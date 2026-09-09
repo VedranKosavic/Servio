@@ -34,7 +34,9 @@ import {
   approveWaste, correctStock, createDelivery, getStock, insertMovement, logWaste, onHand,
   recomputeAvgCost, reverseDelivery, setOpeningStock, theoreticalAt, unitCost,
 } from '../../server/services/stock'
-import { confirmCount, listCounts, pendingCounts, submitCount } from '../../server/services/counts'
+import {
+  confirmCount, listCounts, pendingCounts, submitCount, witnessCount,
+} from '../../server/services/counts'
 import { createDeliveryBody } from '#shared/schemas'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
 import { refuses } from '../helpers/shifts'
@@ -834,5 +836,263 @@ describe('a phone that still holds rounds', () => {
     // With the override it goes through.
     confirmCount(f.db, f.venueId, f.adminActor(), count.id, { override: true })
     expect(movements('count_adjust')).toHaveLength(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Phase 3, WP2 — what *Brzi popis* and *Otpis* need from the shelf.
+// ---------------------------------------------------------------------------
+
+describe('GET /api/stock carries how each item is measured', () => {
+  /**
+   * The count screen decides three things per row from these fields: whether to
+   * draw a scale field or a packs/komadi toggle, what tare to name on screen,
+   * and which line will come back needing a note. They used to live only on the
+   * admin shape, behind routes a bartender may not call (PHASE3 §1.3).
+   */
+  it('says count or weigh, the tare and the tolerance — and no cost that is not already there', () => {
+    f.db.update(schema.stockItems)
+      .set({ tareG: 40, toleranceQty: 5 })
+      .where(eq(schema.stockItems.id, f.stockItemId('Al Fakher · Jabuka')))
+      .run()
+
+    const items = getStock(f.db, f.venueId)
+    const tobacco = items.find(i => i.name === 'Al Fakher · Jabuka')!
+    const cola = items.find(i => i.name === 'Coca-Cola 0,25 l')!
+
+    expect(tobacco.count_method).toBe('weigh')
+    expect(tobacco.tare_g).toBe(40)
+    expect(tobacco.tolerance_qty).toBe(5)
+
+    expect(cola.count_method).toBe('count')
+    expect(cola.tare_g).toBeNull()
+    expect(cola.pack_qty).toBe(24)
+  })
+
+  it('the spot list is what the screen counts', () => {
+    const spot = getStock(f.db, f.venueId).filter(i => i.is_spot)
+    expect(spot.length).toBeGreaterThan(10)
+    expect(spot.map(i => i.name)).toContain('Ugalj (kocke)')
+  })
+})
+
+describe('the refusal names the phone', () => {
+  it('PENDING_OUTBOX carries the devices, so the sentence can say whose', () => {
+    f.openShift({ members: ['Amar', 'Emir'] })
+    const deviceId = enrol('Amarov telefon', {})
+    createOrder(f.db, f.venueId, f.actor('Amar', { device: deviceId }), {
+      client_id: randomUUID(),
+      table_id: f.tableId('Sto 7'),
+      lines: [line('Kafa', 1)],
+    })
+    f.db.update(schema.devices).set({ pendingCount: 2 })
+      .where(eq(schema.devices.id, deviceId)).run()
+
+    try {
+      submitCount(f.db, f.venueId, f.actor('Emir'), {
+        kind: 'full', phase: 'adhoc',
+        lines: [{ stock_item_id: f.stockItemId('Red Bull'), packs: 0, loose: 28 }],
+      })
+      throw new Error('expected PENDING_OUTBOX')
+    } catch (err) {
+      const e = err as { code: string, data?: { devices?: { label: string, pending_count: number }[] } }
+      expect(e.code).toBe('PENDING_OUTBOX')
+      expect(e.data?.devices).toEqual([
+        expect.objectContaining({ label: 'Amarov telefon', pending_count: 2 }),
+      ])
+    }
+  })
+})
+
+describe('Potvrđujem stanje — the witness (F9 step 4)', () => {
+  function spotCount(who = 'Emir') {
+    f.openShift({ members: ['Amar', 'Emir'] })
+    return submitCount(f.db, f.venueId, f.actor(who), {
+      kind: 'full', phase: 'adhoc',
+      lines: [{ stock_item_id: f.stockItemId('Red Bull'), packs: 0, loose: 28 }],
+    })
+  }
+
+  it('records who confirmed the shelf, and moves no stock at all', () => {
+    const count = spotCount()
+    const before = movements().length
+
+    const witnessed = witnessCount(f.db, f.venueId, f.actor('Amar'), count.id)
+
+    expect(witnessed.witnessed_by).toBe(f.userId('Amar'))
+    expect(witnessed.witnessed_by_name).toBe('Amar')
+    expect(witnessed.witnessed_at).toEqual(expect.any(String))
+    expect(witnessed.status).toBe('submitted')
+    expect(movements()).toHaveLength(before)
+  })
+
+  it('writes a quiet entry naming the witness and the phase', () => {
+    const count = spotCount()
+    witnessCount(f.db, f.venueId, f.actor('Amar'), count.id)
+
+    const [entry] = entries('count_witnessed')
+    expect(entry).toBeTruthy()
+    expect(JSON.parse(entry!.bodyJson).witness_id).toBe(f.userId('Amar'))
+    expect(entry!.titleBs).toContain('Amar')
+  })
+
+  it('refuses the counter himself — one pair of eyes twice is not two', () => {
+    const count = spotCount()
+    refuses(() => witnessCount(f.db, f.venueId, f.actor('Emir'), count.id), 'SELF_WITNESS', 403)
+  })
+
+  it('refuses a second witness and a confirmed count', () => {
+    const count = spotCount()
+    witnessCount(f.db, f.venueId, f.actor('Amar'), count.id)
+    refuses(
+      () => witnessCount(f.db, f.venueId, f.actor('Haris'), count.id),
+      'COUNT_ALREADY_WITNESSED', 409,
+    )
+
+    const second = submitCount(f.db, f.venueId, f.actor('Emir'), {
+      kind: 'full', phase: 'close',
+      lines: [{ stock_item_id: f.stockItemId('Red Bull'), packs: 0, loose: 28 }],
+    })
+    confirmCount(f.db, f.venueId, f.adminActor(), second.id, {})
+    refuses(
+      () => witnessCount(f.db, f.venueId, f.actor('Amar'), second.id),
+      'COUNT_ALREADY_CONFIRMED', 409,
+    )
+  })
+
+  /**
+   * The trigger was widened for exactly one more transition (PHASE3 §1.4). What
+   * a count *is* still cannot be rewritten, and the witness pair is still
+   * `NULL -> value`, once — which is what these two assert in raw SQL, because
+   * a rule that only holds through a service is not a rule.
+   */
+  it('the database itself allows the witness pair once and nothing else', () => {
+    const count = spotCount()
+    witnessCount(f.db, f.venueId, f.actor('Amar'), count.id)
+
+    f.expectRefused(
+      `UPDATE stock_counts SET witnessed_by = '${f.userId('Haris')}' WHERE id = '${count.id}'`,
+      /first witness/,
+    )
+    f.expectRefused(
+      `UPDATE stock_counts SET counted_by = '${f.userId('Amar')}' WHERE id = '${count.id}'`,
+      /first witness/,
+    )
+  })
+
+  it('an unwitnessed count is still a count — the confirm does not care', () => {
+    const count = spotCount()
+    const confirmed = confirmCount(f.db, f.venueId, f.adminActor(), count.id, {})
+    expect(confirmed.count.status).toBe('confirmed')
+    expect(confirmed.count.witnessed_by).toBeNull()
+  })
+})
+
+describe('otpis with the approver PIN on the spot (S13)', () => {
+  const EMIR_PIN = '123456'
+  const HARIS_PIN = '123456'
+
+  /** A 12 KM bottle: over `waste_pin_threshold_fen` (10 KM) on its own. */
+  function expensiveBottle(): string {
+    const itemId = f.stockItemId('Red Bull')
+    f.db.update(schema.stockItems)
+      .set({ avgCostMfen: 1_200_000, lastCostMfen: 1_200_000 })
+      .where(eq(schema.stockItems.id, itemId))
+      .run()
+    return itemId
+  }
+
+  it('a right PIN acknowledges the otpis in the same request', () => {
+    f.openShift({ members: ['Emir'] })
+    const waste = logWaste(f.db, f.venueId, f.actor('Emir', { device: 'dev-1' }), {
+      client_id: randomUUID(),
+      stock_item_id: expensiveBottle(),
+      qty: 1,
+      reason: 'razbijeno',
+      approver_user_id: f.userId('Emir'),
+      pin: EMIR_PIN,
+    })
+
+    expect(waste.cost_fen).toBe(1200)
+    expect(waste.needs_approval).toBe(false)
+    expect(waste.approved_by_name).toBe('Emir')
+    // The bottle left the shelf either way — approval never gates the ledger.
+    expect(movements('waste')).toHaveLength(1)
+  })
+
+  it('the same otpis without a PIN saves and waits', () => {
+    f.openShift({ members: ['Emir'] })
+    const waste = logWaste(f.db, f.venueId, f.actor('Emir', { device: 'dev-1' }), {
+      client_id: randomUUID(),
+      stock_item_id: expensiveBottle(),
+      qty: 1,
+      reason: 'razbijeno',
+    })
+
+    expect(waste.needs_approval).toBe(true)
+    expect(waste.approved_by).toBeNull()
+    expect(movements('waste')).toHaveLength(1)
+  })
+
+  it('a cheap otpis needs nobody', () => {
+    f.openShift({ members: ['Emir'] })
+    const waste = logWaste(f.db, f.venueId, f.actor('Emir', { device: 'dev-1' }), {
+      client_id: randomUUID(),
+      stock_item_id: f.stockItemId('Šećer'),
+      qty: 300,
+      reason: 'prosuto',
+    })
+
+    expect(waste.cost_fen).toBeLessThan(1000)
+    expect(waste.needs_approval).toBe(false)
+  })
+
+  it('a wrong PIN writes nothing at all', () => {
+    f.openShift({ members: ['Emir'] })
+    const itemId = expensiveBottle()
+    refuses(
+      () => logWaste(f.db, f.venueId, f.actor('Amar', { device: 'dev-1' }), {
+        client_id: randomUUID(),
+        stock_item_id: itemId,
+        qty: 1,
+        reason: 'razbijeno',
+        approver_user_id: f.userId('Emir'),
+        pin: '9999',
+      }),
+      'INVALID_PIN',
+    )
+    expect(movements('waste')).toHaveLength(0)
+  })
+
+  it('a waiter is not an approver, whatever PIN he types', () => {
+    f.openShift({ members: ['Amar'] })
+    const itemId = expensiveBottle()
+    refuses(
+      () => logWaste(f.db, f.venueId, f.actor('Amar', { device: 'dev-1' }), {
+        client_id: randomUUID(),
+        stock_item_id: itemId,
+        qty: 1,
+        reason: 'razbijeno',
+        approver_user_id: f.userId('Lejla'),
+        pin: '2222',
+      }),
+      'NOT_APPROVER', 403,
+    )
+  })
+
+  it("the owner's PIN still only works on the owner's own phone", () => {
+    f.openShift({ members: ['Emir'] })
+    const itemId = expensiveBottle()
+    refuses(
+      () => logWaste(f.db, f.venueId, f.actor('Emir', { device: 'dev-1', bound: true }), {
+        client_id: randomUUID(),
+        stock_item_id: itemId,
+        qty: 1,
+        reason: 'razbijeno',
+        approver_user_id: f.userId('Haris'),
+        pin: HARIS_PIN,
+      }),
+      'ADMIN_PIN_FOREIGN_DEVICE', 403,
+    )
   })
 })

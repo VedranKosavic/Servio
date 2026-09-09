@@ -34,8 +34,8 @@ export const WAITER_MENU: WaiterMenuItem[] = [
   // Already on disk since Korak 1.
   { id: 'settle', label: 'Završi smjenu', to: '/k/smjena', roles: ['waiter', 'bartender'], ready: true },
   // WP2
-  { id: 'count', label: 'Brzi popis', to: '/k/popis', roles: ['waiter', 'bartender'], ready: false, soon: 'stiže uskoro' },
-  { id: 'waste', label: 'Otpis', to: '/k/otpis', roles: ['waiter', 'bartender'], ready: false, soon: 'stiže uskoro' },
+  { id: 'count', label: 'Brzi popis', to: '/k/popis', roles: ['waiter', 'bartender'], ready: true },
+  { id: 'waste', label: 'Otpis', to: '/k/otpis', roles: ['waiter', 'bartender'], ready: true },
   // WP4
   { id: 'rules', label: 'Pravila', to: '/k/pravila', roles: ['waiter', 'bartender'], ready: false, soon: 'stiže uskoro' },
   // WP0 — this package.

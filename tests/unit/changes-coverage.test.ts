@@ -23,7 +23,7 @@ import { markPrepared } from '../../server/services/prep'
 import {
   correctStock, createDelivery, approveWaste, logWaste, reverseDelivery, setOpeningStock,
 } from '../../server/services/stock'
-import { confirmCount, submitCount } from '../../server/services/counts'
+import { confirmCount, submitCount, witnessCount } from '../../server/services/counts'
 import {
   acceptTab, assignTab, decideUnpaid, markUnpaid, moveTab, tabMoney,
 } from '../../server/services/tabs'
@@ -181,6 +181,16 @@ const CALLS: Record<string, () => void> = {
       kind: 'full', phase: 'adhoc',
       lines: [{ stock_item_id: f.stockItemId('Red Bull'), packs: 0, loose: 28 }],
     })
+  },
+
+  // *Potvrđujem stanje* writes no movement, and still bumps: the count's own
+  // card on `/a` and the *Puls* attention line both change the moment it lands.
+  [join('stock', 'counts', '[id]', 'witness.post.ts')]: () => {
+    const count = submitCount(f.db, f.venueId, f.actor('Emir'), {
+      kind: 'full', phase: 'adhoc',
+      lines: [{ stock_item_id: f.stockItemId('Red Bull'), packs: 0, loose: 28 }],
+    })
+    witnessCount(f.db, f.venueId, f.actor('Amar'), count.id)
   },
 
   [join('stock', 'counts', '[id]', 'confirm.post.ts')]: () => {

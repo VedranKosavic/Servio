@@ -26,6 +26,8 @@ export const STOCK_ERRORS = {
   NO_OPEN_SHIFT: 'Nema otvorene smjene — nema se šta zaključiti.',
   COUNT_EXISTS: 'Ova smjena već ima takav popis.',
   COUNT_ALREADY_CONFIRMED: 'Popis je već potvrđen.',
+  COUNT_ALREADY_WITNESSED: 'Ovaj popis je već potvrdio svjedok.',
+  SELF_WITNESS: 'Stanje potvrđuje neko drugi — ne onaj ko je popisivao.',
   LINES_MISSING: 'Fali roba na popisu — popiši sve stavke.',
   PRICE_MISSING: 'Ova roba nema cijenu — unesi je u Početno stanje pa potvrdi popis.',
 } as const

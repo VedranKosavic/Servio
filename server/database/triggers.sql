@@ -461,23 +461,50 @@ BEGIN
   SELECT RAISE(ABORT, 'append-only');
 END;
 
+-- Two transitions, each allowed exactly once, and nothing else.
+--
+-- The confirm (`submitted -> confirmed`) is the owner's signature, and it is the
+-- one that moves the ledger. The witness (PHASE3 §1.4) is the incoming
+-- custodian's *Potvrđujem stanje*: it fills `witnessed_by` / `witnessed_at`,
+-- leaves `status` where it was, and changes no quantity anywhere — which is why
+-- widening the guard for it takes nothing away. Everything the count *is*
+-- (its lines' quantities, who counted, when) still cannot be rewritten, and
+-- `NULL -> value, once` still holds for both pairs of columns.
 DROP TRIGGER IF EXISTS stock_counts_update_guard;
 CREATE TRIGGER stock_counts_update_guard
 BEFORE UPDATE ON stock_counts
 WHEN NOT (
-  OLD.status = 'submitted' AND NEW.status = 'confirmed'
-  AND OLD.confirmed_by IS NULL AND NEW.confirmed_by IS NOT NULL
-  AND OLD.confirmed_at IS NULL AND NEW.confirmed_at IS NOT NULL
-  AND OLD.id IS NEW.id
+  -- The identity of the count never moves, whichever transition this is.
+  OLD.id IS NEW.id
   AND OLD.venue_id IS NEW.venue_id
   AND OLD.kind IS NEW.kind
   AND OLD.phase IS NEW.phase
   AND OLD.shift_id IS NEW.shift_id
   AND OLD.counted_by IS NEW.counted_by
   AND OLD.submitted_at IS NEW.submitted_at
+  AND (
+    -- 1. The confirm.
+    (
+      OLD.status = 'submitted' AND NEW.status = 'confirmed'
+      AND OLD.confirmed_by IS NULL AND NEW.confirmed_by IS NOT NULL
+      AND OLD.confirmed_at IS NULL AND NEW.confirmed_at IS NOT NULL
+      AND OLD.witnessed_by IS NEW.witnessed_by
+      AND OLD.witnessed_at IS NEW.witnessed_at
+    )
+    -- 2. The witness.
+    OR (
+      OLD.status IS NEW.status
+      AND OLD.confirmed_by IS NEW.confirmed_by
+      AND OLD.confirmed_at IS NEW.confirmed_at
+      AND OLD.override_by IS NEW.override_by
+      AND OLD.note IS NEW.note
+      AND OLD.witnessed_by IS NULL AND NEW.witnessed_by IS NOT NULL
+      AND OLD.witnessed_at IS NULL AND NEW.witnessed_at IS NOT NULL
+    )
+  )
 )
 BEGIN
-  SELECT RAISE(ABORT, 'stock_counts: only submitted -> confirmed, once');
+  SELECT RAISE(ABORT, 'stock_counts: only submitted -> confirmed or a first witness, once');
 END;
 
 DROP TRIGGER IF EXISTS stock_counts_no_delete;
