@@ -31,7 +31,7 @@ import { businessDate, localDate, localTime } from '#shared/dates'
 import { mergeSettings, type Settings } from '#shared/settings'
 import type { Actor, ChangeEntity, LogKind, Role } from '#shared/types'
 import type { AlertRuleKey } from '#shared/constants'
-import type { Db, Queryable, Tx } from './types'
+import type { Queryable, Tx } from './types'
 
 type ShiftRow = typeof schema.shifts.$inferSelect
 
@@ -312,13 +312,8 @@ export function hasLiveSettlement(
   return notImplemented('hasLiveSettlement')
 }
 
-/** WP2 (§6.6). The one outbox check: refuses while a phone still holds rounds. */
-export function assertNoPendingOutbox(
-  _tx: Tx, _venueId: string, _shiftId: string | null,
-  _opts: { actor: Actor, override?: boolean },
-): void {
-  return notImplemented('assertNoPendingOutbox')
-}
+/** WP1 (§6.6). The one outbox check: refuses while a phone still holds rounds. */
+export { assertNoPendingOutbox } from './devices'
 
 /** WP2. The custodian of the stock for this shift. */
 export function setCustodian(_tx: Tx, _venueId: string, _shiftId: string, _userId: string): void {
@@ -341,12 +336,10 @@ export function writeSummaryVersion(
 }
 
 /** WP1 (`services/auth.ts`). Takes `Db`, not `Tx`: it owns its own attempt rows. */
-export function verifyPinMetered(
-  _db: Db, _venueId: string, _userId: string, _deviceId: string | null,
-  _pin: string, _ctx: { ip: string, kind: 'pin' | 'approve', now?: string },
-): void {
-  return notImplemented('verifyPinMetered')
-}
+export { verifyPinMetered } from './auth'
+
+/** WP1 (`services/devices.ts`, §4.3). The heartbeat's own update; WP5 owns the route. */
+export { heartbeat } from './devices'
 
 /** WP3 (`services/payments.ts`). Which shift a payment belongs to. */
 export function resolvePaymentShift(

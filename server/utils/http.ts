@@ -9,13 +9,25 @@ import type { ZodType } from 'zod'
 import type { H3Event } from 'h3'
 import { SankError } from './errors'
 
-/** Turn any error into an h3 error whose JSON body carries `{ code, message }`. */
-export function apiError(status: number, code: string, message: string) {
+/**
+ * Turn any error into an h3 error whose JSON body carries `{ code, message }` —
+ * plus whatever the screen needs to *render* the sentence.
+ *
+ * `extra` is the fourth argument of `SankError` (`docs/BACKEND.md` §2), and it is
+ * not decoration: the Bosnian sentences in `shared/errors.ts` interpolate it.
+ * "PIN je zaključan. Pokušaj ponovo za {retry_after_s} s." with no
+ * `retry_after_s` in the body is a waiter staring at a literal `{retry_after_s}`
+ * — so a 423 carries its countdown, a wrong PIN carries `fails_left`, and an
+ * overpay carries `remaining_fen`.
+ */
+export function apiError(
+  status: number, code: string, message: string, extra?: Record<string, unknown>,
+) {
   return createError({
     statusCode: status,
     statusMessage: code,
     message,
-    data: { code, message },
+    data: { code, message, ...extra },
   })
 }
 
@@ -24,7 +36,7 @@ export function guard<T>(fn: () => T): T {
   try {
     return fn()
   } catch (err) {
-    if (err instanceof SankError) throw apiError(err.status, err.code, err.message)
+    if (err instanceof SankError) throw apiError(err.status, err.code, err.message, err.data)
     throw err
   }
 }
