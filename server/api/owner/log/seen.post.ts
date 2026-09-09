@@ -8,16 +8,14 @@
 import { logSeenBody } from '#shared/schemas'
 import { useDb } from '../../../utils/db'
 import { guard, readValidatedJson } from '../../../utils/http'
-import { requestActor, requestVenueId, requireRole } from '../../../utils/request-actor'
+import { requireRole } from '../../../utils/auth'
 import { markLogSeen } from '../../../services/log'
 
 export default defineEventHandler(async (event) => {
   await readValidatedJson(event, logSeenBody)
   return guard(() => {
-    const db = useDb()
-    const venueId = requestVenueId(event, db)
-    const actor = requestActor(event, db, venueId)
+    const { venueId, actor } = event.context
     requireRole(actor, 'admin')
-    return markLogSeen(db, venueId, actor.userId)
+    return markLogSeen(useDb(), venueId, actor.userId)
   })
 })

@@ -31,7 +31,7 @@ import { businessDate, localDate, localTime } from '#shared/dates'
 import { mergeSettings, type Settings } from '#shared/settings'
 import type { Actor, ChangeEntity, LogKind, Role } from '#shared/types'
 import type { AlertRuleKey } from '#shared/constants'
-import type { Db, Queryable, Tx } from './types'
+import type { Queryable, Tx } from './types'
 
 type ShiftRow = typeof schema.shifts.$inferSelect
 
@@ -279,10 +279,14 @@ export { bump } from './changes'
 export { queueAlert } from './alerts'
 
 /**
- * WP1 (`services/devices.ts`) per §12 — but the auth package has not landed and
- * creating its file here is the merge conflict §12 exists to prevent, so WP5
- * parked the body in `services/heartbeat.ts`. WP1 moves it and repoints this
- * line; `api/devices/heartbeat.post.ts` never changes.
+ * §12 gives the heartbeat **service** to WP1 and the **route** to WP5, and both
+ * branches wrote a body for it — WP5 in `services/heartbeat.ts` (because
+ * creating `services/devices.ts` on its branch is the merge conflict §12 exists
+ * to prevent), WP1 inside `services/devices.ts`. The integration keeps WP5's:
+ * it is the tested one (`tests/unit/heartbeat.test.ts`), and it is the only one
+ * that dedupes the nightly `clock_skew` entry on `hasEntryFor`, reports
+ * `revoked`, and emits on the bus. WP1's copy is gone;
+ * `api/devices/heartbeat.post.ts` still imports through this line.
  */
 export { heartbeat } from './heartbeat'
 
@@ -302,13 +306,8 @@ export function hasLiveSettlement(
   return notImplemented('hasLiveSettlement')
 }
 
-/** WP2 (§6.6). The one outbox check: refuses while a phone still holds rounds. */
-export function assertNoPendingOutbox(
-  _tx: Tx, _venueId: string, _shiftId: string | null,
-  _opts: { actor: Actor, override?: boolean },
-): void {
-  return notImplemented('assertNoPendingOutbox')
-}
+/** WP1 (§6.6). The one outbox check: refuses while a phone still holds rounds. */
+export { assertNoPendingOutbox } from './devices'
 
 /** WP2. The custodian of the stock for this shift. */
 export function setCustodian(_tx: Tx, _venueId: string, _shiftId: string, _userId: string): void {
@@ -331,12 +330,7 @@ export function writeSummaryVersion(
 }
 
 /** WP1 (`services/auth.ts`). Takes `Db`, not `Tx`: it owns its own attempt rows. */
-export function verifyPinMetered(
-  _db: Db, _venueId: string, _userId: string, _deviceId: string | null,
-  _pin: string, _ctx: { ip: string, kind: 'pin' | 'approve', now?: string },
-): void {
-  return notImplemented('verifyPinMetered')
-}
+export { verifyPinMetered } from './auth'
 
 /** WP3 (`services/payments.ts`). Which shift a payment belongs to. */
 export function resolvePaymentShift(

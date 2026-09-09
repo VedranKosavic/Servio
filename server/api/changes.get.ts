@@ -8,13 +8,13 @@
 import { useDb } from '../utils/db'
 import { guard } from '../utils/http'
 import { withEtag } from '../utils/etag'
-import { requestActor, requestVenueId } from '../utils/request-actor'
 import { changeTag, getChanges } from '../services/changes'
 
 export default defineEventHandler(event => guard(() => {
   const db = useDb()
-  const venueId = requestVenueId(event, db)
-  const actor = requestActor(event, db, venueId)
+  // `server/middleware/tenant.ts` resolved both of these from the cookies before
+  // this handler ran, and 403'd anything `ROUTE_ROLES` does not declare.
+  const { venueId, actor } = event.context
 
   // A missing or unparseable cursor means "I have nothing" — the `full`
   // answer — rather than a 400. A phone that lost its cursor must be able to

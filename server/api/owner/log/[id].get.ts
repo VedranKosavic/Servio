@@ -7,12 +7,10 @@
  */
 import { useDb } from '../../../utils/db'
 import { guard, requiredParam } from '../../../utils/http'
-import { requestActor, requestVenueId, requireRole } from '../../../utils/request-actor'
+import { requireRole } from '../../../utils/auth'
 import { getLogEntry } from '../../../services/log'
 
 export default defineEventHandler(event => guard(() => {
-  const db = useDb()
-  const venueId = requestVenueId(event, db)
-  requireRole(requestActor(event, db, venueId), 'admin')
-  return getLogEntry(db, venueId, requiredParam(event, 'id'))
+  requireRole(event.context.actor, 'admin')
+  return getLogEntry(useDb(), event.context.venueId, requiredParam(event, 'id'))
 }))

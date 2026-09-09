@@ -14,13 +14,12 @@ import type { LogKind, LogQuery } from '#shared/types'
 import { useDb } from '../../../utils/db'
 import { guard } from '../../../utils/http'
 import { withEtag } from '../../../utils/etag'
-import { requestActor, requestVenueId, requireRole } from '../../../utils/request-actor'
+import { requireRole } from '../../../utils/auth'
 import { listLog, maxAt } from '../../../services/log'
 
 export default defineEventHandler(event => guard(() => {
   const db = useDb()
-  const venueId = requestVenueId(event, db)
-  const actor = requestActor(event, db, venueId)
+  const { venueId, actor } = event.context
   requireRole(actor, 'admin')
 
   const q = getQuery(event)

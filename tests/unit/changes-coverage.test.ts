@@ -11,6 +11,7 @@
  * the bug nobody reports because it looks like bad Wi-Fi.
  */
 import { randomUUID } from 'node:crypto'
+import { eq } from 'drizzle-orm'
 import { readdirSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -22,6 +23,8 @@ import { markPrepared } from '../../server/services/prep'
 import { createDelivery } from '../../server/services/stock'
 import { payTab } from '../../server/services/tabs'
 import { markLogSeen } from '../../server/services/log'
+import { enrolDevice, mintEnrolCode, revokeDevice, unlockDevice } from '../../server/services/devices'
+import { schema } from '../helpers/db'
 
 const API_DIR = fileURLToPath(new URL('../../server/api', import.meta.url))
 const MUTATING = /\.(post|put|patch|delete)\.ts$/
@@ -33,11 +36,22 @@ const MUTATING = /\.(post|put|patch|delete)\.ts$/
  * evidence rather than venue state. The heartbeat is exempt for a sharper
  * reason: it fires every 60 s from every phone, and a bump would invalidate
  * every waiter's ETag on every tick.
+ *
+ * The last two arrived with WP1 and belong to the first reason, not a second
+ * one. `POST /api/admin/enrol-codes` writes a hashed six-character credential
+ * that is read back exactly once, by the phone typing it — the same class of
+ * row as a session, and no screen renders it. `PATCH /api/admin/devices/:id`
+ * changes a device's label, which nothing in the feed carries: the only screen
+ * that shows labels is *Uređaji*, and it reads `GET /api/admin/devices`
+ * directly. Both of WP1's device writes that a phone must learn about — revoke
+ * and unlock — are registered below, and they do bump.
  */
 const EXEMPT = [
   /^auth[\\/]/,
   /^devices[\\/]heartbeat\.post\.ts$/,
   /^dev[\\/]/,
+  /^admin[\\/]enrol-codes\.post\.ts$/,
+  /^admin[\\/]devices[\\/]\[id\][\\/]index\.patch\.ts$/,
 ]
 
 function mutatingRoutes(dir = API_DIR): string[] {
@@ -100,6 +114,53 @@ const CALLS: Record<string, () => void> = {
   [join('owner', 'log', 'seen.post.ts')]: () => {
     markLogSeen(f.db, f.venueId, f.userId('Haris'))
   },
+
+  // WP1's three device writes that the floor has to learn about. Each one of
+  // them writes its Dnevnik entry inside its own transaction, and `log()` bumps
+  // — which is the point of §4.1's rule being about the *transaction* and not
+  // about a literal `bump(` in the service.
+  [join('devices', 'enrol.post.ts')]: () => {
+    const { code } = mintEnrolCode(f.db, f.venueId, f.adminActor(), {
+      mode: 'shared', label: 'Šank tablet',
+    })
+    enrolDevice(f.db, { code }, { ip: '127.0.0.1' })
+  },
+
+  [join('admin', 'devices', '[id]', 'revoke.post.ts')]: () => {
+    revokeDevice(f.db, f.venueId, f.adminActor(), enrolled())
+  },
+
+  [join('admin', 'devices', '[id]', 'unlock.post.ts')]: () => {
+    const deviceId = enrolled()
+    f.db.update(schema.devices)
+      .set({ lockedAt: f.clock.now() })
+      .where(eq(schema.devices.id, deviceId))
+      .run()
+    unlockDevice(f.db, f.venueId, f.adminActor(), deviceId)
+  },
+}
+
+/**
+ * One enrolled phone, written straight into the table.
+ *
+ * Deliberately not `enrolDevice()`: that call is itself one of the routes under
+ * test, and a fixture that bumps before the assertion's `before` snapshot would
+ * measure nothing.
+ */
+function enrolled(label = 'Emirov telefon'): string {
+  const id = randomUUID()
+  f.db.insert(schema.devices).values({
+    id,
+    venueId: f.venueId,
+    label,
+    tokenHash: randomUUID(),
+    mode: 'shared',
+    enrolledAt: f.clock.now(),
+    lastSeenAt: f.clock.now(),
+    pendingCount: 0,
+    clockSkewS: 0,
+  }).run()
+  return id
 }
 
 describe('every mutating route bumps the change feed', () => {
@@ -131,10 +192,15 @@ describe('every mutating route bumps the change feed', () => {
     expect(maxSeq(f.db, f.venueId)).toBeGreaterThan(before)
   })
 
-  it('the exemptions are exactly the two §4.1 names, plus the dev-only enrol', () => {
-    expect(EXEMPT).toHaveLength(3)
+  it('the exemptions are exactly the two §4.1 names, the dev-only enrol and WP1\'s two credential writes', () => {
+    expect(EXEMPT).toHaveLength(5)
     expect(EXEMPT.some(rx => rx.test(join('devices', 'heartbeat.post.ts')))).toBe(true)
     expect(EXEMPT.some(rx => rx.test(join('auth', 'pin.post.ts')))).toBe(true)
+    expect(EXEMPT.some(rx => rx.test(join('admin', 'enrol-codes.post.ts')))).toBe(true)
+    expect(EXEMPT.some(rx => rx.test(join('admin', 'devices', '[id]', 'index.patch.ts')))).toBe(true)
+    // …and nothing wider: revoke and unlock live one folder along and must not
+    // fall through the same pattern.
+    expect(EXEMPT.some(rx => rx.test(join('admin', 'devices', '[id]', 'revoke.post.ts')))).toBe(false)
     expect(sep).toBeTruthy()
   })
 })
