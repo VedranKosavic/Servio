@@ -26,6 +26,7 @@ import { createOrder } from '../../server/services/orders'
 import { getPrep, markPrepared } from '../../server/services/prep'
 import { createDelivery, getStock } from '../../server/services/stock'
 import { getTab, getTablesState } from '../../server/services/tabs'
+import { getLive, getOwnerShift, listOwnerShifts, shiftLines } from '../../server/services/owner'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
 
 let f: Fixture
@@ -312,5 +313,89 @@ describe('no response carries a secret', () => {
     const users = f.db.select().from(schema.users).all()
     expect(users.every(u => u.pinHash !== null)).toBe(true)
     expect(users.some(u => u.passwordHash !== null)).toBe(true)
+  })
+})
+
+/**
+ * `OwnerLive` — the envelope §11 names for `GET /api/owner/live`, appended by
+ * WP7 the way this file's header says each package extends it.
+ *
+ * Every field is asserted **by name**, because *Puls* is the one screen where a
+ * quietly renamed key would not break a build: `/a` reads it with optional
+ * chaining and a missing number renders as an empty tile the owner reads as "a
+ * quiet night". The shape check is the only thing standing between that and a
+ * wrong answer on a busy one.
+ */
+describe('GET /api/owner/live', () => {
+  it('carries the fourteen fields the Puls screen reads, and no secret', () => {
+    const shiftId = f.openShift({ members: ['Amar'] })
+    createOrder(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(),
+      table_id: f.tableId('Sto 7'),
+      lines: [{ id: randomUUID(), product_id: f.productId('Kafa'), qty: 2 }],
+    })
+    f.cashMovement({ type: 'payout', amountFen: 2500, user: 'Emir', status: 'pending' })
+
+    const live = getLive(f.db, f.venueId, f.adminActor())
+
+    expect(Object.keys(live).sort()).toEqual([
+      'attention', 'expected_cash_fen', 'flags', 'gratis', 'last_lines', 'log_max_at',
+      'open', 'pending', 'promet_danas_fen', 'self_voids', 'seq', 'shift', 'storna',
+      'tables', 'unsent', 'waste', 'who',
+    ])
+
+    expect(live.shift?.id).toBe(shiftId)
+    expect(Object.keys(live.open).sort()).toEqual(['tables', 'total_fen'])
+    expect(Object.keys(live.pending).sort())
+      .toEqual(['adjustments', 'payouts', 'settlements', 'unpaid'])
+    for (const p of [live.storna, live.gratis, live.self_voids, live.waste]) {
+      expect(Object.keys(p).sort()).toEqual(['count', 'fen'])
+    }
+
+    // One row per person on the shift, with the badge the floor plan uses.
+    expect(Object.keys(live.who[0]!).sort()).toEqual([
+      'initials', 'joined_at', 'name', 'open_tabs', 'promet_fen', 'settled', 'user_id',
+    ])
+
+    // The decidable list and the derived one, each with its own fixed shape.
+    const payout = live.attention.find(a => a.kind === 'payout')!
+    expect(Object.keys(payout).sort())
+      .toEqual(['actions', 'amount_fen', 'at', 'kind', 'ref_id', 'ref_type', 'title_bs'])
+    for (const flag of live.flags) {
+      expect(Object.keys(flag).sort()).toEqual(['at', 'kind', 'ref_id', 'ref_type', 'title_bs'])
+    }
+
+    // The drill-down row, which *Puls* shows twenty of and *Smjena* pages.
+    expect(Object.keys(live.last_lines[0]!).sort()).toEqual([
+      'arrived_at', 'at', 'charged_fen', 'flavour_names', 'late_sync', 'line_id',
+      'locked_by', 'locked_by_name', 'name_snapshot', 'note', 'qty', 'shift_seq',
+      'status', 'sync_lag_s', 'table_name', 'unit_price_fen',
+    ])
+  })
+
+  it('and neither Puls nor the shift reads leak a hash or a token', () => {
+    const shiftId = f.openShift({ members: ['Amar'] })
+    createOrder(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(),
+      table_id: f.tableId('Sto 7'),
+      lines: [{ id: randomUUID(), product_id: f.productId('Kafa'), qty: 1 }],
+    })
+
+    const keys = (value: unknown, out: string[] = []): string[] => {
+      if (Array.isArray(value)) for (const item of value) keys(item, out)
+      else if (value && typeof value === 'object') {
+        for (const [k, child] of Object.entries(value)) { out.push(k); keys(child, out) }
+      }
+      return out
+    }
+
+    const responses: unknown[] = [
+      getLive(f.db, f.venueId, f.adminActor()),
+      getOwnerShift(f.db, f.venueId, shiftId),
+      listOwnerShifts(f.db, f.venueId, '2000-01-01', '2999-12-31'),
+      shiftLines(f.db, f.venueId, shiftId, { kat: 'sve' }),
+    ]
+    expect(responses.flatMap(r => keys(r)).filter(k => /_hash$|token|password|pepper/i.test(k)))
+      .toEqual([])
   })
 })

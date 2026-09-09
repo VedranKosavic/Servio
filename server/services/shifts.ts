@@ -42,22 +42,14 @@ export { currentShift, ensureOpenShift, joinShift, nextShiftSeq } from './contra
 /**
  * A row on the owner's *treba odlučiti* list.
  *
- * The shape is `docs/BACKEND.md` §6.10's `AttentionItem`, which lives in WP7's
- * `shared/types/owner.ts` and does not exist yet. It is declared here rather
- * than in a shared fragment WP2 does not own; when WP7 lands the shared type,
- * these objects satisfy it structurally and the declaration below goes away.
+ * WP2 declared this shape here because WP7's `shared/types/owner.ts` did not
+ * exist yet, and said the declaration would go away when it landed. It has: the
+ * type is now the shared one, re-exported from this file so the four packages
+ * that import `AttentionItem` from `./shifts` keep importing it from `./shifts`
+ * and nothing else moved. The objects they already build satisfy it unchanged —
+ * that was the point of writing it out identically.
  */
-export interface AttentionItem {
-  kind: 'void' | 'comp' | 'unpaid_tab' | 'payout' | 'float_out'
-    | 'settlement' | 'count' | 'waste'
-  ref_type: 'line_adjustment' | 'tab' | 'cash_movement' | 'waiter_settlement'
-    | 'stock_count' | 'waste_event'
-  ref_id: string
-  title_bs: string
-  amount_fen?: number
-  at: string
-  actions: ('approve' | 'reject' | 'note')[]
-}
+export type { AttentionItem } from '#shared/types/owner'
 
 // ===========================================================================
 // Small shared reads

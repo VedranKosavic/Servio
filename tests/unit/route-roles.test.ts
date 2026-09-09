@@ -100,6 +100,12 @@ const LANDED = new Set([
   'POST /api/stock/counts/:id/confirm',
   'GET /api/owner/stock', 'GET /api/owner/stock/:id/movements',
   'GET /api/owner/categories', 'GET /api/owner/nargila',
+  // WP7 — the owner's reads. §12's ownership table splits `api/owner/**` three
+  // ways: `log*` is WP5's above, `{stock,categories,nargila}` WP4's above, and
+  // `live`, `shifts` and `shift/**` are these.
+  'GET /api/owner/live', 'GET /api/owner/shifts',
+  'GET /api/owner/shift/:id', 'GET /api/owner/shift/:id/summary',
+  'GET /api/owner/shift/:id/lines',
 ])
 
 /** Every `.get.ts` / `.post.ts` / `.patch.ts` under `server/api/**`, as a key. */
