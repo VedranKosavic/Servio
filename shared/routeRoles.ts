@@ -130,6 +130,14 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   'GET /api/owner/log/:id': A,
   'POST /api/owner/log/seen': A,
 
+  // -- Izvoz: the four CSV files (Phase 2 WP5) ------------------------------
+  // Reads, so they bump nothing; owner-only, so per-person money and the
+  // night's takings cannot be fetched by a phone that guessed the path.
+  'GET /api/owner/export/smjene': A,
+  'GET /api/owner/export/dnevni-pazar': A,
+  'GET /api/owner/export/stavke': A,
+  'GET /api/owner/export/popis': A,
+
   // -- Admin CRUD ----------------------------------------------------------
   'GET /api/admin/products': A,
   'POST /api/admin/products': A,
