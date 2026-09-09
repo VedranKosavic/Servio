@@ -182,6 +182,7 @@ function bodyFor(kind: LogKind, f: Fixture): Record<string, unknown> {
     },
     delivery_reversed: { delivery_id: uid(), note: 'pogrešna faktura' },
     count_submitted: { count_id: uid(), items: 19, out_of_tolerance: 3 },
+    count_witnessed: { count_id: uid(), witness_id: approver, phase: 'close' },
     count_confirmed: { count_id: uid(), variance_fen: -1500, adjusted_items: 3 },
     waste_logged: {
       waste_id: uid(), stock_item_id: f.stockItemId('Coca-Cola 0,25 l'), user_id: user,

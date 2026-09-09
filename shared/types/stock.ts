@@ -49,6 +49,19 @@ export interface StockItem {
   pack_name: string | null
   pack_qty: number | null
   is_spot: boolean
+  /**
+   * The three fields *Brzi popis* cannot count without (PHASE3 §1.3).
+   *
+   * They used to live on `StockItemAdmin` only, behind admin routes a bartender
+   * may not call — which left the count screen unable to say which items go on
+   * the scale, what tare to subtract, or which line needs a note. None of them
+   * is a price or anybody's money: they are how the shelf is measured.
+   */
+  count_method: 'count' | 'weigh'
+  /** The empty tin, in grams. `null` on an item nobody weighs. */
+  tare_g: number | null
+  /** How far a count may miss before the line needs a note. */
+  tolerance_qty: number
   on_hand: number
   status: StockStatus
   /** The unit cost is the `last_cost_mfen` fallback, not a real average (§6.8). */
@@ -163,6 +176,16 @@ export interface CountView {
   counted_by: string
   counted_by_name: string
   submitted_at: string
+  /**
+   * The incoming custodian's *Potvrđujem stanje* (F9 step 4, PHASE3 §1.4).
+   *
+   * Nullable on purpose: an unwitnessed count is an attention line on the
+   * owner's *Puls*, never a blocked one. A count with nobody else behind the bar
+   * is still a count.
+   */
+  witnessed_by: string | null
+  witnessed_by_name: string | null
+  witnessed_at: string | null
   confirmed_by: string | null
   confirmed_by_name: string | null
   confirmed_at: string | null

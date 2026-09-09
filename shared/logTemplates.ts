@@ -103,6 +103,17 @@ function defineLog<S extends z.ZodType>(t: {
  * which CLAUDE.md calls a bug. Anything a later reason adds falls through
  * unchanged rather than disappearing.
  */
+/**
+ * A count's phase, in Bosnian. Same reason as the payout reasons below: the
+ * slug is a *value*, and a slug printed inside a Bosnian sentence is an English
+ * word on a Bosnian screen. Anything a later phase adds falls through unchanged.
+ */
+const COUNT_PHASE_BS: Record<string, string> = {
+  open: 'otvaranje',
+  close: 'zatvaranje',
+  adhoc: 'usput',
+}
+
 const PAYOUT_REASON_BS: Record<string, string> = {
   dobavljac: 'dobavljač',
   sitno: 'sitno',
@@ -465,6 +476,21 @@ export const LOG = {
     group: 'roba',
     body: body({ count_id: id, items: z.int(), out_of_tolerance: z.int() }),
     title: b => `Popis predan · ${b.items} stavki · ${b.out_of_tolerance} van tolerancije`,
+  }),
+
+  /**
+   * *Potvrđujem stanje* — the incoming custodian saw the same shelf (F9 step 4).
+   *
+   * Quiet: it is the routine half of a handover, and the owner reads it only as
+   * the reassurance behind a variance. What is **not** quiet is its absence —
+   * an unwitnessed count is an attention line on *Puls*, which is the honest way
+   * round: nothing happened is what deserves the owner's eye here.
+   */
+  count_witnessed: defineLog({
+    group: 'roba',
+    quiet: true,
+    body: body({ count_id: id, witness_id: id, phase: z.string() }),
+    title: (b, n) => `Popis potvrdio svjedok · ${n.user(b.witness_id)} · ${COUNT_PHASE_BS[b.phase] ?? b.phase}`,
   }),
 
   count_confirmed: defineLog({

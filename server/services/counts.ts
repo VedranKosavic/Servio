@@ -3,8 +3,10 @@
  *
  * Two states and no more: a count is **submitted** by whoever counted, and
  * **confirmed** by the owner. There is no server-side draft in Korak 2 (§14.5) —
- * the phone keeps the in-progress count in IndexedDB exactly like the cart — and
- * no witness route, though the columns are there for Korak 3.
+ * the phone keeps the in-progress count in IndexedDB exactly like the cart.
+ * Between the two states sits the **witness** (PHASE3 §1.4, F9 step 4): the
+ * incoming custodian's *Potvrđujem stanje*, which fills `witnessed_by` and
+ * changes no quantity anywhere.
  *
  * The one idea worth reading twice is **theoretical by `occurred_at`**. What the
  * count compares against is not "on hand right now" but "what the ledger says was
@@ -18,7 +20,7 @@
  */
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
-import { conflict, notFound, unprocessable } from '../utils/errors'
+import { conflict, forbidden, notFound, unprocessable } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
 import type {
   ConfirmCountBody, ConfirmResult, ConfirmResultLine, CountLineView, CountView, PendingCount,
@@ -347,6 +349,67 @@ export function confirmCount(
   return { count: getCount(db, venueId, countId), lines }
 }
 
+// ===========================================================================
+// Witness
+// ===========================================================================
+
+/**
+ * `POST /api/stock/counts/:id/witness` — *Potvrđujem stanje* (F9 step 4).
+ *
+ * The count is handed over the same way the drawer is: the person taking the
+ * shelf on looks at what the person leaving counted and taps once, on that same
+ * phone. It writes **no movement and no adjustment** — only the ledger's owner
+ * does that, on `/a`, with *Primijeni*. What it records is that two people saw
+ * the same shelf, which is the whole of what makes a variance attributable.
+ *
+ * Three refusals and no more:
+ *   - the counter cannot witness himself (403 `SELF_WITNESS`) — one pair of eyes
+ *     twice is not two pairs of eyes;
+ *   - a confirmed count is history (409 `COUNT_ALREADY_CONFIRMED`);
+ *   - a witnessed count is witnessed (409 `COUNT_ALREADY_WITNESSED`) — the
+ *     append-only trigger allows the pair to be written exactly once.
+ *
+ * An unwitnessed count is **never blocked**: it goes to the owner as an
+ * attention line. A count nobody was around to confirm is still worth more than
+ * no count.
+ */
+export function witnessCount(
+  db: Db, venueId: string, actor: Actor, countId: string, now = nowIso(),
+): CountView {
+  db.transaction((tx) => {
+    const count = requireCount(tx, venueId, countId)
+
+    if (count.status === 'confirmed') {
+      throw conflict('COUNT_ALREADY_CONFIRMED', `count ${countId} is already confirmed`)
+    }
+    if (count.witnessedBy) {
+      throw conflict('COUNT_ALREADY_WITNESSED', `count ${countId} already has a witness`)
+    }
+    if (count.countedBy === actor.userId) {
+      throw forbidden('SELF_WITNESS', 'the person who counted cannot witness his own count')
+    }
+
+    tx.update(schema.stockCounts)
+      .set({ witnessedBy: actor.userId, witnessedAt: now })
+      .where(and(eq(schema.stockCounts.venueId, venueId), eq(schema.stockCounts.id, countId)))
+      .run()
+
+    log(tx, venueId, {
+      kind: 'count_witnessed',
+      body: { count_id: countId, witness_id: actor.userId, phase: count.phase },
+      actorId: actor.userId,
+      deviceId: actor.deviceId,
+      ref: { type: 'stock_count', id: countId },
+      shiftId: count.shiftId,
+      at: now,
+    })
+
+    bump(tx, venueId, 'count', countId)
+  })
+
+  return getCount(db, venueId, countId)
+}
+
 /** The `count_submitted` entry this confirmation answers — the Dnevnik pairs them. */
 function submittedEntryId(tx: Tx, venueId: string, countId: string): string | null {
   return tx.select({ id: schema.logEntries.id }).from(schema.logEntries)
@@ -466,6 +529,9 @@ function countView(
     counted_by: count.countedBy,
     counted_by_name: names.get(count.countedBy) ?? '',
     submitted_at: count.submittedAt,
+    witnessed_by: count.witnessedBy,
+    witnessed_by_name: count.witnessedBy ? names.get(count.witnessedBy) ?? '' : null,
+    witnessed_at: count.witnessedAt,
     confirmed_by: count.confirmedBy,
     confirmed_by_name: count.confirmedBy ? names.get(count.confirmedBy) ?? '' : null,
     confirmed_at: count.confirmedAt,

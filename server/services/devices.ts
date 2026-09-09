@@ -18,7 +18,7 @@
  */
 import { and, eq, gt, inArray, isNull, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
-import { badRequest, conflict, notFound, unauthorized } from '../utils/errors'
+import { badRequest, conflict, notFound, SankError, unauthorized } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
 import { hashSecret, hashToken, newEnrolCode, newToken, verifySecret } from '../utils/password'
 import {
@@ -407,7 +407,16 @@ export function assertNoPendingOutbox(
 
   if (fresh.length > 0) {
     if (!(opts.override && opts.actor.role === 'admin')) {
-      throw conflict('PENDING_OUTBOX', 'a phone is still holding rounds for this shift')
+      /**
+       * The refusal names the phones (PHASE3 §3, WP2). "Sačekaj da se pošalju"
+       * with no subject leaves a bartender at 03:00 with nobody to walk over to;
+       * `devices` is what turns it into *"Amarov telefon se javio prije 3 min, 2
+       * neposlane"*. `conflict()` carries no data, so this is the same
+       * `SankError` the settle path already throws for its own half of the rule.
+       */
+      throw new SankError(409, 'PENDING_OUTBOX', 'a phone is still holding rounds for this shift', {
+        devices: fresh.map(brief),
+      })
     }
     log(tx, venueId, {
       kind: 'override',

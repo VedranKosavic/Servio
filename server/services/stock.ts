@@ -31,9 +31,9 @@ import type {
   BaseUnit, CorrectStockBody, CreateDeliveryBody, DeliveryView, LogWasteBody, OpeningStockBody,
   ReverseDeliveryBody, StockItem, StockItemStock, StockLastMovement, StockStatus, WasteView,
 } from '#shared/types'
-import type { Actor } from '#shared/types'
+import type { Actor, Role } from '#shared/types'
 import type { Db, Queryable, Tx } from './types'
-import { bump, getSettings, log } from './contracts'
+import { bump, getSettings, log, verifyPinMetered } from './contracts'
 import { listStockItems } from './admin'
 
 type StockItemRow = typeof schema.stockItems.$inferSelect
@@ -314,6 +314,11 @@ export function getStock(q: Queryable, venueId: string): StockItem[] {
       pack_name: item.packName,
       pack_qty: item.packQty,
       is_spot: item.isSpot === 1,
+      // How the shelf is measured, for *Brzi popis* (PHASE3 §1.3). Not money,
+      // not a cost: a bartender who may count has to know what to count with.
+      count_method: item.countMethod,
+      tare_g: item.tareG,
+      tolerance_qty: item.toleranceQty,
       on_hand: hand,
       status: stockStatus(item, hand),
       estimated: cost.estimated,
@@ -784,6 +789,40 @@ export function recomputeAvgCost(q: Queryable, venueId: string): Map<string, num
 const WAITER_REASONS = new Set(['razbijeno', 'prosuto'])
 
 /**
+ * Whose PIN the otpis sheet will accept.
+ *
+ * The twin of `requireApproverUser` in `services/adjustments.ts`, with one rule
+ * deliberately missing: **there is no self-approval check.** A void is somebody
+ * else's money and a waiter approving his own is the fraud the rule exists for;
+ * a broken bottle is the bartender's own shelf, and `settings.approver_roles` is
+ * exactly the list of people who answer for it. Emir typing his own PIN over a
+ * 12 KM bottle he dropped is the case S13 was drawn for.
+ *
+ * The owner's PIN still only works on the owner's own phone: accepting six
+ * digits on every handset in the café turns each of them into a place to guess.
+ */
+function requireWasteApprover(
+  q: Queryable, venueId: string, actor: Actor, approverId: string,
+): { id: string, role: Role } {
+  const settings = getSettings(q, venueId)
+  const user = q.select().from(schema.users)
+    .where(and(
+      eq(schema.users.id, approverId),
+      eq(schema.users.venueId, venueId),
+      eq(schema.users.active, 1),
+    ))
+    .get()
+  if (!user) throw notFound('USER_NOT_FOUND', `user ${approverId} not found`)
+  if (!settings.approver_roles.includes(user.role)) {
+    throw forbidden('NOT_APPROVER', 'this role does not approve an otpis')
+  }
+  if (user.role === 'admin' && actor.deviceBoundUserId !== user.id) {
+    throw forbidden('ADMIN_PIN_FOREIGN_DEVICE', 'the owner types his PIN on his own phone')
+  }
+  return { id: user.id, role: user.role }
+}
+
+/**
  * `POST /api/stock/waste` — *otpis*.
  *
  * The movement is written **immediately and always**. The bottle is broken
@@ -791,10 +830,33 @@ const WAITER_REASONS = new Set(['razbijeno', 'prosuto'])
  * breakage at all — which is the one outcome that costs the owner real money
  * (§14.10). Approval is acknowledgement, not gating: `needs_approval` puts the
  * row on the bartender's list and writes a non-quiet Dnevnik entry.
+ *
+ * **The approver's PIN, typed on the spot (PHASE3 §3, WP2).** The body has
+ * carried `approver_user_id` + `pin` since Korak 2 and the route has been on
+ * `PIN_BEARING_ROUTES` all along; nothing read them, so S13's PIN sheet would
+ * have been a keypad that changed nothing. When they arrive and check out, the
+ * row is born acknowledged — a bartender standing beside the waiter with the
+ * broken bottle in his hand is the whole point of the sheet.
  */
 export function logWaste(
   db: Db, venueId: string, actor: Actor, body: LogWasteBody, now = nowIso(),
 ): WasteView {
+  /**
+   * Checked **before** the transaction opens, on `db` and not on `tx` — the same
+   * rule `requestAdjustment` follows: `verifyPinMetered` writes an
+   * `auth_attempts` row whether the PIN was right or wrong, and a row written
+   * inside a transaction that later throws is rolled back with it, leaving a
+   * lockout counter that never counts the attempts that matter.
+   */
+  const approver = body.approver_user_id && body.pin
+    ? requireWasteApprover(db, venueId, actor, body.approver_user_id)
+    : null
+  if (approver && body.pin) {
+    verifyPinMetered(db, venueId, approver.id, actor.deviceId, body.pin, {
+      ip: '', kind: 'approve',
+    })
+  }
+
   const wasteId = db.transaction((tx) => {
     const replay = tx.select({ id: schema.wasteEvents.id }).from(schema.wasteEvents)
       .where(and(
@@ -847,7 +909,10 @@ export function logWaste(
     // A `kom` drink is a bottle off the shelf, which is the one waste a person
     // could quietly turn into a free round for a friend.
     const bottleByWaiter = !isApprover && item.kind === 'pice' && item.baseUnit === 'kom'
-    const needsApproval = overThreshold || bottleByWaiter || overCap
+    // A PIN that checked out *is* the approval, so the row is not waiting for
+    // one. `approved_by` still says who gave it, and the entry still says the
+    // otpis was big enough to need one.
+    const needsApproval = (overThreshold || bottleByWaiter || overCap) && !approver
 
     const id = newId()
     tx.insert(schema.wasteEvents).values({
@@ -862,6 +927,8 @@ export function logWaste(
       shiftId: shift?.id ?? null,
       userId: actor.userId,
       needsApproval: needsApproval ? 1 : 0,
+      approvedBy: approver?.id ?? null,
+      approvedAt: approver ? now : null,
       createdAt: now,
     }).run()
 
@@ -889,6 +956,7 @@ export function logWaste(
         cost_fen: costFen,
         reason: body.reason,
         needs_approval: needsApproval,
+        ...(approver ? { approved_by: approver.id } : {}),
       },
       actorId: actor.userId,
       deviceId: actor.deviceId,
@@ -1042,6 +1110,9 @@ export function correctStock(
     pack_name: row.packName,
     pack_qty: row.packQty,
     is_spot: row.isSpot === 1,
+    count_method: row.countMethod,
+    tare_g: row.tareG,
+    tolerance_qty: row.toleranceQty,
     on_hand: hand,
     status: stockStatus(row, hand),
     estimated: cost.estimated,

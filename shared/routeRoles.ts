@@ -107,6 +107,10 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   'POST /api/stock/corrections': A,
   'POST /api/stock/counts': AWB,
   'POST /api/stock/counts/:id/confirm': A,
+  // *Potvrđujem stanje*: the incoming custodian, whoever he is. A waiter taking
+  // the bar over from the šanker witnesses exactly like a šanker does, and the
+  // service refuses the one person who must not — the counter himself.
+  'POST /api/stock/counts/:id/witness': AWB,
   'GET /api/stock/counts': AWB,
   'GET /api/stock/counts/:id': AWB,
 
