@@ -1,12 +1,73 @@
 /**
  * The response shapes, written once and imported by both sides.
  *
- * The request types are derived from the Zod schemas in `./schemas` (one
- * definition, two uses). The response types are declared here, and the service
+ * This file is a **barrel plus four names**. Everything a route answers is
+ * *shaped* in the `docs/BACKEND.md` §6 subsection that returns it and lives in
+ * that package's fragment under `shared/types/`, so five work packages can add
+ * types in parallel without ever touching the same lines. What stays here is
+ * only what is genuinely cross-package: `Role`, `Actor`, `LogKind`,
+ * `ChangeEntity`, and the re-exported constants.
+ *
+ * Request types are derived from the Zod schemas in `./schemas` (one definition,
+ * two uses). Response types are declared in the fragments, and the service
  * functions in `server/services/*` are typed to return them — so a change to a
  * route's answer is a compile error in the screen that reads it, instead of a
  * blank field discovered on a Saturday night.
  */
+
+// --- the four cross-package names ------------------------------------------
+
+/**
+ * Three roles and no more.
+ *
+ * `admin` has the special permissions: the dashboard, every live read, the
+ * approvals, the catalogue, users and settings, the Dnevnik. `waiter` and
+ * `bartender` have **identical permissions on the floor**; the default screen
+ * differs (`/k` vs `/s`) and one thing more — the bartender is a default
+ * approver, which is a *setting* (`approver_roles`) and not a hard-coded rule.
+ *
+ * Korak 1's `'owner'` is gone: the migration renames the value, and the paths
+ * that still say `owner` name the owner *dashboard*, not the role.
+ */
+export type Role = 'admin' | 'waiter' | 'bartender'
+
+/**
+ * Who is making this request. Built once by `authorizeRequest` and passed to
+ * every mutation as its third argument — no service reads a user id from a body.
+ */
+export interface Actor {
+  venueId: string
+  userId: string
+  role: Role
+  sessionId: string
+  /** 'admin' = an email+password session, which has no device. */
+  sessionKind: 'admin' | 'staff'
+  deviceId: string | null
+  /** A personal device: whose it is. */
+  deviceBoundUserId: string | null
+  /** Somebody PIN'd into a colleague's phone. */
+  borrowed: boolean
+}
+
+/** What a `changes` row can be about — the sync feed's vocabulary (§4.1). */
+export type ChangeEntity =
+  | 'table' | 'prep' | 'stock' | 'count' | 'shift' | 'adjustment'
+  | 'menu' | 'settings' | 'user' | 'device' | 'log'
+
+export type { LogKind } from './logTemplates'
+
+// --- the fragments ----------------------------------------------------------
+
+export type * from './types/admin'
+export type * from './types/auth'
+export type * from './types/money'
+export type * from './types/owner'
+export type * from './types/shifts'
+export type * from './types/stock'
+export type * from './types/sync'
+
+// --- request bodies, derived from the Zod schemas ---------------------------
+
 export type {
   CreateDeliveryBody,
   CreateOrderBody,
@@ -15,156 +76,16 @@ export type {
   PayTabBody,
 } from './schemas'
 
-export type Role = 'waiter' | 'bartender' | 'owner'
-export type Zone = 'unutra' | 'basta'
-export type ProductKind = 'simple' | 'shisha'
-export type StockKind = 'pice' | 'duhan' | 'zar' | 'potrosni'
-export type BaseUnit = 'kom' | 'g' | 'ml'
-export type MovementType = 'opening' | 'delivery' | 'sale' | 'correction'
-export type TabStatus = 'open' | 'paid'
+// --- the shared constants and settings --------------------------------------
 
-export interface Venue {
-  id: string
-  name: string
-  slug: string
-}
-
-export interface User {
-  id: string
-  name: string
-  initials: string
-  role: Role
-}
-
-export interface VenueTable {
-  id: string
-  name: string
-  zone: Zone
-  col: number
-  row: number
-  /** 'vip' for the VIP box; null for an ordinary table. */
-  grp: string | null
-  sort: number
-}
-
-export interface Category {
-  id: string
-  name: string
-  sort: number
-}
-
-export interface Product {
-  id: string
-  category_id: string
-  name: string
-  price_fen: number
-  kind: ProductKind
-  /** Grams of tobacco a bowl uses, split across the chosen flavours. */
-  shisha_grams: number | null
-  coal_pcs: number | null
-  is_favourite: boolean
-  sort: number
-}
-
-/** A tobacco stock item, offered as an aroma on a shisha product. */
-export interface Flavour {
-  id: string
-  name: string
-  on_hand: number
-  base_unit: BaseUnit
-}
-
-export interface Bootstrap {
-  venue: Venue
-  users: User[]
-  tables: VenueTable[]
-  categories: Category[]
-  products: Product[]
-  flavours: Flavour[]
-}
-
-export interface TableState {
-  table_id: string
-  tab_id: string | null
-  total_fen: number
-  opened_by_name: string | null
-  opened_at: string | null
-  last_order_at: string | null
-}
-
-export interface CreateOrderResult {
-  order_id: string
-  tab_id: string
-  order_total_fen: number
-  tab_total_fen: number
-  /** True when this request was a replay of one already applied. */
-  already_applied: boolean
-}
-
-export interface Tab {
-  id: string
-  table_id: string
-  table_name: string
-  client_id: string
-  status: TabStatus
-  total_fen: number
-  opened_by: string
-  opened_at: string
-  closed_at: string | null
-  closed_by: string | null
-}
-
-export interface PrepLine {
-  name_snapshot: string
-  qty: number
-  flavours: string[]
-  note: string | null
-}
-
-export interface PrepOrder {
-  order_id: string
-  table_name: string
-  waiter_name: string
-  created_at: string
-  prepared_at: string | null
-  prepared_by_name: string | null
-  note: string | null
-  lines: PrepLine[]
-}
-
-export interface Prep {
-  open: PrepOrder[]
-  done: PrepOrder[]
-}
-
-export interface StockLastMovement {
-  type: MovementType
-  qty_delta: number
-  occurred_at: string
-  /** A human line: "Sto 7 · narudžba", "prijem robe", "početno stanje". */
-  ref_label: string
-}
-
-export interface StockItem {
-  id: string
-  name: string
-  kind: StockKind
-  base_unit: BaseUnit
-  pack_name: string | null
-  pack_qty: number | null
-  is_spot: boolean
-  on_hand: number
-  last_movement: StockLastMovement | null
-}
-
-export interface Health {
-  ok: true
-  tables: number
-  products: number
-}
+export type { Settings, SettingsPatch } from './settings'
+export type { AlertRuleKey } from './constants'
+export type { RouteRole } from './routeRoles'
+export type { LogGroup, LogNames, LogTemplate } from './logTemplates'
 
 /** The body of every 4xx/5xx this API returns, unwrapped by `useApi`. */
 export interface ApiError {
   code: string
   message: string
+  data?: Record<string, unknown>
 }

@@ -1,6 +1,23 @@
 /**
  * The read routes, through their services: the shapes the two UI agents build
  * against. A field that quietly disappears fails here rather than on a phone.
+ *
+ * **Scope, and why it is what it is.** `docs/BACKEND.md` §11 describes this file
+ * as asserting every Korak 2 envelope by name — `TablesStateResponse`,
+ * `ChangesResult`, `MeContext`, `MyShift`, `OwnerLive`, `TabDetail`, `CountView`,
+ * `DeliveryView`. None of those services exists yet: `docs/PHASES.md` §1 says
+ * the response shapes arrive in the types-only `phase-1/contract-types` PR the
+ * day after WP0 merges, and their implementations in WP1–WP7. So this file
+ * covers the routes that exist today, on the Korak 2 schema and seed, and the
+ * package that lands each envelope extends it here — the point being that this
+ * file is WP0's, so nobody has to edit somebody else's test to do it.
+ *
+ * The last block is the assertion that has to be here from day one and not
+ * later: **no response anywhere carries a hash, a token, a password or the
+ * pepper**. The Korak 2 seed puts scrypt hashes and an admin email on `users`
+ * for the first time, and `getBootstrap` does a `SELECT *` on that table before
+ * it maps. One forgotten field and every phone in the café holds the owner's
+ * password hash.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { randomUUID } from 'node:crypto'
@@ -8,8 +25,8 @@ import { getBootstrap, getHealth } from '../../server/services/bootstrap'
 import { createOrder } from '../../server/services/orders'
 import { getPrep, markPrepared } from '../../server/services/prep'
 import { createDelivery, getStock } from '../../server/services/stock'
-import { getTablesState } from '../../server/services/tabs'
-import { makeFixture, type Fixture } from '../helpers/db'
+import { getTab, getTablesState } from '../../server/services/tabs'
+import { makeFixture, schema, type Fixture } from '../helpers/db'
 
 let f: Fixture
 
@@ -44,6 +61,14 @@ describe('GET /api/bootstrap', () => {
     expect(boot.flavours).toHaveLength(6)
     expect(boot.flavours.find(x => x.name === 'Al Fakher · Jabuka')?.on_hand).toBe(643)
   })
+
+  it('speaks the three Korak 2 roles', () => {
+    const boot = getBootstrap(f.db, f.venueId)
+    expect(boot.users.find(u => u.name === 'Haris')?.role).toBe('admin')
+    expect(boot.users.find(u => u.name === 'Emir')?.role).toBe('bartender')
+    // 'owner' is not an accepted role value anywhere after the migration.
+    expect(boot.users.map(u => u.role)).not.toContain('owner')
+  })
 })
 
 describe('GET /api/health', () => {
@@ -71,6 +96,25 @@ describe('GET /api/tables/state', () => {
     expect(sto7.total_fen).toBe(300)
     expect(sto7.opened_by_name).toBe('Amar')
     expect(sto7.last_order_at).not.toBeNull()
+  })
+
+  it('has exactly the fields the floor plan reads, and no more', () => {
+    // Two waiters, so the state has to distinguish them, and one tab offered to
+    // a colleague — a Korak 2 column that must not leak into this envelope until
+    // WP3 designs where it goes.
+    const amar = f.lock('Amar', 'Sto 1', [{ product: 'Kafa' }])
+    f.lock('Lejla', 'Sto 2', [{ product: 'Coca-Cola' }])
+    f.sqlite.exec(`UPDATE tabs SET offered_to = '${f.userId('Lejla')}' WHERE id = '${amar.tabId}'`)
+
+    const rows = getTablesState(f.db, f.venueId)
+    const busy = rows.filter(r => r.tab_id !== null)
+    expect(busy.map(r => r.opened_by_name).sort()).toEqual(['Amar', 'Lejla'])
+
+    for (const row of rows) {
+      expect(Object.keys(row).sort()).toEqual([
+        'last_order_at', 'opened_at', 'opened_by_name', 'tab_id', 'table_id', 'total_fen',
+      ])
+    }
   })
 })
 
@@ -156,5 +200,70 @@ describe('GET /api/stock and POST /api/stock/deliveries', () => {
     expect(updated.find(i => i.name === 'Coca-Cola 0,25 l')!.on_hand).toBe(79 + 48)
     expect(updated.find(i => i.name === 'Ugalj (kocke)')!.on_hand).toBe(103 + 64)
     expect(updated.find(i => i.name === 'Ugalj (kocke)')!.last_movement?.ref_label).toBe('prijem robe')
+  })
+})
+
+describe('a sale carries what it cost', () => {
+  it('stamps every movement with the item\'s unit cost, in milli-feninga', () => {
+    createOrder(f.db, f.venueId, {
+      client_id: randomUUID(),
+      table_id: f.tableId('Sto 7'),
+      user_id: f.userId('Amar'),
+      lines: [{ product_id: f.productId('Coca-Cola'), qty: 1 }],
+    })
+
+    const cola = f.db.select().from(schema.stockMovements).all()
+      .find(m => m.type === 'sale')!
+    // The seed's placeholder: 0,90 KM a bottle is 90 000 mfen per `kom`.
+    expect(cola.unitCostMfen).toBe(90_000)
+    // And the round attached itself to a shift, which the trigger insisted on.
+    expect(cola.shiftId).not.toBeNull()
+  })
+})
+
+/**
+ * The sweep. Every read route's whole response, flattened, checked for a key
+ * that has no business leaving the server.
+ */
+describe('no response carries a secret', () => {
+  const FORBIDDEN = /_hash$|token|password|pepper/i
+
+  function keysOf(value: unknown, out: string[] = []): string[] {
+    if (Array.isArray(value)) {
+      for (const item of value) keysOf(item, out)
+    } else if (value && typeof value === 'object') {
+      for (const [key, child] of Object.entries(value)) {
+        out.push(key)
+        keysOf(child, out)
+      }
+    }
+    return out
+  }
+
+  it('across bootstrap, tables, prep, stock and a tab', () => {
+    const order = createOrder(f.db, f.venueId, {
+      client_id: randomUUID(),
+      table_id: f.tableId('Sto 7'),
+      user_id: f.userId('Amar'),
+      lines: [{ product_id: f.productId('Kafa'), qty: 1 }],
+    })
+
+    const responses: unknown[] = [
+      getBootstrap(f.db, f.venueId),
+      getHealth(f.db, f.venueId),
+      getTablesState(f.db, f.venueId),
+      getPrep(f.db, f.venueId),
+      getStock(f.db, f.venueId),
+      getTab(f.db, f.venueId, order.tab_id),
+    ]
+
+    const offenders = responses.flatMap(r => keysOf(r)).filter(k => FORBIDDEN.test(k))
+    expect(offenders).toEqual([])
+  })
+
+  it('and the seed really does store hashes, so the sweep has something to catch', () => {
+    const users = f.db.select().from(schema.users).all()
+    expect(users.every(u => u.pinHash !== null)).toBe(true)
+    expect(users.some(u => u.passwordHash !== null)).toBe(true)
   })
 })

@@ -15,7 +15,8 @@ import { and, eq, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { badRequest, notFound } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
-import type { CreateOrderBody, CreateOrderResult, OrderLineInput } from '#shared/types'
+import { ensureOpenShift, insertMovement, nextShiftSeq, unitCost } from './contracts'
+import type { Actor, CreateOrderBody, CreateOrderResult, OrderLineInput } from '#shared/types'
 import type { Db, Queryable, Tx } from './types'
 
 export function createOrder(db: Db, venueId: string, body: CreateOrderBody): CreateOrderResult {
@@ -63,7 +64,30 @@ export function createOrder(db: Db, venueId: string, body: CreateOrderBody): Cre
     if (!user) throw notFound('USER_NOT_FOUND', `user ${body.user_id} not found`)
 
     const at = nowIso()
-    const tabId = resolveTab(tx, venueId, table.id, body, at)
+
+    /**
+     * The first lock of the evening opens the night. Korak 2 made `shift_id`
+     * and `shift_seq` mandatory on `orders` through the `orders_shift_required`
+     * trigger — a column that REFERENCES another table cannot be declared NOT
+     * NULL by an ALTER, so the trigger is what makes it mandatory — and these
+     * three lines are what satisfy it. WP3 rewrites this whole service and
+     * takes a real `Actor` from the session; until then the actor is built from
+     * the user the body named, which is exactly what Korak 1 already trusted.
+     */
+    const actor: Actor = {
+      venueId,
+      userId: user.id,
+      role: user.role,
+      sessionId: '',
+      sessionKind: 'staff',
+      deviceId: null,
+      deviceBoundUserId: null,
+      borrowed: false,
+    }
+    const { shift } = ensureOpenShift(tx, venueId, actor, at)
+    const shiftSeq = nextShiftSeq(tx, venueId, shift.id)
+
+    const tabId = resolveTab(tx, venueId, table.id, body, at, shift.id)
 
     const orderId = newId()
     tx.insert(schema.orders).values({
@@ -71,6 +95,8 @@ export function createOrder(db: Db, venueId: string, body: CreateOrderBody): Cre
       venueId,
       tabId,
       clientId: body.client_id,
+      shiftId: shift.id,
+      shiftSeq,
       lockedBy: user.id,
       note: body.note ?? null,
       createdAt: at,
@@ -80,7 +106,7 @@ export function createOrder(db: Db, venueId: string, body: CreateOrderBody): Cre
 
     let orderTotalFen = 0
     for (const line of body.lines) {
-      orderTotalFen += insertLine(tx, venueId, orderId, line, user.id, at)
+      orderTotalFen += insertLine(tx, venueId, orderId, line, user.id, at, shift.id)
     }
 
     return {
@@ -101,7 +127,9 @@ export function createOrder(db: Db, venueId: string, body: CreateOrderBody): Cre
  * phone's client id if it has been seen, otherwise by "the open tab on this
  * table", otherwise a new one. The phone adopts whatever id comes back.
  */
-function resolveTab(tx: Tx, venueId: string, tableId: string, body: CreateOrderBody, at: string): string {
+function resolveTab(
+  tx: Tx, venueId: string, tableId: string, body: CreateOrderBody, at: string, shiftId: string,
+): string {
   if (body.tab_client_id) {
     const byClient = tx.select().from(schema.tabs)
       .where(and(eq(schema.tabs.venueId, venueId), eq(schema.tabs.clientId, body.tab_client_id)))
@@ -130,8 +158,14 @@ function resolveTab(tx: Tx, venueId: string, tableId: string, body: CreateOrderB
     tableId,
     clientId: body.tab_client_id ?? newId(),
     status: 'open',
+    shiftId,
     openedBy: body.user_id,
     openedAt: at,
+    // Whose tab it is. Nullable in the DDL only because a REFERENCES column
+    // cannot be added NOT NULL; `tabs_assigned_required` refuses an insert
+    // without it, which is why no reader anywhere needs a fallback.
+    assignedTo: body.user_id,
+    offeredTo: null,
     closedAt: null,
     closedBy: null,
   }).run()
@@ -152,6 +186,7 @@ function insertLine(
   line: OrderLineInput,
   userId: string,
   at: string,
+  shiftId: string,
 ): number {
   const product = tx.select().from(schema.products)
     .where(and(
@@ -198,26 +233,29 @@ function insertLine(
     note: line.note ?? null,
   }).run()
 
+  // Every movement goes through `insertMovement`, which is also where the
+  // late-sync offset lives — one rule, one place, so `SUM(qty_delta)` stays true.
   for (const m of resolveStock(tx, venueId, product, line.qty, flavours.map(f => f.id))) {
-    tx.insert(schema.stockMovements).values({
-      id: newId(),
-      venueId,
+    insertMovement(tx, venueId, {
       stockItemId: m.stockItemId,
       type: 'sale',
       qtyDelta: m.qtyDelta,
+      // What that quantity was worth when it moved, so COGS never has to guess
+      // at yesterday's price.
+      unitCostMfen: m.unitCostMfen,
       refType: 'order_line',
       refId: lineId,
       userId,
-      note: null,
+      shiftId,
       occurredAt: at,
       createdAt: at,
-    }).run()
+    })
   }
 
   return chargedFen
 }
 
-interface PendingMovement { stockItemId: string, qtyDelta: number }
+interface PendingMovement { stockItemId: string, qtyDelta: number, unitCostMfen: number }
 
 /**
  * What one line takes off the shelf. Three ways, and a product may use more
@@ -240,9 +278,12 @@ function resolveStock(
   flavourIds: string[],
 ): PendingMovement[] {
   const out: PendingMovement[] = []
+  const push = (stockItemId: string, qtyDelta: number) => {
+    out.push({ stockItemId, qtyDelta, unitCostMfen: costOf(tx, venueId, stockItemId) })
+  }
 
   if (product.sellsStockItemId) {
-    out.push({ stockItemId: product.sellsStockItemId, qtyDelta: -qty })
+    push(product.sellsStockItemId, -qty)
   }
 
   const recipe = tx.select().from(schema.recipeLines)
@@ -252,7 +293,7 @@ function resolveStock(
     ))
     .all()
   for (const r of recipe) {
-    out.push({ stockItemId: r.stockItemId, qtyDelta: -(r.qty * qty) })
+    push(r.stockItemId, -(r.qty * qty))
   }
 
   if (product.kind === 'shisha') {
@@ -261,17 +302,33 @@ function resolveStock(
       // A mixed bowl splits the venue norm across its aromas: 20 g over two
       // aromas is 10 g + 10 g (PLAN.md §9, the owner's monthly formula).
       const perFlavour = grams / flavourIds.length
-      for (const id of flavourIds) out.push({ stockItemId: id, qtyDelta: -perFlavour })
+      for (const id of flavourIds) push(id, -perFlavour)
     }
 
     const coal = (product.coalPcs ?? 0) * qty
     if (coal > 0) {
       const coalItem = coalStockItem(tx, venueId)
-      if (coalItem) out.push({ stockItemId: coalItem.id, qtyDelta: -coal })
+      if (coalItem) push(coalItem.id, -coal)
     }
   }
 
   return out
+}
+
+/**
+ * What one base unit of this item costs, in milli-feninga — the moving average
+ * when there is one, the last invoice price when there is not, and 0 only for an
+ * item nobody has ever priced (`unitCost`, BACKEND §6.8).
+ */
+function costOf(tx: Tx, venueId: string, stockItemId: string): number {
+  const item = tx.select({
+    avgCostMfen: schema.stockItems.avgCostMfen,
+    lastCostMfen: schema.stockItems.lastCostMfen,
+  })
+    .from(schema.stockItems)
+    .where(and(eq(schema.stockItems.id, stockItemId), eq(schema.stockItems.venueId, venueId)))
+    .get()
+  return item ? unitCost(item).mfen : 0
 }
 
 /**

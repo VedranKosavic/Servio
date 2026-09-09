@@ -15,8 +15,14 @@ const { db, sqlite } = openDatabase(file)
 if (!isEmpty(db)) {
   console.info(`[sank] ${file} already has a venue — nothing to seed.`)
 } else {
-  seed(db)
+  // Dev secrets — the PINs and the admin password of `docs/BACKEND.md` §5.6 —
+  // are an explicit decision, never an environment guess. On a production
+  // install the six people arrive with no PIN and cannot log in until the owner
+  // sets them in `/a`, which is the only way a default PIN never reaches a café.
+  const devSecrets = process.env.NODE_ENV !== 'production'
+  seed(db, { devSecrets })
   console.info(`[sank] seeded ${file}: venue "Lounge", 27 tables, 14 products, 19 stock items.`)
+  if (!devSecrets) console.info('[sank] postavi PIN-ove u /a')
 }
 
 sqlite.close()

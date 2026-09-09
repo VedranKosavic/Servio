@@ -2,6 +2,10 @@
   "name": "sank",
   "type": "module",
   "private": true,
+  "//imports": "Node subpath imports, so `#shared/*` resolves outside Nuxt too — `npm run db:seed` runs seed.ts through tsx with no Vite and no Nitro alias in sight, and server code imports real values (not just types) from shared/.",
+  "imports": {
+    "#shared/*": "./shared/*.ts"
+  },
   "scripts": {
     "dev": "nuxt dev",
     "build": "nuxt build",
