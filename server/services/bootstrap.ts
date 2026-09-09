@@ -12,7 +12,7 @@ import type { Actor, Queryable } from './types'
 import { onHandByItem } from './stock'
 import { getMe } from './auth'
 import { shiftBrief } from './shifts'
-import { menuVersion } from './changes'
+import { changeTag, menuVersion } from './changes'
 
 /**
  * `actor` is required and comes from the session — `ROUTE_ROLES` gives this
@@ -20,6 +20,20 @@ import { menuVersion } from './changes'
  * a catalogue into a boot: `me`, `device` and `shift` are all per person, and
  * `shift.my_open_tabs` is a different number for Amar than for Lejla.
  */
+/**
+ * The ETag for `GET /api/bootstrap`.
+ *
+ * **An ETag is a fingerprint of an answer** (see `server/utils/etag.ts`): the
+ * browser sends it back on the next request, and an unchanged server replies
+ * `304 Not Modified` with no body. The fingerprint must therefore move whenever
+ * the body could, which is why it is `changeTag` — `MAX(seq)` for the venue plus
+ * the role and the user — and not `MAX(seq)` alone. The boot envelope carries `me`, `device` and `shift` — three per-person
+ * objects — so the user belongs in the fingerprint as much as the sequence does.
+ */
+export function bootstrapTag(q: Queryable, venueId: string, actor: Actor): string {
+  return changeTag(q, venueId, actor)
+}
+
 export function getBootstrap(db: Queryable, venueId: string, actor: Actor): Bootstrap {
   const venue = db.select().from(schema.venues).where(eq(schema.venues.id, venueId)).get()!
   const me = getMe(db, venueId, actor)

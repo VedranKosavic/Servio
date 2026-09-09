@@ -2,35 +2,32 @@
  * Sync, the Dnevnik and the heartbeat — the shapes WP5 answers with
  * (`docs/BACKEND.md` §4.1, §4.3, §6.9).
  *
- * **On the three placeholder aliases below.** §4.1 types three of the change
- * feed's snapshots as `TablesStateResponse`, `ShiftBrief` and `MeContext`, and
- * those names are shaped by WP3, WP2 and WP1 in *their* fragments — none of
- * which has landed. Rather than pre-empt three other packages' types in this
- * file (which would collide in the barrel the day they land), each is an alias
- * here, in one place, pointing at the shape the server can actually produce
- * today. When the owning package lands its envelope, exactly one line below
- * changes and every caller is a compile error until it agrees.
+ * **On the aliases below.** §4.1 types three of the change feed's snapshots as
+ * `TablesStateResponse`, `ShiftBrief` and `MeContext`. Those names are shaped by
+ * other packages, so each is an alias here, in one place — when the owning
+ * package lands its envelope, exactly one line below changes and every caller is
+ * a compile error until it agrees. Phase 2 (WP0) pointed the last two at the
+ * real types: `ShiftBrief` shipped with `closing`, `closer_name`, `my_settled`
+ * and `my_open_tabs` on it, which is what the shift strip actually reads, and
+ * `MeContext` is what `GET /api/me` answers.
  */
 import type { ChangeEntity } from '../types'
 import type { LogKind } from '../logTemplates'
+import type { MeContext } from './auth'
 import type { Prep, TablesStateResponse } from './money'
+import type { ShiftBrief } from './shifts'
 import type { StockItem } from './stock'
 
-// --- the three forward references -------------------------------------------
+// --- the snapshots the feed attaches ----------------------------------------
 
-/** → WP3's `TablesStateResponse` (§6.2): the floor plan with its shift strip. */
+/** WP3's `TablesStateResponse` (§6.2): the floor plan with its shift strip. */
 export type TablesStateSnapshot = TablesStateResponse
 
-/** → WP2's `ShiftBrief` (§6.5). Until it lands, the columns every screen needs. */
-export interface ShiftSnapshot {
-  id: string
-  business_date: string
-  status: 'open' | 'closing' | 'closed' | 'reviewed'
-  opened_at: string
-}
+/** WP2's `ShiftBrief` (§6.5) — the shift strip, closer and this actor's own state. */
+export type ShiftSnapshot = ShiftBrief
 
-/** → WP1's `MeContext` (§5.5). A session refresh the phone re-reads on `user`/`device`. */
-export type MeSnapshot = Record<string, unknown>
+/** WP1's `MeContext` (§5.5). Attached when a `user` or `device` row moved. */
+export type MeSnapshot = MeContext
 
 /** → WP4's `StockItemView` (§6.8). Korak 1's `StockItem` is its ancestor. */
 export type StockSnapshot = StockItem[]

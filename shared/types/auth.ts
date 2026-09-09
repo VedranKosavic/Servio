@@ -69,12 +69,10 @@ export interface MeContext {
   seq: number
 }
 
-/** `POST /api/auth/admin/login` — a laptop session, no device. */
-export interface AdminLoginResult {
-  user: MeUser
-  venue: VenueBrief
-  expires_at: string
-}
+// `POST /api/auth/admin/login` had an envelope of its own — `AdminLoginResult
+// { user, venue, expires_at }`. Phase 2 deleted it: the owner's laptop answers
+// the same `MeContext` as `GET /api/me`, so `/a/login.vue` hands the answer to
+// `useMe().refreshAfterLogin()` rather than assembling a context by hand.
 
 /** `POST /api/auth/pin` — the staff session. */
 export interface PinLoginResult {

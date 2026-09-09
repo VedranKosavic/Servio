@@ -19,7 +19,7 @@ import type {
 } from '#shared/types'
 import type { Actor, Db, Queryable, Tx } from './types'
 import { bump, getSettings, log, writeSummaryVersion } from './contracts'
-import { maxSeq } from './changes'
+import { changeTag, maxSeq } from './changes'
 import { emitChange } from '../utils/bus'
 import { type AttentionItem, shiftBrief, userNames } from './shifts'
 
@@ -127,6 +127,22 @@ export function tabTotal(q: Queryable, venueId: string, tabId: string): number {
  * closed. `actor` is here for the same reason the ETag carries the user —
  * `my_settled`, `my_open_tabs` and the colleague badge are per person.
  */
+/**
+ * The ETag for `GET /api/tables/state`.
+ *
+ * **An ETag is a fingerprint of an answer** (see `server/utils/etag.ts`): the
+ * browser sends it back on the next request, and an unchanged server replies
+ * `304 Not Modified` with no body. The fingerprint must therefore move whenever
+ * the body could, which is why it is `changeTag` — `MAX(seq)` for the venue plus
+ * the role and the user — and not `MAX(seq)` alone. This envelope carries `shift.my_settled` and `shift.my_open_tabs`, which
+ * are the actor's own numbers: on the shared bar tablet — one browser profile
+ * that Emir, then Haris, then Amar sign into — a tag without the user would
+ * serve the first one's numbers to the second out of his own cache.
+ */
+export function tablesStateTag(q: Queryable, venueId: string, actor: Actor): string {
+  return changeTag(q, venueId, actor)
+}
+
 export function getTablesState(
   q: Queryable, venueId: string, actor: Actor,
 ): TablesStateResponse {

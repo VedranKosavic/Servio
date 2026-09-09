@@ -98,6 +98,26 @@ describe('admin login', () => {
     expect(attempts(f, { kind: 'password', ok: true })).toHaveLength(1)
   })
 
+  /**
+   * Phase 2 (WP0): the laptop door answers the same envelope as `GET /api/me`,
+   * so `/a/login.vue` hands it to `useMe().refreshAfterLogin()` rather than
+   * assembling a `MeContext` by hand — which is what that function exists to
+   * prevent. `AdminLoginResult` is gone.
+   */
+  it('answers a full MeContext, with no device and the venue settings', () => {
+    const { result } = adminLogin(f.db, { email: 'haris@lounge.ba', password: 'lounge' }, { ip: IP })
+
+    expect(result.session.kind).toBe('admin')
+    expect(result.session.borrowed).toBe(false)
+    expect(Date.parse(result.session.expires_at)).toBeGreaterThan(Date.now())
+    // A laptop is not an enrolled phone and never becomes one.
+    expect(result.device).toBeNull()
+    expect(result.venue.slug).toBe('lounge')
+    expect(result.venue.settings.cash_tolerance_fen).toBeGreaterThan(0)
+    // The cursor the dashboard starts polling `/api/changes?since=` from.
+    expect(typeof result.seq).toBe('number')
+  })
+
   it('answers the same 401 for an unknown email and a wrong password', () => {
     const unknown = catchError(() => adminLogin(f.db, { email: 'niko@lounge.ba', password: 'x' }, { ip: IP }))
     const wrong = catchError(() => adminLogin(f.db, { email: 'haris@lounge.ba', password: 'x' }, { ip: IP }))
