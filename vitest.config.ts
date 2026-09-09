@@ -19,9 +19,13 @@ export default defineConfig({
   },
   // Nuxt gives `shared/` the `#shared` alias in the app and in Nitro; vitest
   // runs these modules outside both, so it needs to be told the same thing.
+  // `~` is Nuxt's alias for `app/`, which the outbox tests import directly —
+  // the store takes its transport as an argument precisely so that it can be
+  // exercised in a plain Node process with no browser and no Nuxt.
   resolve: {
     alias: {
       '#shared': fileURLToPath(new URL('./shared', import.meta.url)),
+      '~': fileURLToPath(new URL('./app', import.meta.url)),
     },
   },
 })

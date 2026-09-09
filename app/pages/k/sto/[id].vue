@@ -2,10 +2,16 @@
 /**
  * Narudžba — the round being built for one table, and the till that closes it.
  *
- * The draft lives in the cart store (localStorage), not here, so walking away to
+ * The draft lives in the cart store (IndexedDB), not here, so walking away to
  * another table and coming back does not lose the taps. This screen turns the
- * catalogue into tiles, hands the draft to `POST /api/orders`, and opens the
+ * catalogue into tiles, hands the draft to the **outbox**, and opens the
  * *Naplati* sheet when the guests ask for the bill.
+ *
+ * Since Phase 3 nothing on this screen posts money itself. *Pošalji šankeru*,
+ * *Naplati* and *Nije plaćeno* all `enqueue(...)`, which writes to IndexedDB and
+ * returns immediately; `app/stores/outbox.ts` gets it to the server, in order,
+ * exactly once, whenever there is a network. A waiter's thumb never waits for a
+ * router, and a dead spot behind the fridge costs nothing.
  *
  * Note what is never sent: a price, and — since WP9 — a person. The tiles show
  * prices so the waiter can read them out to the guest, but the body carries
@@ -17,9 +23,10 @@ import { formatKm } from '#shared/money'
 import type { PaymentMethod, Product, TableState } from '#shared/types'
 
 const route = useRoute()
-const api = useApi()
 const me = useMe()
 const cart = useCartStore()
+const { outbox, enqueue } = useOutbox()
+const { lockToast } = useSync()
 
 const tableId = computed(() => String(route.params.id))
 
@@ -92,6 +99,51 @@ function stavke(n: number): string {
   return `${n} stavki`
 }
 
+/** Money for this table still on the phone. Keeps the card honest (§2.3). */
+const queuedHere = computed(() => outbox.pendingForTab(
+  tabState.value?.tab_client_id ?? cart.tabClientIdFor(tableId.value),
+))
+const payQueued = computed(() => queuedHere.value.some(e => e.kind === 'pay'))
+
+/**
+ * What this table owes **according to this phone**: what the server knows plus
+ * every round still on the queue, minus every payment still on the queue.
+ *
+ * The queued part is priced from the catalogue, which is the one place in the
+ * app that is allowed to do that — it is a number to read out to a guest, never
+ * a number that is sent. The server prices the round for real when the entry
+ * lands, and the amber *Cijena promijenjena* card (WP3) is what covers the rare
+ * case where the two differ.
+ *
+ * Without this a waiter who locked a round with no signal could not take cash
+ * for it: the *Naplati* card is drawn from the server's tab, and offline there
+ * is no server tab yet.
+ */
+const queuedOrdersFen = computed(() => queuedHere.value
+  .filter(e => e.kind === 'order')
+  .reduce((sum, entry) => {
+    const payload = entry.payload as { lines?: { product_id: string, qty: number }[] }
+    return sum + (payload.lines ?? []).reduce(
+      (n, line) => n + (priceById.value.get(line.product_id) ?? 0) * line.qty,
+      0,
+    )
+  }, 0))
+
+const queuedPaidFen = computed(() => queuedHere.value
+  .filter(e => e.kind === 'pay')
+  .reduce((sum, entry) => sum + (entry.amount_fen ?? 0), 0))
+
+/** The total under the *Naplati* button, server truth and phone truth together. */
+const localTotalFen = computed(() =>
+  (tabState.value?.total_fen ?? 0) + queuedOrdersFen.value)
+const localRemainingFen = computed(() => Math.max(
+  0,
+  (tabState.value?.remaining_fen ?? 0) + queuedOrdersFen.value - queuedPaidFen.value,
+))
+
+/** Is there anything to charge for — from either side? */
+const hasTab = computed(() => !!tabState.value?.tab_id || queuedHere.value.length > 0)
+
 const sheetProduct = ref<Product | null>(null)
 
 function onTile(product: Product) {
@@ -120,32 +172,58 @@ onBeforeUnmount(() => {
   if (leaveTimer) clearTimeout(leaveTimer)
 })
 
+/**
+ * Which tab this table's money belongs to.
+ *
+ * The server's own id wins whenever the poll has one — that is a tab everybody
+ * agrees about. Otherwise it is the id this phone minted when the table was
+ * first opened, which is the whole point: a round locked with no signal has to
+ * be able to name the tab it opens, so that the payment queued behind it can
+ * name the same one.
+ */
+function tabClientId(): string {
+  return tabState.value?.tab_client_id ?? cart.ensureTabClientId(tableId.value)
+}
+
 async function send() {
-  const clientId = cart.clientIdFor(tableId.value)
-  if (!clientId || count.value === 0 || sending.value) return
+  const draft = cart.draftFor(tableId.value)
+  if (!draft || count.value === 0 || sending.value) return
 
   sending.value = true
   sendError.value = null
   try {
-    await api.postOrder({
+    await enqueue({
+      kind: 'order',
       // The same uuid on every retry: the server answers a replay with the
       // round it already wrote instead of charging the guest twice.
-      client_id: clientId,
-      table_id: tableId.value,
-      // The phone mints the line id too, so a void queued offline can name a
-      // line the server has not seen yet (docs/BACKEND.md §6.1).
-      lines: lines.value.map(line => ({
-        id: crypto.randomUUID(),
-        product_id: line.product_id,
-        qty: line.qty,
-        ...(line.flavour_ids?.length ? { flavour_ids: line.flavour_ids } : {}),
-      })),
+      client_id: draft.client_id,
+      tab_client_id: tabClientId(),
+      label: tableName.value,
+      payload: {
+        client_id: draft.client_id,
+        table_id: tableId.value,
+        tab_client_id: tabClientId(),
+        // When it happened in the *world*. A round queued in a cellar and sent
+        // twenty minutes later is priced and shifted by this, not by the
+        // moment the request finally arrived.
+        client_created_at: new Date().toISOString(),
+        // The line ids were minted when the tiles were tapped, so a void queued
+        // offline can name a line the server has not seen yet (BACKEND §6.1).
+        lines: draft.lines.map(line => ({
+          id: line.id,
+          product_id: line.product_id,
+          qty: line.qty,
+          ...(line.flavour_ids?.length ? { flavour_ids: line.flavour_ids } : {}),
+          ...(line.note ? { note: line.note } : {}),
+        })),
+      },
     })
     cart.clear(tableId.value)
-    toast.value = `Poslano · ${tableName.value}`
+    toast.value = lockToast(tableName.value)
     leaveSoon()
   } catch (err) {
-    // The draft is deliberately left alone: retrying is the whole plan.
+    // Enqueueing barely fails — only storage can refuse. The draft is
+    // deliberately left alone either way: retrying is the whole plan.
     sendError.value = apiErrorText(err, 'Nema veze — pokušaj ponovo')
     void me.handleAuthError(err)
   } finally {
@@ -163,35 +241,58 @@ const paymentMethods = computed<PaymentMethod[]>(() =>
   me.settings.value?.payment_methods ?? ['cash'])
 
 async function pay(payment: { method: PaymentMethod, amount_fen: number, received_fen?: number }) {
-  const tabId = tabState.value?.tab_id
-  if (!tabId || paying.value) return
+  if (paying.value) return
+  // Offline there is no `tab_id` yet — the tab is still only on this phone. The
+  // body may carry either, and the server prefers the phone's own id.
+  const tabId = tabState.value?.tab_id ?? null
+  const clientTabId = tabClientId()
 
   paying.value = true
   payError.value = null
   try {
-    const result = await api.postPayment({
+    // The change and what is left are arithmetic the phone can do itself; the
+    // server's answer would be identical, and waiting for it to hand back a
+    // guest's change is exactly what an outbox exists to stop.
+    const change = Math.max(0, (payment.received_fen ?? payment.amount_fen) - payment.amount_fen)
+    const remaining = Math.max(0, localRemainingFen.value - payment.amount_fen)
+
+    // One uuid, on the entry *and* in the body — they are the same row's
+    // idempotency key, and two different ones would defeat the whole scheme.
+    const clientId = crypto.randomUUID()
+    await enqueue({
+      kind: 'pay',
       // Minted per attempt and reused on every retry: `payments_client_uq` is
       // what turns a retried payment into one row instead of two charges.
-      client_id: crypto.randomUUID(),
-      tab_id: tabId,
-      method: payment.method,
+      client_id: clientId,
+      tab_client_id: clientTabId,
+      label: tableName.value,
       amount_fen: payment.amount_fen,
-      ...(payment.received_fen !== undefined ? { received_fen: payment.received_fen } : {}),
-      tip_fen: 0,
-      covers_order_client_ids: [],
+      payload: {
+        client_id: clientId,
+        ...(tabId ? { tab_id: tabId } : {}),
+        tab_client_id: clientTabId,
+        method: payment.method,
+        amount_fen: payment.amount_fen,
+        ...(payment.received_fen !== undefined ? { received_fen: payment.received_fen } : {}),
+        tip_fen: 0,
+        covers_order_client_ids: [],
+        client_created_at: new Date().toISOString(),
+      },
     })
     payOpen.value = false
     await refreshState()
 
-    if (result.remaining_fen > 0) {
+    if (remaining > 0) {
       // A part payment: the table stays, and so does the waiter.
-      toast.value = `Naplaćeno · ostaje ${formatKm(result.remaining_fen)}`
+      toast.value = `Naplaćeno · ostaje ${formatKm(remaining)}`
       return
     }
-    toast.value = result.change_fen > 0
-      ? `Naplaćeno · vrati ${formatKm(result.change_fen)}`
+    // Settled: the next guests at this table open a tab of their own.
+    cart.closeTab(tableId.value)
+    toast.value = change > 0
+      ? `Naplaćeno · vrati ${formatKm(change)}`
       : `Naplaćeno · ${tableName.value}`
-    leaveSoon(result.change_fen > 0 ? 3500 : 2000)
+    leaveSoon(change > 0 ? 3500 : 2000)
   } catch (err) {
     payError.value = apiErrorText(err)
     void me.handleAuthError(err)
@@ -201,21 +302,31 @@ async function pay(payment: { method: PaymentMethod, amount_fen: number, receive
 }
 
 async function markUnpaid(reason: 'walked_out' | 'dispute' | 'other') {
-  const tabClientId = tabState.value?.tab_client_id
-  if (!tabClientId || paying.value) return
+  if (paying.value) return
+  const clientTabId = tabClientId()
 
   paying.value = true
   payError.value = null
   try {
-    await api.markUnpaid({
-      client_id: crypto.randomUUID(),
+    // One uuid, on the entry *and* in the body: the same row's replay key.
+    const clientId = crypto.randomUUID()
+    await enqueue({
+      kind: 'unpaid',
+      client_id: clientId,
       // Keyed by the tab's own client id, not by a server id: a guest can walk
       // out while the phone is offline, on a tab the server has never seen.
-      tab_client_id: tabClientId,
-      reason,
+      tab_client_id: clientTabId,
+      label: tableName.value,
+      payload: {
+        client_id: clientId,
+        tab_client_id: clientTabId,
+        reason,
+        client_created_at: new Date().toISOString(),
+      },
     })
     payOpen.value = false
     await refreshState()
+    cart.closeTab(tableId.value)
     toast.value = `Označeno: nije plaćeno · ${tableName.value}`
     leaveSoon(2500)
   } catch (err) {
@@ -237,25 +348,32 @@ function openPay() {
     <div class="flex flex-1 flex-col">
       <WaiterHeader :title="tableName" back-to="/k">
         <template #right>
-          <span class="chip">{{ zoneLabel }}</span>
-          <span v-if="tabState?.tab_id" class="num font-semibold">{{ formatKm(tabState.remaining_fen) }}</span>
+          <WaiterSyncChip compact />
+          <span v-if="hasTab" class="num font-semibold">{{ formatKm(localRemainingFen) }}</span>
         </template>
       </WaiterHeader>
 
+      <WaiterOutboxBanner />
+
       <div class="flex flex-1 flex-col gap-3 py-3">
-        <!-- What is already locked on this table -->
-        <div v-if="tabState?.tab_id" class="card flex items-center gap-3 p-3">
+        <!-- A body the server read and refused. Nothing behind it on this table
+             goes out until the waiter answers. -->
+        <WaiterFailedCard />
+        <!-- What is already locked on this table, here and at the bar -->
+        <div v-if="hasTab" class="card flex items-center gap-3 p-3">
           <div class="grow">
-            <div class="flex items-center gap-2 text-sm text-text-2">
+            <div class="flex flex-wrap items-center gap-2 text-sm text-text-2">
               Zaključene ture
-              <span v-if="tabState.pending_review" class="chip chip-warn">naplata čeka</span>
-              <span v-if="tabState.late_sync" class="chip chip-warn">kasno</span>
+              <span v-if="payQueued" class="chip chip-warn">naplata čeka slanje</span>
+              <span v-else-if="queuedOrdersFen > 0" class="chip chip-warn">čeka slanje</span>
+              <span v-else-if="tabState?.pending_review" class="chip chip-warn">naplata čeka</span>
+              <span v-if="tabState?.late_sync" class="chip chip-warn">kasno</span>
             </div>
             <div class="num text-2xl font-semibold">
-              {{ formatKm(tabState.remaining_fen) }}
+              {{ formatKm(localRemainingFen) }}
             </div>
-            <div v-if="tabState.remaining_fen !== tabState.total_fen" class="num text-sm text-text-2">
-              od {{ formatKm(tabState.total_fen) }}
+            <div v-if="localRemainingFen !== localTotalFen" class="num text-sm text-text-2">
+              od {{ formatKm(localTotalFen) }}
             </div>
           </div>
           <button type="button" class="btn btn-accent" @click="openPay">
@@ -295,7 +413,7 @@ function openPay() {
         </p>
 
         <p class="text-center text-sm text-text-2">
-          dodir = +1 · Nargila otvara izbor arome
+          {{ zoneLabel }} · dodir = +1 · Nargila otvara izbor arome
         </p>
       </div>
 
@@ -337,10 +455,10 @@ function openPay() {
 
     <!-- Naplati -->
     <WaiterPaySheet
-      v-if="payOpen && tabState?.tab_id"
+      v-if="payOpen && hasTab"
       :table-name="tableName"
-      :remaining-fen="tabState.remaining_fen"
-      :total-fen="tabState.total_fen"
+      :remaining-fen="localRemainingFen"
+      :total-fen="localTotalFen"
       :methods="paymentMethods"
       :busy="paying"
       :error="payError"

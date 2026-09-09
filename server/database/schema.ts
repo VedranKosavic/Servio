@@ -165,11 +165,27 @@ export const products = sqliteTable('products', {
   /** May a waiter take this as one of his `staff_drinks_per_shift`? */
   staffDrinkAllowed: integer('staff_drink_allowed').notNull().default(0),
   isFavourite: integer('is_favourite').notNull().default(0),
+  /**
+   * What a *phone* is allowed to recognise a product by (PHASE3 §1.10).
+   *
+   * `'zar'` is *Dodatni žar* and `'ostalo'` is the fixed-price catch-all; both
+   * get UI behaviour of their own, and matching that behaviour on a name is how
+   * a rename becomes a Saturday-night bug. NULL for everything else, which is
+   * why the unique index below is **partial**: a partial index only indexes the
+   * rows its WHERE matches, so a hundred products with no system key are not a
+   * hundred collisions on NULL.
+   */
+  systemKey: text('system_key', { enum: ['zar', 'ostalo'] }),
   sort: integer('sort').notNull().default(0),
   active: integer('active').notNull().default(1),
   createdAt: text('created_at').notNull().default(''),
   updatedAt: text('updated_at'),
-}, t => [index('products_venue_cat_idx').on(t.venueId, t.categoryId, t.sort)])
+}, t => [
+  index('products_venue_cat_idx').on(t.venueId, t.categoryId, t.sort),
+  uniqueIndex('products_system_key_uq')
+    .on(t.venueId, t.systemKey)
+    .where(sql`system_key IS NOT NULL`),
+])
 
 /**
  * Costs live here in **milli-feninga per base unit**, and there are two of them:
@@ -526,7 +542,13 @@ export const shiftSummaries = sqliteTable('shift_summaries', {
 export const tabs = sqliteTable('tabs', {
   id: text('id').primaryKey(),
   venueId: text('venue_id').notNull().references(() => venues.id),
-  tableId: text('table_id').notNull().references(() => tables.id),
+  /**
+   * NULL is *Bez stola* (PHASE3 §1.11): a tab with no table, for the guests at
+   * the bar. `tabs_one_open_per_table_uq` keeps working unchanged, because
+   * SQLite treats two NULLs in a unique index as *different* values — so many
+   * table-less tabs may be open at once while one table still holds one tab.
+   */
+  tableId: text('table_id').references(() => tables.id),
   clientId: text('client_id').notNull(),
   status: text('status', { enum: ['open', 'paid', 'unpaid', 'voided'] }).notNull().default('open'),
   shiftId: text('shift_id').references(() => shifts.id),
@@ -897,6 +919,27 @@ export const stockCountLines = sqliteTable('stock_count_lines', {
 }, t => [
   uniqueIndex('stock_count_lines_uq').on(t.venueId, t.countId, t.stockItemId),
   index('stock_count_lines_item_idx').on(t.venueId, t.stockItemId, t.countId),
+])
+
+/**
+ * *Napomena* — one person's own words about one of his own nights (PHASE3 §1.6).
+ *
+ * Deliberately **not** a ledger table: no trigger, no entry in `LEDGER_TABLES`,
+ * and it may be edited and deleted. It is not an accounting row, it is a note,
+ * and a note nobody can correct is a note nobody writes. One per person per
+ * shift, which is what the unique index says.
+ */
+export const staffNotes = sqliteTable('staff_notes', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  shiftId: text('shift_id').notNull().references(() => shifts.id),
+  userId: text('user_id').notNull().references(() => users.id),
+  body: text('body').notNull(),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at'),
+}, t => [
+  uniqueIndex('staff_notes_shift_user_uq').on(t.venueId, t.shiftId, t.userId),
+  index('staff_notes_user_idx').on(t.venueId, t.userId, t.shiftId),
 ])
 
 // ---------------------------------------------------------------------------

@@ -242,7 +242,11 @@ export function tabView(q: Queryable, venueId: string, tabId: string): Tab {
 
   return {
     id: tab.id,
-    table_id: tab.tableId,
+    // `tabs.table_id` became nullable in `0003_phase3.sql` for *Bez stola*, but
+    // no route can create a table-less tab until WP3 widens `createOrderBody` —
+    // and the inner join above would drop such a row before it got here anyway.
+    // WP3 widens `Tab.table_id` and this join together.
+    table_id: tab.tableId!,
     table_name: row.tableName,
     client_id: tab.clientId,
     status: tab.status,

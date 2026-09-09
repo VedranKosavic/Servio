@@ -67,6 +67,51 @@ function readTriggersSql(): string {
 }
 
 /**
+ * Run the committed migrations with foreign keys switched **off**, then prove
+ * nothing was orphaned.
+ *
+ * This is SQLite's own prescription, not a shortcut. SQLite cannot take
+ * `NOT NULL` off a column; the only way is to build the new shape beside the
+ * old one, copy the rows, drop the original and rename — and while the original
+ * is gone, every child row pointing at it is briefly an orphan.
+ * `0003_phase3.sql` does exactly that to `tabs` (PHASE3 §1.11).
+ *
+ * The pragma has to be set *here* rather than inside the .sql file for a reason
+ * worth knowing: **`PRAGMA foreign_keys` is silently ignored inside a
+ * transaction**, and drizzle's migrator wraps each file in one. Its deferred
+ * cousin does work there, but deferring is not enough either — SQLite counts
+ * violations as they happen and a rename does not decrement that counter, so
+ * the COMMIT fails anyway.
+ *
+ * So: off before, `foreign_key_check` after, and back on. The check is the part
+ * that matters — it walks every row of every child table and returns the ones
+ * whose parent is missing. An empty answer means the rebuild kept its promises;
+ * anything else stops the boot here rather than one query at a time on a
+ * Saturday night.
+ */
+function migrateWithForeignKeysOff(sqlite: Database.Database, db: Db): void {
+  sqlite.pragma('foreign_keys = OFF')
+  try {
+    migrate(db, { migrationsFolder: resolve(process.cwd(), MIGRATIONS_DIR) })
+  } finally {
+    sqlite.pragma('foreign_keys = ON')
+  }
+
+  const orphans = sqlite.prepare('PRAGMA foreign_key_check').all() as {
+    table: string, rowid: number, parent: string
+  }[]
+  if (orphans.length > 0) {
+    const first = orphans.slice(0, 5)
+      .map(o => `${o.table}.rowid=${o.rowid} -> ${o.parent}`)
+      .join(', ')
+    throw new Error(
+      `migration left ${orphans.length} orphaned row(s): ${first}`
+      + (orphans.length > 5 ? ', …' : ''),
+    )
+  }
+}
+
+/**
  * Open a database, bring the schema up to date and install the triggers.
  * `:memory:` gives a throwaway database that lives only inside this process —
  * exactly what a test wants, with the real migrations and the real triggers.
@@ -78,7 +123,7 @@ export function openDatabase(file: string): { db: Db, sqlite: Database.Database 
   applyPragmas(sqlite)
 
   const db = drizzle(sqlite, { schema })
-  migrate(db, { migrationsFolder: resolve(process.cwd(), MIGRATIONS_DIR) })
+  migrateWithForeignKeysOff(sqlite, db)
   applyTriggers(sqlite)
 
   return { db, sqlite }

@@ -625,7 +625,9 @@ function requestEntryId(q: Queryable, venueId: string, adjustmentId: string): st
 
 function logDecision(
   tx: Tx, venueId: string, actor: Actor, adj: AdjustmentRow, lineName: string,
-  tableId: string, shiftId: string | null, at: string, resolvesId: string | null,
+  // Nullable since `0003_phase3.sql`: a *Bez stola* tab has no table, and the
+  // log template already has `table_id` optional for exactly that shape.
+  tableId: string | null, shiftId: string | null, at: string, resolvesId: string | null,
   note?: string,
 ): void {
   log(tx, venueId, {
@@ -633,7 +635,7 @@ function logDecision(
     body: {
       adjustment_id: adj.id,
       tab_id: adj.tabId,
-      table_id: tableId,
+      table_id: tableId ?? undefined,
       user_id: adj.requestedBy,
       approver_id: adj.approvedBy ?? undefined,
       line: lineName,

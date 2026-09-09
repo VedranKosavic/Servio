@@ -16,6 +16,8 @@ useHead({ title: 'Stolovi' })
 
 const api = useApi()
 const me = useMe()
+// Hydrates the outbox and the drafts off IndexedDB, and owns the flush timers.
+const { outbox } = useOutbox()
 
 const states = ref<TableState[]>([])
 const shift = ref<ShiftBrief | null>(null)
@@ -29,7 +31,7 @@ onMounted(() => {
   void me.requireSession()
 })
 
-const { ok: synced } = useChanges({
+useChanges({
   tables: (state) => {
     states.value = state.tables
     shift.value = state.shift
@@ -73,6 +75,72 @@ async function acceptOffer(tabId: string, tableName: string) {
   }
 }
 
+/**
+ * The room as **this phone** knows it: what the server says, plus the tables
+ * whose rounds are still on the queue.
+ *
+ * Without this, a waiter who locks a round with no signal watches Sto 12 stay
+ * drawn as free — and a table drawn free is a table a colleague will sit
+ * somebody at. The overlay tells the truth the phone actually has: the table is
+ * his, and this is what is on it. The amount is priced from the catalogue,
+ * which is allowed here because it is a number to read, never a number to send;
+ * the server prices the round for real when the entry lands.
+ */
+const priceById = computed(() =>
+  new Map((boot.value?.products ?? []).map(p => [p.id, p.price_fen])))
+
+const queuedByTable = computed(() => {
+  const totals = new Map<string, number>()
+  for (const entry of outbox.entries) {
+    if (entry.kind !== 'order') continue
+    const payload = entry.payload as {
+      table_id?: string | null
+      lines?: { product_id: string, qty: number }[]
+    }
+    if (!payload.table_id) continue
+    const sum = (payload.lines ?? []).reduce(
+      (n, line) => n + (priceById.value.get(line.product_id) ?? 0) * line.qty, 0,
+    )
+    totals.set(payload.table_id, (totals.get(payload.table_id) ?? 0) + sum)
+  }
+  return totals
+})
+
+const shownStates = computed<TableState[]>(() => {
+  const myId = me.user.value?.id ?? null
+  const merged = [...states.value]
+  for (const [tableId, fen] of queuedByTable.value) {
+    const existing = merged.findIndex(s => s.table_id === tableId)
+    if (existing >= 0) {
+      // The server already has a tab here; add what it has not seen yet.
+      const row = merged[existing]!
+      merged[existing] = {
+        ...row,
+        total_fen: row.total_fen + fen,
+        remaining_fen: row.remaining_fen + fen,
+      }
+      continue
+    }
+    merged.push({
+      table_id: tableId,
+      // No server id yet, and the tile only asks whether there is *a* tab.
+      tab_id: `local:${tableId}`,
+      tab_client_id: null,
+      total_fen: fen,
+      remaining_fen: fen,
+      assigned_to: myId,
+      assigned_to_initials: me.user.value?.initials ?? null,
+      opened_by_name: me.user.value?.name ?? null,
+      opened_at: null,
+      last_order_at: null,
+      pending_review: false,
+      late_sync: false,
+      offered_to: null,
+    })
+  }
+  return merged
+})
+
 /** My own open tabs — the counter the *Završi smjenu* bar carries (§6.2). */
 const myOpenTabs = computed(() => shift.value?.my_open_tabs ?? 0)
 
@@ -86,41 +154,27 @@ function openTable(tableId: string) {
     <div class="flex flex-1 flex-col">
       <WaiterHeader title="Stolovi">
         <template #right>
-          <span class="chip" :class="synced ? 'chip-good' : 'chip-danger'">
-            <span class="h-2 w-2 shrink-0 rounded-full bg-current" />
-            {{ synced ? 'Sinhronizovano' : 'Nema veze' }}
-          </span>
+          <WaiterSyncChip />
 
-          <div class="relative">
-            <button
-              type="button"
-              class="flex h-11 w-11 items-center justify-center rounded-full bg-accent text-base font-bold text-accent-ink"
-              aria-label="Korisnik"
-              @click="menuOpen = !menuOpen"
-            >
-              {{ me.user.value?.initials ?? '?' }}
-            </button>
-
-            <template v-if="menuOpen">
-              <!-- A tap anywhere else closes the menu. -->
-              <div class="fixed inset-0 z-30" @click="menuOpen = false" />
-              <div class="card absolute right-0 top-full z-40 mt-2 flex w-60 flex-col gap-2 p-2">
-                <p class="px-2 pt-1 text-sm text-text-2">
-                  {{ me.user.value?.name }}
-                </p>
-                <NuxtLink to="/k/smjena" class="btn w-full">
-                  Završi smjenu
-                </NuxtLink>
-                <button type="button" class="btn btn-ghost w-full" @click="me.logout()">
-                  Promijeni korisnika
-                </button>
-              </div>
-            </template>
-          </div>
+          <button
+            type="button"
+            class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-base font-bold text-accent-ink"
+            aria-label="Korisnik"
+            @click="menuOpen = true"
+          >
+            {{ me.user.value?.initials ?? '?' }}
+          </button>
         </template>
       </WaiterHeader>
 
+      <WaiterOutboxBanner />
+
       <div class="flex flex-1 flex-col gap-4 py-4">
+        <!-- A queued body the server refused. It blocks its own table only. -->
+        <WaiterFailedCard />
+
+        <!-- A new build is waiting, and this is a safe moment to take it. -->
+        <WaiterUpdatePrompt />
         <!-- Someone handed me a table -->
         <div
           v-for="offer in offers"
@@ -180,7 +234,7 @@ function openTable(tableId: string) {
           v-if="boot"
           :tables="boot.tables"
           :zone="zone"
-          :states="states"
+          :states="shownStates"
           :my-user-id="me.user.value?.id ?? null"
           @select="openTable"
         />
@@ -196,6 +250,8 @@ function openTable(tableId: string) {
         </p>
       </div>
     </div>
+
+    <WaiterAvatarSheet v-if="menuOpen" @close="menuOpen = false" />
 
     <template #fallback>
       <p class="py-10 text-center text-text-2">

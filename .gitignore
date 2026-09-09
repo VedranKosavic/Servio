@@ -17,3 +17,8 @@ data/
 deploy/.deploy.env
 uploads/
 .DS_Store
+
+# Playwright's own output: traces, screenshots and the HTML report of a run.
+# The specs are committed; what one run of them produced is not.
+test-results/
+playwright-report/
