@@ -17,17 +17,25 @@
  *
  * Add a table to the database with the right col/row and it appears here; this
  * file never learns how many tables the café has.
+ *
+ * **What WP9 changed.** The tile used to guess whose table it was by comparing
+ * `opened_by_name` to the name in localStorage. It now reads `assigned_to`
+ * against the session's user id, which is a different question and the right
+ * one: a table handed over mid-shift belongs to whoever holds it now, not to
+ * whoever opened it. The initials come down the wire too
+ * (`assigned_to_initials`), so the plan no longer needs the staff list to draw a
+ * colleague's badge, and the amount on a tile is `remaining_fen` — what is still
+ * owed — rather than the full total of a tab already half paid.
  */
 import { formatAmount } from '#shared/money'
-import type { TableState, User, VenueTable, Zone } from '#shared/types'
+import type { TableState, VenueTable, Zone } from '#shared/types'
 
 const props = defineProps<{
   tables: VenueTable[]
   zone: Zone
   states: TableState[]
-  users: User[]
-  /** The waiter holding the phone, so his own tables can be picked out. */
-  myName: string | null
+  /** The person holding the phone, from `GET /api/me`. */
+  myUserId: string | null
 }>()
 
 defineEmits<{ select: [tableId: string] }>()
@@ -36,11 +44,12 @@ interface Cell {
   id: string
   label: string
   sub: string | null
-  variant: 'free' | 'mine' | 'other'
+  variant: 'free' | 'mine' | 'other' | 'offered'
+  attention: boolean
+  late: boolean
 }
 
 const stateById = computed(() => new Map(props.states.map(s => [s.table_id, s])))
-const initialsByName = computed(() => new Map(props.users.map(u => [u.name, u.initials])))
 
 /** "Sto 7" → "7": every circle would otherwise say the same word. */
 function shortLabel(name: string): string {
@@ -50,21 +59,27 @@ function shortLabel(name: string): string {
 function toCell(table: VenueTable): Cell {
   const state = stateById.value.get(table.id)
   const label = shortLabel(table.name)
+  const base = { id: table.id, label, attention: false, late: false }
 
-  if (!state?.tab_id) return { id: table.id, label, sub: null, variant: 'free' }
+  if (!state?.tab_id) return { ...base, sub: null, variant: 'free' }
 
-  if (state.opened_by_name && state.opened_by_name === props.myName) {
+  const common = {
+    ...base,
+    attention: state.pending_review,
+    late: state.late_sync,
+  }
+
+  // Offered to me and not taken yet: not mine, but one tap from it.
+  if (state.offered_to && state.offered_to === props.myUserId) {
+    return { ...common, sub: 'nudi', variant: 'offered' }
+  }
+
+  if (state.assigned_to && state.assigned_to === props.myUserId) {
     // The amount without " KM": at 10 px the currency is noise, not information.
-    return { id: table.id, label, sub: formatAmount(state.total_fen), variant: 'mine' }
+    return { ...common, sub: formatAmount(state.remaining_fen), variant: 'mine' }
   }
 
-  const name = state.opened_by_name ?? ''
-  return {
-    id: table.id,
-    label,
-    sub: initialsByName.value.get(name) ?? name.slice(0, 2).toUpperCase(),
-    variant: 'other',
-  }
+  return { ...common, sub: state.assigned_to_initials, variant: 'other' }
 }
 
 const zoneTables = computed(() => props.tables.filter(t => t.zone === props.zone))
@@ -113,6 +128,8 @@ const rows = computed(() => {
             :label="cell.label"
             :sub="cell.sub"
             :variant="cell.variant"
+            :attention="cell.attention"
+            :late="cell.late"
             @select="$emit('select', cell.id)"
           />
           <div
@@ -128,6 +145,8 @@ const rows = computed(() => {
                 :label="cell.label"
                 :sub="cell.sub"
                 :variant="cell.variant"
+                :attention="cell.attention"
+                :late="cell.late"
                 @select="$emit('select', cell.id)"
               />
             </div>
@@ -149,6 +168,8 @@ const rows = computed(() => {
             :label="cell.label"
             :sub="cell.sub"
             :variant="cell.variant"
+            :attention="cell.attention"
+            :late="cell.late"
             :small="line.small"
             @select="$emit('select', cell.id)"
           />
@@ -156,10 +177,11 @@ const rows = computed(() => {
       </div>
     </div>
 
-    <div class="flex items-center justify-center gap-3.5 text-[13px] text-text-2">
-      <span class="flex items-center gap-1.5"><i class="inline-block h-3 w-3 rounded-full bg-accent" />moj sto</span>
-      <span class="flex items-center gap-1.5"><i class="inline-block h-3 w-3 rounded-full bg-line" />kolegin</span>
-      <span class="flex items-center gap-1.5"><i class="inline-block h-3 w-3 rounded-full border border-muted" />slobodan</span>
+    <div class="flex flex-wrap items-center justify-center gap-x-3.5 gap-y-1 text-[13px] text-text-2">
+      <span class="flex items-center gap-1.5"><i class="inline-block size-3 rounded-full bg-accent" />moj sto</span>
+      <span class="flex items-center gap-1.5"><i class="inline-block size-3 rounded-full bg-line" />kolegin</span>
+      <span class="flex items-center gap-1.5"><i class="inline-block size-3 rounded-full border border-muted" />slobodan</span>
+      <span class="flex items-center gap-1.5"><i class="inline-block size-3 rounded-full border-2 border-warn" />čeka</span>
     </div>
   </div>
 </template>

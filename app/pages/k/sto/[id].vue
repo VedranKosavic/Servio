@@ -1,32 +1,33 @@
 <script setup lang="ts">
 /**
- * Narudžba — the round being built for one table.
+ * Narudžba — the round being built for one table, and the till that closes it.
  *
- * The draft lives in the cart store (localStorage), not here, so walking away
- * to another table and coming back does not lose the taps. This screen only
- * turns the catalog into tiles and, when *Pošalji šankeru* is tapped, hands the
- * draft to `POST /api/orders`.
+ * The draft lives in the cart store (localStorage), not here, so walking away to
+ * another table and coming back does not lose the taps. This screen turns the
+ * catalogue into tiles, hands the draft to `POST /api/orders`, and opens the
+ * *Naplati* sheet when the guests ask for the bill.
  *
- * Note what is never sent: a price. The tiles show prices so the waiter can
- * read them out to the guest, but the body carries product ids and quantities
- * and the server does the arithmetic — a phone that could send a price could
- * send any price.
+ * Note what is never sent: a price, and — since WP9 — a person. The tiles show
+ * prices so the waiter can read them out to the guest, but the body carries
+ * product ids and quantities; and who locked the round is the session's
+ * business, not the body's (BACKEND §5.7). A phone that could send either could
+ * send any price under anybody's name.
  */
 import { formatKm } from '#shared/money'
-import type { Product, TableState } from '#shared/types'
+import type { PaymentMethod, Product, TableState } from '#shared/types'
 
 const route = useRoute()
 const api = useApi()
-const session = useSessionStore()
+const me = useMe()
 const cart = useCartStore()
 
 const tableId = computed(() => String(route.params.id))
 
 onMounted(() => {
-  if (!session.isWaiter) navigateTo('/')
+  void me.requireSession()
 })
 
-const { data: boot } = useBootstrapData()
+const { data: boot, refresh: refreshBoot } = useBootstrapData()
 
 const table = computed(() => boot.value?.tables.find(t => t.id === tableId.value) ?? null)
 const tableName = computed(() => table.value?.name ?? 'Sto')
@@ -34,18 +35,19 @@ const zoneLabel = computed(() => (table.value?.zone === 'basta' ? 'Bašta' : 'Un
 
 useHead({ title: tableName })
 
-// The table's open tab, if a round was already locked on it tonight. Read once
-// on open — the floor plan is where this number is kept fresh.
+/**
+ * The table's open tab. It rides in on the same `/api/changes` answer as
+ * everything else, so a colleague adding a round to this table while the sheet
+ * is open moves the amount under the *Naplati* button within a poll.
+ */
 const tabState = ref<TableState | null>(null)
-async function loadTabState() {
-  try {
-    const { tables } = await api.getTablesState()
-    tabState.value = tables.find(r => r.table_id === tableId.value) ?? null
-  } catch {
-    tabState.value = null
-  }
-}
-onMounted(loadTabState)
+const { refresh: refreshState } = useChanges({
+  tables: (state) => {
+    tabState.value = state.tables.find(r => r.table_id === tableId.value) ?? null
+  },
+  menu: () => refreshBoot(),
+  me: () => me.load(),
+}, { intervalMs: 12_000 })
 
 // -- The menu ---------------------------------------------------------------
 
@@ -111,8 +113,8 @@ const toast = ref<string | null>(null)
 
 // A timer that outlives the screen would navigate a waiter who already left.
 let leaveTimer: ReturnType<typeof setTimeout> | null = null
-function leaveSoon() {
-  leaveTimer = setTimeout(() => navigateTo('/k'), 2000)
+function leaveSoon(delayMs = 2000) {
+  leaveTimer = setTimeout(() => navigateTo('/k'), delayMs)
 }
 onBeforeUnmount(() => {
   if (leaveTimer) clearTimeout(leaveTimer)
@@ -120,8 +122,7 @@ onBeforeUnmount(() => {
 
 async function send() {
   const clientId = cart.clientIdFor(tableId.value)
-  const userId = session.state.userId
-  if (!clientId || !userId || count.value === 0 || sending.value) return
+  if (!clientId || count.value === 0 || sending.value) return
 
   sending.value = true
   sendError.value = null
@@ -145,47 +146,89 @@ async function send() {
     leaveSoon()
   } catch (err) {
     // The draft is deliberately left alone: retrying is the whole plan.
-    const e = err as { code?: string, message?: string }
-    sendError.value = e.code === 'NETWORK'
-      ? 'Nema veze — pokušaj ponovo'
-      : (e.message ?? 'Nema veze — pokušaj ponovo')
+    sendError.value = apiErrorText(err, 'Nema veze — pokušaj ponovo')
+    void me.handleAuthError(err)
   } finally {
     sending.value = false
   }
 }
 
-// -- Naplaćeno --------------------------------------------------------------
+// -- Naplata ----------------------------------------------------------------
 
 const payOpen = ref(false)
 const paying = ref(false)
 const payError = ref<string | null>(null)
 
-async function pay() {
+const paymentMethods = computed<PaymentMethod[]>(() =>
+  me.settings.value?.payment_methods ?? ['cash'])
+
+async function pay(payment: { method: PaymentMethod, amount_fen: number, received_fen?: number }) {
   const tabId = tabState.value?.tab_id
-  const userId = session.state.userId
-  if (!tabId || !userId || paying.value) return
+  if (!tabId || paying.value) return
 
   paying.value = true
   payError.value = null
   try {
-    await api.postPayment({
+    const result = await api.postPayment({
+      // Minted per attempt and reused on every retry: `payments_client_uq` is
+      // what turns a retried payment into one row instead of two charges.
       client_id: crypto.randomUUID(),
       tab_id: tabId,
-      method: 'cash',
-      amount_fen: tabState.value?.remaining_fen ?? 0,
+      method: payment.method,
+      amount_fen: payment.amount_fen,
+      ...(payment.received_fen !== undefined ? { received_fen: payment.received_fen } : {}),
       tip_fen: 0,
       covers_order_client_ids: [],
     })
     payOpen.value = false
-    tabState.value = null
-    toast.value = `Naplaćeno · ${tableName.value}`
-    leaveSoon()
+    await refreshState()
+
+    if (result.remaining_fen > 0) {
+      // A part payment: the table stays, and so does the waiter.
+      toast.value = `Naplaćeno · ostaje ${formatKm(result.remaining_fen)}`
+      return
+    }
+    toast.value = result.change_fen > 0
+      ? `Naplaćeno · vrati ${formatKm(result.change_fen)}`
+      : `Naplaćeno · ${tableName.value}`
+    leaveSoon(result.change_fen > 0 ? 3500 : 2000)
   } catch (err) {
-    const e = err as { message?: string }
-    payError.value = e.message ?? 'Nema veze — pokušaj ponovo'
+    payError.value = apiErrorText(err)
+    void me.handleAuthError(err)
   } finally {
     paying.value = false
   }
+}
+
+async function markUnpaid(reason: 'walked_out' | 'dispute' | 'other') {
+  const tabClientId = tabState.value?.tab_client_id
+  if (!tabClientId || paying.value) return
+
+  paying.value = true
+  payError.value = null
+  try {
+    await api.markUnpaid({
+      client_id: crypto.randomUUID(),
+      // Keyed by the tab's own client id, not by a server id: a guest can walk
+      // out while the phone is offline, on a tab the server has never seen.
+      tab_client_id: tabClientId,
+      reason,
+    })
+    payOpen.value = false
+    await refreshState()
+    toast.value = `Označeno: nije plaćeno · ${tableName.value}`
+    leaveSoon(2500)
+  } catch (err) {
+    payError.value = apiErrorText(err)
+    void me.handleAuthError(err)
+  } finally {
+    paying.value = false
+  }
+}
+
+function openPay() {
+  payError.value = null
+  payOpen.value = true
 }
 </script>
 
@@ -195,7 +238,7 @@ async function pay() {
       <WaiterHeader :title="tableName" back-to="/k">
         <template #right>
           <span class="chip">{{ zoneLabel }}</span>
-          <span v-if="tabState?.tab_id" class="num font-semibold">{{ formatKm(tabState.total_fen) }}</span>
+          <span v-if="tabState?.tab_id" class="num font-semibold">{{ formatKm(tabState.remaining_fen) }}</span>
         </template>
       </WaiterHeader>
 
@@ -203,15 +246,20 @@ async function pay() {
         <!-- What is already locked on this table -->
         <div v-if="tabState?.tab_id" class="card flex items-center gap-3 p-3">
           <div class="grow">
-            <div class="text-sm text-text-2">
+            <div class="flex items-center gap-2 text-sm text-text-2">
               Zaključene ture
+              <span v-if="tabState.pending_review" class="chip chip-warn">naplata čeka</span>
+              <span v-if="tabState.late_sync" class="chip chip-warn">kasno</span>
             </div>
             <div class="num text-2xl font-semibold">
-              {{ formatKm(tabState.total_fen) }}
+              {{ formatKm(tabState.remaining_fen) }}
+            </div>
+            <div v-if="tabState.remaining_fen !== tabState.total_fen" class="num text-sm text-text-2">
+              od {{ formatKm(tabState.total_fen) }}
             </div>
           </div>
-          <button type="button" class="btn btn-ghost" @click="payOpen = true">
-            Naplaćeno
+          <button type="button" class="btn btn-accent" @click="openPay">
+            Naplati
           </button>
         </div>
 
@@ -287,30 +335,24 @@ async function pay() {
       @confirm="addShisha"
     />
 
-    <!-- Naplaćeno? -->
-    <div v-if="payOpen && tabState?.tab_id" class="fixed inset-0 z-50">
-      <div class="absolute inset-0 bg-black/55" @click="payOpen = false" />
-      <div class="absolute inset-x-0 bottom-0 mx-auto flex w-full max-w-3xl flex-col gap-3 rounded-t-[20px] border-t border-line bg-surface px-4 pb-6 pt-3">
-        <div class="mx-auto h-1 w-10 rounded-sm bg-line" />
-        <p class="text-center text-xl font-semibold">
-          {{ tableName }} · <span class="num">{{ formatKm(tabState.total_fen) }}</span> · Naplaćeno?
-        </p>
-        <p v-if="payError" class="text-center text-danger">
-          {{ payError }}
-        </p>
-        <button type="button" class="btn btn-accent h-14 text-lg" :disabled="paying" @click="pay">
-          Naplaćeno
-        </button>
-        <button type="button" class="btn btn-ghost" @click="payOpen = false">
-          Otkaži
-        </button>
-      </div>
-    </div>
+    <!-- Naplati -->
+    <WaiterPaySheet
+      v-if="payOpen && tabState?.tab_id"
+      :table-name="tableName"
+      :remaining-fen="tabState.remaining_fen"
+      :total-fen="tabState.total_fen"
+      :methods="paymentMethods"
+      :busy="paying"
+      :error="payError"
+      @close="payOpen = false"
+      @pay="pay"
+      @unpaid="markUnpaid"
+    />
 
-    <!-- Sent -->
+    <!-- Sent / paid -->
     <div
       v-if="toast"
-      class="fixed inset-x-0 bottom-28 z-50 mx-auto w-max rounded-xl bg-good-soft px-4 py-3 font-semibold text-good"
+      class="fixed inset-x-0 bottom-28 z-50 mx-auto w-max max-w-[92vw] rounded-xl bg-good-soft px-4 py-3 text-center font-semibold text-good"
     >
       {{ toast }}
     </div>

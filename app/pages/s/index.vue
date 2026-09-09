@@ -11,15 +11,17 @@ import { useTimestamp } from '@vueuse/core'
 
 useHead({ title: 'Narudžbe' })
 
-const session = useSessionStore()
+const me = useMe()
 const { open, done, busy, errorMessage, online, loaded, markDone } = usePrepPolling()
 
-// Who is holding the tablet is decided on the start screen; without it there is
-// nobody to record against *Gotovo*. The session lives in localStorage, which
-// only exists in the browser, so the check waits for the client.
+// Who is holding the tablet is the server's answer now, not localStorage's:
+// *Gotovo* is recorded against the session, so a screen with no session has
+// nobody to record against and belongs back at the lock screen.
 onMounted(() => {
-  if (!session.isSet) navigateTo('/')
+  void me.requireSession()
 })
+
+const menuOpen = ref(false)
 
 // One clock for the whole screen: "prije 5 s" keeps counting between polls.
 const now = useTimestamp({ interval: 2000 })
@@ -35,9 +37,31 @@ const now = useTimestamp({ interval: 2000 })
         <span class="size-2 rounded-full bg-current" />
         {{ online ? 'Sinhronizovano' : 'Nema veze' }}
       </span>
-      <span class="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface-2 text-sm font-bold">
-        {{ session.state.initials ?? '?' }}
-      </span>
+      <div class="relative">
+        <button
+          type="button"
+          class="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface-2 text-sm font-bold"
+          aria-label="Korisnik"
+          @click="menuOpen = !menuOpen"
+        >
+          {{ me.user.value?.initials ?? '?' }}
+        </button>
+
+        <template v-if="menuOpen">
+          <div class="fixed inset-0 z-30" @click="menuOpen = false" />
+          <div class="card absolute right-0 top-full z-40 mt-2 flex w-60 flex-col gap-2 p-2">
+            <p class="px-2 pt-1 text-sm text-text-2">
+              {{ me.user.value?.name }}
+            </p>
+            <NuxtLink to="/k/smjena" class="btn w-full">
+              Završi smjenu
+            </NuxtLink>
+            <button type="button" class="btn btn-ghost w-full" @click="me.logout()">
+              Promijeni korisnika
+            </button>
+          </div>
+        </template>
+      </div>
     </header>
 
     <main class="flex flex-1 flex-col gap-3 py-4">
