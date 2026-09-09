@@ -8,6 +8,7 @@ import { nowIso } from '../utils/ids'
 import type { Tab, TableState } from '#shared/types'
 import type { Db, Queryable } from './types'
 import { tabTotal } from './orders'
+import { bump } from './contracts'
 
 /**
  * `GET /api/tables/state` — one row per table, whether or not it has guests.
@@ -133,6 +134,9 @@ export function payTab(db: Db, venueId: string, tabId: string, userId: string): 
       .set({ status: 'paid', closedAt: nowIso(), closedBy: userId })
       .where(eq(schema.tabs.id, tabId))
       .run()
+
+    // The sync hook (BACKEND §4.1): the table is free again on every floor plan.
+    bump(tx, venueId, 'table', tabId)
 
     return getTab(tx, venueId, tabId)
   })

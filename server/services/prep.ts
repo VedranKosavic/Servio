@@ -11,6 +11,7 @@ import { conflict, notFound } from '../utils/errors'
 import { nowIso } from '../utils/ids'
 import type { Prep, PrepOrder } from '#shared/types'
 import type { Db, Queryable } from './types'
+import { bump } from './contracts'
 
 /** How many finished rounds the bartender can still see. */
 const DONE_LIMIT = 10
@@ -50,6 +51,10 @@ export function markPrepared(db: Db, venueId: string, orderId: string, userId: s
       .set({ preparedAt: nowIso(), preparedBy: userId })
       .where(eq(schema.orders.id, orderId))
       .run()
+
+    // The sync hook (BACKEND §4.1): the ticket left the queue, so every
+    // bartender screen in the building has a stale list until it re-polls.
+    bump(tx, venueId, 'prep', orderId)
 
     return getPrepOrder(tx, venueId, orderId)
   })

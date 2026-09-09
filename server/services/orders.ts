@@ -15,12 +15,14 @@ import { and, eq, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { badRequest, notFound } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
-import { ensureOpenShift, insertMovement, nextShiftSeq, unitCost } from './contracts'
+import { bump, ensureOpenShift, insertMovement, nextShiftSeq, unitCost } from './contracts'
+import { maxSeq } from './changes'
+import { emitChange } from '../utils/bus'
 import type { Actor, CreateOrderBody, CreateOrderResult, OrderLineInput } from '#shared/types'
 import type { Db, Queryable, Tx } from './types'
 
 export function createOrder(db: Db, venueId: string, body: CreateOrderBody): CreateOrderResult {
-  return db.transaction((tx) => {
+  const result = db.transaction((tx) => {
     /**
      * Idempotency, the property that lets a phone retry over bad Wi-Fi.
      *
@@ -109,6 +111,15 @@ export function createOrder(db: Db, venueId: string, body: CreateOrderBody): Cre
       orderTotalFen += insertLine(tx, venueId, orderId, line, user.id, at, shift.id)
     }
 
+    // The sync hook (BACKEND §4.1). Three entities move when a round is locked:
+    // the floor plan (the table now has a total), the bartender's queue and the
+    // shelf. Inside the transaction, after the business rows — a lock that rolls
+    // back must not tell a phone it happened. WP3 keeps these when it rewrites
+    // this service; `changes-coverage.test.ts` is what stops them being dropped.
+    bump(tx, venueId, 'table', tabId)
+    bump(tx, venueId, 'prep', orderId)
+    bump(tx, venueId, 'stock')
+
     return {
       order_id: orderId,
       tab_id: tabId,
@@ -117,6 +128,16 @@ export function createOrder(db: Db, venueId: string, body: CreateOrderBody): Cre
       already_applied: false,
     }
   })
+
+  // **After** `db.transaction()` returns, never inside it: until the transaction
+  // comes back the rows are written but not committed, and a listener that went
+  // looking for them could see nothing — or see rows a later throw rolls back.
+  // This is the hook point every mutating service uses (BACKEND §4.1); in Korak 2
+  // the only listener is the alert drainer, and a Phase 5 SSE endpoint plugs in
+  // here without touching a line of business logic.
+  emitChange(venueId, { seq: maxSeq(db, venueId), entity: 'table', entityId: result.tab_id })
+
+  return result
 }
 
 /**

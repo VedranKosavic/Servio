@@ -270,31 +270,21 @@ export function onHand(q: Queryable, venueId: string, stockItemId: string): numb
 // ===========================================================================
 
 /** WP5 (`services/log.ts`). Writes one Dnevnik entry inside the caller's transaction. */
-export function log(_tx: Tx, _venueId: string, _e: {
-  kind: LogKind
-  body: unknown
-  actorId?: string | null
-  deviceId?: string | null
-  ref?: { type: string, id: string }
-  shiftId?: string | null
-  resolvesId?: string | null
-}): string {
-  return notImplemented('log')
-}
+export { log } from './log'
 
 /** WP5 (`services/changes.ts`). One `changes` row; a mutation without one is a bug. */
-export function bump(_tx: Tx, _venueId: string, _entity: ChangeEntity, _entityId?: string): number {
-  return notImplemented('bump')
-}
+export { bump } from './changes'
 
 /** WP5 (`services/alerts.ts`). Dedupes on `(venue, rule, ref_type, ref_id)`. */
-export function queueAlert(_tx: Tx, _venueId: string, _a: {
-  ruleKey: AlertRuleKey
-  ref: { type: string, id: string }
-  payload: Record<string, unknown>
-}): void {
-  return notImplemented('queueAlert')
-}
+export { queueAlert } from './alerts'
+
+/**
+ * WP1 (`services/devices.ts`) per §12 — but the auth package has not landed and
+ * creating its file here is the merge conflict §12 exists to prevent, so WP5
+ * parked the body in `services/heartbeat.ts`. WP1 moves it and repoints this
+ * line; `api/devices/heartbeat.post.ts` never changes.
+ */
+export { heartbeat } from './heartbeat'
 
 /** WP2 (`services/cash.ts`). The reconciliation: venue = drawer + Σ waiters. */
 export function expectedCash(_q: Queryable, _venueId: string, _shiftId: string): {

@@ -12,6 +12,7 @@ import { badRequest, notFound } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
 import type { CreateDeliveryBody, StockItem, StockLastMovement } from '#shared/types'
 import type { Db, Queryable, Tx } from './types'
+import { bump } from './contracts'
 
 /** On hand per stock item, for one venue, in one query. */
 export function onHandByItem(db: Queryable, venueId: string): Map<string, number> {
@@ -157,6 +158,10 @@ export function createDelivery(db: Db, venueId: string, body: CreateDeliveryBody
         createdAt: at,
       }).run()
     }
+
+    // The sync hook (BACKEND §4.1): the shelf moved, so every *Roba* screen
+    // and the aroma grid on the shisha sheet are stale until they re-poll.
+    bump(tx, venueId, 'stock')
 
     return getStock(tx, venueId)
   })

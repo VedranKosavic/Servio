@@ -1,0 +1,283 @@
+/**
+ * The venue-wide change sequence (`docs/BACKEND.md` §4.1).
+ *
+ * One Node process, no Redis, no WebSockets: sync in Korak 2 is a phone asking
+ * "anything new since 812?" every 15 s. The `changes` table is that cursor — one
+ * row per mutating transaction, `seq` a global AUTOINCREMENT, monotonic per
+ * venue because every read filters by `venue_id`.
+ *
+ * Two properties carry the whole design:
+ *
+ *   **`bump` runs inside the caller's transaction.** Its argument is a `Tx`, not
+ *   a `Db`, so the type system refuses a call made outside one. A round that
+ *   fails a stock check rolls back its `changes` row with everything else, and a
+ *   phone is never told about a round that does not exist.
+ *
+ *   **The rows are keys, never data.** `getChanges` answers *which entities
+ *   moved*, then re-reads each snapshot from the ledgers in the same request. So
+ *   a stale phone replaying an old response cannot paint an old floor plan over
+ *   a newer one; all it can do is advance the largest `seq` it has seen.
+ */
+import { and, asc, desc, eq, gt, inArray, sql } from 'drizzle-orm'
+import { schema } from '../database/client'
+import { nowIso } from '../utils/ids'
+import type { Actor, ChangeEntity } from '#shared/types'
+import type {
+  ChangeRow, ChangesResult, CountBrief, PendingCounts, ShiftSnapshot,
+} from '#shared/types'
+import type { Db, Queryable, Tx } from './types'
+import { currentShift } from './contracts'
+import { getTablesState } from './tabs'
+import { getPrep } from './prep'
+import { getStock } from './stock'
+
+/**
+ * One `changes` row, returning its `seq`.
+ *
+ * Called **inside** every mutating transaction, after the business rows. A
+ * mutating transaction without a `bump` is a bug and
+ * `tests/unit/changes-coverage.test.ts` is what proves it: one fixture call per
+ * non-GET route, asserting `maxSeq` grew.
+ *
+ * The caller emits on the bus *after* `db.transaction()` returns — see
+ * `server/utils/bus.ts` for why never before.
+ */
+export function bump(tx: Tx, venueId: string, entity: ChangeEntity, entityId?: string): number {
+  const row = tx.insert(schema.changes)
+    .values({ venueId, entity, entityId: entityId ?? null, createdAt: nowIso() })
+    .returning({ seq: schema.changes.seq })
+    .get()
+  return row.seq
+}
+
+/** The venue's cursor right now. 0 on a freshly seeded database. */
+export function maxSeq(db: Queryable, venueId: string): number {
+  const row = db.select({ max: sql<number | null>`max(${schema.changes.seq})` })
+    .from(schema.changes)
+    .where(eq(schema.changes.venueId, venueId))
+    .get()
+  return row?.max ?? 0
+}
+
+/** The oldest cursor still in the table. A `since` below it has fallen behind the prune. */
+export function minSeq(db: Queryable, venueId: string): number {
+  const row = db.select({ min: sql<number | null>`min(${schema.changes.seq})` })
+    .from(schema.changes)
+    .where(eq(schema.changes.venueId, venueId))
+    .get()
+  return row?.min ?? 0
+}
+
+/**
+ * The ETag tag for a role-and-user-sensitive read (§4.2).
+ *
+ * `maxSeq` alone is not enough and the reason is the shared bar tablet: one
+ * browser profile that Emir, then Haris, then Amar all sign into.
+ * `assigned_to_initials` renders a colleague's tile differently from your own,
+ * `shift.my_settled` is literally the actor's own number, and `pending` is
+ * withheld from waiters entirely. Two people at the same `maxSeq` must therefore
+ * get two different tags, or the second one is served the first one's numbers
+ * out of his own browser cache with the server never being asked.
+ */
+export function changeTag(db: Queryable, venueId: string, actor: Actor): string {
+  return `${maxSeq(db, venueId)}-${actor.role}-${actor.userId.slice(0, 8)}`
+}
+
+/**
+ * `GET /api/changes?since=` — the one call the waiter and bartender screens make.
+ *
+ * `since = 0`, or a `since` the nightly prune has passed, answers `full: true`
+ * and every snapshot: a phone that has been off for a week gets a clean slate
+ * rather than a partial repaint over stale state.
+ */
+export function getChanges(
+  db: Queryable, venueId: string, actor: Actor, since: number,
+): ChangesResult {
+  const top = maxSeq(db, venueId)
+  const oldest = minSeq(db, venueId)
+
+  // `since` below the oldest surviving row means the prune has passed this
+  // cursor and we can no longer say what it missed. `oldest > 0` guards the
+  // empty table, where nothing has been pruned because nothing has happened.
+  const behindPrune = oldest > 0 && since > 0 && since < oldest - 1
+  const full = since <= 0 || behindPrune
+
+  const moved: ChangeRow[] = full
+    ? []
+    : db.select({
+        entity: sql<ChangeEntity>`${schema.changes.entity}`,
+        seq: sql<number>`max(${schema.changes.seq})`,
+      })
+      .from(schema.changes)
+      .where(and(eq(schema.changes.venueId, venueId), gt(schema.changes.seq, since)))
+      .groupBy(schema.changes.entity)
+      .all()
+
+  const entities = new Set<ChangeEntity>(full ? ALL_ENTITIES : moved.map(r => r.entity))
+
+  const result: ChangesResult = {
+    seq: top,
+    full,
+    changes: full ? allChangeRows(db, venueId) : moved,
+  }
+
+  const isStaffFloor = actor.role === 'waiter'
+
+  if (entities.has('table')) result.tables_state = getTablesState(db, venueId)
+  if (entities.has('prep')) result.prep = { seq: top, ...getPrep(db, venueId) }
+  if (entities.has('stock')) result.stock = getStock(db, venueId)
+  if (entities.has('count')) result.counts = listCountBriefs(db, venueId)
+  if (entities.has('shift')) result.shift = shiftSnapshot(db, venueId)
+  // The queues are decisions, and a waiter decides nothing: §4.1 attaches
+  // `pending` for admins and bartenders only.
+  if (entities.has('adjustment') && !isStaffFloor) result.pending = pendingCounts(db, venueId)
+  if (entities.has('menu') || entities.has('settings')) {
+    result.menu_version = menuVersion(db, venueId)
+  }
+  // The Dnevnik is owner-only (CLAUDE.md), so even the fact that it moved is.
+  if (entities.has('log') && actor.role === 'admin') result.log_max_at = logMaxAt(db, venueId)
+
+  // `me` is a session refresh, and the session envelope is WP1's `getMe`
+  // (§5.5). Until it lands there is nothing to attach; the `user`/`device`
+  // entity still arrives in `changes[]`, which is what tells the phone to refetch.
+
+  return result
+}
+
+/** Every entity the feed can talk about. `full` answers as if all of them moved. */
+export const ALL_ENTITIES: ChangeEntity[] = [
+  'table', 'prep', 'stock', 'count', 'shift', 'adjustment',
+  'menu', 'settings', 'user', 'device', 'log',
+]
+
+/**
+ * A `full` answer still reports the per-entity sequences it knows, so the
+ * phone's next incremental poll starts from real numbers. On a freshly seeded
+ * venue this is empty — nothing has ever been bumped — and `seq: 0` is the
+ * honest cursor.
+ */
+function allChangeRows(db: Queryable, venueId: string): ChangeRow[] {
+  return db.select({
+    entity: sql<ChangeEntity>`${schema.changes.entity}`,
+    seq: sql<number>`max(${schema.changes.seq})`,
+  })
+    .from(schema.changes)
+    .where(eq(schema.changes.venueId, venueId))
+    .groupBy(schema.changes.entity)
+    .all()
+}
+
+function shiftSnapshot(db: Queryable, venueId: string): ShiftSnapshot | null {
+  const shift = currentShift(db, venueId)
+  if (!shift) return null
+  return {
+    id: shift.id,
+    business_date: shift.businessDate,
+    status: shift.status,
+    opened_at: shift.openedAt,
+  }
+}
+
+function listCountBriefs(db: Queryable, venueId: string): CountBrief[] {
+  return db.select({
+    id: schema.stockCounts.id,
+    status: schema.stockCounts.status,
+    phase: schema.stockCounts.phase,
+  })
+    .from(schema.stockCounts)
+    .where(and(
+      eq(schema.stockCounts.venueId, venueId),
+      eq(schema.stockCounts.status, 'submitted'),
+    ))
+    .orderBy(asc(schema.stockCounts.submittedAt))
+    .all()
+}
+
+/**
+ * The four queues, as counts.
+ *
+ * These are `count(*)`s over four ledgers rather than calls into four packages'
+ * `pendingFor()` — the *decidable list* is `owner.ts`'s job (§6.10) and needs
+ * titles, amounts and route pairs; the feed needs only "is there anything", so
+ * a badge can appear on a phone that is not the owner's.
+ */
+export function pendingCounts(db: Queryable, venueId: string): PendingCounts {
+  const count = (n: number | null | undefined) => n ?? 0
+
+  const adjustments = db.select({ n: sql<number>`count(*)` })
+    .from(schema.lineAdjustments)
+    .where(and(
+      eq(schema.lineAdjustments.venueId, venueId),
+      eq(schema.lineAdjustments.status, 'pending'),
+    ))
+    .get()?.n
+
+  const unpaid = db.select({ n: sql<number>`count(*)` })
+    .from(schema.tabs)
+    .where(and(
+      eq(schema.tabs.venueId, venueId),
+      eq(schema.tabs.status, 'unpaid'),
+      eq(schema.tabs.pendingReview, 1),
+    ))
+    .get()?.n
+
+  // `payout` and `float_out` are both born pending: a cash obligation needs the
+  // receiver's acknowledgement (§6.5), so both belong in this badge.
+  const payouts = db.select({ n: sql<number>`count(*)` })
+    .from(schema.cashMovements)
+    .where(and(
+      eq(schema.cashMovements.venueId, venueId),
+      eq(schema.cashMovements.status, 'pending'),
+      inArray(schema.cashMovements.type, ['payout', 'float_out']),
+    ))
+    .get()?.n
+
+  const settlements = db.select({ n: sql<number>`count(*)` })
+    .from(schema.waiterSettlements)
+    .where(and(
+      eq(schema.waiterSettlements.venueId, venueId),
+      sql`${schema.waiterSettlements.acceptedAt} is null`,
+    ))
+    .get()?.n
+
+  return {
+    adjustments: count(adjustments),
+    unpaid: count(unpaid),
+    payouts: count(payouts),
+    settlements: count(settlements),
+  }
+}
+
+/** `MAX(seq)` over `menu` and `settings`: when it moves, refetch `/api/bootstrap`. */
+export function menuVersion(db: Queryable, venueId: string): number {
+  const row = db.select({ max: sql<number | null>`max(${schema.changes.seq})` })
+    .from(schema.changes)
+    .where(and(
+      eq(schema.changes.venueId, venueId),
+      inArray(schema.changes.entity, ['menu', 'settings']),
+    ))
+    .get()
+  return row?.max ?? 0
+}
+
+function logMaxAt(db: Queryable, venueId: string): string {
+  const row = db.select({ at: schema.logEntries.createdAt })
+    .from(schema.logEntries)
+    .where(eq(schema.logEntries.venueId, venueId))
+    .orderBy(desc(schema.logEntries.createdAt))
+    .limit(1)
+    .get()
+  return row?.at ?? ''
+}
+
+/**
+ * The prune the nightly task runs (§10) — here rather than in `tasks/nightly.ts`
+ * because `changes` is this package's table and the deletion rule belongs beside
+ * the insertion rule. WP8 calls it.
+ */
+export function pruneChanges(db: Db, before: string): number {
+  const result = db.delete(schema.changes)
+    .where(sql`${schema.changes.createdAt} < ${before}`)
+    .run()
+  return result.changes
+}
