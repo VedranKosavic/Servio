@@ -69,11 +69,18 @@ export type * from './types/sync'
 // --- request bodies, derived from the Zod schemas ---------------------------
 
 export type {
+  AssignTabBody,
+  CreateAdjustmentBody,
   CreateDeliveryBody,
   CreateOrderBody,
+  CreatePaymentBody,
+  DecideAdjustmentBody,
+  DecideUnpaidBody,
+  DiscardDraftBody,
   MarkPreparedBody,
+  MarkUnpaidBody,
+  MoveTabBody,
   OrderLineInput,
-  PayTabBody,
 } from './schemas'
 
 // --- the shared constants and settings --------------------------------------

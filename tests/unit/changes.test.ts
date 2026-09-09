@@ -20,11 +20,10 @@ afterEach(() => { f.close() })
 
 /** A real lock through the real service — the hot path the feed exists for. */
 function lockOne(waiter = 'Amar', table = 'Sto 7', product = 'Kafa') {
-  return createOrder(f.db, f.venueId, {
+  return createOrder(f.db, f.venueId, f.actor(waiter), {
     client_id: randomUUID(),
     table_id: f.tableId(table),
-    user_id: f.userId(waiter),
-    lines: [{ product_id: f.productId(product), qty: 1 }],
+    lines: [{ id: randomUUID(), product_id: f.productId(product), qty: 1 }],
   })
 }
 
@@ -115,7 +114,8 @@ describe('getChanges', () => {
   it('the tables_state snapshot is re-read, not replayed', () => {
     lockOne('Amar', 'Sto 7')
     const result = getChanges(f.db, f.venueId, admin(), 0)
-    const sto7 = result.tables_state?.find(t => t.table_id === f.tableId('Sto 7'))
+    // WP3's envelope: the floor plan travels with the shift strip (§6.2).
+    const sto7 = result.tables_state?.tables.find(t => t.table_id === f.tableId('Sto 7'))
     expect(sto7?.tab_id).toBeTruthy()
     expect(sto7?.total_fen).toBe(150)
   })

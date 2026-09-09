@@ -79,54 +79,76 @@ describe('GET /api/health', () => {
 
 describe('GET /api/tables/state', () => {
   it('gives every table a row, with or without guests', () => {
-    const before = getTablesState(f.db, f.venueId)
-    expect(before).toHaveLength(27)
-    expect(before.every(t => t.tab_id === null && t.total_fen === 0)).toBe(true)
+    const before = getTablesState(f.db, f.venueId, f.actor('Amar'))
+    expect(before.tables).toHaveLength(27)
+    expect(before.tables.every(t => t.tab_id === null && t.total_fen === 0)).toBe(true)
 
-    createOrder(f.db, f.venueId, {
+    createOrder(f.db, f.venueId, f.actor('Amar'), {
       client_id: randomUUID(),
       table_id: f.tableId('Sto 7'),
-      user_id: f.userId('Amar'),
-      lines: [{ product_id: f.productId('Kafa'), qty: 2 }],
+      lines: [{ id: randomUUID(), product_id: f.productId('Kafa'), qty: 2 }],
     })
 
-    const after = getTablesState(f.db, f.venueId)
-    const sto7 = after.find(t => t.table_id === f.tableId('Sto 7'))!
+    const after = getTablesState(f.db, f.venueId, f.actor('Amar'))
+    const sto7 = after.tables.find(t => t.table_id === f.tableId('Sto 7'))!
     expect(sto7.tab_id).not.toBeNull()
     expect(sto7.total_fen).toBe(300)
+    expect(sto7.remaining_fen).toBe(300)
     expect(sto7.opened_by_name).toBe('Amar')
     expect(sto7.last_order_at).not.toBeNull()
+
+    // The strip travels with the floor plan, so the two can never disagree.
+    expect(after.seq).toBeGreaterThan(0)
+    expect(after.shift?.status).toBe('open')
+    expect(after.shift?.my_open_tabs).toBe(1)
+    expect(after.shift?.my_settled).toBe(false)
   })
 
   it('has exactly the fields the floor plan reads, and no more', () => {
     // Two waiters, so the state has to distinguish them, and one tab offered to
-    // a colleague — a Korak 2 column that must not leak into this envelope until
-    // WP3 designs where it goes.
+    // a colleague — the tile that says "Nudi ti: Sto 1 · Prihvati".
     const amar = f.lock('Amar', 'Sto 1', [{ product: 'Kafa' }])
     f.lock('Lejla', 'Sto 2', [{ product: 'Coca-Cola' }])
     f.sqlite.exec(`UPDATE tabs SET offered_to = '${f.userId('Lejla')}' WHERE id = '${amar.tabId}'`)
 
-    const rows = getTablesState(f.db, f.venueId)
-    const busy = rows.filter(r => r.tab_id !== null)
+    const { tables } = getTablesState(f.db, f.venueId, f.actor('Lejla'))
+    const busy = tables.filter(r => r.tab_id !== null)
     expect(busy.map(r => r.opened_by_name).sort()).toEqual(['Amar', 'Lejla'])
 
-    for (const row of rows) {
+    const sto1 = tables.find(r => r.table_id === f.tableId('Sto 1'))!
+    expect(sto1.assigned_to).toBe(f.userId('Amar'))
+    expect(sto1.assigned_to_initials).toBe('AM')
+    expect(sto1.offered_to).toBe(f.userId('Lejla'))
+    expect(sto1.pending_review).toBe(false)
+    expect(sto1.late_sync).toBe(false)
+    expect(sto1.tab_client_id).toBeTruthy()
+
+    for (const row of tables) {
       expect(Object.keys(row).sort()).toEqual([
-        'last_order_at', 'opened_at', 'opened_by_name', 'tab_id', 'table_id', 'total_fen',
+        'assigned_to', 'assigned_to_initials', 'last_order_at', 'late_sync', 'offered_to',
+        'opened_at', 'opened_by_name', 'pending_review', 'remaining_fen', 'tab_client_id',
+        'tab_id', 'table_id', 'total_fen',
       ])
     }
+  })
+
+  it('answers the envelope §6.2 shapes, not a bare array', () => {
+    const state = getTablesState(f.db, f.venueId, f.actor('Amar'))
+    expect(Object.keys(state).sort()).toEqual(['seq', 'shift', 'tables'])
+    // No shift has been opened, so the strip is null and the floor plan is not.
+    expect(state.shift).toBeNull()
+    expect(Array.isArray(state.tables)).toBe(true)
   })
 })
 
 describe('GET /api/prep', () => {
   it('lists open tickets oldest first and the last ten finished', () => {
-    const order = createOrder(f.db, f.venueId, {
+    const order = createOrder(f.db, f.venueId, f.actor('Dino'), {
       client_id: randomUUID(),
       table_id: f.tableId('Sto 16'),
-      user_id: f.userId('Dino'),
       note: 'bez šećera',
       lines: [{
-        product_id: f.productId('Nargila'),
+        id: randomUUID(), product_id: f.productId('Nargila'),
         qty: 1,
         flavour_ids: [f.stockItemId('Al Fakher · Jabuka'), f.stockItemId('Al Fakher · Menta')],
         note: 'jače',
@@ -175,11 +197,10 @@ describe('GET /api/stock and POST /api/stock/deliveries', () => {
   })
 
   it('labels a sale with the table it came from', () => {
-    createOrder(f.db, f.venueId, {
+    createOrder(f.db, f.venueId, f.actor('Amar'), {
       client_id: randomUUID(),
       table_id: f.tableId('Sto 7'),
-      user_id: f.userId('Amar'),
-      lines: [{ product_id: f.productId('Coca-Cola'), qty: 1 }],
+      lines: [{ id: randomUUID(), product_id: f.productId('Coca-Cola'), qty: 1 }],
     })
 
     const cola = getStock(f.db, f.venueId).find(i => i.name === 'Coca-Cola 0,25 l')!
@@ -205,11 +226,10 @@ describe('GET /api/stock and POST /api/stock/deliveries', () => {
 
 describe('a sale carries what it cost', () => {
   it('stamps every movement with the item\'s unit cost, in milli-feninga', () => {
-    createOrder(f.db, f.venueId, {
+    createOrder(f.db, f.venueId, f.actor('Amar'), {
       client_id: randomUUID(),
       table_id: f.tableId('Sto 7'),
-      user_id: f.userId('Amar'),
-      lines: [{ product_id: f.productId('Coca-Cola'), qty: 1 }],
+      lines: [{ id: randomUUID(), product_id: f.productId('Coca-Cola'), qty: 1 }],
     })
 
     const cola = f.db.select().from(schema.stockMovements).all()
@@ -241,20 +261,19 @@ describe('no response carries a secret', () => {
   }
 
   it('across bootstrap, tables, prep, stock and a tab', () => {
-    const order = createOrder(f.db, f.venueId, {
+    const order = createOrder(f.db, f.venueId, f.actor('Amar'), {
       client_id: randomUUID(),
       table_id: f.tableId('Sto 7'),
-      user_id: f.userId('Amar'),
-      lines: [{ product_id: f.productId('Kafa'), qty: 1 }],
+      lines: [{ id: randomUUID(), product_id: f.productId('Kafa'), qty: 1 }],
     })
 
     const responses: unknown[] = [
       getBootstrap(f.db, f.venueId),
       getHealth(f.db, f.venueId),
-      getTablesState(f.db, f.venueId),
+      getTablesState(f.db, f.venueId, f.actor('Amar')),
       getPrep(f.db, f.venueId),
       getStock(f.db, f.venueId),
-      getTab(f.db, f.venueId, order.tab_id),
+      getTab(f.db, f.venueId, order.tab_id, f.actor('Amar')),
     ]
 
     const offenders = responses.flatMap(r => keysOf(r)).filter(k => FORBIDDEN.test(k))
