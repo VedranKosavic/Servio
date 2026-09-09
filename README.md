@@ -11,3 +11,4 @@ Status: planning (2026-09-08). The technical plan is in [PLAN.md](PLAN.md) (Engl
 developers); the owner-facing plan in Bosnian is [docs/PLAN.bs.md](docs/PLAN.bs.md); research
 appendices in [docs/research/](docs/research/); the review log in [docs/reviews.md](docs/reviews.md).
 The app itself is Bosnian-only (no i18n layer).
+# Servio
