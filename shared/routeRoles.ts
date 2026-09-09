@@ -93,6 +93,9 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   'GET /api/me/shift': AWB,
   'GET /api/me/shift/lines': AWB,
   'GET /api/me/shifts': AWB,
+  // Own row only — the service refuses a shift this person was not on (§1.6).
+  'PUT /api/me/shifts/:id/note': AWB,
+  'GET /api/me/sessions': AWB,
 
   // -- Stock ---------------------------------------------------------------
   'GET /api/stock': AWB,

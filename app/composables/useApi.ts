@@ -34,10 +34,13 @@ import type {
   EnrolResult,
   Health,
   HeartbeatResult,
+  LinesPage,
+  LoginUser,
   MarkUnpaidBody,
   MeContext,
-  MeUser,
   MyShift,
+  MyShiftRow,
+  MySession,
   PaymentResult,
   PinLoginResult,
   Prep,
@@ -54,7 +57,7 @@ import type {
 // schemas is the same definition — `z.infer` of the object the route validates
 // against — and it means WP9 changes no file outside `app/`.
 import type {
-  EnrolDeviceBody, HeartbeatBody, PinLoginBody, SettleBody,
+  EnrolDeviceBody, HeartbeatBody, PinLoginBody, SettleBody, StaffNoteBody,
 } from '#shared/schemas'
 import { errorMessage } from '#shared/errors'
 
@@ -125,7 +128,7 @@ const rawFetch = $fetch as unknown as
   (url: string, options?: Record<string, unknown>) => Promise<unknown>
 
 async function request<T>(url: string, options?: {
-  method?: 'GET' | 'POST'
+  method?: 'GET' | 'POST' | 'PUT'
   body?: unknown
   /**
    * A heavy GET the server ETags (BACKEND §4.2).
@@ -208,7 +211,7 @@ export function useApi() {
      * whoever holds an enrolled device. Nothing but name, initials, role and
      * how many digits the PIN pad should draw.
      */
-    getLoginUsers: () => request<MeUser[]>('/api/auth/users'),
+    getLoginUsers: () => request<LoginUser[]>('/api/auth/users'),
 
     /** Four digits (six for an admin) against the device cookie. */
     loginWithPin: (body: PinLoginBody) =>
@@ -331,6 +334,32 @@ export function useApi() {
     /** *Završi smjenu* — the blind declaration, and the reveal in the answer. */
     settleShift: (shiftId: string, body: SettleBody) =>
       request<SettleResult>(`/api/shifts/${shiftId}/settle`, { method: 'POST', body }),
+
+    // -- Moja smjena (S11) --------------------------------------------------
+
+    /** The last thirty nights he was on, newest first, each with its *Napomena*. */
+    getMyShifts: (limit = 30) => request<MyShiftRow[]>(`/api/me/shifts?limit=${limit}`),
+
+    /**
+     * *Napomena* on one of his own nights. `PUT`, because it is one row per
+     * person per night and the body is the row — sending it twice leaves the
+     * same note, and an empty string deletes it.
+     */
+    putShiftNote: (shiftId: string, body: StaffNoteBody) =>
+      request<{ note: string | null }>(`/api/me/shifts/${shiftId}/note`, { method: 'PUT', body }),
+
+    /** *Moji podaci* — his own sign-ins, so a login he does not recognise is visible. */
+    getMySessions: () => request<MySession[]>('/api/me/sessions'),
+
+    /**
+     * The lines behind one of his own numbers. `kat` is a category id, or one
+     * of `sve · storno · gratis · nijeplaceno`; `totals` is null until he has
+     * settled, the same blindness the strip has.
+     */
+    getMyShiftLines: (kat = 'sve', cursor?: string) =>
+      request<LinesPage>(
+        `/api/me/shift/lines?kat=${encodeURIComponent(kat)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+      ),
 
     getHealth: () => request<Health>('/api/health'),
   }

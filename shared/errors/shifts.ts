@@ -16,6 +16,7 @@ export const SHIFT_ERRORS = {
   NO_OPEN_COUNT: 'Nema početnog popisa za ovu smjenu.',
   NOTE_REQUIRED: 'Napiši šta se desilo.',
   ALREADY_LEFT: 'Već si završio smjenu.',
+  NOT_MY_SHIFT: 'Napomenu pišeš samo na svojoj smjeni.',
   NOT_APPROVER: 'Ovo ne možeš odobriti.',
 
   MOVEMENT_NOT_FOUND: 'Ta stavka kase ne postoji.',

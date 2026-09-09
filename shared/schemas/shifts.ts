@@ -121,6 +121,19 @@ export const openingFloatBody = z.object({
   fen: moneyFen,
 }).strict()
 
+// -- napomena ----------------------------------------------------------------
+
+/**
+ * `PUT /api/me/shifts/:id/note` — *Napomena* on his own night (PHASE3 §1.6).
+ *
+ * An **empty string deletes the row**, which is why the trim has no `min()`:
+ * clearing a note is a thing people do, and making them type a space to do it
+ * would be a rule invented by a form rather than by a café.
+ */
+export const staffNoteBody = z.object({
+  body: z.string().trim().max(500),
+}).strict()
+
 /** `POST /api/cash-movements/:id/decide` — the two types born `pending` (§6.5). */
 export const decideCashMovementBody = z.object({
   outcome: z.enum(['approved', 'rejected']),
@@ -140,3 +153,4 @@ export type RequestPayoutBody = z.infer<typeof requestPayoutBody>
 export type PickupBody = z.infer<typeof pickupBody>
 export type OpeningFloatBody = z.infer<typeof openingFloatBody>
 export type DecideCashMovementBody = z.infer<typeof decideCashMovementBody>
+export type StaffNoteBody = z.infer<typeof staffNoteBody>

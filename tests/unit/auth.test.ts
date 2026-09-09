@@ -609,8 +609,30 @@ describe('the lock screen list', () => {
     const users = listLoginUsers(f.db, f.venueId)
     expect(users).toHaveLength(5)
     expect(Object.keys(users[0]!).sort()).toEqual(
-      ['active', 'has_pin', 'id', 'initials', 'name', 'pin_len', 'role'],
+      ['active', 'has_pin', 'id', 'initials', 'last_login_at', 'name', 'pin_len', 'role'],
     )
+  })
+
+  /**
+   * PHASE3 §1.8. The lock screen offers the last three faces first, and the
+   * recency it sorts on is **this device's** — the one thing this body may grow.
+   * Asked without a device (the enrol response, which has no history yet) every
+   * row answers `null` rather than a café-wide ranking nobody outside the bar
+   * should be able to read off an unlocked phone.
+   */
+  it('answers last_login_at for the asking device, and null without one', () => {
+    const here_ = enrol(f, 'shared')
+    const there = enrol(f, 'shared')
+
+    loginWithPin(f.db, deviceRow(f, here_.deviceId), { user_id: f.userId('Amar'), pin: '1111' }, { ip: IP })
+    loginWithPin(f.db, deviceRow(f, there.deviceId), { user_id: f.userId('Lejla'), pin: '2222' }, { ip: IP })
+
+    const here = listLoginUsers(f.db, f.venueId, here_.deviceId)
+    expect(here.find(u => u.name === 'Amar')?.last_login_at).toBeTruthy()
+    // Lejla signed in on the terrace tablet, not on this one.
+    expect(here.find(u => u.name === 'Lejla')?.last_login_at).toBeNull()
+
+    expect(listLoginUsers(f.db, f.venueId).every(u => u.last_login_at === null)).toBe(true)
   })
 })
 

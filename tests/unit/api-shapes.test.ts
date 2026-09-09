@@ -28,6 +28,7 @@ import { getPrep, markPrepared } from '../../server/services/prep'
 import { createDelivery, getStock } from '../../server/services/stock'
 import { getTab, getTablesState } from '../../server/services/tabs'
 import { getLive, getOwnerShift, listOwnerShifts, shiftLines } from '../../server/services/owner'
+import { listLoginUsers, listMySessions } from '../../server/services/auth'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
 
 let f: Fixture
@@ -433,5 +434,55 @@ describe('GET /api/owner/live', () => {
     ]
     expect(responses.flatMap(r => keys(r)).filter(k => /_hash$|token|password|pepper/i.test(k)))
       .toEqual([])
+  })
+})
+
+// ===========================================================================
+// WP4 — the two reads *Moja smjena* and the lock screen added
+// ===========================================================================
+
+/**
+ * `GET /api/me/sessions` (PHASE3 §1.7) and `GET /api/auth/users` (§1.8).
+ *
+ * The second one is the sharp case. It is the **one** response a stranger
+ * holding an enrolled phone can read with no session at all (BACKEND §5.5), so
+ * its key set is asserted by name here: `last_login_at` is the only thing
+ * Phase 3 is allowed to add to it, and anything else appearing in this list is
+ * a leak that nobody would notice on a screen.
+ */
+describe('GET /api/me/sessions and GET /api/auth/users', () => {
+  it('lists a person’s own sign-ins, newest first, with the current one marked', () => {
+    const actor = f.actor('Amar')
+    const rows = listMySessions(f.db, f.venueId, actor)
+
+    // `f.actor()` invents a session id rather than writing a row, so an empty
+    // list is the honest answer — and the shape is asserted on a real one below.
+    expect(Array.isArray(rows)).toBe(true)
+
+    const sessionId = randomUUID()
+    f.db.insert(schema.sessions).values({
+      id: sessionId, venueId: f.venueId, userId: f.userId('Amar'), deviceId: null,
+      tokenHash: 'x'.repeat(64), kind: 'staff', borrowed: 0,
+      createdAt: f.clock.now(), lastSeenAt: f.clock.now(),
+      expiresAt: f.clock.now(), revokedAt: null, ip: null, userAgent: null,
+    }).run()
+
+    const mine = listMySessions(f.db, f.venueId, { ...actor, sessionId })
+    expect(mine).toHaveLength(1)
+    expect(Object.keys(mine[0]!).sort()).toEqual([
+      'borrowed', 'created_at', 'current', 'device_label', 'id', 'kind', 'last_seen_at',
+    ])
+    expect(mine[0]!.current).toBe(true)
+
+    // A colleague's sessions are never in anybody else's list.
+    expect(listMySessions(f.db, f.venueId, f.actor('Lejla'))).toEqual([])
+  })
+
+  it('keeps the lock-screen list to what the screen draws, plus the recency', () => {
+    const rows = listLoginUsers(f.db, f.venueId)
+    expect(Object.keys(rows[0]!).sort()).toEqual([
+      'active', 'has_pin', 'id', 'initials', 'last_login_at', 'name', 'pin_len', 'role',
+    ])
+    expect(JSON.stringify(rows)).not.toMatch(/_hash|token|password|pepper|email/i)
   })
 })

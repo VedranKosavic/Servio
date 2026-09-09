@@ -24,7 +24,14 @@ const props = withDefaults(defineProps<{
   error?: string | null
   /** While the lockout is counting down, the pad refuses taps. */
   locked?: boolean
-}>(), { busy: false, error: null, locked: false })
+  /**
+   * A quiet line under the name, for something the pad must say before the
+   * digits are typed rather than after — *"Posuđuješ tuđi telefon"* is the one
+   * case (S10, *Drugi konobar*): a 2-hour borrowed session is a different thing
+   * from signing in, and finding that out afterwards is finding it out too late.
+   */
+  note?: string | null
+}>(), { busy: false, error: null, locked: false, note: null })
 
 const emit = defineEmits<{
   submit: [pin: string]
@@ -68,6 +75,9 @@ const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
       </h2>
       <p class="text-[15px] text-text-2">
         Unesi PIN
+      </p>
+      <p v-if="note" class="max-w-[280px] text-center text-[15px] text-warn">
+        {{ note }}
       </p>
     </div>
 

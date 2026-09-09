@@ -339,6 +339,41 @@ export interface LinesPage {
 // The two shift reads
 // ---------------------------------------------------------------------------
 
+/**
+ * One category of his night, as a **count** — no money in it (PHASE3 §1.5).
+ *
+ * `category_id` is here so the chip can open the drill-down
+ * (`/k/moja-smjena/stavke?kat=`), which filters on exactly this id.
+ */
+export interface MyShiftCategoryCount {
+  category_id: string
+  name: string
+  count: number
+}
+
+/**
+ * What *Moja smjena* shows **before** the envelope is handed in (PHASE3 §1.5).
+ *
+ * Always present, and deliberately **money-free**: not one key ends in `_fen`
+ * except `gratis.max_fen`, which is not his money at all — it is the published
+ * rule, the ceiling on a staff drink, and a rule you are measured against has
+ * to be readable before you are measured. `summaries.test.ts` asserts that with
+ * a regex over the serialised object, so a `*_fen` added here fails the suite
+ * rather than the blindness (§6.6).
+ */
+export interface MyShiftCounts {
+  rounds: number
+  tabs: number
+  bowls: number
+  by_category: MyShiftCategoryCount[]
+  /** His storna tonight, split by whether anybody has decided them yet. */
+  storno: { pending: number, applied: number }
+  /** *Osoblje: 1/2 (do 3 KM)* — used, the cap, and the per-drink ceiling. */
+  gratis: { used: number, cap: number, max_fen: number }
+  waste: number
+  hours: number
+}
+
 export interface MyShift {
   shift: ShiftBrief | null
   joined_at: string | null
@@ -356,6 +391,13 @@ export interface MyShift {
   cash_movements: CashMovement[]
   /** `null` until he settles — the blindness strip. */
   summary: UserSummary | null
+  /**
+   * Always present, with no money in it. The blindness strip hides what the
+   * night *earned*; it was never meant to hide what he *did*, and an empty
+   * screen for the first five hours of every shift is how a waiter learns that
+   * *Moja smjena* is not worth opening (PHASE3 §1.5).
+   */
+  counts: MyShiftCounts
 }
 
 export interface MyShiftRow {
@@ -366,6 +408,8 @@ export interface MyShiftRow {
   hours: number
   declared_fen: number | null
   diff_fen: number | null
+  /** *Napomena* — his own words about his own night, editable (PHASE3 §1.6). */
+  note: string | null
 }
 
 export interface OwnerShiftRow {

@@ -38,6 +38,7 @@ import {
   acknowledgeFloat, decideCashMovement, moveFloat, pickup, requestPayout, setOpeningFloat,
 } from '../../server/services/cash'
 import { acceptSettlement, settle } from '../../server/services/settlements'
+import { putStaffNote } from '../../server/services/summaries'
 import { resetPin } from '../../server/services/auth'
 import {
   createCategory, createProduct, createStockItem, createTable, createUser, setRecipe,
@@ -320,6 +321,15 @@ const CALLS: Record<string, () => void> = {
       cash_counted_fen: 0, closing_note: 'test', pin: HARIS_PIN,
     })
     reviewShift(f.db, f.venueId, f.adminActor(), shiftId, { card_total_fen: 0 })
+  },
+
+  // WP4 — *Napomena*. `staff_notes` is not a ledger table, but the note is
+  // rendered on the owner's per-waiter strip (PHASE3 §1.6), so a note that no
+  // dashboard learns about is a note written into a drawer.
+  [join('me', 'shifts', '[id]', 'note.put.ts')]: () => {
+    putStaffNote(
+      f.db, f.venueId, f.userId('Amar'), f.openShift({ members: ['Amar'] }), 'kasnio sam sat',
+    )
   },
 
   [join('shifts', '[id]', 'leave.post.ts')]: () => {
