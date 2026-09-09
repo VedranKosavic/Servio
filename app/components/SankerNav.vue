@@ -2,17 +2,18 @@
 /**
  * The bartender's whole navigation: three pills, always in reach of a thumb.
  *
- * All three are listed from day one, and *Na čekanju* renders greyed out with
- * *stiže uskoro* until WP1 builds `/s/cekanje` — a nav that grows a tab every
- * week teaches nobody where anything is. No later package edits this file.
+ * All three are listed from day one; *Na čekanju* rendered greyed out with
+ * *stiže uskoro* until WP1 built `/s/cekanje` — a nav that grows a tab every
+ * week teaches nobody where anything is. The one line WP1 changes here is the
+ * flag below, which WP0 left for it.
  *
  * `sticky bottom-0` keeps the bar on screen while the ticket list scrolls; the
  * negative margin lets it run edge to edge inside the layout's `px-4` column.
  */
 defineProps<{ active: 'narudzbe' | 'cekanje' | 'stanje' }>()
 
-/** Flip to true in the PR that lands `/s/cekanje` (WP1). */
-const CEKANJE_READY = false
+/** Flipped by the PR that landed `/s/cekanje` (WP1). */
+const CEKANJE_READY = true
 
 const PILL = 'flex min-h-12 flex-1 items-center justify-center rounded-full border text-base font-semibold'
 const ON = 'bg-accent text-accent-ink border-accent'
