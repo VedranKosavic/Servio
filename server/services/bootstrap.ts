@@ -34,6 +34,24 @@ export function bootstrapTag(q: Queryable, venueId: string, actor: Actor): strin
   return changeTag(q, venueId, actor)
 }
 
+/**
+ * `categories.note_chips_json` as the phone wants it: an array of short strings.
+ *
+ * The column is a JSON *text* column, which is how SQLite stores a list without
+ * a second table. A row written by hand, or by an older build, may hold anything
+ * — so a value that does not parse into an array of strings is dropped rather
+ * than allowed to break a screen a waiter is standing in front of.
+ */
+function noteChips(json: string): string[] {
+  try {
+    const parsed: unknown = JSON.parse(json)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((chip): chip is string => typeof chip === 'string' && chip.length > 0)
+  } catch {
+    return []
+  }
+}
+
 export function getBootstrap(db: Queryable, venueId: string, actor: Actor): Bootstrap {
   const venue = db.select().from(schema.venues).where(eq(schema.venues.id, venueId)).get()!
   const me = getMe(db, venueId, actor)
@@ -109,15 +127,24 @@ export function getBootstrap(db: Queryable, venueId: string, actor: Actor): Boot
       grp: t.grp,
       sort: t.sort,
     })),
-    categories: categories.map(c => ({ id: c.id, name: c.name, sort: c.sort })),
+    categories: categories.map(c => ({
+      id: c.id,
+      name: c.name,
+      note_chips: noteChips(c.noteChipsJson),
+      sort: c.sort,
+    })),
     products: products.map(p => ({
       id: p.id,
       category_id: p.categoryId,
       name: p.name,
+      short_name: p.shortName,
+      search_aliases: p.searchAliases,
       price_fen: p.priceFen,
       kind: p.kind,
+      system_key: p.systemKey,
       shisha_grams: p.shishaGrams,
       coal_pcs: p.coalPcs,
+      staff_drink_allowed: p.staffDrinkAllowed === 1,
       is_favourite: p.isFavourite === 1,
       sort: p.sort,
     })),

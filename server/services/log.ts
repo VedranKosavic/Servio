@@ -141,6 +141,16 @@ function names(q: Queryable, venueId: string): LogNames {
     }
   }
 
+  /**
+   * A table id that is **explicitly null** is not a missing id: since
+   * `0003_phase3.sql` it means *Bez stola* — the guests standing at the bar, on
+   * no table at all (PHASE3 §1.11). An absent field still falls back to the
+   * generic word, because that one really is "we do not know which".
+   */
+  const lookupTable = lookup(schema.tables, 'sto')
+  const tableName = (tableId: string | null | undefined): string =>
+    (tableId === null ? 'Bez stola' : lookupTable(tableId))
+
   let deviceCache: Map<string, string> | null = null
   const device = (id: string | null | undefined): string => {
     if (!id) return 'Uređaj'
@@ -163,7 +173,7 @@ function names(q: Queryable, venueId: string): LogNames {
     // A null actor is the server itself, and the Dnevnik says so in Bosnian.
     user: lookup(schema.users, 'Sistem'),
     product: lookup(schema.products, 'stavka'),
-    table: lookup(schema.tables, 'sto'),
+    table: tableName,
     category: lookup(schema.categories, 'kategorija'),
     stockItem: lookup(schema.stockItems, 'roba'),
     device,

@@ -36,7 +36,12 @@ export type TabLineStatus = 'ok' | 'storno' | 'storno_na_cekanju' | 'gratis'
  * means a colleague has been offered the table and has not taken it yet.
  */
 export interface TableState {
-  table_id: string
+  /**
+   * `null` only inside `loose_tabs`: a *Bez stola* tab belongs to guests at the
+   * bar and sits on no tile of the floor plan (PHASE3 §1.11). Every row in
+   * `tables` has one.
+   */
+  table_id: string | null
   tab_id: string | null
   /** The phone's own id for the tab; a phone that locked offline adopts it. */
   tab_client_id: string | null
@@ -66,6 +71,15 @@ export interface TablesStateResponse {
   seq: number
   shift: ShiftBrief | null
   tables: TableState[]
+  /**
+   * Open tabs with no table — *Bez stola*, the guests standing at the bar.
+   *
+   * They are their own list rather than extra rows in `tables`, because the
+   * floor plan draws one circle per table and there is no circle for these:
+   * `/k` renders them as cards above the plan (S1). Every row has
+   * `table_id: null` and a `tab_id`.
+   */
+  loose_tabs: TableState[]
 }
 
 // ---------------------------------------------------------------------------
@@ -114,8 +128,10 @@ export interface TabMoney {
 
 export interface Tab {
   id: string
-  table_id: string
-  table_name: string
+  /** `null` is *Bez stola*. */
+  table_id: string | null
+  /** `null` with `table_id`; the screens render the word *Bez stola*. */
+  table_name: string | null
   client_id: string
   status: TabStatus
   shift_id: string | null

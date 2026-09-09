@@ -441,3 +441,73 @@ describe('requestAdjustment through the tab', () => {
       .toBe('storno_na_cekanju')
   })
 })
+
+/**
+ * A *Bez stola* tab is a tab like any other — that is the point of §1.11. It
+ * takes rounds, it takes money, it can be marked unpaid, and *Premjesti sto*
+ * seats it at a real table the moment one frees up.
+ */
+describe('bez stola', () => {
+  function lockLoose(who: string, tabClientId?: string) {
+    return createOrder(f.db, f.venueId, f.actor(who), {
+      client_id: randomUUID(),
+      table_id: null,
+      ...(tabClientId ? { tab_client_id: tabClientId } : {}),
+      lines: [line('Kafa', 2)],
+    })
+  }
+
+  it('takes a payment and leaves the floor plan alone', () => {
+    const order = lockLoose('Amar')
+    const paid = payCash('Amar', order.tab_id, 300)
+
+    expect(paid.tab_status).toBe('paid')
+    expect(paid.remaining_fen).toBe(0)
+
+    const state = getTablesState(f.db, f.venueId, f.actor('Amar'))
+    // A paid tab frees its slot, table or no table.
+    expect(state.loose_tabs).toHaveLength(0)
+    expect(state.tables.every(t => t.tab_id === null)).toBe(true)
+  })
+
+  it('can be marked nije plaćeno', () => {
+    const tabClientId = randomUUID()
+    lockLoose('Amar', tabClientId)
+
+    const result = markUnpaid(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(),
+      tab_client_id: tabClientId,
+      reason: 'walked_out',
+    })
+
+    expect(result.tab.status).toBe('unpaid')
+    expect(result.tab.table_id).toBeNull()
+    expect(result.tab.table_name).toBeNull()
+    expect(result.tab.unpaid_by).toBe(f.userId('Amar'))
+  })
+
+  it('Premjesti sto seats it at a real table', () => {
+    const order = lockLoose('Amar')
+
+    const moved = moveTab(f.db, f.venueId, f.actor('Amar'), order.tab_id, {
+      table_id: f.tableId('Sto 7'),
+    })
+
+    expect(moved.table_id).toBe(f.tableId('Sto 7'))
+    expect(moved.table_name).toBe('Sto 7')
+    expect(entries('tab_moved')).toHaveLength(1)
+
+    const state = getTablesState(f.db, f.venueId, f.actor('Amar'))
+    expect(state.loose_tabs).toHaveLength(0)
+    expect(state.tables.find(t => t.table_id === f.tableId('Sto 7'))!.total_fen).toBe(300)
+  })
+
+  it('refuses a move onto a table that already has guests', () => {
+    lock('Lejla', 'Sto 7')
+    const loose = lockLoose('Amar')
+
+    refuses(() => moveTab(f.db, f.venueId, f.actor('Amar'), loose.tab_id, {
+      table_id: f.tableId('Sto 7'),
+    }), 'TABLE_OCCUPIED')
+  })
+})

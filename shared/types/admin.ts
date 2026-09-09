@@ -9,6 +9,17 @@ export type Zone = 'unutra' | 'basta'
 export type ProductKind = 'simple' | 'shisha'
 export type CategoryKind = 'pice' | 'hrana' | 'nargila' | 'ostalo'
 
+/**
+ * The two products a *phone* is allowed to recognise (PHASE3 §1.10).
+ *
+ * `'zar'` is *Dodatni žar* — 0 KM, two pieces of coal, and the one product the
+ * lock sheet is skipped for (PLAN §10, invariant 2). `'ostalo'` is the
+ * fixed-price catch-all whose long-press takes the free text that becomes the
+ * line's note. Both get behaviour of their own on S2 and S3, and matching that
+ * behaviour on a *name* is how a rename in *Meni* becomes a Saturday-night bug.
+ */
+export type ProductSystemKey = 'zar' | 'ostalo'
+
 export interface Venue {
   id: string
   name: string
@@ -36,6 +47,12 @@ export interface VenueTable {
 export interface Category {
   id: string
   name: string
+  /**
+   * The quick notes a long-press offers on this category's tiles — *bez šećera*,
+   * *s mlijekom*, *dupla* (F2 step 4). A category with none falls back to the
+   * free-text field alone.
+   */
+  note_chips: string[]
   sort: number
 }
 
@@ -43,11 +60,23 @@ export interface Product {
   id: string
   category_id: string
   name: string
+  /** What fits on a 3-column tile when `name` does not. */
+  short_name: string | null
+  /**
+   * Extra words the *Dodaj* search matches, space separated ("kola koka").
+   * The search is prefix-based and diacritic-insensitive, so "coca" and "kola"
+   * both find Coca-Cola without either spelling being the product's name.
+   */
+  search_aliases: string
   price_fen: number
   kind: ProductKind
+  /** Set only on the two system products; see `ProductSystemKey`. */
+  system_key: ProductSystemKey | null
   /** Grams of tobacco a bowl uses, split across the chosen flavours. */
   shisha_grams: number | null
   coal_pcs: number | null
+  /** May a waiter take this as one of his staff drinks (F7)? */
+  staff_drink_allowed: boolean
   is_favourite: boolean
   sort: number
 }

@@ -184,7 +184,32 @@ export function getTablesState(
       .map(u => [u.id, u.initials]),
   )
 
-  const byTable = new Map(openTabs.map(t => [t.tab.tableId, t]))
+  /**
+   * One row per open tab that sits on a table. A *Bez stola* tab has a null
+   * `table_id`, so it can never be found by a table's id and drops out of this
+   * map on its own — `loose_tabs` below is where it goes instead.
+   */
+  const byTable = new Map(openTabs.filter(t => t.tab.tableId !== null)
+    .map(t => [t.tab.tableId!, t]))
+
+  const stateOf = (tab: TabRow, openedByName: string): TableState => {
+    const m = money.get(tab.id) ?? ZERO
+    return {
+      table_id: tab.tableId,
+      tab_id: tab.id,
+      tab_client_id: tab.clientId,
+      total_fen: m.total_fen,
+      remaining_fen: m.remaining_fen,
+      assigned_to: tab.assignedTo,
+      assigned_to_initials: tab.assignedTo ? initials.get(tab.assignedTo) ?? null : null,
+      opened_by_name: openedByName,
+      opened_at: tab.openedAt,
+      last_order_at: lastOrder.get(tab.id) ?? null,
+      pending_review: tab.pendingReview === 1,
+      late_sync: tab.lateSync === 1,
+      offered_to: tab.offeredTo,
+    }
+  }
 
   const rows: TableState[] = tables.map((table) => {
     const found = byTable.get(table.id)
@@ -205,33 +230,28 @@ export function getTablesState(
         offered_to: null,
       }
     }
-    const tab = found.tab
-    const m = money.get(tab.id) ?? ZERO
-    return {
-      table_id: table.id,
-      tab_id: tab.id,
-      tab_client_id: tab.clientId,
-      total_fen: m.total_fen,
-      remaining_fen: m.remaining_fen,
-      assigned_to: tab.assignedTo,
-      assigned_to_initials: tab.assignedTo ? initials.get(tab.assignedTo) ?? null : null,
-      opened_by_name: found.openedByName,
-      opened_at: tab.openedAt,
-      last_order_at: lastOrder.get(tab.id) ?? null,
-      pending_review: tab.pendingReview === 1,
-      late_sync: tab.lateSync === 1,
-      offered_to: tab.offeredTo,
-    }
+    return stateOf(found.tab, found.openedByName)
   })
 
-  return { seq: maxSeq(q, venueId), shift: shiftBrief(q, venueId, actor), tables: rows }
+  const looseTabs: TableState[] = openTabs
+    .filter(t => t.tab.tableId === null)
+    .map(t => stateOf(t.tab, t.openedByName))
+
+  return {
+    seq: maxSeq(q, venueId),
+    shift: shiftBrief(q, venueId, actor),
+    tables: rows,
+    loose_tabs: looseTabs,
+  }
 }
 
 /** The `tabs` row as a screen sees it, with its money and its two names. */
 export function tabView(q: Queryable, venueId: string, tabId: string): Tab {
+  // A **left** join since `0003_phase3.sql`: a *Bez stola* tab has no table row
+  // to join to, and an inner join would simply drop it from every read.
   const row = q.select({ tab: schema.tabs, tableName: schema.tables.name })
     .from(schema.tabs)
-    .innerJoin(schema.tables, eq(schema.tables.id, schema.tabs.tableId))
+    .leftJoin(schema.tables, eq(schema.tables.id, schema.tabs.tableId))
     .where(and(eq(schema.tabs.venueId, venueId), eq(schema.tabs.id, tabId)))
     .get()
   if (!row) throw notFound('TAB_NOT_FOUND', `tab ${tabId} not found`)
@@ -242,11 +262,7 @@ export function tabView(q: Queryable, venueId: string, tabId: string): Tab {
 
   return {
     id: tab.id,
-    // `tabs.table_id` became nullable in `0003_phase3.sql` for *Bez stola*, but
-    // no route can create a table-less tab until WP3 widens `createOrderBody` —
-    // and the inner join above would drop such a row before it got here anyway.
-    // WP3 widens `Tab.table_id` and this join together.
-    table_id: tab.tableId!,
+    table_id: tab.tableId,
     table_name: row.tableName,
     client_id: tab.clientId,
     status: tab.status,

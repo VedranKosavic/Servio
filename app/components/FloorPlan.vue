@@ -30,15 +30,22 @@
 import { formatAmount } from '#shared/money'
 import type { TableState, VenueTable, Zone } from '#shared/types'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   tables: VenueTable[]
   zone: Zone
   states: TableState[]
   /** The person holding the phone, from `GET /api/me`. */
   myUserId: string | null
-}>()
+  /** Tables with an unlocked draft on this phone — drawn dashed (S1). */
+  draftTables?: string[]
+  /** "nacrt 3 · 8,50" for one of those tables. */
+  draftLabel?: (tableId: string) => string
+}>(), {
+  draftTables: () => [],
+  draftLabel: undefined,
+})
 
-defineEmits<{ select: [tableId: string] }>()
+defineEmits<{ select: [tableId: string], long: [tableId: string] }>()
 
 interface Cell {
   id: string
@@ -47,6 +54,8 @@ interface Cell {
   variant: 'free' | 'mine' | 'other' | 'offered'
   attention: boolean
   late: boolean
+  /** A round on this table has not left the phone yet. */
+  draft: boolean
 }
 
 const stateById = computed(() => new Map(props.states.map(s => [s.table_id, s])))
@@ -59,9 +68,17 @@ function shortLabel(name: string): string {
 function toCell(table: VenueTable): Cell {
   const state = stateById.value.get(table.id)
   const label = shortLabel(table.name)
-  const base = { id: table.id, label, attention: false, late: false }
+  const draft = props.draftTables.includes(table.id)
+  const base = { id: table.id, label, attention: false, late: false, draft }
 
-  if (!state?.tab_id) return { ...base, sub: null, variant: 'free' }
+  if (!state?.tab_id) {
+    // A table with nothing on the server but a draft on this phone is not free:
+    // it is drawn dashed with what the draft comes to, so a colleague does not
+    // seat guests at it and so the waiter can find his own unlocked round.
+    return draft
+      ? { ...base, sub: props.draftLabel?.(table.id) ?? 'nacrt', variant: 'mine' }
+      : { ...base, sub: null, variant: 'free' }
+  }
 
   const common = {
     ...base,
@@ -130,7 +147,9 @@ const rows = computed(() => {
             :variant="cell.variant"
             :attention="cell.attention"
             :late="cell.late"
+            :draft="cell.draft"
             @select="$emit('select', cell.id)"
+            @long="$emit('long', cell.id)"
           />
           <div
             v-for="group in column.groups"
@@ -147,7 +166,9 @@ const rows = computed(() => {
                 :variant="cell.variant"
                 :attention="cell.attention"
                 :late="cell.late"
+                :draft="cell.draft"
                 @select="$emit('select', cell.id)"
+                @long="$emit('long', cell.id)"
               />
             </div>
           </div>
@@ -170,8 +191,10 @@ const rows = computed(() => {
             :variant="cell.variant"
             :attention="cell.attention"
             :late="cell.late"
+            :draft="cell.draft"
             :small="line.small"
             @select="$emit('select', cell.id)"
+            @long="$emit('long', cell.id)"
           />
         </div>
       </div>
@@ -181,6 +204,7 @@ const rows = computed(() => {
       <span class="flex items-center gap-1.5"><i class="inline-block size-3 rounded-full bg-accent" />moj sto</span>
       <span class="flex items-center gap-1.5"><i class="inline-block size-3 rounded-full bg-line" />kolegin</span>
       <span class="flex items-center gap-1.5"><i class="inline-block size-3 rounded-full border border-muted" />slobodan</span>
+      <span class="flex items-center gap-1.5"><i class="inline-block size-3 rounded-full border border-dashed border-accent" />nacrt</span>
       <span class="flex items-center gap-1.5"><i class="inline-block size-3 rounded-full border-2 border-warn" />čeka</span>
     </div>
   </div>

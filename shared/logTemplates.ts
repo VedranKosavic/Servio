@@ -201,7 +201,7 @@ export const LOG = {
     group: 'storno',
     quiet: true,
     body: body({
-      adjustment_id: id, tab_id: id, table_id: id.optional(), user_id: id,
+      adjustment_id: id, tab_id: id, table_id: id.nullish(), user_id: id,
       line: z.string(), amount_fen: fen,
     }),
     title: (b, n) =>
@@ -215,7 +215,7 @@ export const LOG = {
     // out, and an admin PIN typed on somebody else's phone.
     alert: { rule: 'void_after_payment', when: b => Boolean(b.was_paid || b.foreign_device) },
     body: body({
-      adjustment_id: id, tab_id: id, table_id: id.optional(),
+      adjustment_id: id, tab_id: id, table_id: id.nullish(),
       user_id: id, approver_id: id.optional(),
       line: z.string(), amount_fen: fen, outcome: z.enum(['applied', 'rejected']),
       was_paid: z.boolean().optional(), foreign_device: z.boolean().optional(),
@@ -266,7 +266,7 @@ export const LOG = {
   unpaid_marked: defineLog({
     group: 'novac',
     quiet: true,
-    body: body({ tab_id: id, table_id: id.optional(), user_id: id, remaining_fen: fen, reason: z.string() }),
+    body: body({ tab_id: id, table_id: id.nullish(), user_id: id, remaining_fen: fen, reason: z.string() }),
     title: (b, n) =>
       `Nije plaćeno · ${n.user(b.user_id)} · ${n.table(b.table_id)}`
       + ` · ${n.formatKm(b.remaining_fen)} · ${b.reason}`,
@@ -275,7 +275,7 @@ export const LOG = {
   unpaid_decided: defineLog({
     group: 'novac',
     body: body({
-      tab_id: id, table_id: id.optional(), amount_fen: fen,
+      tab_id: id, table_id: id.nullish(), amount_fen: fen,
       outcome: z.enum(['otpis', 'naplatiti']),
     }),
     title: (b, n) =>
@@ -292,7 +292,7 @@ export const LOG = {
     // whichever of the two fields is present.
     body: body({
       payment_id: id.optional(), movement_id: id.optional(),
-      tab_id: id, table_id: id.optional(),
+      tab_id: id, table_id: id.nullish(),
       amount_fen: fen, method: z.enum(['cash', 'card']),
       adjustment_id: id.optional(),
       refund_kind: z.enum(['none', 'from_waiter', 'from_drawer']).optional(),
@@ -305,7 +305,7 @@ export const LOG = {
   pay_duplicate_attempt: defineLog({
     group: 'novac',
     quiet: true,
-    body: body({ tab_id: id, table_id: id.optional(), user_id: id, paid_by: id }),
+    body: body({ tab_id: id, table_id: id.nullish(), user_id: id, paid_by: id }),
     title: (b, n) =>
       `Pokušaj druge naplate · ${n.user(b.user_id)} · ${n.table(b.table_id)}`
       + ` · već naplatio ${n.user(b.paid_by)}`,
@@ -314,7 +314,7 @@ export const LOG = {
   pay_uncovered: defineLog({
     group: 'novac',
     quiet: true,
-    body: body({ tab_id: id, table_id: id.optional(), user_id: id }),
+    body: body({ tab_id: id, table_id: id.nullish(), user_id: id }),
     title: (b, n) => `Naplata bez pokrića · ${n.user(b.user_id)} · ${n.table(b.table_id)}`,
   }),
 
@@ -322,23 +322,26 @@ export const LOG = {
   tab_moved: defineLog({
     group: 'novac',
     quiet: true,
-    body: body({ tab_id: id, user_id: id, from_table_id: id, to_table_id: id }),
+    // `from_table_id` is null when the guests were *Bez stola* and have just
+    // been seated — a tab with no table is still a tab that can be moved
+    // (PHASE3 §1.11), and the entry names where it came from in words.
+    body: body({ tab_id: id, user_id: id, from_table_id: id.nullable(), to_table_id: id }),
     title: (b, n) =>
-      `Račun prebačen · ${n.user(b.user_id)}`
+      `Sto premješten · ${n.user(b.user_id)}`
       + ` · ${n.table(b.from_table_id)} → ${n.table(b.to_table_id)}`,
   }),
 
   tab_offered: defineLog({
     group: 'novac',
     quiet: true,
-    body: body({ tab_id: id, table_id: id.optional(), user_id: id, to: id }),
+    body: body({ tab_id: id, table_id: id.nullish(), user_id: id, to: id }),
     title: (b, n) =>
       `Sto ponuđen · ${n.user(b.user_id)} → ${n.user(b.to)} · ${n.table(b.table_id)}`,
   }),
 
   tab_handed: defineLog({
     group: 'novac',
-    body: body({ tab_id: id, table_id: id.optional(), from: id, to: id }),
+    body: body({ tab_id: id, table_id: id.nullish(), from: id, to: id }),
     title: (b, n) =>
       `Sto preuzet · ${n.user(b.to)} · od ${n.user(b.from)} · ${n.table(b.table_id)}`,
   }),
@@ -346,7 +349,7 @@ export const LOG = {
   cross_waiter_lock: defineLog({
     group: 'novac',
     quiet: true,
-    body: body({ tab_id: id, order_id: id, table_id: id.optional(), assigned_to: id, locked_by: id }),
+    body: body({ tab_id: id, order_id: id, table_id: id.nullish(), assigned_to: id, locked_by: id }),
     title: (b, n) =>
       `Tura na tuđem stolu · ${n.user(b.locked_by)} · ${n.table(b.table_id)}`
       + ` · vodi ${n.user(b.assigned_to)}`,
@@ -372,7 +375,7 @@ export const LOG = {
     // and `payment_id` names the row in that case.
     body: body({
       order_id: id.optional(), payment_id: id.optional(),
-      tab_id: id.optional(), table_id: id.optional(),
+      tab_id: id.optional(), table_id: id.nullish(),
       user_id: id, shift_seq: z.int().optional(), amount_fen: fen,
       method: z.enum(['cash', 'card']).optional(),
     }),
@@ -385,7 +388,7 @@ export const LOG = {
     group: 'novac',
     alert: { rule: 'late_after_close' },
     body: body({
-      tab_id: id, order_id: id, shift_id: id.optional(), table_id: id.optional(),
+      tab_id: id, order_id: id, shift_id: id.optional(), table_id: id.nullish(),
       user_id: id.optional(), amount_fen: fen, count: z.int(),
     }),
     title: (b, n) =>

@@ -165,11 +165,56 @@ describe('createOrder — stock resolution', () => {
     expect(topUp.parentLineId).toBe(bowl.id)
   })
 
-  it('refuses a parent line that is not on this round', () => {
+  /**
+   * The invariant moved, deliberately: a parent line must be on **this tab**
+   * rather than on this same round.
+   *
+   * F4's *Žar* is a round of its own, locked half an hour after the bowl it
+   * tops up, so "on this round" made the two-tap path impossible to build. What
+   * the rule is actually for — a phone cannot hang coal off a line at somebody
+   * else's table — is unchanged and is what the two tests below assert.
+   */
+  it('hangs a Dodatni žar off a bowl locked on an earlier round of the same tab', () => {
+    const bowl = line('Nargila', 1, { flavour_ids: [f.stockItemId('Al Fakher · Jabuka')] })
+    const first = createOrder(f.db, f.venueId, f.actor('Dino'), {
+      client_id: randomUUID(),
+      table_id: f.tableId('Sto 16'),
+      lines: [bowl],
+    })
+
+    const topUp = createOrder(f.db, f.venueId, f.actor('Dino'), {
+      client_id: randomUUID(),
+      table_id: f.tableId('Sto 16'),
+      lines: [line('Dodatni žar', 1, { parent_line_id: bowl.id })],
+    })
+
+    expect(topUp.tab_id).toBe(first.tab_id)
+    const row = f.db.select().from(schema.orderLines)
+      .where(eq(schema.orderLines.orderId, topUp.order_id)).get()!
+    expect(row.parentLineId).toBe(bowl.id)
+    expect(row.chargedFen).toBe(0)
+  })
+
+  it('refuses a parent line that is on no tab of this venue', () => {
     refuses(() => createOrder(f.db, f.venueId, f.actor('Dino'), {
       client_id: randomUUID(),
       table_id: f.tableId('Sto 16'),
       lines: [line('Dodatni žar', 1, { parent_line_id: randomUUID() })],
+    }), 'PARENT_LINE_NOT_FOUND', 404)
+  })
+
+  it("refuses a parent line that belongs to another table's tab", () => {
+    const bowl = line('Nargila', 1, { flavour_ids: [f.stockItemId('Al Fakher · Jabuka')] })
+    createOrder(f.db, f.venueId, f.actor('Dino'), {
+      client_id: randomUUID(),
+      table_id: f.tableId('Sto 16'),
+      lines: [bowl],
+    })
+
+    refuses(() => createOrder(f.db, f.venueId, f.actor('Dino'), {
+      client_id: randomUUID(),
+      table_id: f.tableId('Sto 17'),
+      lines: [line('Dodatni žar', 1, { parent_line_id: bowl.id })],
     }), 'PARENT_LINE_NOT_FOUND', 404)
   })
 })
@@ -533,5 +578,97 @@ describe('createOrder — a gratis on the round', () => {
     })
     expect(third.order_total_fen).toBe(150)
     expect(f.db.select().from(schema.lineAdjustments).all()).toHaveLength(1)
+  })
+})
+
+/**
+ * *Bez stola* — a round for the guests standing at the bar (PHASE3 §1.11).
+ *
+ * `tabs.table_id` became nullable in `0003_phase3.sql`, and the partial index
+ * `tabs_one_open_per_table_uq (venue_id, table_id) WHERE status='open'` keeps
+ * working unchanged: SQLite treats two NULLs in a unique index as *different*
+ * values, so many table-less tabs may be open at once while a real table still
+ * holds exactly one. That is the whole property this block is about.
+ */
+describe('createOrder — bez stola', () => {
+  it('opens a tab with no table', () => {
+    const result = createOrder(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(),
+      table_id: null,
+      lines: [line('Kafa', 2)],
+    })
+
+    const tab = f.db.select().from(schema.tabs).where(eq(schema.tabs.id, result.tab_id)).get()!
+    expect(tab.tableId).toBeNull()
+    expect(tab.status).toBe('open')
+    expect(tab.assignedTo).toBe(f.userId('Amar'))
+    expect(result.order_total_fen).toBe(300)
+    expect(result.late_sync).toBe(false)
+  })
+
+  it('opens a second one instead of joining the first', () => {
+    const first = createOrder(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(),
+      table_id: null,
+      tab_client_id: randomUUID(),
+      lines: [line('Kafa')],
+    })
+    const second = createOrder(f.db, f.venueId, f.actor('Lejla'), {
+      client_id: randomUUID(),
+      table_id: null,
+      tab_client_id: randomUUID(),
+      lines: [line('Coca-Cola')],
+    })
+
+    // Two parties at the bar are two tabs, never one — "the open tab on this
+    // table" is a question only a table can answer.
+    expect(second.tab_id).not.toBe(first.tab_id)
+    expect(f.db.select().from(schema.tabs).all()).toHaveLength(2)
+  })
+
+  it('adds a second round to the same table-less tab by its client id', () => {
+    const tabClientId = randomUUID()
+    const first = createOrder(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(),
+      table_id: null,
+      tab_client_id: tabClientId,
+      lines: [line('Kafa')],
+    })
+    const second = createOrder(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(),
+      table_id: null,
+      tab_client_id: tabClientId,
+      lines: [line('Kafa')],
+    })
+
+    expect(second.tab_id).toBe(first.tab_id)
+    expect(second.tab_total_fen).toBe(300)
+  })
+
+  it('refuses a tab_client_id that belongs to a real table', () => {
+    const onTable = createOrder(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(),
+      table_id: f.tableId('Sto 7'),
+      lines: [line('Kafa')],
+    })
+
+    refuses(() => createOrder(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(),
+      table_id: null,
+      tab_client_id: onTable.tab_client_id,
+      lines: [line('Kafa')],
+    }), 'TAB_TABLE_MISMATCH')
+  })
+
+  it('a replay of a table-less round writes nothing twice', () => {
+    const clientId = randomUUID()
+    const body = { client_id: clientId, table_id: null, lines: [line('Kafa', 2)] }
+
+    const first = createOrder(f.db, f.venueId, f.actor('Amar'), body)
+    const replay = createOrder(f.db, f.venueId, f.actor('Amar'), body)
+
+    expect(replay.order_id).toBe(first.order_id)
+    expect(replay.already_applied).toBe(true)
+    expect(f.db.select().from(schema.orders).all()).toHaveLength(1)
   })
 })

@@ -76,14 +76,8 @@ export function createOrder(
       }
     }
 
-    const table = tx.select().from(schema.tables)
-      .where(and(
-        eq(schema.tables.id, body.table_id),
-        eq(schema.tables.venueId, venueId),
-        eq(schema.tables.active, 1),
-      ))
-      .get()
-    if (!table) throw notFound('TABLE_NOT_FOUND', `table ${body.table_id} not found`)
+    // `null` is *Bez stola* — guests at the bar, on no table at all (§1.11).
+    const table = body.table_id === null ? null : requireTable(tx, venueId, body.table_id)
 
     const settings = getSettings(tx, venueId)
     const at = nowIso()
@@ -110,7 +104,7 @@ export function createOrder(
     const postSettle = hasLiveSettlement(tx, venueId, shift.id, actor.userId)
     const shiftSeq = nextShiftSeq(tx, venueId, shift.id)
 
-    const resolved = resolveTab(tx, venueId, table.id, body, actor, at, clientAt, shift.id)
+    const resolved = resolveTab(tx, venueId, table?.id ?? null, body, actor, at, clientAt, shift.id)
 
     const orderId = newId()
     tx.insert(schema.orders).values({
@@ -136,7 +130,8 @@ export function createOrder(
     let orderTotalFen = 0
     for (const line of body.lines) {
       orderTotalFen += insertLine(
-        tx, venueId, actor, settings, orderId, line, shift.id, at, clientAt, inserted,
+        tx, venueId, actor, settings, orderId, resolved.tabId, line,
+        shift.id, at, clientAt, inserted,
       )
     }
 
@@ -150,7 +145,7 @@ export function createOrder(
         body: {
           tab_id: resolved.tabId,
           order_id: orderId,
-          table_id: table.id,
+          table_id: table?.id ?? null,
           assigned_to: resolved.assignedTo,
           locked_by: actor.userId,
         },
@@ -172,7 +167,7 @@ export function createOrder(
           tab_id: resolved.tabId,
           order_id: orderId,
           shift_id: resolved.tabShiftId,
-          table_id: table.id,
+          table_id: table?.id ?? null,
           user_id: actor.userId,
           amount_fen: orderTotalFen,
           count: lateTabCount(tx, venueId, resolved.tabShiftId, actor.userId),
@@ -200,7 +195,7 @@ export function createOrder(
         body: {
           order_id: orderId,
           tab_id: resolved.tabId,
-          table_id: table.id,
+          table_id: table?.id ?? null,
           user_id: actor.userId,
           shift_seq: shiftSeq,
           amount_fen: orderTotalFen,
@@ -261,14 +256,7 @@ export function discardDraft(
   db: Db, venueId: string, actor: Actor, body: DiscardDraftBody,
 ): { ok: true } {
   db.transaction((tx) => {
-    const table = tx.select().from(schema.tables)
-      .where(and(
-        eq(schema.tables.id, body.table_id),
-        eq(schema.tables.venueId, venueId),
-        eq(schema.tables.active, 1),
-      ))
-      .get()
-    if (!table) throw notFound('TABLE_NOT_FOUND', `table ${body.table_id} not found`)
+    const table = requireTable(tx, venueId, body.table_id)
 
     const shift = tx.select({ id: schema.shifts.id }).from(schema.shifts)
       .where(and(eq(schema.shifts.venueId, venueId), eq(schema.shifts.status, 'open')))
@@ -295,6 +283,19 @@ export function discardDraft(
 // ===========================================================================
 // The tab a round lands on
 // ===========================================================================
+
+/** The table a round names, or a 404. `null` never reaches here — it is *Bez stola*. */
+function requireTable(tx: Tx, venueId: string, tableId: string) {
+  const table = tx.select().from(schema.tables)
+    .where(and(
+      eq(schema.tables.id, tableId),
+      eq(schema.tables.venueId, venueId),
+      eq(schema.tables.active, 1),
+    ))
+    .get()
+  if (!table) throw notFound('TABLE_NOT_FOUND', `table ${tableId} not found`)
+  return table
+}
 
 interface ResolvedTab {
   tabId: string
@@ -326,7 +327,7 @@ interface ResolvedTab {
  * exactly the money that explains a surplus in somebody's envelope.
  */
 function resolveTab(
-  tx: Tx, venueId: string, tableId: string, body: CreateOrderBody, actor: Actor,
+  tx: Tx, venueId: string, tableId: string | null, body: CreateOrderBody, actor: Actor,
   at: string, clientAt: string, shiftId: string,
 ): ResolvedTab {
   const settings = getSettings(tx, venueId)
@@ -343,17 +344,26 @@ function resolveTab(
     }
   }
 
-  // The last time somebody closed a tab on this table. A round claiming to have
-  // happened before that moment belongs to a night that is already settled.
-  const lastClosed = tx.select({ at: schema.tabs.closedAt, shiftId: schema.tabs.shiftId })
-    .from(schema.tabs)
-    .where(and(
-      eq(schema.tabs.venueId, venueId),
-      eq(schema.tabs.tableId, tableId),
-      isNotNull(schema.tabs.closedAt),
-    ))
-    .orderBy(desc(schema.tabs.closedAt))
-    .get()
+  /**
+   * The last time somebody closed a tab on this table. A round claiming to have
+   * happened before that moment belongs to a night that is already settled.
+   *
+   * *Bez stola* has no such history and cannot have one: two table-less tabs are
+   * two different parties standing at the bar, not the same table twice. So the
+   * only lateness a loose round can have is its own `tab_client_id` pointing at
+   * a tab that is already closed.
+   */
+  const lastClosed = tableId === null
+    ? undefined
+    : tx.select({ at: schema.tabs.closedAt, shiftId: schema.tabs.shiftId })
+      .from(schema.tabs)
+      .where(and(
+        eq(schema.tabs.venueId, venueId),
+        eq(schema.tabs.tableId, tableId),
+        isNotNull(schema.tabs.closedAt),
+      ))
+      .orderBy(desc(schema.tabs.closedAt))
+      .get()
 
   const closedByClient = byClient !== undefined && byClient.status !== 'open'
   const beforeLastClose = lastClosed?.at !== undefined && lastClosed.at !== null
@@ -392,13 +402,17 @@ function resolveTab(
     }
   }
 
-  const existing = byClient ?? tx.select().from(schema.tabs)
-    .where(and(
-      eq(schema.tabs.venueId, venueId),
-      eq(schema.tabs.tableId, tableId),
-      eq(schema.tabs.status, 'open'),
-    ))
-    .get()
+  // "The open tab on this table" is a question only a table can answer. A loose
+  // round joins a tab **only** through the id its own phone minted.
+  const existing = byClient ?? (tableId === null
+    ? undefined
+    : tx.select().from(schema.tabs)
+      .where(and(
+        eq(schema.tabs.venueId, venueId),
+        eq(schema.tabs.tableId, tableId),
+        eq(schema.tabs.status, 'open'),
+      ))
+      .get())
 
   if (existing) {
     const crossWaiter = existing.assignedTo !== actor.userId
@@ -477,6 +491,7 @@ function insertLine(
   actor: Actor,
   settings: Settings,
   orderId: string,
+  tabId: string,
   line: OrderLineInput,
   shiftId: string,
   at: string,
@@ -511,10 +526,21 @@ function insertLine(
     return item
   })
 
-  // *Dodatni žar* points at the bowl it tops up, and the bowl has to be on this
-  // same round — the phone mints both ids in the same cart.
-  if (line.parent_line_id && !inserted.has(line.parent_line_id)) {
-    throw notFound('PARENT_LINE_NOT_FOUND', `line ${line.parent_line_id} is not on this order`)
+  /**
+   * *Dodatni žar* points at the bowl it tops up, and the bowl has to be on
+   * **this tab** — either on this same round (the phone minted both ids in one
+   * cart) or on an earlier one at the same table.
+   *
+   * The earlier-round case is F4 itself: a nargila lit at 21:05 burns down at
+   * 21:40 and the guest raises a hand. That top-up is its own `orders` row, so
+   * its parent is by definition on a round the phone locked half an hour ago.
+   * Scoping the check to the tab rather than to the order is what makes the
+   * two-tap path possible while keeping the rule that matters — a phone cannot
+   * hang coal off a line at somebody else's table.
+   */
+  if (line.parent_line_id && !inserted.has(line.parent_line_id)
+    && !lineIsOnTab(tx, venueId, tabId, line.parent_line_id)) {
+    throw notFound('PARENT_LINE_NOT_FOUND', `line ${line.parent_line_id} is not on this tab`)
   }
 
   const lineId = line.id
@@ -597,6 +623,19 @@ function insertLine(
   }
 
   return chargedFen
+}
+
+/** Is this line one of the ones already locked on this tab? */
+function lineIsOnTab(tx: Tx, venueId: string, tabId: string, lineId: string): boolean {
+  return tx.select({ id: schema.orderLines.id })
+    .from(schema.orderLines)
+    .innerJoin(schema.orders, eq(schema.orders.id, schema.orderLines.orderId))
+    .where(and(
+      eq(schema.orderLines.venueId, venueId),
+      eq(schema.orderLines.id, lineId),
+      eq(schema.orders.tabId, tabId),
+    ))
+    .get() !== undefined
 }
 
 /**

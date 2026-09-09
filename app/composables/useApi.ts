@@ -54,7 +54,7 @@ import type {
 // schemas is the same definition — `z.infer` of the object the route validates
 // against — and it means WP9 changes no file outside `app/`.
 import type {
-  EnrolDeviceBody, HeartbeatBody, PinLoginBody, SettleBody,
+  DiscardDraftBody, EnrolDeviceBody, HeartbeatBody, PinLoginBody, SettleBody,
 } from '#shared/schemas'
 import { errorMessage } from '#shared/errors'
 
@@ -288,6 +288,24 @@ export function useApi() {
      */
     markUnpaid: (body: MarkUnpaidBody) =>
       request<UnpaidResult>('/api/tabs/unpaid', { method: 'POST', body }),
+
+    /**
+     * *Premjesti sto* — the guests changed table, or stood up from the bar and
+     * sat down. Online only: the partial unique index that keeps one open tab
+     * per table lives on the server, so a queued move could not be checked
+     * against it here.
+     */
+    moveTab: (tabId: string, tableId: string) =>
+      request<Tab>(`/api/tabs/${tabId}/move`, { method: 'POST', body: { table_id: tableId } }),
+
+    /**
+     * *Odbaci* on a draft nobody is going to lock. It writes one log entry and
+     * no ledger row — the point is that a shift cannot close with an unlocked
+     * cart on somebody's phone, and a discard has to leave a trace or that
+     * check is a check on nothing.
+     */
+    discardDraft: (body: DiscardDraftBody) =>
+      request<{ ok: true }>('/api/drafts/discard', { method: 'POST', body }),
 
     /** *Predaj sto kolegi* — the offer half. Online only. */
     offerTab: (tabId: string, userId: string) =>
