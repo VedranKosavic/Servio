@@ -72,10 +72,11 @@ export const orderLineInput = z.object({
  * That property is called idempotency and it is the reason this app can go
  * offline.
  *
- * `client_created_at` is one of exactly three timestamps a body may carry — it
- * records when the round happened in the *world*, while the phone was in a
- * cellar with no signal. It is a claim, not a fact: the server stores it and
- * stores the clamped value it actually used beside it.
+ * `client_created_at` is one of exactly four timestamps a body may carry (the
+ * fourth is on `createAdjustmentBody`, added in Phase 3) — it records when the
+ * round happened in the *world*, while the phone was in a cellar with no signal.
+ * It is a claim, not a fact: the server stores it and stores the clamped value
+ * it actually used beside it.
  */
 export const createOrderBody = z.object({
   client_id: uuid,
@@ -177,6 +178,19 @@ export const createAdjustmentBody = z.object({
   /** Whose PIN authorises it on the spot — a bartender's, or the owner's. */
   approver_user_id: uuid.optional(),
   pin: pin.optional(),
+  /**
+   * When the storno was asked for **in the world** — the fourth and last of the
+   * timestamps a body may carry (PHASE3 §1.2).
+   *
+   * Without it, the one case the 300 s self-void window exists for is the one
+   * case it fails: a waiter strikes a mistaken line twenty seconds after locking
+   * it, the phone is behind the fridge, the request arrives ten minutes later,
+   * and the server — measuring from its own clock — sends a genuine miskey to
+   * the bartender's queue. With it, the window is measured from when the thumb
+   * moved. It is a claim like every other client timestamp: skew-corrected,
+   * clamped, and never trusted to reach further back than the venue's tolerance.
+   */
+  client_created_at: clientAt.optional(),
 }).strict().refine(
   b => (b.kind === 'void'
     ? (VOID_REASONS as readonly string[]).includes(b.reason)

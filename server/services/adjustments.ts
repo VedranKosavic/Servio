@@ -33,6 +33,7 @@ import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { conflict, forbidden, notFound } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
+import { clampEventAt } from '#shared/dates'
 import { RESTOCK_REASONS } from '#shared/schemas'
 import type { Settings } from '#shared/settings'
 import type {
@@ -112,7 +113,7 @@ export function requestAdjustment(
     if (live) throw conflict('LINE_ALREADY_ADJUSTED', `line ${line.id} already has an adjustment`)
 
     const at = nowIso()
-    const secondsSinceLock = Math.floor((Date.parse(at) - Date.parse(order.createdAt)) / 1000)
+    const secondsSinceLock = secondsSinceLockFor(tx, settings, actor, body, order.createdAt, at)
     const wasPaid = tabWasPaid(tx, venueId, tab, order.clientId)
 
     // Whole-line voids in v1: the body sends no qty and no amount, and both are
@@ -562,6 +563,52 @@ function requireDecider(
   if (elapsed > settings.bartender_approve_window_s) {
     throw forbidden('WINDOW_EXPIRED', 'the bartender window has passed — this is the owner\'s')
   }
+}
+
+/**
+ * How long after the lock the storno was **asked for**, not how long after the
+ * lock the request happened to arrive (PHASE3 §1.2).
+ *
+ * The difference is the whole point of the 300 s window. A waiter strikes a
+ * mistaken coffee twenty seconds after locking it while the phone is in a dead
+ * spot; the outbox flushes ten minutes later. Measured from *server now* the
+ * request is 620 s old and goes to the bartender's queue — the wrong answer for
+ * the exact case the window was written for.
+ *
+ * The claim is treated like every other client timestamp (`shared/dates.ts`):
+ *
+ *   - the device's own `clock_skew_s`, measured by the heartbeat, is subtracted
+ *     first, so a phone that is three minutes fast cannot buy itself three extra
+ *     minutes of window;
+ *   - it is clamped to `[now − max_sync_lag_h, now]`, so it can be neither in
+ *     the future nor older than the venue tolerates;
+ *   - and it can never claim to be *before* the lock: a negative age is a wrong
+ *     clock, not a storno asked for before the round existed.
+ *
+ * A body with no claim behaves exactly as it did before: server now.
+ *
+ * **The raw claim is not stored.** `line_adjustments` has no column for it and
+ * WP1 adds no migration this phase (PHASE3 §1: one migration, WP0's). Only the
+ * value actually used survives, in `seconds_since_lock` — noted here so the
+ * asymmetry with `orders.client_created_at` / `client_created_at_adj` is a known
+ * gap rather than a silent one.
+ */
+function secondsSinceLockFor(
+  tx: Tx, settings: Settings, actor: Actor, body: CreateAdjustmentBody,
+  lockedAt: string, now: string,
+): number {
+  const skewS = deviceSkew(tx, actor.deviceId)
+  const askedAt = clampEventAt(body.client_created_at, now, settings.max_sync_lag_h, skewS)
+  return Math.max(0, Math.floor((Date.parse(askedAt) - Date.parse(lockedAt)) / 1000))
+}
+
+/** How far this phone's clock is from the server's, as the heartbeat measured it. */
+function deviceSkew(tx: Tx, deviceId: string | null): number {
+  if (!deviceId) return 0
+  const row = tx.select({ skew: schema.devices.clockSkewS }).from(schema.devices)
+    .where(eq(schema.devices.id, deviceId))
+    .get()
+  return row?.skew ?? 0
 }
 
 /** His self-voids so far this shift: how many, and how much. */

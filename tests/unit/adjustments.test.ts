@@ -23,6 +23,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { and, eq } from 'drizzle-orm'
 import { randomUUID } from 'node:crypto'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
+import {
+  COMP_REASONS as SCHEMA_COMP_REASONS,
+  RESTOCK_REASONS as SCHEMA_RESTOCK_REASONS,
+  VOID_REASONS as SCHEMA_VOID_REASONS,
+} from '../../shared/schemas'
+import { COMP_REASONS, VOID_REASONS, reasonLabel } from '../../app/composables/useAdjustments'
 import { createOrder } from '../../server/services/orders'
 import { createPayment } from '../../server/services/payments'
 import { decideAdjustment, listPending, requestAdjustment } from '../../server/services/adjustments'
@@ -171,6 +179,103 @@ describe('the self-void', () => {
     const order = lock('Amar', 'Sto 7')
     const result = request('Lejla', lineOf(order.order_id))
     expect(result.adjustment.status).toBe('pending')
+  })
+})
+
+// ===========================================================================
+// The window is measured from the thumb, not from the router (PHASE3 §1.2)
+// ===========================================================================
+
+describe('client_created_at and the self-void window', () => {
+  /** Locked ten minutes ago; the request arrives now. */
+  function tenMinutesOld() {
+    f.openShift({ members: ['Amar'] })
+    return f.lock('Amar', 'Sto 7', [{ product: 'Kafa' }], {
+      at: new Date(Date.now() - 600_000).toISOString(),
+    })
+  }
+
+  it('applies a request made 20 s after the lock and flushed ten minutes late', () => {
+    const old = tenMinutesOld()
+
+    // The thumb moved at lock + 20 s. The outbox got out of the dead spot ten
+    // minutes later, and the body still says when it happened in the world.
+    const result = request('Amar', old.lineIds[0]!, {
+      client_created_at: new Date(Date.now() - 580_000).toISOString(),
+    })
+
+    expect(result.applied).toBe(true)
+    expect(result.adjustment.status).toBe('applied')
+    expect(result.adjustment.auto).toBe(true)
+    expect(result.adjustment.seconds_since_lock).toBe(20)
+  })
+
+  it('still measures from server now when the body carries no claim', () => {
+    const old = tenMinutesOld()
+    const result = request('Amar', old.lineIds[0]!)
+
+    expect(result.adjustment.status).toBe('pending')
+    expect(result.adjustment.seconds_since_lock).toBeGreaterThanOrEqual(600)
+  })
+
+  it('subtracts the phone\'s own clock skew before believing it', () => {
+    const old = tenMinutesOld()
+    // This phone runs nine minutes **slow**, as the heartbeat measured it. The
+    // waiter taps storno now — ten minutes after the lock — and the phone stamps
+    // the body nine minutes ago, which reads as a minute after the lock. Taken
+    // at face value that is a free self-void; corrected, it is what it is.
+    f.db.insert(schema.devices).values({
+      id: 'slow-phone',
+      venueId: f.venueId,
+      label: 'Amarov telefon',
+      tokenHash: randomUUID(),
+      mode: 'personal',
+      boundUserId: f.userId('Amar'),
+      enrolledAt: f.clock.now(),
+      lastSeenAt: f.clock.now(),
+      pendingCount: 0,
+      clockSkewS: -540,
+    }).run()
+
+    const result = requestAdjustment(
+      f.db, f.venueId, f.actor('Amar', { device: 'slow-phone', bound: true }), {
+        client_id: randomUUID(),
+        order_line_id: old.lineIds[0]!,
+        kind: 'void',
+        reason: 'wrong_entry',
+        client_created_at: new Date(Date.now() - 540_000).toISOString(),
+      })
+
+    expect(result.adjustment.status).toBe('pending')
+    expect(result.adjustment.seconds_since_lock).toBeGreaterThan(300)
+  })
+
+  it('refuses to let a claim reach further back than the venue tolerates', () => {
+    f.openShift({ members: ['Amar'] })
+    f.settingsWith({ max_sync_lag_h: 1 })
+    const old = f.lock('Amar', 'Sto 7', [{ product: 'Kafa' }], {
+      at: new Date(Date.now() - 6 * 3_600_000).toISOString(),
+    })
+
+    // "I asked for this six hours ago" on a venue that tolerates one: the claim
+    // is clamped to an hour ago, which is still far outside the window.
+    const result = request('Amar', old.lineIds[0]!, {
+      client_created_at: new Date(Date.now() - 6 * 3_600_000 + 20_000).toISOString(),
+    })
+
+    expect(result.adjustment.status).toBe('pending')
+    expect(result.adjustment.seconds_since_lock).toBe(5 * 3600)
+  })
+
+  it('never records a storno asked for before the round it strikes', () => {
+    f.openShift({ members: ['Amar'] })
+    const order = lock('Amar', 'Sto 7')
+    const result = request('Amar', lineOf(order.order_id), {
+      client_created_at: new Date(Date.now() - 120_000).toISOString(),
+    })
+
+    expect(result.adjustment.seconds_since_lock).toBe(0)
+    expect(result.applied).toBe(true)
   })
 })
 
@@ -633,5 +738,58 @@ describe('a void on a comped line', () => {
     const result = request('Lejla', lineOf(order.order_id))
     expect(result.adjustment.amount_fen).toBe(0)
     expect(result.tab_total_fen).toBe(0)
+  })
+})
+
+// ===========================================================================
+// The sheets (WP1) — the rules the phone draws, and the house rules it obeys
+// ===========================================================================
+//
+// No component is mounted here. Rendering a sheet to assert that a button says
+// *Odobri* tests Vue, not Šank (`admin-ui.test.ts` says the same about `/a`).
+// What is worth pinning is the one way these files can silently go wrong: the
+// chips a waiter taps drifting away from the reasons the server accepts, and an
+// English word or an emoji reaching a screen.
+
+describe('the storno and gratis sheets', () => {
+  const uiFiles = [
+    'app/composables/useAdjustments.ts',
+    'app/pages/s/cekanje.vue',
+    ...readdirSync('app/components/adjust').map(name => join('app/components/adjust', name)),
+  ]
+
+  it('offers exactly the reasons the server accepts', () => {
+    expect(VOID_REASONS.map(r => r.id)).toEqual([...SCHEMA_VOID_REASONS])
+    expect(COMP_REASONS.map(r => r.id)).toEqual([...SCHEMA_COMP_REASONS])
+  })
+
+  it('promises the shelf exactly what RESTOCK_REASONS delivers', () => {
+    // "Vraća robu na stanje: da / ne" is read before anything is sent, so a
+    // chip that promised the wrong thing would be a lie told in advance.
+    for (const chip of VOID_REASONS) {
+      const server = (SCHEMA_RESTOCK_REASONS as readonly string[]).includes(chip.id)
+      expect(chip.restock, chip.id).toBe(server)
+    }
+  })
+
+  it('has a Bosnian label for every reason, and never echoes the code', () => {
+    for (const chip of [...VOID_REASONS, ...COMP_REASONS]) {
+      expect(reasonLabel(chip.id)).toBe(chip.label)
+      expect(chip.label).not.toMatch(/[a-z]_[a-z]/)
+    }
+  })
+
+  /** `CLAUDE.md`: no emoji on a screen, in a log title, or in a commit message. */
+  it('has no emoji and no hand-written hex colour', () => {
+    const emoji = /\p{Extended_Pictographic}/u
+    const offenders: string[] = []
+    for (const path of uiFiles) {
+      const source = readFileSync(path, 'utf8')
+      if (emoji.test(source)) offenders.push(`${path}: emoji`)
+      source.split('\n').forEach((line, i) => {
+        if (/#[0-9a-fA-F]{3,8}\b/.test(line)) offenders.push(`${path}:${i + 1} ${line.trim()}`)
+      })
+    }
+    expect(offenders).toEqual([])
   })
 })

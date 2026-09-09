@@ -23,6 +23,7 @@
  * `e.data.retry_after_s` without knowing anything about $fetch.
  */
 import type {
+  AdjustmentResult,
   ApiError,
   Bootstrap,
   ChangesResult,
@@ -39,6 +40,7 @@ import type {
   MeUser,
   MyShift,
   PaymentResult,
+  PendingAdjustment,
   PinLoginResult,
   Prep,
   PrepOrder,
@@ -49,12 +51,12 @@ import type {
   TablesStateResponse,
   UnpaidResult,
 } from '#shared/types'
-// Four bodies the `shared/types.ts` barrel does not re-export (it lists the
+// Five bodies the `shared/types.ts` barrel does not re-export (it lists the
 // request types the Korak 1 screens needed). Taking them straight from the
 // schemas is the same definition — `z.infer` of the object the route validates
 // against — and it means WP9 changes no file outside `app/`.
 import type {
-  EnrolDeviceBody, HeartbeatBody, PinLoginBody, SettleBody,
+  DecideAdjustmentBody, EnrolDeviceBody, HeartbeatBody, PinLoginBody, SettleBody,
 } from '#shared/schemas'
 import { errorMessage } from '#shared/errors'
 
@@ -288,6 +290,31 @@ export function useApi() {
      */
     markUnpaid: (body: MarkUnpaidBody) =>
       request<UnpaidResult>('/api/tabs/unpaid', { method: 'POST', body }),
+
+    // -- Storno i gratis ----------------------------------------------------
+
+    /**
+     * *Zatraži storno* / *Zatraži gratis* **with an approver's PIN**, and only
+     * with one. Every PIN-less request goes through the outbox instead
+     * (`sendQueued('adjust', …)`) — there is one queue for money, not two.
+     *
+     * A PIN is a credential: it must never be written into IndexedDB and left on
+     * a phone for hours, so this branch posts directly and the sheet offers it
+     * only while the phone is online (`app/composables/useAdjustments.ts`).
+     */
+    requestAdjustment: (body: Record<string, unknown>) =>
+      request<AdjustmentResult>('/api/adjustments', { method: 'POST', body, timeoutMs: 8000 }),
+
+    /** *Na čekanju*. Scoped by the server: a waiter sees only his own requests. */
+    getPendingAdjustments: () => request<PendingAdjustment[]>('/api/adjustments/pending'),
+
+    /**
+     * *Odobri* / *Odbij*. Online only — a bartender's authority is a window
+     * measured at the moment he decides, so a queued decision would be one he no
+     * longer has the right to make.
+     */
+    decideAdjustment: (id: string, body: DecideAdjustmentBody) =>
+      request<AdjustmentResult>(`/api/adjustments/${id}/decide`, { method: 'POST', body }),
 
     /** *Predaj sto kolegi* — the offer half. Online only. */
     offerTab: (tabId: string, userId: string) =>
