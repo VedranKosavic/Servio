@@ -116,12 +116,18 @@ export const PIN_BEARING_ROUTES = [
 ] as const
 
 /**
- * The thirteen things worth waking the owner for (BACKEND §9). Frozen for
- * Korak 2: `queueAlert` takes one of these, so a log kind marked ✔ with no key
- * here is a kind that would throw at 03:10 on a shift close.
+ * The fourteen things worth waking the owner for (BACKEND §9). `queueAlert`
+ * takes one of these, so a log kind marked ✔ with no key here is a kind that
+ * would throw at 03:10 on a shift close.
  *
  * Deliberately absent: a mirror of every shift *opening* is noise, and telling
  * the owner about the payout decision he just made is noise.
+ *
+ * **`shift_not_closed` is WP8's, and it is the one key with no log kind behind
+ * it besides `health`.** §10 asks the nightly task to raise it when a shift is
+ * still open three hours past closing time; there is no *event* to log, because
+ * the whole point is that nothing happened. `tests/unit/alerts.test.ts` names
+ * its caller in `NON_LOG_CALLERS` the same way it names `health`'s.
  */
 export const ALERT_RULE_KEYS = [
   'shift_closed',
@@ -139,9 +145,14 @@ export const ALERT_RULE_KEYS = [
   'stock_variance',
   'payout_pending',
   'device_lockout',
+  /** Nobody closed the night: still `open` three hours past `closing_time`. */
+  'shift_not_closed',
   /** A backup or a nightly task that failed. */
   'health',
 ] as const
+
+/** How long past `closing_time` a shift may stay open before the nightly says so. */
+export const SHIFT_NOT_CLOSED_GRACE_H = 3
 
 export type AlertRuleKey = typeof ALERT_RULE_KEYS[number]
 

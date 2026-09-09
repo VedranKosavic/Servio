@@ -9,10 +9,18 @@
  * explain *why* rather than only saying no.
  */
 export const ADMIN_ERRORS = {
-  PRODUCT_NOT_FOUND: 'Artikal nije pronađen.',
-  CATEGORY_NOT_FOUND: 'Kategorija nije pronađena.',
-  TABLE_NOT_FOUND: 'Sto nije pronađen.',
-  STOCK_ITEM_NOT_FOUND: 'Roba nije pronađena.',
+  // `PRODUCT_NOT_FOUND`, `TABLE_NOT_FOUND` and `STOCK_ITEM_NOT_FOUND` were
+  // written here *and* in `errors/{money,stock}.ts`. `ADMIN_ERRORS` is spread
+  // last, so this fragment's "… nije pronađen." was silently winning on the
+  // waiter's phone as well as on the laptop, and the three sentences the money
+  // and stock packages wrote for their own screens were dead text.
+  //
+  // WP8 deleted this fragment's copies and kept theirs, which are the ones every
+  // *other* not-found in the app is already spelled like — 'Ta osoba ne
+  // postoji.', 'Taj račun ne postoji.', 'Ta narudžba ne postoji.'. One code, one
+  // sentence, and now one voice: "Taj/Ta X ne postoji." `CATEGORY_NOT_FOUND`
+  // stays because it is the only fragment that defines it.
+  CATEGORY_NOT_FOUND: 'Kategorija ne postoji.',
 
   /** Nothing to change: a PATCH with no keys would write an empty Dnevnik entry. */
   EMPTY_PATCH: 'Nema izmjena za snimiti.',

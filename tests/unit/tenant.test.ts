@@ -288,9 +288,32 @@ describe('the middleware itself', () => {
     expect(source).not.toMatch(/no-store/)
   })
 
-  it('opens the frozen Korak 1 routes only in dev and only on an explicit opt-in', () => {
+  /**
+   * **This assertion replaces one, and it is strictly stronger.**
+   *
+   * WP1 asserted that the Korak 1 escape hatch opened *only* in dev and *only*
+   * on `SANK_LEGACY_OPEN=1` — the narrowest a hatch can be while still being a
+   * hatch. WP8 wired `event.context.actor` into all five of those handlers, so
+   * the hatch is gone and the invariant that moved is "the hatch is narrow" →
+   * "there is no hatch". Nothing that used to pass this file now fails to.
+   *
+   * The check is textual because that is the only way to catch the shape:
+   * an early `return` above `authorizeRequest` cannot be reached by calling
+   * `authorizeRequest` in a test, which is exactly why the hatch was invisible
+   * to every other case in this file.
+   */
+  it('has no way past `authorizeRequest` — the Korak 1 hatch is gone', () => {
     const source = code(readFileSync(file, 'utf8'))
-    expect(source).toMatch(/import\.meta\.dev && process\.env\.SANK_LEGACY_OPEN === '1'/)
-    expect(process.env.SANK_LEGACY_OPEN).not.toBe('1')
+
+    expect(source).not.toMatch(/SANK_LEGACY_OPEN/)
+    expect(source).not.toMatch(/KORAK1_ROUTES/)
+    expect(source).not.toMatch(/legacyOpen/)
+
+    // The one early return left is the first line of the handler: a path that
+    // is not `/api/` is not this middleware's business. Everything after it
+    // goes through `authorizeRequest`.
+    const returns = source.match(/^\s*(if \(.*\) )?return\b/gm) ?? []
+    expect(returns).toHaveLength(1)
+    expect(source).toMatch(/if \(!path\.startsWith\('\/api\/'\)\) return/)
   })
 })

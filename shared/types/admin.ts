@@ -52,8 +52,29 @@ export interface Product {
   sort: number
 }
 
+/**
+ * `GET /api/bootstrap` — everything a screen needs before it can draw anything,
+ * in one request (§5.7, §7).
+ *
+ * The last five fields are Korak 2's. Korak 1 shipped a catalogue and nothing
+ * else, so every screen then asked separately who it was talking to; now the
+ * envelope answers that too. `me`, `device` and `shift` are the same objects
+ * `GET /api/me` and `GET /api/tables/state` return — one parser on the client,
+ * not three — and `seq` and `menu_version` are the two cursors: poll
+ * `/api/changes?since=seq`, and refetch this whole envelope only when
+ * `menu_version` moves (§4.4).
+ */
 export interface Bootstrap {
   venue: Venue
+  /** The sync cursor at this moment. Poll `/api/changes?since=` from here. */
+  seq: number
+  /** Refetch this envelope when this number moves, and at no other time. */
+  menu_version: number
+  me: import('./auth').MeUser
+  /** `null` on an admin's email session, which has no device. */
+  device: import('./auth').DeviceBrief | null
+  /** The open shift and this actor's place in it, or `null` before one opens. */
+  shift: import('./shifts').ShiftBrief | null
   users: User[]
   tables: VenueTable[]
   categories: Category[]

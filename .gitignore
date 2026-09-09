@@ -8,5 +8,12 @@ data/
 *.db-shm
 .env
 .env.*
+# …except the template. `.env.example` holds no secret — it is the list of names
+# a fresh clone has to fill in, and it is useless if it is not in the repo.
+!.env.example
+# Where your server lives, and the ssh user to reach it. Not a secret, but not
+# anybody else's business either; `deploy/deploy.env.example` is the committed
+# template it is copied from.
+deploy/.deploy.env
 uploads/
 .DS_Store
