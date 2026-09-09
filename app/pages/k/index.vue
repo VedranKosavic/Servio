@@ -25,7 +25,7 @@ const { data: boot } = useBootstrapData()
 
 const states = ref<TableState[]>([])
 const { ok: synced } = usePolling(async () => {
-  states.value = await api.getTablesState()
+  states.value = (await api.getTablesState()).tables
 })
 
 // Which zone the waiter was last looking at. Remembered per phone: a waiter who

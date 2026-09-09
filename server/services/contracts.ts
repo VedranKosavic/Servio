@@ -25,7 +25,6 @@
  */
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
-import { SankError } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
 import { businessDate, localDate, localTime } from '#shared/dates'
 import { mergeSettings, type Settings } from '#shared/settings'
@@ -34,14 +33,6 @@ import type { Actor, Role } from '#shared/types'
 import type { Queryable, Tx } from './types'
 
 type ShiftRow = typeof schema.shifts.$inferSelect
-
-function notImplemented(what: string): never {
-  throw new SankError(
-    501,
-    'NOT_IMPLEMENTED',
-    `${what}: this work package has not landed yet (docs/BACKEND.md §12)`,
-  )
-}
 
 // ===========================================================================
 // Real — WP0 implements these because its own tests need them
@@ -350,30 +341,20 @@ export { writeSummaryVersion } from './summaries'
 /** WP1 (`services/auth.ts`). Takes `Db`, not `Tx`: it owns its own attempt rows. */
 export { verifyPinMetered } from './auth'
 
-/** WP3 (`services/payments.ts`). Which shift a payment belongs to. */
-export function resolvePaymentShift(
-  _tx: Tx, _venueId: string, _tabId: string, _at: string,
-): string {
-  return notImplemented('resolvePaymentShift')
-}
+/**
+ * WP3 (`services/payments.ts`). Which shift a payment belongs to: the tab's own
+ * while that shift is still taking money, else whatever is open now.
+ */
+export { resolvePaymentShift } from './payments'
 
 /**
- * WP3. A negative payment row plus its `cash_movements(type='refund')` twin.
+ * WP2 (`services/cash.ts`). The drawer's half of a refund — the guest is handed
+ * cash back out of the till rather than out of the waiter's envelope.
  *
- * **For WP3:** the `cash_movements` half already exists — WP2 shipped
- * `insertRefund(tx, venueId, actor, shiftId, { amountFen, adjustmentId?, note?, at })`
- * in `services/cash.ts`, which is §6.5's signature and not this stub's. WP3
- * writes the payment row, calls that, and replaces this line with its own
- * re-export; the two names collide only here, and only until it does.
+ * The stub this line replaces described a **payment** row, which is
+ * `insertReversal` in `services/payments.ts` and belongs to the waiter's half of
+ * the same choice. There is one `insertRefund` and it is WP2's; WP3's adjustment
+ * decision calls it for `refund_kind='from_drawer'` and `insertReversal` for
+ * `from_waiter`, which is the whole of §6.4's third bullet.
  */
-export function insertRefund(_tx: Tx, _venueId: string, _r: {
-  tabId: string
-  amountFen: number
-  method: 'cash' | 'card'
-  approvedBy: string
-  adjustmentId?: string
-  refundKind: 'none' | 'from_waiter' | 'from_drawer'
-  at: string
-}): string {
-  return notImplemented('insertRefund')
-}
+export { insertRefund } from './cash'

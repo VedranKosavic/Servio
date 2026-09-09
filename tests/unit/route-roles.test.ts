@@ -21,15 +21,18 @@ import { ROUTE_ROLES } from '#shared/routeRoles'
 const API_DIR = resolve(process.cwd(), 'server/api')
 
 /**
- * The Korak 1 route WP3 deletes in the PR that lands `POST /api/payments`.
+ * Nothing is waiting to be deleted any more.
  *
- * `payTabBody` has no `client_id`, so there is nothing to replay a retried
- * payment against — the whole idempotency of a payment rests on
- * `payments_client_uq` (§5.7). It is deliberately absent from `ROUTE_ROLES`,
- * which means the middleware already 403s it; the file is only still on disk
- * because deleting it is WP3's line in the work-package table, not WP1's.
+ * `POST /api/tabs/:id/pay` was the only entry, and WP3 has now deleted it
+ * together with `payTabBody` — the body had no `client_id`, so there was nothing
+ * to replay a retried payment against, and the whole idempotency of a payment
+ * rests on `payments_client_uq` (§5.7). `POST /api/payments` replaced it.
+ *
+ * The set stays because the mechanism is worth keeping: a route on its way out
+ * belongs here for exactly one PR, and an empty set is the honest state between
+ * two of them.
  */
-const PENDING_DELETION = new Set(['POST /api/tabs/:id/pay'])
+const PENDING_DELETION = new Set<string>()
 
 /**
  * The routes whose files exist today: Korak 1's, plus WP1's, WP5's and WP2's
@@ -63,6 +66,14 @@ const LANDED = new Set([
   'POST /api/shifts/:id/opening-float',
   'POST /api/cash-movements/:id/decide', 'POST /api/cash-movements/:id/ack',
   'GET /api/me/shift', 'GET /api/me/shift/lines', 'GET /api/me/shifts',
+  // WP3 — the money core. `POST /api/tabs/:id/pay` is gone from disk and from
+  // `ROUTE_ROLES`; every row of §7's *Orders, tabs, payments, adjustments*
+  // block except the two prep reads is here.
+  'GET /api/tabs/:id', 'POST /api/payments',
+  'POST /api/tabs/unpaid', 'POST /api/tabs/:id/unpaid/decide',
+  'POST /api/tabs/:id/move', 'POST /api/tabs/:id/assign', 'POST /api/tabs/:id/accept',
+  'POST /api/adjustments', 'POST /api/adjustments/:id/decide', 'GET /api/adjustments/pending',
+  'POST /api/drafts/discard',
 ])
 
 /** Every `.get.ts` / `.post.ts` / `.patch.ts` under `server/api/**`, as a key. */

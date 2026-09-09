@@ -11,8 +11,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { eq } from 'drizzle-orm'
 import { randomUUID } from 'node:crypto'
 import { createOrder } from '../../server/services/orders'
+import { tabMoney } from '../../server/services/tabs'
 import { markPrepared } from '../../server/services/prep'
-import { payTab } from '../../server/services/tabs'
+import { createPayment } from '../../server/services/payments'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
 
 let f: Fixture
@@ -29,11 +30,10 @@ afterEach(() => {
 const q = (s: string) => `'${s.replace(/'/g, "''")}'`
 
 function anOrder() {
-  return createOrder(f.db, f.venueId, {
+  return createOrder(f.db, f.venueId, f.actor('Amar'), {
     client_id: randomUUID(),
     table_id: f.tableId('Sto 9'),
-    user_id: f.userId('Amar'),
-    lines: [{ product_id: f.productId('Kafa'), qty: 1 }],
+    lines: [{ id: randomUUID(), product_id: f.productId('Kafa'), qty: 1 }],
   })
 }
 
@@ -119,17 +119,31 @@ describe('orders — the one allowed transition', () => {
   })
 })
 
+/** Naplati the whole tab in cash — WP3's replacement for Korak 1's `payTab`. */
+function pay(tabId: string) {
+  const money = tabMoney(f.db, f.venueId, tabId)
+  return createPayment(f.db, f.venueId, f.actor('Amar'), {
+    client_id: randomUUID(),
+    tab_id: tabId,
+    method: 'cash',
+    amount_fen: money.remaining_fen,
+    tip_fen: 0,
+    covers_order_client_ids: [],
+  })
+}
+
 describe('tabs — open to paid, and no further', () => {
   it('pays once and refuses a second payment', () => {
     const order = anOrder()
-    const tab = payTab(f.db, f.venueId, order.tab_id, f.userId('Amar'))
+    const result = pay(order.tab_id)
 
-    expect(tab.status).toBe('paid')
-    expect(tab.closed_at).not.toBeNull()
-    expect(tab.total_fen).toBe(150)
+    expect(result.tab_status).toBe('paid')
+    expect(result.total_fen).toBe(150)
+    expect(result.remaining_fen).toBe(0)
 
-    expect(() => payTab(f.db, f.venueId, order.tab_id, f.userId('Amar')))
-      .toThrow(/already paid/)
+    // WP3 replaced `POST /api/tabs/:id/pay` with `POST /api/payments`; the
+    // invariant it proves is unchanged — one tab, one settlement.
+    expect(() => pay(order.tab_id)).toThrow(/already paid/)
   })
 
   /**
@@ -140,7 +154,7 @@ describe('tabs — open to paid, and no further', () => {
    */
   it('refuses reopening a paid tab', () => {
     const order = anOrder()
-    payTab(f.db, f.venueId, order.tab_id, f.userId('Amar'))
+    pay(order.tab_id)
 
     expect(() => f.db.update(schema.tabs)
       .set({ status: 'open', closedAt: null, closedBy: null })
@@ -151,13 +165,12 @@ describe('tabs — open to paid, and no further', () => {
   it('frees the table for a new tab once the old one is paid', () => {
     const tableId = f.tableId('Sto 9')
     const first = anOrder()
-    payTab(f.db, f.venueId, first.tab_id, f.userId('Amar'))
+    pay(first.tab_id)
 
-    const second = createOrder(f.db, f.venueId, {
+    const second = createOrder(f.db, f.venueId, f.actor('Amar'), {
       client_id: randomUUID(),
       table_id: tableId,
-      user_id: f.userId('Amar'),
-      lines: [{ product_id: f.productId('Čaj'), qty: 1 }],
+      lines: [{ id: randomUUID(), product_id: f.productId('Čaj'), qty: 1 }],
     })
     expect(second.tab_id).not.toBe(first.tab_id)
   })

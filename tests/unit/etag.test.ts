@@ -30,11 +30,10 @@ function makeEvent(ifNoneMatch?: string): H3Event {
 }
 
 function lockOne(waiter = 'Amar', table = 'Sto 7') {
-  return createOrder(f.db, f.venueId, {
+  return createOrder(f.db, f.venueId, f.actor(waiter), {
     client_id: randomUUID(),
     table_id: f.tableId(table),
-    user_id: f.userId(waiter),
-    lines: [{ product_id: f.productId('Kafa'), qty: 1 }],
+    lines: [{ id: randomUUID(), product_id: f.productId('Kafa'), qty: 1 }],
   })
 }
 

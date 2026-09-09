@@ -13,13 +13,13 @@
  */
 import type { ChangeEntity } from '../types'
 import type { LogKind } from '../logTemplates'
-import type { Prep, TableState } from './money'
+import type { Prep, TablesStateResponse } from './money'
 import type { StockItem } from './stock'
 
 // --- the three forward references -------------------------------------------
 
-/** → WP3's `TablesStateResponse` (§6.2). Korak 1 still answers a bare array. */
-export type TablesStateSnapshot = TableState[]
+/** → WP3's `TablesStateResponse` (§6.2): the floor plan with its shift strip. */
+export type TablesStateSnapshot = TablesStateResponse
 
 /** → WP2's `ShiftBrief` (§6.5). Until it lands, the columns every screen needs. */
 export interface ShiftSnapshot {

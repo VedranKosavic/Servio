@@ -18,12 +18,13 @@ import type {
   CreateDeliveryBody,
   CreateOrderBody,
   CreateOrderResult,
+  CreatePaymentBody,
   Health,
+  PaymentResult,
   Prep,
   PrepOrder,
   StockItem,
-  Tab,
-  TableState,
+  TablesStateResponse,
 } from '#shared/types'
 
 export class ApiSideError extends Error implements ApiError {
@@ -74,8 +75,12 @@ export function useApi() {
     /** Menu, floor plan, staff and aromas — one call, at app start. */
     getBootstrap: () => request<Bootstrap>('/api/bootstrap'),
 
-    /** One row per table: open tab, running total, who opened it, last round. */
-    getTablesState: () => request<TableState[]>('/api/tables/state'),
+    /**
+     * The floor plan and the shift strip, in one envelope. WP3 replaced the bare
+     * array: a phone that polled the two separately would draw a *Završi smjenu*
+     * bar for a shift that had already closed.
+     */
+    getTablesState: () => request<TablesStateResponse>('/api/tables/state'),
 
     /**
      * Lock a round. `body.client_id` is a uuid the phone mints once and reuses
@@ -84,9 +89,13 @@ export function useApi() {
     postOrder: (body: CreateOrderBody) =>
       request<CreateOrderResult>('/api/orders', { method: 'POST', body }),
 
-    /** *Naplati* — close the tab. 409 `TAB_ALREADY_PAID` if a colleague got there first. */
-    payTab: (tabId: string, userId: string) =>
-      request<Tab>(`/api/tabs/${tabId}/pay`, { method: 'POST', body: { user_id: userId } }),
+    /**
+     * *Naplati*. `client_id` is minted once per attempt and reused on every
+     * retry: `payments_client_uq` is what makes a retried payment one row rather
+     * than two charges. 409 `TAB_ALREADY_PAID` if a colleague got there first.
+     */
+    postPayment: (body: CreatePaymentBody) =>
+      request<PaymentResult>('/api/payments', { method: 'POST', body }),
 
     /** The bartender's tickets: `open` oldest first, `done` the last ten. */
     getPrep: () => request<Prep>('/api/prep'),

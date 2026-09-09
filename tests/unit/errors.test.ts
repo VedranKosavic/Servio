@@ -35,8 +35,15 @@ const THROWS = [
   /\bcode:\s*'([A-Z0-9_]+)'/g,
 ]
 
-/** The one code nothing throws: `errorMessage()`'s own fallback. */
-const IMPLICIT = ['SERVER_ERROR']
+/**
+ * The two codes nothing throws.
+ *
+ * `SERVER_ERROR` is `errorMessage()`'s own fallback. `NOT_IMPLEMENTED` is the
+ * shared sentence for a `contracts.ts` stub whose work package has not landed —
+ * WP3 was the last package to replace one, so today there is no thrower and the
+ * sentence stays for the next branch that needs it (§12).
+ */
+const IMPLICIT = ['SERVER_ERROR', 'NOT_IMPLEMENTED']
 
 function sources(): { path: string, text: string }[] {
   const out: { path: string, text: string }[] = []

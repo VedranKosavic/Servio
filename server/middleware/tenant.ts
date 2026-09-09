@@ -52,13 +52,16 @@ const AUTH_DOORS = new Set([
  */
 const KORAK1_ROUTES = new Set([
   'GET /api/bootstrap',
-  'GET /api/tables/state',
   'GET /api/prep',
   'GET /api/stock',
-  'POST /api/orders',
   'POST /api/prep/:id/done',
   'POST /api/stock/deliveries',
-  'POST /api/tabs/:id/pay',
+  // `GET /api/tables/state` and `POST /api/orders` left this list with WP3:
+  // both now read `event.context.actor` (the floor plan's colleague badge and
+  // shift strip are per person, and a lock takes its waiter from the session),
+  // so letting them through without one would be a crash, not a convenience.
+  // `POST /api/tabs/:id/pay` left it because the route is gone — `POST
+  // /api/payments` replaced it.
 ])
 
 function legacyOpen(): boolean {

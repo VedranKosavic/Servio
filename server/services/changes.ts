@@ -123,7 +123,7 @@ export function getChanges(
 
   const isStaffFloor = actor.role === 'waiter'
 
-  if (entities.has('table')) result.tables_state = getTablesState(db, venueId)
+  if (entities.has('table')) result.tables_state = getTablesState(db, venueId, actor)
   if (entities.has('prep')) result.prep = { seq: top, ...getPrep(db, venueId) }
   if (entities.has('stock')) result.stock = getStock(db, venueId)
   if (entities.has('count')) result.counts = listCountBriefs(db, venueId)

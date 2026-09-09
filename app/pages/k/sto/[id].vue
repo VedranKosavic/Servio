@@ -39,8 +39,8 @@ useHead({ title: tableName })
 const tabState = ref<TableState | null>(null)
 async function loadTabState() {
   try {
-    const rows = await api.getTablesState()
-    tabState.value = rows.find(r => r.table_id === tableId.value) ?? null
+    const { tables } = await api.getTablesState()
+    tabState.value = tables.find(r => r.table_id === tableId.value) ?? null
   } catch {
     tabState.value = null
   }
@@ -131,8 +131,10 @@ async function send() {
       // round it already wrote instead of charging the guest twice.
       client_id: clientId,
       table_id: tableId.value,
-      user_id: userId,
+      // The phone mints the line id too, so a void queued offline can name a
+      // line the server has not seen yet (docs/BACKEND.md §6.1).
       lines: lines.value.map(line => ({
+        id: crypto.randomUUID(),
         product_id: line.product_id,
         qty: line.qty,
         ...(line.flavour_ids?.length ? { flavour_ids: line.flavour_ids } : {}),
@@ -166,7 +168,14 @@ async function pay() {
   paying.value = true
   payError.value = null
   try {
-    await api.payTab(tabId, userId)
+    await api.postPayment({
+      client_id: crypto.randomUUID(),
+      tab_id: tabId,
+      method: 'cash',
+      amount_fen: tabState.value?.remaining_fen ?? 0,
+      tip_fen: 0,
+      covers_order_client_ids: [],
+    })
     payOpen.value = false
     tabState.value = null
     toast.value = `Naplaćeno · ${tableName.value}`

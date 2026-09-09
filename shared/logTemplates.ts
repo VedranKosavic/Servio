@@ -270,8 +270,13 @@ export const LOG = {
   payment_reversed: defineLog({
     group: 'novac',
     telegram: { rule: 'payment_reversed' },
+    // §8 gives this kind two writers: `insertReversal`, which writes a negative
+    // `payments` row, and `insertRefund`, which writes a `cash_movements` one.
+    // Neither id is therefore required — the row it points at is named by
+    // whichever of the two fields is present.
     body: body({
-      payment_id: id, tab_id: id, table_id: id.optional(),
+      payment_id: id.optional(), movement_id: id.optional(),
+      tab_id: id, table_id: id.optional(),
       amount_fen: fen, method: z.enum(['cash', 'card']),
       adjustment_id: id.optional(),
       refund_kind: z.enum(['none', 'from_waiter', 'from_drawer']).optional(),
@@ -346,9 +351,14 @@ export const LOG = {
   late_after_settle: defineLog({
     group: 'novac',
     telegram: { rule: 'late_after_settle' },
+    // Two writers again (§8): a round locked after the settlement, and a
+    // payment taken after it. A payment has no order, so `order_id` is optional
+    // and `payment_id` names the row in that case.
     body: body({
-      order_id: id, tab_id: id.optional(), table_id: id.optional(),
+      order_id: id.optional(), payment_id: id.optional(),
+      tab_id: id.optional(), table_id: id.optional(),
       user_id: id, shift_seq: z.int().optional(), amount_fen: fen,
+      method: z.enum(['cash', 'card']).optional(),
     }),
     title: (b, n) =>
       `Tura nakon predaje · ${n.user(b.user_id)} · ${n.table(b.table_id)}`

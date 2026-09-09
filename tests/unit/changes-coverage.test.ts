@@ -21,7 +21,11 @@ import { maxSeq } from '../../server/services/changes'
 import { createOrder } from '../../server/services/orders'
 import { markPrepared } from '../../server/services/prep'
 import { createDelivery } from '../../server/services/stock'
-import { payTab } from '../../server/services/tabs'
+import {
+  acceptTab, assignTab, decideUnpaid, markUnpaid, moveTab, tabMoney,
+} from '../../server/services/tabs'
+import { createPayment } from '../../server/services/payments'
+import { decideAdjustment, requestAdjustment } from '../../server/services/adjustments'
 import { markLogSeen } from '../../server/services/log'
 import { enrolDevice, mintEnrolCode, revokeDevice, unlockDevice } from '../../server/services/devices'
 import {
@@ -59,6 +63,11 @@ const EXEMPT = [
   /^dev[\\/]/,
   /^admin[\\/]enrol-codes\.post\.ts$/,
   /^admin[\\/]devices[\\/]\[id\][\\/]index\.patch\.ts$/,
+  // WP3's *Odbaci*. The only mutation in the app that writes no ledger row at
+  // all: it records that an unlocked cart was thrown away, so the closing check
+  // has something to check, and nothing on any screen changes because of it
+  // (§6.1). A `bump` here would invalidate every phone's ETag for a non-event.
+  /^drafts[\\/]discard\.post\.ts$/,
 ]
 
 function mutatingRoutes(dir = API_DIR): string[] {
@@ -83,20 +92,18 @@ afterEach(() => { f.close() })
  */
 const CALLS: Record<string, () => void> = {
   'orders.post.ts': () => {
-    createOrder(f.db, f.venueId, {
+    createOrder(f.db, f.venueId, f.actor('Amar'), {
       client_id: randomUUID(),
       table_id: f.tableId('Sto 7'),
-      user_id: f.userId('Amar'),
-      lines: [{ product_id: f.productId('Kafa'), qty: 1 }],
+      lines: [{ id: randomUUID(), product_id: f.productId('Kafa'), qty: 1 }],
     })
   },
 
   [join('prep', '[orderId]', 'done.post.ts')]: () => {
-    const order = createOrder(f.db, f.venueId, {
+    const order = createOrder(f.db, f.venueId, f.actor('Amar'), {
       client_id: randomUUID(),
       table_id: f.tableId('Sto 8'),
-      user_id: f.userId('Amar'),
-      lines: [{ product_id: f.productId('Kafa'), qty: 1 }],
+      lines: [{ id: randomUUID(), product_id: f.productId('Kafa'), qty: 1 }],
     })
     markPrepared(f.db, f.venueId, order.order_id, f.userId('Emir'))
   },
@@ -108,14 +115,75 @@ const CALLS: Record<string, () => void> = {
     })
   },
 
-  [join('tabs', '[id]', 'pay.post.ts')]: () => {
-    const order = createOrder(f.db, f.venueId, {
+  // WP3 — the money core. `POST /api/tabs/:id/pay` is gone; `POST /api/payments`
+  // took its place, and every one of these ends in `bump('table')` because a
+  // tab that changes hands, is paid, or is struck redraws somebody's floor plan.
+  'payments.post.ts': () => {
+    const order = lockOn('Sto 9')
+    createPayment(f.db, f.venueId, f.actor('Amar'), {
       client_id: randomUUID(),
-      table_id: f.tableId('Sto 9'),
-      user_id: f.userId('Amar'),
-      lines: [{ product_id: f.productId('Kafa'), qty: 1 }],
+      tab_id: order.tab_id,
+      method: 'cash',
+      amount_fen: tabMoney(f.db, f.venueId, order.tab_id).remaining_fen,
+      tip_fen: 0,
+      covers_order_client_ids: [],
     })
-    payTab(f.db, f.venueId, order.tab_id, f.userId('Amar'))
+  },
+
+  [join('tabs', 'unpaid.post.ts')]: () => {
+    const order = lockOn('Sto 10')
+    markUnpaid(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(),
+      tab_client_id: order.tab_client_id,
+      reason: 'walked_out',
+    })
+  },
+
+  [join('tabs', '[id]', 'unpaid', 'decide.post.ts')]: () => {
+    const order = lockOn('Sto 11')
+    markUnpaid(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(),
+      tab_client_id: order.tab_client_id,
+      reason: 'walked_out',
+    })
+    decideUnpaid(f.db, f.venueId, f.adminActor(), order.tab_id, { outcome: 'otpis' })
+  },
+
+  [join('tabs', '[id]', 'move.post.ts')]: () => {
+    const order = lockOn('Sto 12')
+    moveTab(f.db, f.venueId, f.actor('Amar'), order.tab_id, { table_id: f.tableId('Sto 13') })
+  },
+
+  [join('tabs', '[id]', 'assign.post.ts')]: () => {
+    const order = lockOn('Sto 14')
+    assignTab(f.db, f.venueId, f.actor('Amar'), order.tab_id, { user_id: f.userId('Lejla') })
+  },
+
+  [join('tabs', '[id]', 'accept.post.ts')]: () => {
+    const order = lockOn('Sto 15')
+    assignTab(f.db, f.venueId, f.actor('Amar'), order.tab_id, { user_id: f.userId('Lejla') })
+    acceptTab(f.db, f.venueId, f.actor('Lejla'), order.tab_id)
+  },
+
+  [join('adjustments', 'index.post.ts')]: () => {
+    const order = lockOn('Sto 17')
+    requestAdjustment(f.db, f.venueId, f.actor('Lejla'), {
+      client_id: randomUUID(),
+      order_line_id: lineOf(order.order_id),
+      kind: 'void',
+      reason: 'wrong_entry',
+    })
+  },
+
+  [join('adjustments', '[id]', 'decide.post.ts')]: () => {
+    const order = lockOn('Sto 18')
+    const adj = requestAdjustment(f.db, f.venueId, f.actor('Lejla'), {
+      client_id: randomUUID(),
+      order_line_id: lineOf(order.order_id),
+      kind: 'void',
+      reason: 'wrong_entry',
+    })
+    decideAdjustment(f.db, f.venueId, f.adminActor(), adj.adjustment.id, { outcome: 'applied' })
   },
 
   [join('owner', 'log', 'seen.post.ts')]: () => {
@@ -234,6 +302,21 @@ const CALLS: Record<string, () => void> = {
   },
 }
 
+/** One locked round on a named table, through the real service. */
+function lockOn(table: string) {
+  return createOrder(f.db, f.venueId, f.actor('Amar'), {
+    client_id: randomUUID(),
+    table_id: f.tableId(table),
+    lines: [{ id: randomUUID(), product_id: f.productId('Kafa'), qty: 1 }],
+  })
+}
+
+/** The one line of a one-line round. */
+function lineOf(orderId: string): string {
+  return f.db.select().from(schema.orderLines)
+    .where(eq(schema.orderLines.orderId, orderId)).all()[0]!.id
+}
+
 /** Haris's seeded dev PIN — `closeShift` runs the real `verifyPinMetered`. */
 const HARIS_PIN = '123456'
 
@@ -300,8 +383,8 @@ describe('every mutating route bumps the change feed', () => {
     expect(maxSeq(f.db, f.venueId)).toBeGreaterThan(before)
   })
 
-  it('the exemptions are exactly the two §4.1 names, the dev-only enrol and WP1\'s two credential writes', () => {
-    expect(EXEMPT).toHaveLength(5)
+  it('the exemptions are the §4.1 names, the dev enrol, WP1\'s credential writes and *Odbaci*', () => {
+    expect(EXEMPT).toHaveLength(6)
     expect(EXEMPT.some(rx => rx.test(join('devices', 'heartbeat.post.ts')))).toBe(true)
     expect(EXEMPT.some(rx => rx.test(join('auth', 'pin.post.ts')))).toBe(true)
     expect(EXEMPT.some(rx => rx.test(join('admin', 'enrol-codes.post.ts')))).toBe(true)
@@ -309,6 +392,7 @@ describe('every mutating route bumps the change feed', () => {
     // …and nothing wider: revoke and unlock live one folder along and must not
     // fall through the same pattern.
     expect(EXEMPT.some(rx => rx.test(join('admin', 'devices', '[id]', 'revoke.post.ts')))).toBe(false)
+    expect(EXEMPT.some(rx => rx.test(join('drafts', 'discard.post.ts')))).toBe(true)
     expect(sep).toBeTruthy()
   })
 })
