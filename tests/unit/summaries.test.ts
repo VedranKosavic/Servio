@@ -37,7 +37,7 @@ vi.mock('../../server/services/contracts', async (importOriginal) => {
 // graph; the settle is the one mutation here that needs the doubles.
 const { settle } = await import('../../server/services/settlements')
 const {
-  getMyShift, getOwnerShift, latestSummary, listMyShifts, shiftLines,
+  getMyShift, getOwnerShift, latestSummary, listMyShifts, putStaffNote, shiftLines,
   summarizeShift, summarizeUser, writeSummaryVersion,
 } = await import('../../server/services/summaries')
 const { expectedCash } = await import('../../server/services/cash')
@@ -410,5 +410,141 @@ describe('a whole night', () => {
     const nobody = summarizeUser(f.db, f.venueId, shiftId, f.userId('Tarik'), f.clock.now())
     expect(nobody.promet_fen).toBe(0)
     expect(nobody.rounds).toBe(0)
+  })
+})
+
+// ===========================================================================
+// WP4 — *Moja smjena*
+// ===========================================================================
+
+/**
+ * The screen a waiter opens at 21:00, five hours before he settles.
+ *
+ * `getMyShift` answered `summary: null` and nothing else, which is correct
+ * blindness and an empty screen: a person could not see how many rounds he had
+ * carried on his own night. PHASE3 §1.5 adds `counts` — always present, and
+ * carrying **no `*_fen` key but `gratis.max_fen`**, which is the published
+ * ceiling on a staff drink rather than any of his money. The regex below is the
+ * guard: a money field added to this read fails here, before it reaches a
+ * screen that is supposed to be blind.
+ */
+describe('Moja smjena — counts before the envelope', () => {
+  function amarsNight(): string {
+    const shiftId = f.openShift({ members: ['Amar', 'Emir'] })
+
+    const t1 = f.lock('Amar', 'Sto 1', [{ product: 'Nargila' }, { product: 'Kafa' }])
+    f.pay('Amar', t1.tabId, 1_700)
+    closeTab(f, t1.tabId, 'Amar')
+
+    const t2 = f.lock('Amar', 'Sto 2', [{ product: 'Kafa', qty: 2 }])
+    // One granted storno and one still waiting on somebody.
+    f.voidLine('Amar', t2.lineIds[0]!, { status: 'applied', approvedBy: 'Emir' })
+
+    const t3 = f.lock('Amar', 'Sto 3', [{ product: 'Čaj' }])
+    f.voidLine('Amar', t3.lineIds[0]!, { status: 'pending' })
+
+    // His one staff drink tonight, locked free.
+    lockComped(f, 'Amar', 'Sto 4', 'Kafa')
+
+    f.wasteEvent('Amar', 'Coca-Cola 0,25 l', 1)
+
+    // A colleague's night, which must not show up in a single number below.
+    const e1 = f.lock('Emir', 'Sto 9', [{ product: 'Red Bull', qty: 4 }])
+    f.pay('Emir', e1.tabId, 1_600)
+    closeTab(f, e1.tabId, 'Emir')
+
+    return shiftId
+  }
+
+  it('counts his own work and none of a colleague’s', () => {
+    amarsNight()
+    const mine = getMyShift(f.db, f.venueId, f.userId('Amar'))
+
+    expect(mine.settled).toBe(false)
+    expect(mine.summary).toBeNull()
+    expect(mine.counts.rounds).toBe(4)
+    expect(mine.counts.tabs).toBe(4)
+    expect(mine.counts.bowls).toBe(1)
+    expect(mine.counts.storno).toEqual({ applied: 1, pending: 1 })
+    expect(mine.counts.waste).toBe(1)
+    expect(mine.counts.hours).toBeGreaterThanOrEqual(0)
+
+    // Kafa 1 + 2 + 1 free = 4, Nargila 1, Čaj 1. Red Bull is Emir's.
+    const byName = new Map(mine.counts.by_category.map(c => [c.name, c.count]))
+    expect(byName.get('Kafa')).toBe(4)
+    expect(byName.get('Nargila')).toBe(1)
+    expect(byName.get('Čaj')).toBe(1)
+    expect(byName.has('Energetska')).toBe(false)
+
+    // The chip has to be able to open the drill-down, so the id rides along.
+    expect(mine.counts.by_category.every(c => typeof c.category_id === 'string')).toBe(true)
+  })
+
+  it('shows the staff-drink allowance as a published rule: used, cap, ceiling', () => {
+    amarsNight()
+    const mine = getMyShift(f.db, f.venueId, f.userId('Amar'))
+    expect(mine.counts.gratis).toEqual({ used: 1, cap: 2, max_fen: 300 })
+
+    // A second one, and the counter says so — which is what the sheet renders
+    // as *Osoblje: 2/2 (do 3,00 KM)*.
+    lockComped(f, 'Amar', 'Sto 5', 'Kafa')
+    expect(getMyShift(f.db, f.venueId, f.userId('Amar')).counts.gratis.used).toBe(2)
+  })
+
+  it('puts no money in `counts`, on any night, settled or not', () => {
+    const shiftId = amarsNight()
+    const before = getMyShift(f.db, f.venueId, f.userId('Amar'))
+    expect(JSON.stringify(before.counts).match(/\w*_fen"/g)).toEqual(['max_fen"'])
+
+    settle(f.db, f.venueId, f.actor('Amar'), shiftId, { declared_fen: 1_700, outbox_len: 0 })
+    const after = getMyShift(f.db, f.venueId, f.userId('Amar'))
+    expect(JSON.stringify(after.counts).match(/\w*_fen"/g)).toEqual(['max_fen"'])
+    // …and the money is now next to it, where it belongs.
+    expect(after.summary?.promet_fen).toBe(1_850)
+  })
+
+  it('answers a shape, not a null, when no shift is open at all', () => {
+    const mine = getMyShift(f.db, f.venueId, f.userId('Amar'))
+    expect(mine.shift).toBeNull()
+    expect(mine.counts.rounds).toBe(0)
+    expect(mine.counts.by_category).toEqual([])
+    // The rule is published even on an empty night: it is not a measurement.
+    expect(mine.counts.gratis).toEqual({ used: 0, cap: 2, max_fen: 300 })
+  })
+})
+
+/**
+ * *Napomena* (PHASE3 §1.6) — one person's own words about one of his own nights.
+ *
+ * `staff_notes` is deliberately not a ledger table: it may be edited and
+ * deleted, because a note nobody can correct is a note nobody writes.
+ */
+describe('Napomena on my own night', () => {
+  it('writes, rewrites and deletes one note per person per night', () => {
+    const shiftId = f.openShift({ members: ['Amar', 'Emir'] })
+
+    expect(putStaffNote(f.db, f.venueId, f.userId('Amar'), shiftId, ' kasnio sam sat ').note)
+      .toBe('kasnio sam sat')
+    expect(listMyShifts(f.db, f.venueId, f.userId('Amar'), 30)[0]!.note).toBe('kasnio sam sat')
+
+    // A rewrite is the same row, not a second one.
+    putStaffNote(f.db, f.venueId, f.userId('Amar'), shiftId, 'ostao do 4')
+    expect(f.db.select().from(schema.staffNotes).all()).toHaveLength(1)
+    expect(listMyShifts(f.db, f.venueId, f.userId('Amar'), 30)[0]!.note).toBe('ostao do 4')
+
+    // An empty body deletes it.
+    expect(putStaffNote(f.db, f.venueId, f.userId('Amar'), shiftId, '   ').note).toBeNull()
+    expect(f.db.select().from(schema.staffNotes).all()).toHaveLength(0)
+    expect(listMyShifts(f.db, f.venueId, f.userId('Amar'), 30)[0]!.note).toBeNull()
+  })
+
+  it('is a colleague’s business only on the nights he actually worked', () => {
+    const shiftId = f.openShift({ members: ['Amar'] })
+    expect(() => putStaffNote(f.db, f.venueId, f.userId('Lejla'), shiftId, 'nešto'))
+      .toThrow(/night you worked/)
+
+    putStaffNote(f.db, f.venueId, f.userId('Amar'), shiftId, 'moja noć')
+    // And the note is on his own history row and on nobody else's.
+    expect(listMyShifts(f.db, f.venueId, f.userId('Lejla'), 30)).toEqual([])
   })
 })

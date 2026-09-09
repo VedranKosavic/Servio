@@ -20,7 +20,7 @@
  * nothing here exports a raw comparison and no route calls `verifySecret`
  * directly: `verifyMetered` is the only way to check a secret in this codebase.
  */
-import { and, eq, gt, gte, inArray, isNull, sql } from 'drizzle-orm'
+import { and, desc, eq, gt, gte, inArray, isNull, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { SankError, badRequest, forbidden, locked, notFound, unauthorized, unprocessable } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
@@ -30,7 +30,8 @@ import { getSettings, log } from './contracts'
 import type { Db, Queryable, Tx } from './types'
 import type { Actor, Role } from '#shared/types'
 import type {
-  DeviceBrief, MeContext, MeUser, PinLoginResult, SessionBrief, VenueBrief,
+  DeviceBrief, LoginUser, MeContext, MeUser, MySession,
+  PinLoginResult, SessionBrief, VenueBrief,
 } from '#shared/types/auth'
 import type { AdminLoginBody, PinLoginBody } from '#shared/schemas/auth'
 import { ROUTE_ROLES, routeKey, type RouteRole } from '#shared/routeRoles'
@@ -487,12 +488,80 @@ export function adminLogin(db: Db, body: AdminLoginBody, ctx: { ip: string, user
   }
 }
 
-/** `GET /api/auth/users` — the names the lock screen draws, and nothing else. */
-export function listLoginUsers(q: Queryable, venueId: string): MeUser[] {
+/**
+ * `GET /api/auth/users` — the names the lock screen draws, and nothing else.
+ *
+ * With a device id it also answers `last_login_at`, **for that device only**
+ * (PHASE3 §1.8): the lock screen offers the three people who most recently
+ * signed in *here* as faces, with the rest one tap away. Who signs in at this
+ * bar is already visible to anybody standing at it; who signs in across the
+ * café would not be, and this body is readable with no session at all.
+ *
+ * A revoked session still counts as a login — logging out is not un-logging-in,
+ * and *Promijeni korisnika* revokes on every hand-over of the shared tablet.
+ */
+export function listLoginUsers(
+  q: Queryable, venueId: string, deviceId?: string | null,
+): LoginUser[] {
+  const lastLogin = new Map<string, string>()
+  if (deviceId) {
+    for (const row of q.select({
+      userId: schema.sessions.userId,
+      at: sql<string>`max(${schema.sessions.createdAt})`,
+    })
+      .from(schema.sessions)
+      .where(and(
+        eq(schema.sessions.venueId, venueId),
+        eq(schema.sessions.deviceId, deviceId),
+      ))
+      .groupBy(schema.sessions.userId)
+      .all()) lastLogin.set(row.userId, row.at)
+  }
+
   return q.select().from(schema.users)
     .where(and(eq(schema.users.venueId, venueId), eq(schema.users.active, 1)))
     .all()
-    .map(toMeUser)
+    .map(row => ({ ...toMeUser(row), last_login_at: lastLogin.get(row.id) ?? null }))
+}
+
+/**
+ * `GET /api/me/sessions` — *Moji podaci* (PHASE3 §1.7).
+ *
+ * Own rows only, newest first, twenty at most. PLAN §5 wants a waiter able to
+ * notice a sign-in on a phone that is not his — which is the whole feature, and
+ * the reason the device *label* is joined in: "Emirov telefon" is a sentence a
+ * person can act on and a uuid is not.
+ */
+export function listMySessions(
+  q: Queryable, venueId: string, actor: Actor,
+): MySession[] {
+  return q.select({
+    id: schema.sessions.id,
+    kind: schema.sessions.kind,
+    borrowed: schema.sessions.borrowed,
+    createdAt: schema.sessions.createdAt,
+    lastSeenAt: schema.sessions.lastSeenAt,
+    label: schema.devices.label,
+  })
+    .from(schema.sessions)
+    .leftJoin(schema.devices, eq(schema.devices.id, schema.sessions.deviceId))
+    .where(and(
+      eq(schema.sessions.venueId, venueId),
+      eq(schema.sessions.userId, actor.userId),
+    ))
+    .orderBy(desc(schema.sessions.createdAt))
+    .limit(20)
+    .all()
+    .map(row => ({
+      id: row.id,
+      // An admin session has no device at all: it is the owner's laptop.
+      device_label: row.label ?? 'Računar',
+      kind: row.kind,
+      borrowed: row.borrowed === 1,
+      created_at: row.createdAt,
+      last_seen_at: row.lastSeenAt,
+      current: row.id === actor.sessionId,
+    }))
 }
 
 /**

@@ -30,14 +30,14 @@ export interface WaiterMenuItem {
 
 export const WAITER_MENU: WaiterMenuItem[] = [
   // WP4
-  { id: 'my-shift', label: 'Moja smjena', to: '/k/moja-smjena', roles: ['waiter', 'bartender'], ready: false, soon: 'stiže uskoro' },
+  { id: 'my-shift', label: 'Moja smjena', to: '/k/moja-smjena', roles: ['waiter', 'bartender'], ready: true },
   // Already on disk since Korak 1.
   { id: 'settle', label: 'Završi smjenu', to: '/k/smjena', roles: ['waiter', 'bartender'], ready: true },
   // WP2
   { id: 'count', label: 'Brzi popis', to: '/k/popis', roles: ['waiter', 'bartender'], ready: true },
   { id: 'waste', label: 'Otpis', to: '/k/otpis', roles: ['waiter', 'bartender'], ready: true },
   // WP4
-  { id: 'rules', label: 'Pravila', to: '/k/pravila', roles: ['waiter', 'bartender'], ready: false, soon: 'stiže uskoro' },
+  { id: 'rules', label: 'Pravila', to: '/k/pravila', roles: ['waiter', 'bartender'], ready: true },
   // WP0 — this package.
   { id: 'install', label: 'Instalacija', to: '/k/instalacija', roles: ['waiter', 'bartender'], ready: true },
   { id: 'wakelock', label: 'Drži ekran upaljen', action: 'wakelock', roles: ['waiter', 'bartender'], ready: true },

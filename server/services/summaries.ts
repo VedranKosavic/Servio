@@ -23,18 +23,18 @@
  * writes another. "What did the summary say when we closed?" is then a `SELECT`
  * and not a reconstruction.
  */
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
-import { SankError } from '../utils/errors'
-import { nowIso } from '../utils/ids'
+import { SankError, forbidden } from '../utils/errors'
+import { newId, nowIso } from '../utils/ids'
 import { countBowls } from '#shared/bowls'
 import type {
-  CategoryLine, CountFen, LineRow, LineStatus, LineTotals, LinesPage, MyShift, MyShiftRow,
-  OwnerShift, ShiftCountBrief, ShiftSummary, StornoTotals, SummaryReason, UserSummary,
+  CategoryLine, CountFen, LineRow, LineStatus, LineTotals, LinesPage, MyShift, MyShiftCounts,
+  MyShiftRow, OwnerShift, ShiftCountBrief, ShiftSummary, StornoTotals, SummaryReason, UserSummary,
 } from '#shared/types'
-import type { Queryable, Tx } from './types'
+import type { Db, Queryable, Tx } from './types'
 import { expectedCash, listCashMovements, toleranceFen, withinTolerance } from './cash'
-import { getSettings } from './contracts'
+import { bump, getSettings } from './contracts'
 import { requireShift, shiftBriefFor, shiftView, userNames } from './shifts'
 import { listSettlements } from './settlements'
 
@@ -718,6 +718,199 @@ function decodeCursor(cursor: string): string {
 // ===========================================================================
 
 /**
+ * What *Moja smjena* may show before the envelope is handed in (PHASE3 §1.5).
+ *
+ * The rule this function exists to obey: **no `*_fen` key leaves here**, except
+ * `gratis.max_fen`, which is the published ceiling on a staff drink and not his
+ * money. Blindness is about promet and expected; it was never about how many
+ * rounds he carried. Counting his own work back to him is the whole reason the
+ * screen is worth opening at 21:00 rather than only at 03:00.
+ *
+ * Everything below folds the same `loadLines()` array `summarizeUser` folds, so
+ * the counts and the money cannot disagree the moment the money appears.
+ */
+function myShiftCounts(
+  q: Queryable, venueId: string, shiftId: string, userId: string, now: string,
+): MyShiftCounts {
+  const settings = getSettings(q, venueId)
+  const lines = loadLines(q, venueId, shiftId).filter(l => l.lockedBy === userId)
+
+  const member = q.select().from(schema.shiftMembers)
+    .where(and(
+      eq(schema.shiftMembers.venueId, venueId),
+      eq(schema.shiftMembers.shiftId, shiftId),
+      eq(schema.shiftMembers.userId, userId),
+    ))
+    .get()
+
+  const categories = new Map(
+    q.select({ id: schema.categories.id, name: schema.categories.name })
+      .from(schema.categories)
+      .where(eq(schema.categories.venueId, venueId))
+      .all()
+      .map(c => [c.id, c.name]),
+  )
+
+  const tabs = new Set<string>()
+  const rounds = new Set<string>()
+  const perCategory = new Map<string, number>()
+  const storno = { pending: 0, applied: 0 }
+
+  for (const line of lines) {
+    tabs.add(line.tabId)
+    rounds.add(line.orderId)
+    perCategory.set(line.categoryId, (perCategory.get(line.categoryId) ?? 0) + line.qty)
+    if (line.adjKind === 'void' && line.adjStatus === 'applied') storno.applied += 1
+    if (line.adjKind === 'void' && line.adjStatus === 'pending') storno.pending += 1
+  }
+
+  const wasteCount = q.select({ n: count() })
+    .from(schema.wasteEvents)
+    .where(and(
+      eq(schema.wasteEvents.venueId, venueId),
+      eq(schema.wasteEvents.shiftId, shiftId),
+      eq(schema.wasteEvents.userId, userId),
+    ))
+    .get()?.n ?? 0
+
+  return {
+    rounds: rounds.size,
+    tabs: tabs.size,
+    bowls: countBowls(lines.map(l => ({
+      kind: l.productKind, qty: l.qty, parent_line_id: l.parentLineId,
+    }))),
+    by_category: [...perCategory.entries()]
+      .map(([categoryId, qty]) => ({
+        category_id: categoryId,
+        name: categories.get(categoryId) ?? '—',
+        count: qty,
+      }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'bs')),
+    storno,
+    gratis: {
+      used: staffDrinksUsed(q, venueId, shiftId, userId),
+      cap: settings.staff_drinks_per_shift,
+      max_fen: settings.staff_drink_max_fen,
+    },
+    waste: wasteCount,
+    hours: hoursBetween(member?.joinedAt ?? null, member?.leftAt ?? null, now),
+  }
+}
+
+/**
+ * *Osoblje: 1/2* — how many of tonight's allowance this person has taken.
+ *
+ * The same two halves `staffDrinkAllowed()` counts before it says yes: a line
+ * locked free with `comp_reason = 'staff_drink'`, and a comp *granted* on a
+ * line that was already charged. Counted here rather than imported so this read
+ * never has to reach into the order path for a number a screen only displays.
+ */
+function staffDrinksUsed(
+  q: Queryable, venueId: string, shiftId: string, userId: string,
+): number {
+  const locked = q.select({ n: count() })
+    .from(schema.orderLines)
+    .innerJoin(schema.orders, eq(schema.orders.id, schema.orderLines.orderId))
+    .where(and(
+      eq(schema.orderLines.venueId, venueId),
+      eq(schema.orders.shiftId, shiftId),
+      eq(schema.orders.lockedBy, userId),
+      eq(schema.orderLines.compReason, 'staff_drink'),
+    ))
+    .get()?.n ?? 0
+
+  const granted = q.select({ n: count() })
+    .from(schema.lineAdjustments)
+    .innerJoin(schema.orderLines, eq(schema.orderLines.id, schema.lineAdjustments.orderLineId))
+    .innerJoin(schema.orders, eq(schema.orders.id, schema.orderLines.orderId))
+    .where(and(
+      eq(schema.lineAdjustments.venueId, venueId),
+      eq(schema.lineAdjustments.kind, 'comp'),
+      eq(schema.lineAdjustments.reason, 'staff_drink'),
+      eq(schema.lineAdjustments.status, 'applied'),
+      eq(schema.lineAdjustments.requestedBy, userId),
+      eq(schema.orders.shiftId, shiftId),
+    ))
+    .get()?.n ?? 0
+
+  return locked + granted
+}
+
+/**
+ * `PUT /api/me/shifts/:id/note` — *Napomena* (PHASE3 §1.6).
+ *
+ * `staff_notes` is deliberately **not** a ledger table: no trigger, no row in
+ * `LEDGER_TABLES`, and this function updates and deletes freely. It is one
+ * person's own words about his own night, and a note nobody can correct is a
+ * note nobody writes.
+ *
+ * Two rules the route cannot enforce for itself and this function does: it is
+ * always the actor's own row (no body names a user — CLAUDE.md), and it must be
+ * a shift he was actually on, so a curious phone cannot leave a note on a night
+ * it never worked. It bumps `shift` because the owner's per-waiter strip on
+ * `/a` renders the note; a note written and never seen is not the feature.
+ */
+export function putStaffNote(
+  db: Db, venueId: string, userId: string, shiftId: string, body: string,
+): { note: string | null } {
+  const text = body.trim()
+
+  return db.transaction((tx) => {
+    const member = tx.select({ id: schema.shiftMembers.userId })
+      .from(schema.shiftMembers)
+      .where(and(
+        eq(schema.shiftMembers.venueId, venueId),
+        eq(schema.shiftMembers.shiftId, shiftId),
+        eq(schema.shiftMembers.userId, userId),
+      ))
+      .get()
+    if (!member) throw forbidden('NOT_MY_SHIFT', 'a note belongs to a night you worked')
+
+    const where = and(
+      eq(schema.staffNotes.venueId, venueId),
+      eq(schema.staffNotes.shiftId, shiftId),
+      eq(schema.staffNotes.userId, userId),
+    )
+    const existing = tx.select().from(schema.staffNotes).where(where).get()
+    const now = nowIso()
+
+    if (!text) {
+      if (existing) tx.delete(schema.staffNotes).where(where).run()
+      bump(tx, venueId, 'shift', shiftId)
+      return { note: null }
+    }
+
+    if (existing) {
+      tx.update(schema.staffNotes).set({ body: text, updatedAt: now }).where(where).run()
+    } else {
+      tx.insert(schema.staffNotes).values({
+        id: newId(), venueId, shiftId, userId, body: text, createdAt: now, updatedAt: null,
+      }).run()
+    }
+    bump(tx, venueId, 'shift', shiftId)
+    return { note: text }
+  })
+}
+
+/**
+ * `GET /api/me/sessions` is auth's; this is the note half of `GET /api/me/shifts`.
+ * One query rather than one per row: thirty nights is thirty round trips
+ * otherwise, on a phone.
+ */
+function notesByShift(q: Queryable, venueId: string, userId: string): Map<string, string> {
+  return new Map(
+    q.select({ shiftId: schema.staffNotes.shiftId, body: schema.staffNotes.body })
+      .from(schema.staffNotes)
+      .where(and(
+        eq(schema.staffNotes.venueId, venueId),
+        eq(schema.staffNotes.userId, userId),
+      ))
+      .all()
+      .map(r => [r.shiftId, r.body]),
+  )
+}
+
+/**
  * `GET /api/me/shift` — the waiter's own night.
  *
  * **Blindness is a nudge, not a control.** `summary` stays `null` until he has
@@ -739,6 +932,7 @@ export function getMyShift(q: Queryable, venueId: string, userId: string): MyShi
     return {
       shift: null, joined_at: null, hours: 0, settled: false, settlement: null,
       float_out_fen: 0, cash_movements: [], summary: null,
+      counts: emptyCounts(getSettings(q, venueId)),
     }
   }
 
@@ -766,6 +960,17 @@ export function getMyShift(q: Queryable, venueId: string, userId: string): MyShi
     float_out_fen: floatOut,
     cash_movements: movements,
     summary: settlement ? summarizeUser(q, venueId, brief.id, userId, now) : null,
+    counts: myShiftCounts(q, venueId, brief.id, userId, now),
+  }
+}
+
+/** No shift open yet: zeroes, and the two published gratis numbers anyway. */
+function emptyCounts(settings: { staff_drinks_per_shift: number, staff_drink_max_fen: number }): MyShiftCounts {
+  return {
+    rounds: 0, tabs: 0, bowls: 0, by_category: [],
+    storno: { pending: 0, applied: 0 },
+    gratis: { used: 0, cap: settings.staff_drinks_per_shift, max_fen: settings.staff_drink_max_fen },
+    waste: 0, hours: 0,
   }
 }
 
@@ -797,6 +1002,7 @@ export function listMyShifts(
     .all()
 
   const now = nowIso()
+  const notes = notesByShift(q, venueId, userId)
   return rows.map(r => ({
     shift_id: r.shiftId,
     business_date: r.businessDate,
@@ -807,6 +1013,7 @@ export function listMyShifts(
     diff_fen: r.declaredFen === null || r.expectedFen === null
       ? null
       : r.declaredFen - r.expectedFen,
+    note: notes.get(r.shiftId) ?? null,
   }))
 }
 

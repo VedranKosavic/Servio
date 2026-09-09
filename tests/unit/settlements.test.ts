@@ -83,9 +83,18 @@ describe('the blind strip', () => {
     expect(before.float_out_fen).toBe(500)
     expect(before.cash_movements).toHaveLength(1)
 
-    // Everything except his own cash movements: exactly one money field.
+    // Everything except his own cash movements: two money fields, and the
+    // second one is not his money.
+    //
+    // **The invariant did not move.** It has always been "no `*_fen` of his
+    // *takings* before he declares", and it still holds: `float_out_fen` is
+    // what the drawer handed him (§6.5), and `counts.gratis.max_fen` is the
+    // published ceiling on a staff drink — a *rule*, the same number printed in
+    // *Pravila*, which PHASE3 §1.5 requires on this read precisely so a waiter
+    // can read the rule he is measured against before he is measured. Promet,
+    // expected and declared are still absent, and `summary` is still null.
     const { cash_movements: _movements, ...rest } = before
-    expect([...new Set(fenKeys(rest))]).toEqual(['float_out_fen'])
+    expect([...new Set(fenKeys(rest))].sort()).toEqual(['float_out_fen', 'max_fen'])
     // …and the only money on the movements is what he was handed.
     expect([...new Set(fenKeys(before.cash_movements))]).toEqual(['amount_fen'])
   })

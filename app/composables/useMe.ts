@@ -57,9 +57,27 @@ export function useMe() {
   const user = computed(() => me.value?.user ?? null)
   const venue = computed(() => me.value?.venue ?? null)
   const device = computed(() => me.value?.device ?? null)
+  const session = computed(() => me.value?.session ?? null)
   const settings = computed(() => me.value?.venue.settings ?? null)
   const isReady = computed(() => status.value === 'ready' && !!me.value)
   const home = computed(() => homeFor(me.value?.user.role))
+
+  /**
+   * Somebody PIN'd into a colleague's personal phone (*Drugi konobar*). The
+   * session is two hours instead of fourteen, and — PHASE3 §3, WP4 — the app
+   * says whose phone it is for the whole of it, because a round locked on
+   * Emir's phone under Amar's name is exactly the thing that has to be visible
+   * while it is happening rather than in the morning.
+   */
+  const borrowed = computed(() => me.value?.session.borrowed === true)
+
+  /** *"Amar · Emirov telefon"* on a borrowed session, just the name otherwise. */
+  const identityLabel = computed(() => {
+    const name = me.value?.user.name ?? ''
+    if (!borrowed.value) return name
+    const label = me.value?.device?.label
+    return label ? `${name} · ${label}` : name
+  })
 
   /**
    * Ask the server who this is.
@@ -128,6 +146,11 @@ export function useMe() {
       // screen — leaving the waiter looking at a colleague's floor plan because
       // the wifi blinked is the worse failure.
     }
+    // The remembered PINs go with the session. *Odjavi se* means somebody else
+    // is about to hold this phone.
+    const lock = useLock()
+    await lock.wipe()
+    lock.unlock()
     me.value = null
     status.value = 'anon'
     await navigateTo('/')
@@ -151,6 +174,11 @@ export function useMe() {
       await navigateTo(home.value)
       return false
     }
+    // A shared bar tablet re-locks after `shared_device_idle_s` of no touch
+    // (S10). This is the one call site every dark screen already makes, so
+    // arming here means no page has to remember to; it is a no-op on a
+    // personal phone and on the second call.
+    useLock().arm()
     return true
   }
 
@@ -164,7 +192,11 @@ export function useMe() {
   async function handleAuthError(err: unknown): Promise<boolean> {
     const state = classify(err)
     if (state === 'nodevice' || state === 'anon') {
-      if (state === 'nodevice') wipeLocalState()
+      if (state === 'nodevice') {
+        wipeLocalState()
+        // A revoked device may be in somebody else's hands by now.
+        await useLock().wipe()
+      }
       me.value = null
       status.value = state
       await navigateTo('/')
@@ -179,6 +211,9 @@ export function useMe() {
     user,
     venue,
     device,
+    session,
+    borrowed,
+    identityLabel,
     settings,
     isReady,
     home,

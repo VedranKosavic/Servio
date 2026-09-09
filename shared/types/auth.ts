@@ -29,6 +29,20 @@ export interface MeUser {
   has_pin: boolean
 }
 
+/**
+ * `GET /api/auth/users` — a name on the lock screen (PHASE3 §1.8).
+ *
+ * `MeUser` plus one field and no more: when this person last signed in **on
+ * this device**, which is what lets the pad offer the last three faces first.
+ * The recency is per-device on purpose — this body is the one thing a stranger
+ * holding an enrolled phone can read without a session (BACKEND §5.5), and
+ * "who logs in here" is already visible to anybody standing at that bar, while
+ * "who logs in anywhere in the café" would not be.
+ */
+export interface LoginUser extends MeUser {
+  last_login_at: string | null
+}
+
 /** The phone or tablet this request came from. `null` on an admin email session. */
 export interface DeviceBrief {
   id: string
@@ -50,6 +64,23 @@ export interface SessionBrief {
   expires_at: string
   /** Somebody PIN'd into a colleague's personal phone: 2 h, not 14 h. */
   borrowed: boolean
+}
+
+/**
+ * `GET /api/me/sessions` — *Moji podaci*, one row per sign-in of **this person**.
+ *
+ * PLAN §5 wants a waiter to be able to notice a login on a phone that is not
+ * his. Own rows only, newest first, twenty at most.
+ */
+export interface MySession {
+  id: string
+  device_label: string
+  kind: 'admin' | 'staff'
+  borrowed: boolean
+  created_at: string
+  last_seen_at: string | null
+  /** The session this request is being made with. */
+  current: boolean
 }
 
 export interface VenueBrief {
