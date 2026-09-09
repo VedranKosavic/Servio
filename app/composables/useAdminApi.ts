@@ -47,7 +47,6 @@ import type {
   OwnerShift,
   OwnerShiftRow,
   OwnerStockReport,
-  PendingCount,
   PinResetResult,
   ProductAdmin,
   CategoryAdmin,
@@ -55,6 +54,7 @@ import type {
   SettingsPatch,
   ShiftSummary,
   StockItemAdmin,
+  StockResponse,
   SubmitCountBody,
   TabDetail,
   TableAdmin,
@@ -263,6 +263,15 @@ export function useAdminApi() {
     /** *Stanje šanka* as the owner reads it: value, status, low and negative. */
     getOwnerStock: () => request<OwnerStockReport>('/api/owner/stock'),
 
+    /**
+     * The same shelf as the bar sees it, for the one field the owner read does
+     * not carry: `last_movement`. *Stanje šanka* quotes it under a row that has
+     * gone negative — "zadnje: prijem robe · 09.09.2026." — which is the first
+     * thing the owner asks when the ledger says the shelf owes stock. ETagged,
+     * so a repeat costs one `MAX(seq)`.
+     */
+    getStock: () => request<StockResponse>('/api/stock', { etag: true }),
+
     /** One article's ledger, newest first. `before` is the keyset cursor. */
     getItemMovements: (itemId: string, q: { before?: string, limit?: number } = {}) =>
       request<ItemMovementsPage>(`/api/owner/stock/${itemId}/movements${qs(q)}`),
@@ -287,9 +296,15 @@ export function useAdminApi() {
     reverseDelivery: (id: string, body: Record<string, unknown> = {}) =>
       request<unknown>(`/api/stock/deliveries/${id}/reverse`, { method: 'POST', body }),
 
-    /** *Popisi* — the counts list, optionally one shift's or one status'. */
+    /**
+     * *Popisi* — the counts list, optionally one shift's or one status'.
+     *
+     * The route answers `CountView[]` — `listCounts` in `server/services/
+     * counts.ts` builds a full view per row, lines and totals included.
+     * `PendingCount` is the *Puls* attention shape and is a different thing.
+     */
     getCounts: (q: { shift_id?: string, status?: string } = {}) =>
-      request<PendingCount[]>(`/api/stock/counts${qs(q)}`),
+      request<CountView[]>(`/api/stock/counts${qs(q)}`),
 
     getCount: (id: string) => request<CountView>(`/api/stock/counts/${id}`),
 
