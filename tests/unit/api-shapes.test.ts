@@ -50,7 +50,7 @@ describe('GET /api/bootstrap', () => {
     expect(boot.categories.map(c => c.name)).toEqual(
       ['Kafa', 'Bezalkoholna', 'Energetska', 'Čaj', 'Nargila', 'Ostalo'],
     )
-    expect(boot.products).toHaveLength(14)
+    expect(boot.products).toHaveLength(15)
     expect(boot.products.filter(p => p.is_favourite).map(p => p.name).sort())
       .toEqual(['Coca-Cola', 'Kafa', 'Limunada', 'Nargila', 'Red Bull', 'Čaj'].sort())
 
@@ -106,11 +106,53 @@ describe('GET /api/bootstrap', () => {
     // 'owner' is not an accepted role value anywhere after the migration.
     expect(boot.users.map(u => u.role)).not.toContain('owner')
   })
+
+  /**
+   * PHASE3 §1.9 and §1.10 — the four fields S3 could not be built without, and
+   * the key that lets a phone recognise a system product without matching a
+   * name. All five were on the admin shapes only, behind routes a waiter's
+   * phone may not call.
+   */
+  it('carries the note chips, the search fields and the system keys (§1.9, §1.10)', () => {
+    const boot = getBootstrap(f.db, f.venueId, f.actor('Amar'))
+
+    const kafa = boot.categories.find(c => c.name === 'Kafa')!
+    expect(kafa.note_chips).toContain('bez šećera')
+    expect(boot.categories.find(c => c.name === 'Ostalo')!.note_chips).toEqual([])
+
+    const cola = boot.products.find(p => p.name === 'Coca-Cola')!
+    expect(cola.short_name).toBe('Cola')
+    expect(cola.search_aliases).toContain('kola')
+    expect(cola.staff_drink_allowed).toBe(false)
+    expect(boot.products.find(p => p.name === 'Kafa')!.staff_drink_allowed).toBe(true)
+
+    // Exactly one of each, and found by key rather than by name.
+    expect(boot.products.filter(p => p.system_key === 'zar').map(p => p.name))
+      .toEqual(['Dodatni žar'])
+    expect(boot.products.filter(p => p.system_key === 'ostalo').map(p => p.name))
+      .toEqual(['Ostalo'])
+    expect(boot.products.find(p => p.name === 'Nargila')!.system_key).toBeNull()
+  })
+
+  it('gives the catalogue exactly the fields the phone reads, and no more', () => {
+    const boot = getBootstrap(f.db, f.venueId, f.actor('Amar'))
+
+    for (const category of boot.categories) {
+      expect(Object.keys(category).sort()).toEqual(['id', 'name', 'note_chips', 'sort'])
+    }
+    for (const product of boot.products) {
+      expect(Object.keys(product).sort()).toEqual([
+        'category_id', 'coal_pcs', 'id', 'is_favourite', 'kind', 'name', 'price_fen',
+        'search_aliases', 'shisha_grams', 'short_name', 'sort', 'staff_drink_allowed',
+        'system_key',
+      ])
+    }
+  })
 })
 
 describe('GET /api/health', () => {
   it('counts what the deploy gate needs', () => {
-    expect(getHealth(f.db, f.venueId)).toEqual({ ok: true, tables: 27, products: 14 })
+    expect(getHealth(f.db, f.venueId)).toEqual({ ok: true, tables: 27, products: 15 })
   })
 })
 
@@ -171,10 +213,56 @@ describe('GET /api/tables/state', () => {
 
   it('answers the envelope §6.2 shapes, not a bare array', () => {
     const state = getTablesState(f.db, f.venueId, f.actor('Amar'))
-    expect(Object.keys(state).sort()).toEqual(['seq', 'shift', 'tables'])
+    expect(Object.keys(state).sort()).toEqual(['loose_tabs', 'seq', 'shift', 'tables'])
     // No shift has been opened, so the strip is null and the floor plan is not.
     expect(state.shift).toBeNull()
     expect(Array.isArray(state.tables)).toBe(true)
+    expect(state.loose_tabs).toEqual([])
+  })
+
+  /**
+   * *Bez stola* (PHASE3 §1.11): a tab with no table at all. It must never
+   * appear as a tile — the floor plan draws one circle per table and there is
+   * no circle for the guests standing at the bar — so it goes in a list of its
+   * own that S1 renders as cards above the plan.
+   */
+  it('puts a table-less tab in loose_tabs and on no tile', () => {
+    createOrder(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(),
+      table_id: null,
+      lines: [{ id: randomUUID(), product_id: f.productId('Kafa'), qty: 2 }],
+    })
+
+    const state = getTablesState(f.db, f.venueId, f.actor('Amar'))
+    expect(state.tables).toHaveLength(27)
+    expect(state.tables.every(t => t.tab_id === null)).toBe(true)
+
+    expect(state.loose_tabs).toHaveLength(1)
+    const loose = state.loose_tabs[0]!
+    expect(loose.table_id).toBeNull()
+    expect(loose.tab_id).not.toBeNull()
+    expect(loose.total_fen).toBe(300)
+    expect(loose.assigned_to).toBe(f.userId('Amar'))
+    // Same shape as a tile: one component renders both.
+    expect(Object.keys(loose).sort()).toEqual([
+      'assigned_to', 'assigned_to_initials', 'last_order_at', 'late_sync', 'offered_to',
+      'opened_at', 'opened_by_name', 'pending_review', 'remaining_fen', 'tab_client_id',
+      'tab_id', 'table_id', 'total_fen',
+    ])
+  })
+
+  it('reads a table-less tab back through GET /api/tabs/:id', () => {
+    const order = createOrder(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(),
+      table_id: null,
+      lines: [{ id: randomUUID(), product_id: f.productId('Kafa'), qty: 1 }],
+    })
+
+    const detail = getTab(f.db, f.venueId, order.tab_id, f.actor('Amar'))
+    // The inner join that used to be here would have dropped this tab entirely.
+    expect(detail.tab.table_id).toBeNull()
+    expect(detail.tab.table_name).toBeNull()
+    expect(detail.money.total_fen).toBe(150)
   })
 })
 

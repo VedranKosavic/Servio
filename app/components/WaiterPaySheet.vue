@@ -31,9 +31,14 @@ const props = withDefaults(defineProps<{
   totalFen: number
   /** From `venue.settings.payment_methods`. */
   methods: PaymentMethod[]
+  /**
+   * Which half the sheet opens on. ⋯ → *Nije plaćeno* comes straight here, so
+   * a guest who walked out costs the same two taps as one who paid.
+   */
+  initialMode?: 'main' | 'unpaid'
   busy?: boolean
   error?: string | null
-}>(), { busy: false, error: null })
+}>(), { initialMode: 'main', busy: false, error: null })
 
 const emit = defineEmits<{
   close: []
@@ -42,7 +47,7 @@ const emit = defineEmits<{
 }>()
 
 type Mode = 'main' | 'custom' | 'unpaid'
-const mode = ref<Mode>('main')
+const mode = ref<Mode>(props.initialMode)
 const receivedRaw = ref('')
 
 const cardAllowed = computed(() => props.methods.includes('card'))

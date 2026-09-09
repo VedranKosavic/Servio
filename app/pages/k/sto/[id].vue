@@ -1,34 +1,45 @@
 <script setup lang="ts">
 /**
- * Narudžba — the round being built for one table, and the till that closes it.
+ * **S2 *Sto N*** — everything that has happened at one table, and the two
+ * things that can happen next.
  *
- * The draft lives in the cart store (IndexedDB), not here, so walking away to
- * another table and coming back does not lose the taps. This screen turns the
- * catalogue into tiles, hands the draft to the **outbox**, and opens the
- * *Naplati* sheet when the guests ask for the bill.
+ * It is the screen a waiter comes back to all night, so it answers the three
+ * questions he arrives with, in order: what did they order, what do they owe,
+ * and what do I do now. The rounds are collapsed to their headers ("Tura 2 ·
+ * 21:05 · Amar") because after the third round the list is longer than the
+ * phone; the bar at the bottom is *+ Dodaj* beside either *Zaključi* or
+ * *Naplati*, never both.
  *
- * Since Phase 3 nothing on this screen posts money itself. *Pošalji šankeru*,
- * *Naplati* and *Nije plaćeno* all `enqueue(...)`, which writes to IndexedDB and
- * returns immediately; `app/stores/outbox.ts` gets it to the server, in order,
- * exactly once, whenever there is a network. A waiter's thumb never waits for a
- * router, and a dead spot behind the fridge costs nothing.
+ * **Nothing here posts money directly.** *Potvrdi*, *Naplati* and *Nije
+ * plaćeno* all `enqueue(...)` — one send path, IndexedDB first, the server when
+ * there is one. *Premjesti sto* and *Predaj sto kolegi* are the exceptions and
+ * they are online-only by design (PLAN F5): a move has to be checked against
+ * the one-open-tab-per-table index, and a handover the colleague has not seen
+ * is not a handover.
  *
- * Note what is never sent: a price, and — since WP9 — a person. The tiles show
- * prices so the waiter can read them out to the guest, but the body carries
- * product ids and quantities; and who locked the round is the session's
- * business, not the body's (BACKEND §5.7). A phone that could send either could
- * send any price under anybody's name.
+ * **What this screen knows is the sum of two truths**: the tab the server
+ * describes, and what is still sitting in this phone's outbox. A waiter who
+ * locked a round in a dead spot must be able to take cash for it, so the amount
+ * under *Naplati* counts the queued rounds too — priced from the catalogue,
+ * which is a number to read out and never a number that is sent.
  */
 import { formatKm } from '#shared/money'
-import type { PaymentMethod, Product, TableState } from '#shared/types'
+import type {
+  PaymentMethod, Product, TabDetail, TabLine, TableState, User, VenueTable,
+} from '#shared/types'
+import { stavke } from '~/components/order/OrderText'
 
 const route = useRoute()
+const api = useApi()
 const me = useMe()
 const cart = useCartStore()
 const { outbox, enqueue } = useOutbox()
-const { lockToast } = useSync()
+const { lockToast, state: syncState } = useSync()
 
-const tableId = computed(() => String(route.params.id))
+/** `bez-stola` in the URL is a tab on no table at all (PHASE3 §1.11). */
+const LOOSE = 'bez-stola'
+const routeId = computed(() => String(route.params.id))
+const tableId = computed<string | null>(() => (routeId.value === LOOSE ? null : routeId.value))
 
 onMounted(() => {
   void me.requireSession()
@@ -36,179 +47,195 @@ onMounted(() => {
 
 const { data: boot, refresh: refreshBoot } = useBootstrapData()
 
-const table = computed(() => boot.value?.tables.find(t => t.id === tableId.value) ?? null)
-const tableName = computed(() => table.value?.name ?? 'Sto')
-const zoneLabel = computed(() => (table.value?.zone === 'basta' ? 'Bašta' : 'Unutra'))
+const table = computed(() =>
+  (tableId.value === null ? null : boot.value?.tables.find(t => t.id === tableId.value) ?? null))
+const tableName = computed(() => (tableId.value === null ? 'Bez stola' : table.value?.name ?? 'Sto'))
 
 useHead({ title: tableName })
 
-/**
- * The table's open tab. It rides in on the same `/api/changes` answer as
- * everything else, so a colleague adding a round to this table while the sheet
- * is open moves the amount under the *Naplati* button within a poll.
- */
+// -- What the server knows --------------------------------------------------
+
 const tabState = ref<TableState | null>(null)
+const looseTabs = ref<TableState[]>([])
+const busyTableIds = ref<string[]>([])
+
+/**
+ * Which loose tab is *this* screen's.
+ *
+ * A table identifies its tab; the bar does not, so the phone falls back to the
+ * id it minted itself, and only then to a table-less tab it is already holding.
+ * One *Bez stola* draft per phone is the deliberate limit — the cart store keys
+ * on the table, and "the guests at the bar" is one party at a time from where
+ * one waiter stands.
+ */
+function pickLooseTab(rows: TableState[]): TableState | null {
+  const mine = cart.tabClientIdFor(null)
+  return rows.find(r => mine !== null && r.tab_client_id === mine)
+    ?? rows.find(r => r.assigned_to === me.user.value?.id)
+    ?? null
+}
+
 const { refresh: refreshState } = useChanges({
   tables: (state) => {
-    tabState.value = state.tables.find(r => r.table_id === tableId.value) ?? null
+    looseTabs.value = state.loose_tabs
+    tabState.value = tableId.value === null
+      ? pickLooseTab(state.loose_tabs)
+      : state.tables.find(r => r.table_id === tableId.value) ?? null
+    busyTableIds.value = state.tables.filter(r => r.tab_id !== null).map(r => r.table_id!)
   },
   menu: () => refreshBoot(),
   me: () => me.load(),
 }, { intervalMs: 12_000 })
 
-// -- The menu ---------------------------------------------------------------
+/**
+ * The rounds themselves. `/api/changes` carries the tab's *total*, not its
+ * lines, so the one screen that shows lines asks for them — on open, and again
+ * whenever the poll says the tab moved.
+ */
+const detail = ref<TabDetail | null>(null)
+const detailError = ref<string | null>(null)
 
-/** Not a real category: the shortcut row of the dozen things ordered all night. */
-const FAVOURITES = 'omiljeno'
-const activeTab = ref<string>(FAVOURITES)
-
-const products = computed(() => boot.value?.products ?? [])
-
-const tabs = computed(() => {
-  // Categories with nothing in them would be a dead end, so they are left out.
-  const withProducts = (boot.value?.categories ?? [])
-    .filter(category => products.value.some(p => p.category_id === category.id))
-    .map(category => ({ id: category.id, name: category.name }))
-  return [{ id: FAVOURITES, name: 'Omiljeno' }, ...withProducts]
-})
-
-const shown = computed(() => (
-  activeTab.value === FAVOURITES
-    ? products.value.filter(p => p.is_favourite)
-    : products.value.filter(p => p.category_id === activeTab.value)
-))
-
-// -- The draft --------------------------------------------------------------
-
-const lines = computed(() => cart.linesFor(tableId.value))
-const count = computed(() => cart.countFor(tableId.value))
-
-const priceById = computed(() => new Map(products.value.map(p => [p.id, p.price_fen])))
-/** The draft's own total, for the button. The server prices the real thing. */
-const draftTotal = computed(() => lines.value.reduce(
-  (sum, line) => sum + (priceById.value.get(line.product_id) ?? 0) * line.qty,
-  0,
-))
-
-/** 1 stavka · 2–4 stavke · 5+ stavki — Bosnian counts in three buckets. */
-function stavke(n: number): string {
-  const ones = n % 10
-  const tens = n % 100
-  if (ones === 1 && tens !== 11) return `${n} stavka`
-  if (ones >= 2 && ones <= 4 && (tens < 12 || tens > 14)) return `${n} stavke`
-  return `${n} stavki`
+async function loadDetail() {
+  const tabId = tabState.value?.tab_id
+  if (!tabId) {
+    detail.value = null
+    return
+  }
+  try {
+    detail.value = await api.getTab(tabId)
+    detailError.value = null
+  } catch (err) {
+    // Offline is the normal case here, and the screen says so rather than
+    // showing an empty tab as if the guests had ordered nothing.
+    detailError.value = apiErrorText(err, 'Nema veze — ture sa servera nisu učitane')
+  }
 }
 
-/** Money for this table still on the phone. Keeps the card honest (§2.3). */
-const queuedHere = computed(() => outbox.pendingForTab(
-  tabState.value?.tab_client_id ?? cart.tabClientIdFor(tableId.value),
-))
+watch(() => [tabState.value?.tab_id, tabState.value?.total_fen, tabState.value?.remaining_fen],
+  () => { void loadDetail() },
+  { immediate: true })
+
+// -- What this phone still owes the server ----------------------------------
+
+const products = computed<Product[]>(() => boot.value?.products ?? [])
+const priceById = computed(() => new Map(products.value.map(p => [p.id, p.price_fen])))
+const nameById = computed(() => new Map(products.value.map(p => [p.id, p.name])))
+const flavourNameById = computed(() =>
+  new Map((boot.value?.flavours ?? []).map(f => [f.id, f.name])))
+
+const tabClientIdHere = computed(() =>
+  tabState.value?.tab_client_id ?? cart.tabClientIdFor(tableId.value))
+
+const queuedHere = computed(() => outbox.pendingForTab(tabClientIdHere.value))
 const payQueued = computed(() => queuedHere.value.some(e => e.kind === 'pay'))
 
-/**
- * What this table owes **according to this phone**: what the server knows plus
- * every round still on the queue, minus every payment still on the queue.
- *
- * The queued part is priced from the catalogue, which is the one place in the
- * app that is allowed to do that — it is a number to read out to a guest, never
- * a number that is sent. The server prices the round for real when the entry
- * lands, and the amber *Cijena promijenjena* card (WP3) is what covers the rare
- * case where the two differ.
- *
- * Without this a waiter who locked a round with no signal could not take cash
- * for it: the *Naplati* card is drawn from the server's tab, and offline there
- * is no server tab yet.
- */
-const queuedOrdersFen = computed(() => queuedHere.value
-  .filter(e => e.kind === 'order')
-  .reduce((sum, entry) => {
-    const payload = entry.payload as { lines?: { product_id: string, qty: number }[] }
-    return sum + (payload.lines ?? []).reduce(
-      (n, line) => n + (priceById.value.get(line.product_id) ?? 0) * line.qty,
-      0,
-    )
-  }, 0))
+interface QueuedLine { name: string, qty: number, note: string | null, flavours: string[] }
+interface QueuedRound { clientId: string, lines: QueuedLine[], fen: number }
 
+/** The rounds still on the phone, drawn exactly like the locked ones. */
+const queuedRounds = computed<QueuedRound[]>(() => queuedHere.value
+  .filter(e => e.kind === 'order')
+  .map((entry) => {
+    const payload = entry.payload as {
+      client_id: string
+      lines?: { product_id: string, qty: number, note?: string, flavour_ids?: string[] }[]
+    }
+    const lines = (payload.lines ?? []).map(line => ({
+      name: nameById.value.get(line.product_id) ?? 'Stavka',
+      qty: line.qty,
+      note: line.note ?? null,
+      flavours: (line.flavour_ids ?? []).map(id => flavourNameById.value.get(id) ?? '—'),
+    }))
+    return {
+      clientId: payload.client_id,
+      lines,
+      fen: (payload.lines ?? []).reduce(
+        (n, line) => n + (priceById.value.get(line.product_id) ?? 0) * line.qty, 0),
+    }
+  }))
+
+const queuedOrdersFen = computed(() =>
+  queuedRounds.value.reduce((sum, round) => sum + round.fen, 0))
 const queuedPaidFen = computed(() => queuedHere.value
   .filter(e => e.kind === 'pay')
   .reduce((sum, entry) => sum + (entry.amount_fen ?? 0), 0))
 
-/** The total under the *Naplati* button, server truth and phone truth together. */
-const localTotalFen = computed(() =>
-  (tabState.value?.total_fen ?? 0) + queuedOrdersFen.value)
+const localTotalFen = computed(() => (tabState.value?.total_fen ?? 0) + queuedOrdersFen.value)
 const localRemainingFen = computed(() => Math.max(
   0,
   (tabState.value?.remaining_fen ?? 0) + queuedOrdersFen.value - queuedPaidFen.value,
 ))
 
-/** Is there anything to charge for — from either side? */
 const hasTab = computed(() => !!tabState.value?.tab_id || queuedHere.value.length > 0)
 
-const sheetProduct = ref<Product | null>(null)
+// -- The draft --------------------------------------------------------------
 
-function onTile(product: Product) {
-  // A nargila cannot be added blind: the aromas decide what leaves the shelf.
-  if (product.kind === 'shisha') sheetProduct.value = product
-  else cart.add(tableId.value, product.id)
+const lines = computed(() => cart.linesFor(tableId.value))
+const count = computed(() => cart.countFor(tableId.value))
+const draftTotal = computed(() => lines.value.reduce(
+  (sum, line) => sum + (priceById.value.get(line.product_id) ?? 0) * line.qty, 0))
+
+// -- Rounds -----------------------------------------------------------------
+
+const openRounds = ref<Set<string>>(new Set())
+
+function toggleRound(id: string) {
+  const next = new Set(openRounds.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  openRounds.value = next
 }
 
-function addShisha(flavourIds: string[]) {
-  if (sheetProduct.value) cart.add(tableId.value, sheetProduct.value.id, flavourIds)
-  sheetProduct.value = null
+/** "21:05" — the wall clock the café runs on, never the browser's zone. */
+function clock(iso: string): string {
+  return new Date(iso).toLocaleTimeString('bs-BA', {
+    hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Sarajevo',
+  })
 }
 
-// -- Sending ----------------------------------------------------------------
+function roundLabel(index: number, at: string, who: string): string {
+  return `Tura ${index + 1} · ${clock(at)} · ${who}`
+}
 
+/** Is this line a bowl that can still take coal? */
+function isBowl(line: TabLine): boolean {
+  return line.flavour_names.length > 0 && line.status !== 'storno'
+}
+
+// -- Zaključi ---------------------------------------------------------------
+
+const confirmOpen = ref(false)
 const sending = ref(false)
 const sendError = ref<string | null>(null)
 const toast = ref<string | null>(null)
 
-// A timer that outlives the screen would navigate a waiter who already left.
 let leaveTimer: ReturnType<typeof setTimeout> | null = null
-function leaveSoon(delayMs = 2000) {
-  leaveTimer = setTimeout(() => navigateTo('/k'), delayMs)
-}
 onBeforeUnmount(() => {
   if (leaveTimer) clearTimeout(leaveTimer)
 })
 
-/**
- * Which tab this table's money belongs to.
- *
- * The server's own id wins whenever the poll has one — that is a tab everybody
- * agrees about. Otherwise it is the id this phone minted when the table was
- * first opened, which is the whole point: a round locked with no signal has to
- * be able to name the tab it opens, so that the payment queued behind it can
- * name the same one.
- */
-function tabClientId(): string {
-  return tabState.value?.tab_client_id ?? cart.ensureTabClientId(tableId.value)
-}
+/** What the tiles quoted, per round, so the price card can compare (F3 step 3). */
+const quoted = useLocalStorage<Record<string, number>>('sank:quoted', {})
 
-async function send() {
+async function lockDraft() {
   const draft = cart.draftFor(tableId.value)
   if (!draft || count.value === 0 || sending.value) return
 
   sending.value = true
   sendError.value = null
+  const totalAtLock = draftTotal.value
   try {
+    const tabClientId = cart.ensureTabClientId(tableId.value)
     await enqueue({
       kind: 'order',
-      // The same uuid on every retry: the server answers a replay with the
-      // round it already wrote instead of charging the guest twice.
       client_id: draft.client_id,
-      tab_client_id: tabClientId(),
+      tab_client_id: tabClientId,
       label: tableName.value,
       payload: {
         client_id: draft.client_id,
         table_id: tableId.value,
-        tab_client_id: tabClientId(),
-        // When it happened in the *world*. A round queued in a cellar and sent
-        // twenty minutes later is priced and shifted by this, not by the
-        // moment the request finally arrived.
+        tab_client_id: tabClientId,
         client_created_at: new Date().toISOString(),
-        // The line ids were minted when the tiles were tapped, so a void queued
-        // offline can name a line the server has not seen yet (BACKEND §6.1).
         lines: draft.lines.map(line => ({
           id: line.id,
           product_id: line.product_id,
@@ -218,12 +245,12 @@ async function send() {
         })),
       },
     })
+    quoted.value = { ...quoted.value, [draft.client_id]: totalAtLock }
     cart.clear(tableId.value)
+    confirmOpen.value = false
     toast.value = lockToast(tableName.value)
-    leaveSoon()
+    await refreshState()
   } catch (err) {
-    // Enqueueing barely fails — only storage can refuse. The draft is
-    // deliberately left alone either way: retrying is the whole plan.
     sendError.value = apiErrorText(err, 'Nema veze — pokušaj ponovo')
     void me.handleAuthError(err)
   } finally {
@@ -231,9 +258,70 @@ async function send() {
   }
 }
 
+function addOne(lineId: string) {
+  const line = lines.value.find(l => l.id === lineId)
+  if (line) cart.add(tableId.value, line.product_id, line.flavour_ids, line.note)
+}
+
+function removeOne(lineId: string) {
+  const line = lines.value.find(l => l.id === lineId)
+  if (line) cart.removeOne(tableId.value, line.product_id)
+}
+
+// -- Cijena promijenjena ----------------------------------------------------
+
+/**
+ * The amber card: what the tiles quoted against what the server charged.
+ *
+ * The comparison is per round and by the round's own `client_id`, so it holds
+ * however long the round sat in the outbox and survives a reload — which the
+ * lock's response would not, because since Phase 3 that answer may arrive
+ * twenty minutes later on a screen nobody is looking at.
+ */
+const priceCard = computed(() => {
+  for (const round of detail.value?.orders ?? []) {
+    const quotedFen = quoted.value[round.client_id]
+    if (quotedFen === undefined) continue
+    const serverFen = round.lines.reduce((sum, l) => sum + l.charged_fen, 0)
+    if (serverFen !== quotedFen) return { clientId: round.client_id, quotedFen, serverFen }
+  }
+  return null
+})
+
+// A price that moved means the phone's catalogue is stale: fetch it again, once.
+watch(priceCard, (card) => {
+  if (card) void refreshBoot()
+})
+
+function dismissPriceCard() {
+  const card = priceCard.value
+  if (!card) return
+  const next = { ...quoted.value }
+  delete next[card.clientId]
+  quoted.value = next
+}
+
+/** Rounds that landed cleanly stop being interesting; forget what they quoted. */
+watch(detail, (value) => {
+  if (!value) return
+  const next = { ...quoted.value }
+  let changed = false
+  for (const round of value.orders) {
+    const quotedFen = next[round.client_id]
+    if (quotedFen === undefined) continue
+    const serverFen = round.lines.reduce((sum, l) => sum + l.charged_fen, 0)
+    if (serverFen === quotedFen) {
+      delete next[round.client_id]
+      changed = true
+    }
+  }
+  if (changed) quoted.value = next
+})
+
 // -- Naplata ----------------------------------------------------------------
 
 const payOpen = ref(false)
+const payMode = ref<'main' | 'unpaid'>('main')
 const paying = ref(false)
 const payError = ref<string | null>(null)
 
@@ -242,10 +330,8 @@ const paymentMethods = computed<PaymentMethod[]>(() =>
 
 async function pay(payment: { method: PaymentMethod, amount_fen: number, received_fen?: number }) {
   if (paying.value) return
-  // Offline there is no `tab_id` yet — the tab is still only on this phone. The
-  // body may carry either, and the server prefers the phone's own id.
   const tabId = tabState.value?.tab_id ?? null
-  const clientTabId = tabClientId()
+  const clientTabId = cart.ensureTabClientId(tableId.value)
 
   paying.value = true
   payError.value = null
@@ -256,13 +342,9 @@ async function pay(payment: { method: PaymentMethod, amount_fen: number, receive
     const change = Math.max(0, (payment.received_fen ?? payment.amount_fen) - payment.amount_fen)
     const remaining = Math.max(0, localRemainingFen.value - payment.amount_fen)
 
-    // One uuid, on the entry *and* in the body — they are the same row's
-    // idempotency key, and two different ones would defeat the whole scheme.
     const clientId = crypto.randomUUID()
     await enqueue({
       kind: 'pay',
-      // Minted per attempt and reused on every retry: `payments_client_uq` is
-      // what turns a retried payment into one row instead of two charges.
       client_id: clientId,
       tab_client_id: clientTabId,
       label: tableName.value,
@@ -283,16 +365,14 @@ async function pay(payment: { method: PaymentMethod, amount_fen: number, receive
     await refreshState()
 
     if (remaining > 0) {
-      // A part payment: the table stays, and so does the waiter.
       toast.value = `Naplaćeno · ostaje ${formatKm(remaining)}`
       return
     }
-    // Settled: the next guests at this table open a tab of their own.
     cart.closeTab(tableId.value)
     toast.value = change > 0
       ? `Naplaćeno · vrati ${formatKm(change)}`
       : `Naplaćeno · ${tableName.value}`
-    leaveSoon(change > 0 ? 3500 : 2000)
+    leaveTimer = setTimeout(() => navigateTo('/k'), change > 0 ? 3500 : 2000)
   } catch (err) {
     payError.value = apiErrorText(err)
     void me.handleAuthError(err)
@@ -303,12 +383,11 @@ async function pay(payment: { method: PaymentMethod, amount_fen: number, receive
 
 async function markUnpaid(reason: 'walked_out' | 'dispute' | 'other') {
   if (paying.value) return
-  const clientTabId = tabClientId()
+  const clientTabId = cart.ensureTabClientId(tableId.value)
 
   paying.value = true
   payError.value = null
   try {
-    // One uuid, on the entry *and* in the body: the same row's replay key.
     const clientId = crypto.randomUUID()
     await enqueue({
       kind: 'unpaid',
@@ -328,7 +407,7 @@ async function markUnpaid(reason: 'walked_out' | 'dispute' | 'other') {
     await refreshState()
     cart.closeTab(tableId.value)
     toast.value = `Označeno: nije plaćeno · ${tableName.value}`
-    leaveSoon(2500)
+    leaveTimer = setTimeout(() => navigateTo('/k'), 2500)
   } catch (err) {
     payError.value = apiErrorText(err)
     void me.handleAuthError(err)
@@ -337,9 +416,178 @@ async function markUnpaid(reason: 'walked_out' | 'dispute' | 'other') {
   }
 }
 
-function openPay() {
+function openPay(mode: 'main' | 'unpaid' = 'main') {
   payError.value = null
+  payMode.value = mode
   payOpen.value = true
+  menuOpen.value = false
+}
+
+// -- ⋯ ----------------------------------------------------------------------
+
+const menuOpen = ref(false)
+const guestOpen = ref(false)
+const moveOpen = ref(false)
+const moveError = ref<string | null>(null)
+const moving = ref(false)
+
+/** Only a table with nobody on it can take a move. */
+const freeTables = computed<VenueTable[]>(() => (boot.value?.tables ?? [])
+  .filter(t => !busyTableIds.value.includes(t.id) && t.id !== tableId.value))
+
+const colleagues = computed<User[]>(() => (boot.value?.users ?? [])
+  .filter(u => u.id !== me.user.value?.id && u.role !== 'admin'))
+
+/** *Premjesti* and *Predaj* both need the network; the sheet says so up front. */
+const offlineForOnlineOnly = computed(() => syncState.value === 'offline')
+
+async function moveToTable(targetId: string) {
+  const tabId = tabState.value?.tab_id
+  if (!tabId || moving.value) return
+  moving.value = true
+  moveError.value = null
+  try {
+    await api.moveTab(tabId, targetId)
+    moveOpen.value = false
+    // The draft and the tab id follow the guests to the new table.
+    cart.closeTab(tableId.value)
+    const name = boot.value?.tables.find(t => t.id === targetId)?.name ?? 'sto'
+    toast.value = `Premješteno na ${name}`
+    await refreshState()
+    leaveTimer = setTimeout(() => navigateTo(`/k/sto/${targetId}`), 900)
+  } catch (err) {
+    moveError.value = apiErrorText(err)
+  } finally {
+    moving.value = false
+  }
+}
+
+async function handToColleague(userId: string) {
+  const tabId = tabState.value?.tab_id
+  if (!tabId || moving.value) return
+  moving.value = true
+  moveError.value = null
+  try {
+    await api.offerTab(tabId, userId)
+    moveOpen.value = false
+    const name = boot.value?.users.find(u => u.id === userId)?.name ?? 'kolegi'
+    toast.value = `Ponuđeno: ${name}`
+    await refreshState()
+  } catch (err) {
+    moveError.value = apiErrorText(err)
+  } finally {
+    moving.value = false
+  }
+}
+
+// -- Žar --------------------------------------------------------------------
+
+const zarBusy = ref(false)
+const zarError = ref<string | null>(null)
+
+const zarProduct = computed(() => products.value.find(p => p.system_key === 'zar') ?? null)
+
+/**
+ * *Žar* is its own round, and it is the **one** lock in the app with no
+ * *Potvrdi* sheet (PLAN §10, invariant 2). The carve-out is safe because the
+ * product is 0 KM: there is no price to confirm. Two pieces of coal still leave
+ * the box and the ledger still says so.
+ */
+async function addZar(parentLineId: string) {
+  const product = zarProduct.value
+  if (!product || zarBusy.value) return
+  zarBusy.value = true
+  zarError.value = null
+  try {
+    const clientId = crypto.randomUUID()
+    const tabClientId = cart.ensureTabClientId(tableId.value)
+    await enqueue({
+      kind: 'order',
+      client_id: clientId,
+      tab_client_id: tabClientId,
+      label: tableName.value,
+      payload: {
+        client_id: clientId,
+        table_id: tableId.value,
+        tab_client_id: tabClientId,
+        client_created_at: new Date().toISOString(),
+        lines: [{
+          id: crypto.randomUUID(),
+          product_id: product.id,
+          qty: 1,
+          // Which bowl this coal is for. The server checks the line is on this
+          // same tab, so a stale phone cannot point it at somebody else's.
+          parent_line_id: parentLineId,
+        }],
+      },
+    })
+    toast.value = lockToast(tableName.value, 'Žar')
+    await refreshState()
+  } catch (err) {
+    zarError.value = apiErrorText(err)
+  } finally {
+    zarBusy.value = false
+  }
+}
+
+// -- A locked line ----------------------------------------------------------
+
+const lockedLine = ref<{ line: TabLine, round: string } | null>(null)
+
+// -- Kasno sinhronizovano ---------------------------------------------------
+
+/**
+ * The red card of F3 step 5. It is read from the poll rather than from the
+ * lock's answer, for the same reason the price card is: the round may have gone
+ * out long after the screen that queued it was closed. A tab that came back
+ * `late_sync` **and** `pending_review`, on my own line, is a round the server
+ * could not put on the tab it named — and only the person who carried the phone
+ * knows whether he took the money for it.
+ */
+const dismissedLate = useLocalStorage<string[]>('sank:kasno-odbaceno', [])
+
+const lateTabs = computed(() => looseTabs.value
+  .concat(tabState.value ? [tabState.value] : [])
+  .filter(t => t.tab_id
+    && t.late_sync && t.pending_review
+    && t.assigned_to === me.user.value?.id
+    && !dismissedLate.value.includes(t.tab_id)))
+
+async function lateWasPaid(row: TableState) {
+  if (!row.tab_id) return
+  paying.value = true
+  try {
+    const clientId = crypto.randomUUID()
+    await enqueue({
+      kind: 'pay',
+      client_id: clientId,
+      ...(row.tab_client_id ? { tab_client_id: row.tab_client_id } : {}),
+      label: tableName.value,
+      amount_fen: row.remaining_fen,
+      payload: {
+        client_id: clientId,
+        tab_id: row.tab_id,
+        method: 'cash',
+        amount_fen: row.remaining_fen,
+        tip_fen: 0,
+        covers_order_client_ids: [],
+        client_created_at: new Date().toISOString(),
+      },
+    })
+    toast.value = `Naplaćeno · ${formatKm(row.remaining_fen)}`
+    await refreshState()
+  } catch (err) {
+    payError.value = apiErrorText(err)
+  } finally {
+    paying.value = false
+  }
+}
+
+function lateWasNotPaid(row: TableState) {
+  // Nothing to write: the tab is already `unpaid` with `pending_review`, and
+  // the owner decides it from *Zahtijeva pažnju*. This only stops the card
+  // asking the same question every fifteen seconds.
+  if (row.tab_id) dismissedLate.value = [...dismissedLate.value, row.tab_id]
 }
 </script>
 
@@ -349,117 +597,289 @@ function openPay() {
       <WaiterHeader :title="tableName" back-to="/k">
         <template #right>
           <WaiterSyncChip compact />
-          <span v-if="hasTab" class="num font-semibold">{{ formatKm(localRemainingFen) }}</span>
+          <button
+            type="button"
+            class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface text-text"
+            aria-label="Više"
+            @click="menuOpen = true"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+              <path d="M5 12h.01M12 12h.01M19 12h.01" />
+            </svg>
+          </button>
         </template>
       </WaiterHeader>
 
       <WaiterOutboxBanner />
 
       <div class="flex flex-1 flex-col gap-3 py-3">
-        <!-- A body the server read and refused. Nothing behind it on this table
-             goes out until the waiter answers. -->
         <WaiterFailedCard />
-        <!-- What is already locked on this table, here and at the bar -->
-        <div v-if="hasTab" class="card flex items-center gap-3 p-3">
-          <div class="grow">
-            <div class="flex flex-wrap items-center gap-2 text-sm text-text-2">
-              Zaključene ture
-              <span v-if="payQueued" class="chip chip-warn">naplata čeka slanje</span>
-              <span v-else-if="queuedOrdersFen > 0" class="chip chip-warn">čeka slanje</span>
-              <span v-else-if="tabState?.pending_review" class="chip chip-warn">naplata čeka</span>
-              <span v-if="tabState?.late_sync" class="chip chip-warn">kasno</span>
-            </div>
-            <div class="num text-2xl font-semibold">
-              {{ formatKm(localRemainingFen) }}
-            </div>
-            <div v-if="localRemainingFen !== localTotalFen" class="num text-sm text-text-2">
-              od {{ formatKm(localTotalFen) }}
-            </div>
+
+        <OrderLateCard
+          v-for="row in lateTabs"
+          :key="row.tab_id!"
+          :table-name="tableName"
+          :amount-fen="row.remaining_fen"
+          :busy="paying"
+          @paid="lateWasPaid(row)"
+          @unpaid="lateWasNotPaid(row)"
+        />
+
+        <OrderPriceCard
+          v-if="priceCard"
+          :table-name="tableName"
+          :draft-fen="priceCard.quotedFen"
+          :server-fen="priceCard.serverFen"
+          @close="dismissPriceCard"
+        />
+
+        <!-- What is owed -->
+        <div v-if="hasTab" class="card flex flex-col gap-1 p-3">
+          <div class="flex flex-wrap items-center gap-2 text-sm text-text-2">
+            Zaključeno
+            <span v-if="payQueued" class="chip chip-warn">naplata čeka slanje</span>
+            <span v-else-if="queuedOrdersFen > 0" class="chip chip-warn">čeka slanje</span>
+            <span v-else-if="tabState?.pending_review" class="chip chip-warn">naplata čeka</span>
+            <span v-if="tabState?.late_sync" class="chip chip-warn">kasno</span>
           </div>
-          <button type="button" class="btn btn-accent" @click="openPay">
-            Naplati
-          </button>
+          <div class="num text-3xl font-bold">
+            {{ formatKm(localRemainingFen) }}
+          </div>
+          <div v-if="localRemainingFen !== localTotalFen" class="num text-sm text-text-2">
+            od {{ formatKm(localTotalFen) }}
+          </div>
         </div>
 
-        <!-- Categories -->
-        <div class="-mx-4 flex gap-1.5 overflow-x-auto px-4">
-          <button
-            v-for="item in tabs"
-            :key="item.id"
-            type="button"
-            class="flex h-10 shrink-0 items-center rounded-3xl px-3.5 text-[15px] font-semibold"
-            :class="activeTab === item.id ? 'bg-line text-text' : 'bg-surface text-text-2'"
-            @click="activeTab = item.id"
-          >
-            {{ item.name }}
-          </button>
-        </div>
-
-        <!-- The menu -->
-        <div v-if="boot" class="grid grid-cols-3 gap-2.5">
-          <ProductTile
-            v-for="product in shown"
-            :key="product.id"
-            :name="product.name"
-            :price-fen="product.price_fen"
-            :qty="cart.qtyOfProduct(tableId, product.id)"
-            :shisha="product.kind === 'shisha'"
-            @add="onTile(product)"
-            @remove="cart.removeOne(tableId, product.id)"
-          />
-        </div>
-        <p v-else class="py-10 text-center text-text-2">
-          Učitavanje…
+        <p v-if="detailError" class="rounded-xl bg-warn-soft px-3 py-2 text-[15px] text-warn">
+          {{ detailError }}
         </p>
 
-        <p class="text-center text-sm text-text-2">
-          {{ zoneLabel }} · dodir = +1 · Nargila otvara izbor arome
+        <!-- The locked rounds, newest last, collapsed to their headers -->
+        <div
+          v-for="(round, index) in detail?.orders ?? []"
+          :key="round.id"
+          class="card overflow-hidden"
+        >
+          <button
+            type="button"
+            class="flex w-full items-center gap-2 px-3 py-3 text-left"
+            @click="toggleRound(round.id)"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="shrink-0 text-text-2">
+              <rect x="5" y="11" width="14" height="9" rx="2" />
+              <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+            </svg>
+            <span class="grow text-[15px] font-semibold">
+              {{ roundLabel(index, round.at, round.locked_by_name) }}
+            </span>
+            <span v-if="round.late_sync" class="chip chip-warn">kasno</span>
+            <span class="num text-[15px] font-semibold">
+              {{ formatKm(round.lines.reduce((sum, l) => sum + l.charged_fen, 0)) }}
+            </span>
+            <svg
+              width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="1.8" stroke-linecap="round"
+              class="shrink-0 text-text-2 transition-transform"
+              :class="openRounds.has(round.id) ? 'rotate-180' : ''"
+            >
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+
+          <ul v-if="openRounds.has(round.id)" class="flex flex-col gap-1 border-t border-line px-3 py-2">
+            <li v-for="row in round.lines" :key="row.id" class="flex flex-col gap-1.5 py-1">
+              <button
+                type="button"
+                class="flex items-baseline gap-2 text-left"
+                @click="lockedLine = { line: row, round: roundLabel(index, round.at, round.locked_by_name) }"
+              >
+                <span
+                  class="min-w-0 grow text-[17px]"
+                  :class="row.status === 'storno' ? 'text-text-2 line-through' : ''"
+                >
+                  <span class="num font-semibold">{{ row.qty }}×</span> {{ row.name_snapshot }}
+                </span>
+                <span
+                  class="num shrink-0 text-[17px] font-semibold"
+                  :class="row.status === 'storno' ? 'text-text-2 line-through' : ''"
+                >{{ formatKm(row.charged_fen) }}</span>
+              </button>
+
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span v-for="flavour in row.flavour_names" :key="flavour" class="chip">{{ flavour }}</span>
+                <span v-if="row.note" class="chip chip-warn">{{ row.note }}</span>
+                <span v-if="row.status === 'storno_na_cekanju'" class="chip chip-warn">storno na čekanju</span>
+                <span v-else-if="row.status === 'storno'" class="chip chip-danger">storno</span>
+                <span v-else-if="row.status === 'gratis'" class="chip chip-good">kuća časti</span>
+
+                <!-- The button twin of the long press on the floor plan (F4). -->
+                <template v-if="isBowl(row)">
+                  <button
+                    type="button"
+                    class="chip min-h-12 border border-line bg-surface-2 px-4 text-[15px] font-semibold text-text"
+                    :disabled="zarBusy"
+                    @click="addZar(row.id)"
+                  >
+                    Žar
+                  </button>
+                  <NuxtLink
+                    :to="`/k/dodaj/${routeId}?kat=${products.find(p => p.name === row.name_snapshot)?.category_id ?? ''}`"
+                    class="chip min-h-12 border border-line bg-surface-2 px-4 text-[15px] font-semibold text-text"
+                  >
+                    Nova lula
+                  </NuxtLink>
+                </template>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Rounds this phone has locked but not yet sent -->
+        <div
+          v-for="round in queuedRounds"
+          :key="round.clientId"
+          class="card border-warn p-3"
+        >
+          <div class="flex items-center gap-2">
+            <span class="chip chip-warn">Tura čeka slanje</span>
+            <span class="num grow text-right text-[15px] font-semibold">{{ formatKm(round.fen) }}</span>
+          </div>
+          <ul class="mt-2 flex flex-col gap-1">
+            <li v-for="(row, i) in round.lines" :key="i" class="text-[15px]">
+              <span class="num font-semibold">{{ row.qty }}×</span> {{ row.name }}
+              <small v-if="row.flavours.length" class="text-text-2">· {{ row.flavours.join(' + ') }}</small>
+              <small v-if="row.note" class="text-warn">· {{ row.note }}</small>
+            </li>
+          </ul>
+        </div>
+
+        <!-- The draft: still only on this phone -->
+        <div v-if="count > 0" class="card border-dashed border-accent p-3">
+          <div class="flex items-center gap-2">
+            <span class="chip">Nova tura — nije poslano</span>
+            <span class="num grow text-right text-[15px] font-semibold">{{ formatKm(draftTotal) }}</span>
+          </div>
+          <ul class="mt-2 flex flex-col gap-1.5">
+            <li v-for="line in lines" :key="line.id" class="flex items-center gap-2">
+              <span class="min-w-0 grow text-[17px]">
+                {{ nameById.get(line.product_id) ?? 'Stavka' }}
+                <small v-if="line.flavour_ids?.length" class="text-text-2">
+                  · {{ line.flavour_ids.map(id => flavourNameById.get(id) ?? '—').join(' + ') }}
+                </small>
+                <small v-if="line.note" class="text-warn">· {{ line.note }}</small>
+              </span>
+              <button
+                type="button"
+                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-xl font-bold"
+                :aria-label="`Skini jedan · ${nameById.get(line.product_id) ?? 'stavka'}`"
+                @click="removeOne(line.id)"
+              >
+                −
+              </button>
+              <span class="num w-6 text-center text-lg font-bold">{{ line.qty }}</span>
+              <button
+                type="button"
+                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-xl font-bold"
+                :aria-label="`Dodaj jedan · ${nameById.get(line.product_id) ?? 'stavka'}`"
+                @click="addOne(line.id)"
+              >
+                +
+              </button>
+            </li>
+          </ul>
+        </div>
+
+        <p v-if="!hasTab && count === 0" class="py-8 text-center text-text-2">
+          Ovdje još nema ništa. Dodirni <span class="font-semibold">+ Dodaj</span>.
         </p>
       </div>
 
-      <!-- Send -->
+      <!-- The bar: + Dodaj beside either Zaključi or Naplati, never both -->
       <div class="sticky bottom-0 -mx-4 flex flex-col gap-2 border-t border-line bg-bg px-4 pb-5 pt-3">
-        <div v-if="sendError" class="flex items-center gap-3 rounded-xl bg-danger-soft px-3 py-2 text-danger">
-          <span class="grow text-[15px]">{{ sendError }}</span>
-          <button type="button" class="btn btn-ghost" :disabled="sending" @click="send">
-            Pokušaj ponovo
-          </button>
+        <div v-if="sendError || zarError" class="rounded-xl bg-danger-soft px-3 py-2 text-[15px] text-danger">
+          {{ sendError ?? zarError }}
         </div>
 
-        <button
-          type="button"
-          class="btn btn-accent h-14 text-lg"
-          :disabled="count === 0 || sending"
-          @click="send"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 12l16-8-6 16-2-6z" />
-          </svg>
-          <span v-if="count === 0">Pošalji šankeru</span>
-          <span v-else>Pošalji šankeru · <span class="num">{{ stavke(count) }} · {{ formatKm(draftTotal) }}</span></span>
-        </button>
-        <span class="text-center text-sm text-text-2">
-          Šanker odmah dobije tiket · roba se skida sa stanja
-        </span>
+        <div class="flex gap-2">
+          <NuxtLink :to="`/k/dodaj/${routeId}`" class="btn h-14 flex-1 text-lg">
+            + Dodaj
+          </NuxtLink>
+
+          <button
+            v-if="count > 0"
+            type="button"
+            class="btn btn-accent h-14 flex-1 text-lg"
+            :disabled="sending"
+            @click="confirmOpen = true"
+          >
+            Zaključi · <span class="num">{{ stavke(count) }} · {{ formatKm(draftTotal) }}</span>
+          </button>
+          <button
+            v-else-if="hasTab"
+            type="button"
+            class="btn btn-accent h-14 flex-1 text-lg"
+            @click="openPay('main')"
+          >
+            Naplati <span class="num">{{ formatKm(localRemainingFen) }}</span>
+          </button>
+        </div>
       </div>
     </div>
 
-    <!-- Aromas for a nargila -->
-    <ProductShishaSheet
-      v-if="sheetProduct && boot"
-      :product="sheetProduct"
+    <!-- ⋯ -->
+    <div v-if="menuOpen" class="fixed inset-0 z-50">
+      <div class="absolute inset-0 bg-black/55" @click="menuOpen = false" />
+      <div class="absolute inset-x-0 bottom-0 mx-auto flex w-full max-w-3xl flex-col gap-2 rounded-t-[20px] border-t border-line bg-surface px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-3">
+        <span class="mx-auto h-1 w-10 shrink-0 rounded-full bg-line" />
+        <span class="chip mb-1 self-start bg-line text-text">{{ tableName }}</span>
+
+        <button type="button" class="btn h-14 justify-start text-lg" :disabled="!hasTab" @click="openPay('unpaid')">
+          Nije plaćeno
+        </button>
+        <button
+          type="button"
+          class="btn h-14 justify-start text-lg"
+          :disabled="!tabState?.tab_id"
+          @click="moveOpen = true; menuOpen = false"
+        >
+          Premjesti sto · Predaj sto kolegi
+        </button>
+        <button
+          type="button"
+          class="btn h-14 justify-start text-lg"
+          :disabled="!detail"
+          @click="guestOpen = true; menuOpen = false"
+        >
+          Pokaži narudžbu
+        </button>
+        <button type="button" class="btn btn-ghost h-12" @click="menuOpen = false">
+          Zatvori
+        </button>
+      </div>
+    </div>
+
+    <OrderConfirmSheet
+      v-if="confirmOpen && boot"
+      :table-name="tableName"
+      :lines="lines"
+      :products="boot.products"
       :flavours="boot.flavours"
-      @close="sheetProduct = null"
-      @confirm="addShisha"
+      :busy="sending"
+      :error="sendError"
+      @close="confirmOpen = false"
+      @confirm="lockDraft"
+      @add="addOne"
+      @remove="removeOne"
+      @note="navigateTo(`/k/dodaj/${routeId}`)"
     />
 
-    <!-- Naplati -->
     <WaiterPaySheet
       v-if="payOpen && hasTab"
       :table-name="tableName"
       :remaining-fen="localRemainingFen"
       :total-fen="localTotalFen"
       :methods="paymentMethods"
+      :initial-mode="payMode"
       :busy="paying"
       :error="payError"
       @close="payOpen = false"
@@ -467,12 +887,44 @@ function openPay() {
       @unpaid="markUnpaid"
     />
 
-    <!-- Sent / paid -->
+    <OrderMoveSheet
+      v-if="moveOpen"
+      :table-name="tableName"
+      :free-tables="freeTables"
+      :colleagues="colleagues"
+      :offline="offlineForOnlineOnly"
+      :busy="moving"
+      :error="moveError"
+      @close="moveOpen = false"
+      @move="moveToTable"
+      @hand="handToColleague"
+    />
+
+    <OrderLockedLineSheet
+      v-if="lockedLine"
+      :line="lockedLine.line"
+      :round="lockedLine.round"
+      @close="lockedLine = null"
+    />
+
+    <OrderGuestView
+      v-if="guestOpen && detail"
+      :table-name="tableName"
+      :tab="detail"
+      @close="guestOpen = false"
+    />
+
     <div
       v-if="toast"
       class="fixed inset-x-0 bottom-28 z-50 mx-auto w-max max-w-[92vw] rounded-xl bg-good-soft px-4 py-3 text-center font-semibold text-good"
     >
       {{ toast }}
     </div>
+
+    <template #fallback>
+      <p class="py-10 text-center text-text-2">
+        Učitavanje…
+      </p>
+    </template>
   </ClientOnly>
 </template>

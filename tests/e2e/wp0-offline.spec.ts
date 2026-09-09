@@ -76,11 +76,37 @@ async function loginAsAmar(context: BrowserContext, page: Page): Promise<Map<str
 async function openTable(page: Page, name: string) {
   const number = name.replace(/^Sto /, '')
   await page.getByRole('button', { name: new RegExp(`^${number}(\\s|$)`) }).first().click()
-  await expect(page.getByRole('button', { name: /Pošalji šankeru/ })).toBeVisible()
+  // An empty table opens straight on *Dodaj* (WP3's S3) — the tap a waiter
+  // would otherwise spend on *+ Dodaj* is the difference between five taps for
+  // two coffees and six. A table with something on it opens on S2 instead, and
+  // then *+ Dodaj* is that one tap.
+  const dodaj = page.getByRole('link', { name: '+ Dodaj' })
+  if (await dodaj.count() > 0) await dodaj.click()
+  await expect(page.getByRole('button', { name: /^Zaključi/ })).toBeVisible()
+}
+
+/** Tap a table's circle and stay on S2 — the till rather than the menu. */
+async function openTab(page: Page, name: string) {
+  const number = name.replace(/^Sto /, '')
+  await page.getByRole('button', { name: new RegExp(`^${number}(\\s|$)`) }).first().click()
+  await expect(page.getByRole('button', { name: /^Naplati/ })).toBeVisible()
+}
+
+/** The back arrow, tapped until the floor plan is on screen again. */
+async function backToFloor(page: Page) {
+  for (let i = 0; i < 2; i++) {
+    if (await page.getByText('Stolovi').count() > 0) break
+    await page.getByRole('link', { name: 'Nazad' }).first().click()
+    await page.waitForTimeout(300)
+  }
+  await expect(page.getByText('Stolovi')).toBeVisible({ timeout: 15_000 })
 }
 
 /**
- * Tap a product tile once.
+ * Tap a product tile once, **by the name on the tile**.
+ *
+ * Since PHASE3 §1.9 a product may carry a `short_name`, and the tile prefers it
+ * — Coca-Cola is a tile that says "Cola". Pass what the waiter reads.
  *
  * The `hasText: 'KM'` is not decoration: the category pills above the grid carry
  * the same words as the categories ("Kafa"), and a tile is the only button that
@@ -100,7 +126,10 @@ const chip = (page: Page, text: RegExp | string) => page.locator('.chip').filter
 
 /** Lock the round that is on the draft, and wait for the toast. */
 async function lockRound(page: Page) {
-  await page.getByRole('button', { name: /Pošalji šankeru/ }).click()
+  // *Zaključi* → the sheet with every line and the total → *Potvrdi*
+  // (PLAN §10, invariant 2). Two taps, and never one.
+  await page.getByRole('button', { name: /^Zaključi/ }).click()
+  await page.getByRole('button', { name: 'Potvrdi' }).click()
   await expect(page.getByText(/Sačuvano · čeka slanje/)).toBeVisible()
 }
 
@@ -117,22 +146,23 @@ test.describe('WP0 — the offline outbox', () => {
     await tapProduct(page, 'Kafa')
     await tapProduct(page, 'Kafa')
     await lockRound(page)
-    // The screen takes itself back to the floor plan after the toast.
-    await expect(page.getByText('Stolovi')).toBeVisible({ timeout: 15_000 })
+    // The screen takes itself back to the table after the toast — the round is
+    // a locked *tura* now and the bar reads *Naplati*.
+    await backToFloor(page)
 
     // Round 2 on Sto 7.
     await openTable(page, tableB)
-    await tapProduct(page, 'Coca-Cola')
+    await tapProduct(page, 'Cola')
     await lockRound(page)
-    await expect(page.getByText('Stolovi')).toBeVisible({ timeout: 15_000 })
+    await backToFloor(page)
 
     await expect(chip(page, /čeka slanje \(2\)/i)).toBeVisible()
 
     // Cash for Sto 7, on a tab whose only name is a uuid this phone minted.
     // The *Naplati* card is drawn from the phone's own view of the table for
     // exactly this moment — offline there is no server tab to draw it from.
-    await openTable(page, tableB)
-    await page.getByRole('button', { name: 'Naplati' }).click()
+    await openTab(page, tableB)
+    await page.getByRole('button', { name: /^Naplati/ }).click()
     await page.getByRole('button', { name: /^Tačno/ }).click()
     await expect(page.getByText(/Naplaćeno/)).toBeVisible()
     await expect(page.getByText('Stolovi')).toBeVisible({ timeout: 15_000 })
@@ -171,7 +201,7 @@ test.describe('WP0 — the offline outbox', () => {
     await openTable(page, 'Sto 9')
     await tapProduct(page, 'Kafa')
     await lockRound(page)
-    await expect(page.getByText('Stolovi')).toBeVisible({ timeout: 15_000 })
+    await backToFloor(page)
     await expect(chip(page, /čeka slanje \(1\)/i)).toBeVisible()
 
     // While the queue is held, the phone says so — and this is the number the
@@ -206,7 +236,7 @@ test.describe('WP0 — the offline outbox', () => {
     // the till. Adding and locking still work.
     await openTable(page, 'Sto 11')
     await tapProduct(page, 'Kafa')
-    await expect(page.getByRole('button', { name: /Pošalji šankeru/ })).toBeEnabled()
+    await expect(page.getByRole('button', { name: /^Zaključi/ })).toBeEnabled()
 
     // And the header sentence appears only once something is genuinely stuck —
     // not for a queue that is thirty seconds old.
@@ -242,12 +272,12 @@ test.describe('WP0 — the offline outbox', () => {
     await openTable(page, bad)
     await tapProduct(page, 'Kafa')
     await lockRound(page)
-    await expect(page.getByText('Stolovi')).toBeVisible({ timeout: 15_000 })
+    await backToFloor(page)
 
     await openTable(page, good)
     await tapProduct(page, 'Kafa')
     await lockRound(page)
-    await expect(page.getByText('Stolovi')).toBeVisible({ timeout: 15_000 })
+    await backToFloor(page)
 
     await expect(chip(page, /čeka slanje \(2\)/i)).toBeVisible()
 

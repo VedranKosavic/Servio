@@ -178,13 +178,21 @@ export function seed(db: Db, opts: SeedOptions = {}): void {
     // `kind` is what the category *is*, for the reports: the Nargila column of
     // the monthly report is "every category whose kind is nargila", not a name
     // match that breaks the day somebody renames it.
+    //
+    // `noteChips` are what a long-press on a tile of that category offers (F2
+    // step 4): the two or three things guests actually ask for, so the waiter
+    // taps instead of typing. Free text is always available beside them.
     const categoryIds = new Map<string, string>()
-    const categories: Array<{ name: string, kind: 'pice' | 'hrana' | 'nargila' | 'ostalo' }> = [
-      { name: 'Kafa', kind: 'pice' },
-      { name: 'Bezalkoholna', kind: 'pice' },
-      { name: 'Energetska', kind: 'pice' },
-      { name: 'Čaj', kind: 'pice' },
-      { name: 'Nargila', kind: 'nargila' },
+    const categories: Array<{
+      name: string
+      kind: 'pice' | 'hrana' | 'nargila' | 'ostalo'
+      noteChips?: string[]
+    }> = [
+      { name: 'Kafa', kind: 'pice', noteChips: ['bez šećera', 's mlijekom', 'dupla', 'sa strane'] },
+      { name: 'Bezalkoholna', kind: 'pice', noteChips: ['bez leda', 'sa ledom', 'limun'] },
+      { name: 'Energetska', kind: 'pice', noteChips: ['bez leda', 'sa ledom'] },
+      { name: 'Čaj', kind: 'pice', noteChips: ['s mlijekom', 's limunom', 'bez šećera', 'med'] },
+      { name: 'Nargila', kind: 'nargila', noteChips: ['jači', 'blaži', 'led u boci'] },
       { name: 'Ostalo', kind: 'ostalo' },
     ]
     categories.forEach((category, i) => {
@@ -195,7 +203,7 @@ export function seed(db: Db, opts: SeedOptions = {}): void {
         venueId,
         name: category.name,
         kind: category.kind,
-        noteChipsJson: '[]',
+        noteChipsJson: JSON.stringify(category.noteChips ?? []),
         sort: i + 1,
         active: 1,
       }).run()
@@ -311,25 +319,36 @@ export function seed(db: Db, opts: SeedOptions = {}): void {
       coalPcs?: number
       favourite?: boolean
       staffDrink?: boolean
+      /** What fits on a 3-column tile when the name does not. */
+      shortName?: string
+      /** Extra words the *Dodaj* search matches, space separated. */
+      aliases?: string
+      /** The two products the phone recognises by key rather than by name. */
+      systemKey?: 'zar' | 'ostalo'
     }
     const menu: SeedProduct[] = [
-      { name: 'Kafa', category: 'Kafa', priceFen: 150, recipe: [['Kafa (mljevena)', 7], ['Šećer', 5]], favourite: true, staffDrink: true },
-      { name: 'Kafa s mlijekom', category: 'Kafa', priceFen: 200, recipe: [['Kafa (mljevena)', 7], ['Šećer', 5], ['Mlijeko', 30]], staffDrink: true },
-      { name: 'Nes', category: 'Kafa', priceFen: 250, recipe: [['Nes', 1], ['Šećer', 5]] },
+      { name: 'Kafa', category: 'Kafa', priceFen: 150, recipe: [['Kafa (mljevena)', 7], ['Šećer', 5]], favourite: true, staffDrink: true, aliases: 'espreso kahva' },
+      { name: 'Kafa s mlijekom', category: 'Kafa', priceFen: 200, recipe: [['Kafa (mljevena)', 7], ['Šećer', 5], ['Mlijeko', 30]], staffDrink: true, shortName: 'Kafa + mlijeko', aliases: 'bijela kahva' },
+      { name: 'Nes', category: 'Kafa', priceFen: 250, recipe: [['Nes', 1], ['Šećer', 5]], aliases: 'nescafe' },
       { name: 'Čaj', category: 'Čaj', priceFen: 200, recipe: [['Čaj (vrećice)', 1], ['Šećer', 5]], favourite: true, staffDrink: true },
-      { name: 'Coca-Cola', category: 'Bezalkoholna', priceFen: 300, sells: 'Coca-Cola 0,25 l', favourite: true },
+      { name: 'Coca-Cola', category: 'Bezalkoholna', priceFen: 300, sells: 'Coca-Cola 0,25 l', favourite: true, shortName: 'Cola', aliases: 'kola koka cola' },
       { name: 'Fanta', category: 'Bezalkoholna', priceFen: 300, sells: 'Fanta 0,25 l' },
       { name: 'Cedevita', category: 'Bezalkoholna', priceFen: 250, sells: 'Cedevita' },
-      { name: 'Sok od narandže', category: 'Bezalkoholna', priceFen: 300, sells: 'Sok od narandže' },
-      { name: 'Voda 0,5 l', category: 'Bezalkoholna', priceFen: 150, sells: 'Voda 0,5 l', staffDrink: true },
-      { name: 'Red Bull', category: 'Energetska', priceFen: 500, sells: 'Red Bull', favourite: true },
-      { name: 'Limunada', category: 'Bezalkoholna', priceFen: 350, recipe: [['Limun', 1], ['Šećer', 10]], favourite: true },
-      { name: 'Nargila', category: 'Nargila', priceFen: 1500, kind: 'shisha', shishaGrams: 20, coalPcs: 3, favourite: true },
+      { name: 'Sok od narandže', category: 'Bezalkoholna', priceFen: 300, sells: 'Sok od narandže', shortName: 'Narandža', aliases: 'sok dzus' },
+      { name: 'Voda 0,5 l', category: 'Bezalkoholna', priceFen: 150, sells: 'Voda 0,5 l', staffDrink: true, shortName: 'Voda', aliases: 'kisela' },
+      { name: 'Red Bull', category: 'Energetska', priceFen: 500, sells: 'Red Bull', favourite: true, aliases: 'energetski' },
+      { name: 'Limunada', category: 'Bezalkoholna', priceFen: 350, recipe: [['Limun', 1], ['Šećer', 10]], favourite: true, aliases: 'limun' },
+      { name: 'Nargila', category: 'Nargila', priceFen: 1500, kind: 'shisha', shishaGrams: 20, coalPcs: 3, favourite: true, aliases: 'sisa shisha lula' },
       // A fresh bowl on a running shisha: charged, its own tobacco, no new coal.
-      { name: 'Nova lula', category: 'Nargila', priceFen: 1000, kind: 'shisha', shishaGrams: 20, coalPcs: 0 },
+      { name: 'Nova lula', category: 'Nargila', priceFen: 1000, kind: 'shisha', shishaGrams: 20, coalPcs: 0, aliases: 'glava' },
       // Free for the guest, never free for the café: two pieces of coal leave
-      // the box and the ledger says so.
-      { name: 'Dodatni žar', category: 'Nargila', priceFen: 0, recipe: [['Ugalj (kocke)', 2]] },
+      // the box and the ledger says so. `systemKey` is how S1's long-press and
+      // S2's inline chip find it without matching on the name (PHASE3 §1.10).
+      { name: 'Dodatni žar', category: 'Nargila', priceFen: 0, recipe: [['Ugalj (kocke)', 2]], systemKey: 'zar', shortName: 'Žar' },
+      // The catch-all: one fixed price, and the free text of its long-press
+      // becomes the line's note ("2 kifle", "flaša vode za osoblje"). It sells
+      // nothing off the shelf on purpose — what it was is written on the line.
+      { name: 'Ostalo', category: 'Ostalo', priceFen: 500, systemKey: 'ostalo', aliases: 'razno drugo' },
     ]
 
     menu.forEach((product, i) => {
@@ -342,8 +361,9 @@ export function seed(db: Db, opts: SeedOptions = {}): void {
         venueId,
         categoryId,
         name: product.name,
-        shortName: null,
-        searchAliases: '',
+        shortName: product.shortName ?? null,
+        searchAliases: product.aliases ?? '',
+        systemKey: product.systemKey ?? null,
         priceFen: product.priceFen,
         kind: product.kind ?? 'simple',
         sellsStockItemId: product.sells ? requireStock(stockIds, product.sells) : null,

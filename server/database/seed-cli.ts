@@ -4,8 +4,11 @@
  * TypeScript on the fly so this file needs no build step of its own.
  */
 import { isAbsolute, resolve } from 'node:path'
+import { count } from 'drizzle-orm'
 import { openDatabase } from './client'
+import * as schema from './schema'
 import { isEmpty, seed } from './seed'
+import { getHealth } from '../services/bootstrap'
 
 const configured = process.env.DB_PATH || 'data/sank.db'
 const file = isAbsolute(configured) ? configured : resolve(process.cwd(), configured)
@@ -21,7 +24,13 @@ if (!isEmpty(db)) {
   // sets them in `/a`, which is the only way a default PIN never reaches a café.
   const devSecrets = process.env.NODE_ENV !== 'production'
   seed(db, { devSecrets })
-  console.info(`[sank] seeded ${file}: venue "Lounge", 27 tables, 14 products, 19 stock items.`)
+  // Counted, not written down: the line said "14 products" for as long as the
+  // seed had fourteen, and then it said it for a while longer.
+  const { tables, products } = getHealth(db)
+  const items = db.select({ n: count() }).from(schema.stockItems).get()?.n ?? 0
+  console.info(
+    `[sank] seeded ${file}: venue "Lounge", ${tables} tables, ${products} products, ${items} stock items.`,
+  )
   if (!devSecrets) console.info('[sank] postavi PIN-ove u /a')
 }
 

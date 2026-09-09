@@ -80,7 +80,16 @@ export const orderLineInput = z.object({
  */
 export const createOrderBody = z.object({
   client_id: uuid,
-  table_id: uuid,
+  /**
+   * `null` is *Bez stola*: guests at the bar, on nobody's table (PHASE3 §1.11).
+   *
+   * The column is nullable and the partial index
+   * `tabs_one_open_per_table_uq (venue_id, table_id) WHERE status='open'` keeps
+   * working unchanged — SQLite treats two NULLs in a unique index as *different*
+   * values, so many table-less tabs may be open at once while a real table still
+   * holds exactly one.
+   */
+  table_id: uuid.nullable(),
   /** Optional: the phone's own id for the tab, if it opened one while offline. */
   tab_client_id: uuid.optional(),
   note: shortNote.optional(),
@@ -97,6 +106,11 @@ export const createOrderBody = z.object({
  * check on nothing.
  */
 export const discardDraftBody = z.object({
+  /**
+   * A real table, always. `draft_discarded`'s log template renders the table's
+   * name (`shared/logTemplates.ts`, frozen), so a *Bez stola* draft has nothing
+   * to name and is dropped on the phone without an entry.
+   */
   table_id: uuid,
   lines: z.int().min(1),
   total_fen: moneyFen,
