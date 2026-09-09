@@ -1,0 +1,62 @@
+/**
+ * The `/a` palette — the owner dashboard's light theme.
+ *
+ * **Defined under `[data-theme='light']`, never on `:root`.** The waiter app's
+ * dark tokens in `main.css` own `:root`, and the two themes must never meet: a
+ * rule that touched both would be one careless edit away from turning the
+ * waiter's floor plan white in a dark room.
+ *
+ * It lives in its own file rather than inside `layouts/admin.vue` for one
+ * practical reason: `/a/login` renders with `layout: false` — a login screen has
+ * no nav — so it cannot rely on the layout's stylesheet being loaded. Both
+ * import this one file, and it is still the only place in the app where these
+ * names are defined.
+ */
+[data-theme='light'] {
+  --bg: #f2f0eb;
+  --surface: #fbfaf7;
+  --surface-2: #e9e6df;
+  --line: #d9d4ca;
+  --ink: #1f2a2e;
+  --ink-2: #4a585d;
+  --muted: #6f7c80;
+  --accent: #b5623a;
+  --accent-soft: #f1dccf;
+  --accent-ink: #8f4a28;
+  --nav: #1f2a2e;
+  --nav-ink: #e8e4dc;
+  --nav-muted: #8d9599;
+  --good: #3d8f7a;
+  --good-soft: #dcefe8;
+  --warn: #b07d1e;
+  --warn-soft: #f6e9c9;
+  --danger: #c8433f;
+  --danger-soft: #f4dcda;
+
+  /* The few surfaces the mockup names that are not one of the tokens above.
+     They live here so that no other file under `/a` writes a hex value. */
+  --nav-item: #b9b3a8;
+  --nav-well: #2c3437;
+  --on-accent: #ffffff;
+  --field-bg: #ffffff;
+  --scrim: rgba(31, 42, 46, 0.45);
+  --offline-ink: #e29a97;
+
+  /* Bricolage Grotesque is the wordmark and the page titles, and nothing else. */
+  --font-title: "Bricolage Grotesque", "IBM Plex Sans", sans-serif;
+}
+
+/**
+ * The waiter app paints `html` and `body` dark and sets an 18 px body — read at
+ * arm's length in a dark room. The dashboard is read at a desk: light, 15 px.
+ * The attribute is put on `<html>` by `useHead` in the layout and the login
+ * page, and taken off again when either unmounts, so `/k` is never touched.
+ */
+html[data-theme='light'],
+html[data-theme='light'] body {
+  background: var(--bg);
+  color: var(--ink);
+  color-scheme: light;
+  font-size: 15px;
+  line-height: 1.4;
+}

@@ -10,11 +10,27 @@ import { schema } from '../database/client'
 import { conflict, notFound } from '../utils/errors'
 import { nowIso } from '../utils/ids'
 import type { Prep, PrepOrder } from '#shared/types'
-import type { Db, Queryable } from './types'
+import type { Actor, Db, Queryable } from './types'
 import { bump } from './contracts'
+import { changeTag } from './changes'
 
 /** How many finished rounds the bartender can still see. */
 const DONE_LIMIT = 10
+
+/**
+ * The ETag for `GET /api/prep`.
+ *
+ * **An ETag is a fingerprint of an answer** (see `server/utils/etag.ts`): the
+ * browser sends it back on the next request, and an unchanged server replies
+ * `304 Not Modified` with no body. The fingerprint must therefore move whenever
+ * the body could, which is why it is `changeTag` — `MAX(seq)` for the venue plus
+ * the role and the user — and not `MAX(seq)` alone. The queue itself is the same for everybody behind the bar, but the venue
+ * cursor is the only number that provably moves with it, and the role keeps a
+ * tag from being shared across two people on one tablet.
+ */
+export function prepTag(q: Queryable, venueId: string, actor: Actor): string {
+  return changeTag(q, venueId, actor)
+}
 
 export function getPrep(db: Queryable, venueId: string): Prep {
   const open = loadOrders(db, venueId, { prepared: false, limit: 200 })

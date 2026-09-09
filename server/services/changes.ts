@@ -26,10 +26,11 @@ import type {
   ChangeRow, ChangesResult, CountBrief, PendingCounts, ShiftSnapshot,
 } from '#shared/types'
 import type { Db, Queryable, Tx } from './types'
-import { currentShift } from './contracts'
 import { getTablesState } from './tabs'
 import { getPrep } from './prep'
 import { getStock } from './stock'
+import { shiftBrief } from './shifts'
+import { getMe } from './auth'
 
 /**
  * One `changes` row, returning its `seq`.
@@ -127,7 +128,7 @@ export function getChanges(
   if (entities.has('prep')) result.prep = { seq: top, ...getPrep(db, venueId) }
   if (entities.has('stock')) result.stock = getStock(db, venueId)
   if (entities.has('count')) result.counts = listCountBriefs(db, venueId)
-  if (entities.has('shift')) result.shift = shiftSnapshot(db, venueId)
+  if (entities.has('shift')) result.shift = shiftSnapshot(db, venueId, actor)
   // The queues are decisions, and a waiter decides nothing: §4.1 attaches
   // `pending` for admins and bartenders only.
   if (entities.has('adjustment') && !isStaffFloor) result.pending = pendingCounts(db, venueId)
@@ -137,9 +138,21 @@ export function getChanges(
   // The Dnevnik is owner-only (CLAUDE.md), so even the fact that it moved is.
   if (entities.has('log') && actor.role === 'admin') result.log_max_at = logMaxAt(db, venueId)
 
-  // `me` is a session refresh, and the session envelope is WP1's `getMe`
-  // (§5.5). Until it lands there is nothing to attach; the `user`/`device`
-  // entity still arrives in `changes[]`, which is what tells the phone to refetch.
+  /**
+   * A session refresh, attached rather than hinted at (§4.1).
+   *
+   * A `user` or `device` row moving means somebody's role changed or a phone
+   * was revoked, and the screen has to know *now*. The feed used to send only
+   * the row in `changes[]` and let the client go and ask; it sends the envelope
+   * itself instead, one read in the request that already noticed.
+   *
+   * Not on a `full` answer: there, `changes[]` lists every entity that has ever
+   * moved, so one staff edit last Tuesday would attach `me` to every screen's
+   * first poll — and a screen opening has just read `/api/me` anyway.
+   */
+  if (!full && (entities.has('user') || entities.has('device'))) {
+    result.me = getMe(db, venueId, actor)
+  }
 
   return result
 }
@@ -167,15 +180,16 @@ function allChangeRows(db: Queryable, venueId: string): ChangeRow[] {
     .all()
 }
 
-function shiftSnapshot(db: Queryable, venueId: string): ShiftSnapshot | null {
-  const shift = currentShift(db, venueId)
-  if (!shift) return null
-  return {
-    id: shift.id,
-    business_date: shift.businessDate,
-    status: shift.status,
-    opened_at: shift.openedAt,
-  }
+/**
+ * The shift strip, as the whole `ShiftBrief` (§6.5).
+ *
+ * It used to be four hand-built columns, because `ShiftBrief` had not landed
+ * when the feed was written. It has: `closing`, `closer_name`, `my_settled` and
+ * `my_open_tabs` are exactly what the strip draws, and they are per-actor —
+ * which is why the ETag carries the user (`changeTag`).
+ */
+function shiftSnapshot(db: Queryable, venueId: string, actor: Actor): ShiftSnapshot | null {
+  return shiftBrief(db, venueId, actor)
 }
 
 function listCountBriefs(db: Queryable, venueId: string): CountBrief[] {

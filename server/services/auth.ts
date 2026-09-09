@@ -30,7 +30,7 @@ import { getSettings, log } from './contracts'
 import type { Db, Queryable, Tx } from './types'
 import type { Actor, Role } from '#shared/types'
 import type {
-  AdminLoginResult, DeviceBrief, MeContext, MeUser, PinLoginResult, SessionBrief, VenueBrief,
+  DeviceBrief, MeContext, MeUser, PinLoginResult, SessionBrief, VenueBrief,
 } from '#shared/types/auth'
 import type { AdminLoginBody, PinLoginBody } from '#shared/schemas/auth'
 import { ROUTE_ROLES, routeKey, type RouteRole } from '#shared/routeRoles'
@@ -440,9 +440,14 @@ function newSession(db: Db, e: {
  * The one door with no device cookie in front of it, which is why it is the one
  * that must count its failures: everywhere else an attacker needs a phone that
  * has already been enrolled.
+ *
+ * It answers a full `MeContext`, the same envelope `GET /api/me` returns, so
+ * `/a/login.vue` hands the answer straight to `useMe().refreshAfterLogin()`
+ * instead of assembling a context by hand. `device` is `null`: a laptop is not
+ * an enrolled phone and never becomes one.
  */
 export function adminLogin(db: Db, body: AdminLoginBody, ctx: { ip: string, userAgent?: string, now?: string }): {
-  result: AdminLoginResult, token: string, maxAgeS: number
+  result: MeContext, token: string, maxAgeS: number
 } {
   const now = ctx.now ?? nowIso()
   const email = body.email.trim().toLowerCase()
@@ -467,11 +472,16 @@ export function adminLogin(db: Db, body: AdminLoginBody, ctx: { ip: string, user
   })
 
   return {
-    result: {
-      user: toMeUser(user!),
-      venue: venueBrief(db, venueId),
-      expires_at: session.row.expiresAt,
-    },
+    result: getMe(db, venueId, {
+      venueId,
+      userId: user!.id,
+      role: user!.role,
+      sessionId: session.row.id,
+      sessionKind: 'admin',
+      deviceId: null,
+      deviceBoundUserId: null,
+      borrowed: false,
+    }),
     token: session.token,
     maxAgeS: session.maxAgeS,
   }

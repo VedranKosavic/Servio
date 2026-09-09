@@ -14,6 +14,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeFixture, type Fixture } from '../helpers/db'
 import { withEtag } from '../../server/utils/etag'
 import { changeTag, getChanges } from '../../server/services/changes'
+import { getTablesState, tablesStateTag } from '../../server/services/tabs'
+import { prepTag } from '../../server/services/prep'
+import { bootstrapTag } from '../../server/services/bootstrap'
 import { createOrder } from '../../server/services/orders'
 
 let f: Fixture
@@ -122,5 +125,39 @@ describe('changeTag', () => {
     // no `pending` key at all, not a zeroed one.
     expect(body?.pending).toBeUndefined()
     expect(body?.log_max_at).toBeUndefined()
+  })
+})
+
+/**
+ * The three heavy reads BACKEND §7 marks "(ETag)" and Phase 1 shipped without
+ * one. On `/a` this is what keeps a laptop that has four or five reads open all
+ * evening down to a `MAX(seq)` per poll.
+ */
+describe('the three read tags', () => {
+  it('each one moves with the sequence and carries the user', () => {
+    const tags = [tablesStateTag, prepTag, bootstrapTag]
+
+    for (const tag of tags) {
+      const before = tag(f.db, f.venueId, f.actor('Amar'))
+      // Two people at the same sequence must never share a tag: these envelopes
+      // carry `my_settled`, `my_open_tabs` and `me`.
+      expect(tag(f.db, f.venueId, f.actor('Lejla'))).not.toBe(before)
+      expect(tag(f.db, f.venueId, f.adminActor())).not.toBe(before)
+
+      lockOne('Dino', 'Sto 11')
+      expect(tag(f.db, f.venueId, f.actor('Amar'))).not.toBe(before)
+    }
+  })
+
+  it('an unchanged floor plan is a 304 with no query behind it', () => {
+    lockOne()
+    const actor = f.actor('Amar')
+    const tag = tablesStateTag(f.db, f.venueId, actor)
+
+    const produce = vi.fn(() => getTablesState(f.db, f.venueId, actor))
+    const body = withEtag(makeEvent(`W/"${tag}"`), tag, produce)
+
+    expect(body).toBeUndefined()
+    expect(produce).not.toHaveBeenCalled()
   })
 })

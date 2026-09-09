@@ -25,7 +25,7 @@
  */
 import { useDocumentVisibility, useIntervalFn } from '@vueuse/core'
 import type {
-  ChangesResult, PendingCounts, Prep, StockItem, TablesStateResponse,
+  ChangesResult, MeContext, PendingCounts, Prep, StockItem, TablesStateResponse,
 } from '#shared/types'
 
 export interface ChangeHandlers {
@@ -39,8 +39,17 @@ export interface ChangeHandlers {
   pending?: (counts: PendingCounts) => void
   /** The catalogue changed: refetch `/api/bootstrap`, and only then. */
   menu?: () => void
-  /** A `user` or `device` row moved: re-read `/api/me` (a role or a revoke). */
-  me?: () => void
+  /** A `user` or `device` row moved: the fresh session envelope (a role or a revoke). */
+  me?: (me: MeContext) => void
+  /**
+   * The whole answer, for screens that key their refetches off entities.
+   *
+   * `/a` reads this one: an owner page has no fixed snapshot in the feed, it
+   * has a read of its own that goes stale when a particular entity moves, so it
+   * wants `changes[]` rather than any single attached object. See
+   * `useAdminChanges.ts`.
+   */
+  raw?: (result: ChangesResult) => void
 }
 
 export interface ChangesOptions {
@@ -94,15 +103,14 @@ export function useChanges(handlers: ChangeHandlers, options: ChangesOptions = {
       menuVersion.value = result.menu_version
     }
 
-    // §4.1 attaches a `me` snapshot here; the shipped feed sends only the
-    // `user`/`device` row in `changes[]`, which says the same thing: go and ask.
-    //
-    // Not on a `full` answer: there, `changes[]` lists every entity that has
-    // *ever* moved, so one staff edit last Tuesday would make every screen
-    // re-read the session on open — and the screen has just done that anyway.
-    if (!result.full && result.changes.some(c => c.entity === 'user' || c.entity === 'device')) {
-      handlers.me?.()
-    }
+    // A `user` or `device` row moving means a role changed or a phone was
+    // revoked. The feed attaches the fresh envelope itself (§4.1), so there is
+    // nothing to go and ask for — and it is never attached to a `full` answer,
+    // where every entity that ever moved is listed.
+    if (result.me) handlers.me?.(result.me)
+
+    // Everything, for a screen that decides its own refetches off `changes[]`.
+    handlers.raw?.(result)
 
     // Forward only. An out-of-order reply repaints; it never rewinds.
     if (result.seq > cursor.value) cursor.value = result.seq

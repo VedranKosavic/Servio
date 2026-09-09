@@ -230,37 +230,12 @@ function countAttention(c: PendingCount): AttentionItem {
 /**
  * The route one button on an attention row posts to, with the ids filled in.
  *
- * `ATTENTION_ROUTES` (shared, and checked against `ROUTE_ROLES` in
- * `owner-live.test.ts`) says *which* route; this fills the `:id` segments from
- * the row. The settlement accept route carries two ids and the row carries one,
- * so it takes the shift as well — *Puls* always knows which shift it is showing.
- *
- * Returns `null` when the pair has no route, which by the §1 invariant never
- * happens for a row this file emits; the test is what keeps that true.
+ * The logic moved to `shared/attention.ts` in Phase 2, because `UiAttentionRow`
+ * in `/a` fills the same paths in the browser and one rule must not exist twice.
+ * It is re-exported here so every server caller — and `owner-live.test.ts` —
+ * keeps importing it from the file that owns *Puls*.
  */
-export function attentionTarget(
-  item: AttentionItem, action: AttentionAction, shiftId?: string,
-): string | null {
-  const route = ATTENTION_ROUTES[item.ref_type]?.[action]
-  if (!route) return null
-
-  const [method, path] = route.split(' ') as [string, string]
-
-  // `shifts.pendingFor` has no settlement row to point at — the waiter has not
-  // handed anything in — so it names the pair it does have, `shiftId:userId`.
-  const [refShift, isPair] = item.ref_id.includes(':')
-    ? [item.ref_id.split(':')[0]!, true] as const
-    : [shiftId ?? '', false] as const
-
-  let filled = path
-  if (item.ref_type === 'waiter_settlement') {
-    filled = filled.replace(':id', refShift)
-    filled = isPair ? filled : filled.replace(':id', item.ref_id)
-  } else {
-    filled = filled.replace(':id', item.ref_id)
-  }
-  return `${method} ${filled}`
-}
+export { attentionTarget } from '#shared/attention'
 
 // ===========================================================================
 // The pieces of Puls

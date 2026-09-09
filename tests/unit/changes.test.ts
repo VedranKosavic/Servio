@@ -206,3 +206,53 @@ describe('menuVersion and pendingCounts', () => {
     expect(shiftId).toBeTruthy()
   })
 })
+
+/**
+ * The two forward references Phase 2 (WP0) closed: the shift snapshot is the
+ * whole `ShiftBrief`, and a session refresh rides in the answer instead of only
+ * being hinted at through a `changes[]` row.
+ */
+describe('the shift and me snapshots', () => {
+  it('the shift snapshot is the whole ShiftBrief, per actor', () => {
+    f.openShift({ members: ['Amar', 'Lejla'] })
+    f.lock('Amar', 'Sto 7', [{ product: 'Kafa' }])
+    f.settle('Amar')
+    f.db.transaction(tx => bump(tx, f.venueId, 'shift'))
+
+    const forAmar = getChanges(f.db, f.venueId, f.actor('Amar'), 0).shift
+    const forLejla = getChanges(f.db, f.venueId, f.actor('Lejla'), 0).shift
+
+    // The four fields the strip draws and the old four-column snapshot lacked.
+    expect(forAmar?.closing).toBe(false)
+    expect(forAmar?.closer_name).toBeNull()
+    // Per actor, which is exactly why the ETag carries the user.
+    expect(forAmar?.my_settled).toBe(true)
+    expect(forLejla?.my_settled).toBe(false)
+    expect(forAmar?.business_date).toBe(forLejla?.business_date)
+  })
+
+  it('attaches me when a user or device row moved, and never on a full answer', () => {
+    // A cursor above 0, or the answer would be `full` for that reason alone.
+    lockOne()
+    const cursor = maxSeq(f.db, f.venueId)
+    f.db.transaction(tx => bump(tx, f.venueId, 'user'))
+
+    const incremental = getChanges(f.db, f.venueId, f.actor('Amar'), cursor)
+    expect(incremental.me?.user.name).toBe('Amar')
+    expect(incremental.me?.venue.slug).toBe('lounge')
+    // No secret ever rides along, on any envelope.
+    expect(JSON.stringify(incremental.me)).not.toMatch(/_hash|password|pepper|token/)
+
+    // A `full` answer lists every entity that ever moved, so attaching `me`
+    // there would mean every screen's first poll carries it — and a screen that
+    // has just opened has read `/api/me` already.
+    expect(getChanges(f.db, f.venueId, f.actor('Amar'), 0).me).toBeUndefined()
+  })
+
+  it('does not attach me when nothing about the person moved', () => {
+    lockOne()
+    const cursor = maxSeq(f.db, f.venueId)
+    lockOne('Lejla', 'Sto 8')
+    expect(getChanges(f.db, f.venueId, f.actor('Amar'), cursor).me).toBeUndefined()
+  })
+})
