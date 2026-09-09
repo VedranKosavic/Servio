@@ -1,0 +1,169 @@
+@import "tailwindcss";
+
+/**
+ * Šank's visual language — the waiter's dark theme, and in this slice the theme
+ * of the whole app.
+ *
+ * Every colour, font and radius in the app is declared once, here. Nothing in a
+ * page or a component invents a hex value: a card that is nearly the right grey
+ * is how an app stops looking like one thing.
+ *
+ * Tailwind v4 has no `tailwind.config.js` — the design system IS this file. The
+ * `@theme` block below is Tailwind's: every `--color-x` in it becomes a real
+ * utility class (`bg-x`, `text-x`, `border-x`, `fill-x`), and Tailwind also
+ * emits each one as a plain custom property on `:root`. So `bg-accent` and
+ * `background: var(--color-accent)` are the same colour by construction.
+ *
+ * The short aliases (`--bg`, `--surface`, …) under `:root` are the same values
+ * under the names used in PLAN.md, for hand-written CSS.
+ *
+ * Colours that carry meaning, not decoration:
+ *   --accent  the interactive colour: buttons, active tabs, selected chips
+ *   --good    money that landed, stock that is fine
+ *   --warn    needs attention, waiting
+ *   --danger  refused, negative stock, destructive
+ * Each has a `-soft` companion for backgrounds behind that meaning.
+ */
+@theme {
+  --color-bg: #0e0e12;
+  --color-surface: #16171d;
+  --color-surface-2: #1e2027;
+  --color-line: #2a2d36;
+  --color-text: #f2efe9;
+  --color-text-2: #b6b3ab;
+  --color-muted: #7c7a74;
+  --color-accent: #d68a5f;
+  --color-accent-ink: #1a0f08;
+  --color-good: #5fb39c;
+  --color-good-soft: #173129;
+  --color-warn: #e8b64a;
+  --color-warn-soft: #3a2f12;
+  --color-danger: #e26a66;
+  --color-danger-soft: #3d2324;
+
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --radius-card: 14px;
+}
+
+:root {
+  --bg: var(--color-bg);
+  --surface: var(--color-surface);
+  --surface-2: var(--color-surface-2);
+  --line: var(--color-line);
+  --text: var(--color-text);
+  --text-2: var(--color-text-2);
+  --muted: var(--color-muted);
+  --accent: var(--color-accent);
+  --accent-ink: var(--color-accent-ink);
+  --good: var(--color-good);
+  --good-soft: var(--color-good-soft);
+  --warn: var(--color-warn);
+  --warn-soft: var(--color-warn-soft);
+  --danger: var(--color-danger);
+  --danger-soft: var(--color-danger-soft);
+
+  color-scheme: dark;
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  /* 18px base: this is read at arm's length, in a dark room, in a hurry. */
+  font-family: var(--font-sans);
+  font-size: 18px;
+  line-height: 1.45;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Nothing in this app is text a waiter wants to select by accident. */
+button,
+[role="button"] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+@layer utilities {
+  /**
+   * `.num` — every amount, quantity and clock time.
+   *
+   * Tabular figures give each digit the same width, so a column of prices lines
+   * up on the decimal comma and "12,00" does not jump when it becomes "13,00".
+   */
+  .num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+
+  /** A raised panel: the default container for anything grouped. */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+  }
+
+  /** One step lighter than `.card` — a row inside a card, an input, a well. */
+  .card-2 {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+  }
+
+  /** The primary action. Ink on accent, never accent on dark. */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    /* 48px minimum: a thumb, on a phone, standing up. */
+    min-height: 48px;
+    padding: 0 1rem;
+    border-radius: 12px;
+    border: 1px solid transparent;
+    font-weight: 600;
+    background: var(--surface-2);
+    color: var(--text);
+    cursor: pointer;
+  }
+
+  .btn-accent {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+
+  .btn-ghost {
+    background: transparent;
+    border-color: var(--line);
+    color: var(--text-2);
+  }
+
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  /** A small status pill: "Čeka slanje", "Naplaćeno", a table's round count. */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    background: var(--surface-2);
+    color: var(--text-2);
+  }
+
+  .chip-good { background: var(--good-soft); color: var(--good); }
+  .chip-warn { background: var(--warn-soft); color: var(--warn); }
+  .chip-danger { background: var(--danger-soft); color: var(--danger); }
+
+  /** A 1px rule in the app's line colour, for separating rows. */
+  .hairline { border-bottom: 1px solid var(--line); }
+}
