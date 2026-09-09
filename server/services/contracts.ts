@@ -29,7 +29,7 @@ import { SankError } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
 import { businessDate, localDate, localTime } from '#shared/dates'
 import { mergeSettings, type Settings } from '#shared/settings'
-import type { Actor, ChangeEntity, LogKind, Role } from '#shared/types'
+import type { Actor, ChangeEntity, LogKind, Role, StaleDevice } from '#shared/types'
 import type { AlertRuleKey } from '#shared/constants'
 import type { Db, Queryable, Tx } from './types'
 
@@ -297,48 +297,37 @@ export function queueAlert(_tx: Tx, _venueId: string, _a: {
 }
 
 /** WP2 (`services/cash.ts`). The reconciliation: venue = drawer + Σ waiters. */
-export function expectedCash(_q: Queryable, _venueId: string, _shiftId: string): {
-  venue_expected_fen: number
-  drawer_expected_fen: number
-  by_user: { user_id: string, expected_fen: number }[]
-} {
-  return notImplemented('expectedCash')
-}
+export { expectedCash } from './cash'
 
 /** WP2. Has this person already settled this shift? A later lock is `post_settle`. */
-export function hasLiveSettlement(
-  _q: Queryable, _venueId: string, _shiftId: string, _userId: string,
-): boolean {
-  return notImplemented('hasLiveSettlement')
-}
+export { hasLiveSettlement } from './settlements'
 
-/** WP2 (§6.6). The one outbox check: refuses while a phone still holds rounds. */
+/**
+ * WP2 (§6.6). The one outbox check: refuses while a phone still holds rounds.
+ *
+ * Still a stub, and deliberately so: §6.6 puts the implementation in
+ * `services/devices.ts` beside the `devices.pending_count` column it reads, and
+ * that file is WP1's. What WP2 changed is the **signature**, to the one §6.6
+ * specifies and `settle` calls — a `userId` (settle looks at one person's
+ * phones, a count at every phone in the shift) and stale devices *returned*
+ * rather than thrown, so a phone switched off in a drawer is reported instead of
+ * blocking an envelope.
+ */
 export function assertNoPendingOutbox(
   _tx: Tx, _venueId: string, _shiftId: string | null,
-  _opts: { actor: Actor, override?: boolean },
-): void {
+  _opts: { actor: Actor, override?: boolean, userId?: string },
+): StaleDevice[] {
   return notImplemented('assertNoPendingOutbox')
 }
 
 /** WP2. The custodian of the stock for this shift. */
-export function setCustodian(_tx: Tx, _venueId: string, _shiftId: string, _userId: string): void {
-  return notImplemented('setCustodian')
-}
+export { setCustodian } from './shifts'
 
 /** WP2. Does this shift have a submitted count of that phase? Blocks the close. */
-export function hasSubmittedCount(
-  _q: Queryable, _venueId: string, _shiftId: string, _phase: 'open' | 'close',
-): boolean {
-  return notImplemented('hasSubmittedCount')
-}
+export { hasSubmittedCount } from './shifts'
 
 /** WP2. A new `shift_summaries` version: 'close', 'decision' or 'late'. */
-export function writeSummaryVersion(
-  _tx: Tx, _venueId: string, _shiftId: string,
-  _reason: 'close' | 'decision' | 'late', _at: string,
-): number {
-  return notImplemented('writeSummaryVersion')
-}
+export { writeSummaryVersion } from './summaries'
 
 /** WP1 (`services/auth.ts`). Takes `Db`, not `Tx`: it owns its own attempt rows. */
 export function verifyPinMetered(
