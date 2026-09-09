@@ -205,10 +205,17 @@ export const decideAdjustmentBody = z.object({
   pin: pin.optional(),
 }).strict()
 
-/** `POST /api/prep/:orderId/done` */
-export const markPreparedBody = z.object({
-  user_id: uuid,
-})
+/**
+ * `POST /api/prep/:orderId/done` — an empty body, and that is the point.
+ *
+ * Korak 1 carried a `user_id` here: the bartender's phone said who was tapping.
+ * §5.7 removes it from this body and from every other one, because a client that
+ * names the actor is a client that can name somebody else. Who tapped comes from
+ * `event.context.actor`, which comes from the session cookie, which the server
+ * minted. `.strict()` so an old build sending the field gets a 400 rather than a
+ * silently ignored claim.
+ */
+export const markPreparedBody = z.object({}).strict()
 
 export type OrderLineInput = z.infer<typeof orderLineInput>
 export type CreateOrderBody = z.infer<typeof createOrderBody>

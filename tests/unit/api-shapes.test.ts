@@ -15,9 +15,10 @@
  * The last block is the assertion that has to be here from day one and not
  * later: **no response anywhere carries a hash, a token, a password or the
  * pepper**. The Korak 2 seed puts scrypt hashes and an admin email on `users`
- * for the first time, and `getBootstrap` does a `SELECT *` on that table before
- * it maps. One forgotten field and every phone in the café holds the owner's
- * password hash.
+ * for the first time. WP8 made `getBootstrap` select that table column by column
+ * (§5.7) rather than `SELECT *`-ing it and mapping afterwards, which is the
+ * belt; this sweep is the braces. One forgotten field and every phone in the
+ * café holds the owner's password hash.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { randomUUID } from 'node:crypto'
@@ -41,7 +42,7 @@ afterEach(() => {
 
 describe('GET /api/bootstrap', () => {
   it('carries the venue, the staff, the floor plan, the menu and the aromas', () => {
-    const boot = getBootstrap(f.db, f.venueId)
+    const boot = getBootstrap(f.db, f.venueId, f.actor('Amar'))
 
     expect(boot.venue.slug).toBe('lounge')
     expect(boot.users).toHaveLength(6)
@@ -63,8 +64,43 @@ describe('GET /api/bootstrap', () => {
     expect(boot.flavours.find(x => x.name === 'Al Fakher · Jabuka')?.on_hand).toBe(643)
   })
 
+  /**
+   * The five fields §5.7 adds to the envelope. Korak 1's bootstrap was a
+   * catalogue; Korak 2's is a boot, and WP9's start screen reads all five —
+   * `me` and `device` to know who is holding the phone, `shift` to draw the
+   * strip, and the two cursors to know what to poll and when to come back here.
+   */
+  it('carries the session, the device, the shift and the two cursors', () => {
+    const boot = getBootstrap(f.db, f.venueId, f.actor('Amar'))
+
+    expect(boot.me.name).toBe('Amar')
+    expect(boot.me.role).toBe('waiter')
+    expect(boot.me.has_pin).toBe(true)
+    // `f.actor()` builds an actor with no device, which is what an admin's
+    // email session looks like too.
+    expect(boot.device).toBeNull()
+    // Nothing is open in a freshly seeded venue.
+    expect(boot.shift).toBeNull()
+    expect(boot.seq).toBe(0)
+    expect(typeof boot.menu_version).toBe('number')
+  })
+
+  it('shows the shift once one is open, from the actor\'s side of it', () => {
+    const shiftId = f.openShift({ members: ['Amar', 'Emir'] })
+    const boot = getBootstrap(f.db, f.venueId, f.actor('Amar'))
+
+    expect(boot.shift?.id).toBe(shiftId)
+    expect(boot.shift?.status).toBe('open')
+    expect(boot.shift?.my_open_tabs).toBe(0)
+    // `f.openShift()` writes its rows straight into the ledger without going
+    // through `openShift()`, so nothing bumped the feed and the cursor is still
+    // where the first case left it. That is the fixture being honest, not a bug:
+    // `changes-coverage.test.ts` is where "a mutation bumps" is proven.
+    expect(boot.seq).toBe(0)
+  })
+
   it('speaks the three Korak 2 roles', () => {
-    const boot = getBootstrap(f.db, f.venueId)
+    const boot = getBootstrap(f.db, f.venueId, f.actor('Amar'))
     expect(boot.users.find(u => u.name === 'Haris')?.role).toBe('admin')
     expect(boot.users.find(u => u.name === 'Emir')?.role).toBe('bartender')
     // 'owner' is not an accepted role value anywhere after the migration.
@@ -297,7 +333,7 @@ describe('no response carries a secret', () => {
     })
 
     const responses: unknown[] = [
-      getBootstrap(f.db, f.venueId),
+      getBootstrap(f.db, f.venueId, f.actor('Amar')),
       getHealth(f.db, f.venueId),
       getTablesState(f.db, f.venueId, f.actor('Amar')),
       getPrep(f.db, f.venueId),

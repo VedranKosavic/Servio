@@ -8,13 +8,33 @@
 import { and, asc, eq, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
 import type { Bootstrap, Flavour } from '#shared/types'
-import type { Queryable } from './types'
+import type { Actor, Queryable } from './types'
 import { onHandByItem } from './stock'
+import { getMe } from './auth'
+import { shiftBrief } from './shifts'
+import { menuVersion } from './changes'
 
-export function getBootstrap(db: Queryable, venueId: string): Bootstrap {
+/**
+ * `actor` is required and comes from the session — `ROUTE_ROLES` gives this
+ * route `'any'`, so by the time the handler runs there is one. It is what turns
+ * a catalogue into a boot: `me`, `device` and `shift` are all per person, and
+ * `shift.my_open_tabs` is a different number for Amar than for Lejla.
+ */
+export function getBootstrap(db: Queryable, venueId: string, actor: Actor): Bootstrap {
   const venue = db.select().from(schema.venues).where(eq(schema.venues.id, venueId)).get()!
+  const me = getMe(db, venueId, actor)
 
-  const users = db.select()
+  // Column by column, never `select()` (§5.7). This table carries `pin_hash`,
+  // `password_hash`, `email` and `telegram_chat_id` since Korak 2; a `SELECT *`
+  // that someone later forgets to map is every phone in the café holding the
+  // owner's password hash. `api-shapes.test.ts` sweeps every response for the
+  // shape of those keys, and this is the query that must not produce them.
+  const users = db.select({
+    id: schema.users.id,
+    name: schema.users.name,
+    initials: schema.users.initials,
+    role: schema.users.role,
+  })
     .from(schema.users)
     .where(and(eq(schema.users.venueId, venueId), eq(schema.users.active, 1)))
     .orderBy(asc(schema.users.name))
@@ -60,6 +80,11 @@ export function getBootstrap(db: Queryable, venueId: string): Bootstrap {
 
   return {
     venue: { id: venue.id, name: venue.name, slug: venue.slug },
+    seq: me.seq,
+    menu_version: menuVersion(db, venueId),
+    me: me.user,
+    device: me.device,
+    shift: shiftBrief(db, venueId, actor),
     users: users.map(u => ({ id: u.id, name: u.name, initials: u.initials, role: u.role })),
     tables: tables.map(t => ({
       id: t.id,
@@ -86,15 +111,27 @@ export function getBootstrap(db: Queryable, venueId: string): Bootstrap {
   }
 }
 
-/** `GET /api/health` — is the process up and does the database open? */
-export function getHealth(db: Queryable, venueId: string) {
+/**
+ * `GET /api/health` — is the process up and does the database open?
+ *
+ * The one route in the app with **no venue**. It is `'public'` in `ROUTE_ROLES`
+ * because `deploy/deploy.sh` curls it from the server itself after every
+ * restart, before any cookie exists, and rolls the release back when it does not
+ * answer — so it must not need a session, and it must not need the database to
+ * be seeded either. `venueId` is therefore optional: with one it counts that
+ * café's rows (which is what the tests assert), without one it counts the whole
+ * file. Either way the counts come from real queries, because a process that is
+ * up but cannot read SQLite is exactly the failure this route exists to catch
+ * and an `{ ok: true }` that asks nothing would sail past it.
+ */
+export function getHealth(db: Queryable, venueId?: string) {
   const tables = db.select({ n: sql<number>`count(*)` })
     .from(schema.tables)
-    .where(eq(schema.tables.venueId, venueId))
+    .where(venueId ? eq(schema.tables.venueId, venueId) : undefined)
     .get()?.n ?? 0
   const products = db.select({ n: sql<number>`count(*)` })
     .from(schema.products)
-    .where(eq(schema.products.venueId, venueId))
+    .where(venueId ? eq(schema.products.venueId, venueId) : undefined)
     .get()?.n ?? 0
   return { ok: true as const, tables, products }
 }

@@ -50,5 +50,14 @@ export const AUTH_ERRORS = {
   NO_PIN: 'Nemaš postavljen PIN. Traži od vlasnika da ti ga postavi.',
   USER_NOT_ACTIVE: 'Ovaj korisnik više nije aktivan.',
   PIN_LENGTH: 'PIN mora imati 4 ili 6 cifara.',
-  USER_NOT_FOUND: 'Korisnik nije pronađen.',
+
+  // `USER_NOT_FOUND` went the same way as `PENDING_OUTBOX` above, and for the
+  // same reason. It was written here ('Korisnik nije pronađen.') and in
+  // `errors/money.ts` ('Ta osoba ne postoji.'); `MONEY_ERRORS` is spread after
+  // `AUTH_ERRORS`, so WP3's sentence is the one every phone has ever shown.
+  // WP8 deleted this copy rather than the shipping one — seven services across
+  // five packages throw this code, most of them about picking a colleague
+  // ("izaberi kome dajes pazar"), and 'Ta osoba ne postoji.' is the sentence
+  // that reads right in all of them. `errors.test.ts` now fails on any code
+  // defined in two fragments, so the next one of these is caught the same day.
 } as const

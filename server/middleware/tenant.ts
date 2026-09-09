@@ -32,42 +32,27 @@ const AUTH_DOORS = new Set([
 ])
 
 /**
- * The Korak 1 routes, which have no session in front of them yet.
+ * There is no escape hatch here any more, and that is worth a paragraph.
  *
- * The waiter screens under `app/pages/k/**` are **frozen** until WP9 rewires
- * them (`docs/PHASES.md` §2): they send no cookies, no PIN and a `user_id` in
- * the body. Enforcing the session on them today would leave Vedran with a dev
- * server whose every screen 401s, weeks before the screens that fix it exist.
+ * Korak 1's routes — `/api/bootstrap`, `/api/prep`, `/api/stock`,
+ * `POST /api/prep/:id/done`, `POST /api/stock/deliveries` — used to be let
+ * through without a session behind `SANK_LEGACY_OPEN=1`, because the frozen
+ * waiter screens sent no cookies and enforcing the session on them would have
+ * left Vedran with a dev server whose every screen 401s weeks before the screens
+ * that fix it existed. **WP8 deleted that block**: every one of those handlers
+ * now reads `event.context.venueId` and `event.context.actor`, so there is
+ * nothing left to let through and no environment variable that could open the
+ * door by accident. `currentVenueId(db)` survives for `seed-cli.ts`, the boot
+ * plugins, the tests — and for exactly one route, `POST /api/dev/enrol`, which
+ * mints the first device cookie and therefore runs before any session or venue
+ * can be known. That route 404s unless `SANK_DEV_ENROL=1`, which `/opt/sank/.env`
+ * never sets. `tests/unit/invariants.test.ts` asserts that list of one.
  *
- * So there is one escape hatch and it is deliberately narrow:
- *
- * - it is **off by default**, so nothing changes on the VPS;
- * - it only ever runs when `import.meta.dev` is true, so a stray environment
- *   variable in production cannot open it;
- * - it names the eight legacy routes explicitly rather than matching a prefix.
- *
- * **WP8 deletes this block** when it wires `event.context.actor` into those
- * handlers, and WP9 deletes the screens that need it. Until then a developer
- * opts in with `SANK_LEGACY_OPEN=1` in `.env`.
+ * WP9 rewires the screens themselves (start screen → PIN login, `user_id` gone
+ * from every body, one `/api/changes` poll). Until it lands, the way to drive
+ * the app in dev is a real session: `POST /api/dev/enrol` with
+ * `SANK_DEV_ENROL=1`, then `POST /api/auth/pin`. See `.env.example`.
  */
-const KORAK1_ROUTES = new Set([
-  'GET /api/bootstrap',
-  'GET /api/prep',
-  'GET /api/stock',
-  'POST /api/prep/:id/done',
-  'POST /api/stock/deliveries',
-  // `GET /api/tables/state` and `POST /api/orders` left this list with WP3:
-  // both now read `event.context.actor` (the floor plan's colleague badge and
-  // shift strip are per person, and a lock takes its waiter from the session),
-  // so letting them through without one would be a crash, not a convenience.
-  // `POST /api/tabs/:id/pay` left it because the route is gone — `POST
-  // /api/payments` replaced it.
-])
-
-function legacyOpen(): boolean {
-  return import.meta.dev && process.env.SANK_LEGACY_OPEN === '1'
-}
-
 export default defineEventHandler((event) => {
   const path = getRequestURL(event).pathname
   if (!path.startsWith('/api/')) return
@@ -97,8 +82,6 @@ export default defineEventHandler((event) => {
       throw apiError(429, 'RATE_LIMITED', errorMessage('RATE_LIMITED'))
     }
   }
-
-  if (legacyOpen() && KORAK1_ROUTES.has(key)) return
 
   const verdict = authorizeRequest(db, { path, method: event.method, cookies, ip, now })
 

@@ -1,0 +1,126 @@
+# Šank as a systemd service.
+#
+# systemd is Ubuntu's process supervisor: it starts the app at boot, restarts it
+# if it dies, and collects everything it prints into the journal (`journalctl`).
+# deploy/setup-server.sh copies this file to /etc/systemd/system/sank.service —
+# do not edit it there, edit it here and run setup-server.sh again, or the next
+# deploy will disagree with the running server.
+#
+# The scheduled tasks (nightly / alerts / backup) run INSIDE this one process,
+# on the Nitro node-server preset's own cron runner. The only thing that is a
+# real system cron is the database backup, in /etc/cron.d/sank-backup — on
+# purpose: cron keeps taking backups even when this Node process is wedged, and
+# an in-process backup task cannot.
+
+[Unit]
+Description=Šank — order, shift and bar-stock system for the lounge
+Documentation=file:///opt/sank/current/README.md
+After=network-online.target
+Wants=network-online.target
+# Restart=always without a limit is an infinite hot loop when the app cannot
+# start at all (no release deployed yet, a broken .env, a database file that is
+# not readable). Ten tries in five minutes, then it stays failed until somebody
+# looks: `systemctl reset-failed sank` after fixing it.
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=sank
+Group=sank
+
+# `current` is a symlink to the release that is live. deploy/deploy.sh flips it
+# and restarts, so systemd resolves it fresh on every start.
+#
+# This has to be right: the app reads `server/database/migrations/*.sql` and
+# `server/database/triggers.sql` from disk relative to its working directory at
+# every boot. Both travel with the release and land next to `.output/`.
+WorkingDirectory=/opt/sank/current
+
+# Defaults first, then the operator's file, which wins. Every one of these can
+# be overridden in /opt/sank/.env.
+Environment=NODE_ENV=production
+
+# TZ=UTC is deliberate, and it is not a detail.
+#
+# It fixes the clock zone of THIS PROCESS to UTC, which does two things:
+#
+#   1. The in-process cron expressions (the nightly task, the alert drainer) are
+#      then read in UTC and mean the same thing forever. A schedule written
+#      against local time silently shifts twice a year when Sarajevo changes to
+#      and from summer time.
+#   2. It makes the app derive Sarajevo local time *itself*, through
+#      `shared/dates.ts`, instead of inheriting it from whatever the machine
+#      happens to be set to. That is what the business day depends on: the day
+#      starts at 06:00 Europe/Sarajevo, and a server whose clock zone changed
+#      under it — a provider migration, a re-image, a helpful `timedatectl` —
+#      would quietly move the boundary and put a night's takings on the wrong
+#      date.
+#
+# The *system* timezone is a separate thing and IS Europe/Sarajevo
+# (setup-server.sh sets it), so `date`, the log timestamps you read by hand and
+# the backup cron all speak local time. Only this process runs on UTC.
+Environment=TZ=UTC
+
+# The database. Absolute, and outside the release directories on purpose: the
+# releases come and go, the data does not.
+Environment=DB_PATH=/opt/sank/data/sank.db
+
+# Nitro reads NITRO_PORT/PORT and NITRO_HOST/HOST at startup. 127.0.0.1 means
+# the app is reachable from the server itself only — the firewall opens 22, 80
+# and 443, never 3100. nginx is what publishes it (deploy/nginx.conf).
+Environment=NITRO_PORT=3100
+Environment=NITRO_HOST=127.0.0.1
+
+# The operator's file: PIN_PEPPER, TRUST_PROXY, PUBLIC_URL and the optional
+# Telegram token. Mode 600, owned by sank. systemd reads it once, at start, so
+# every change to it needs a `systemctl restart sank`.
+EnvironmentFile=/opt/sank/.env
+
+ExecStart=/usr/bin/node .output/server/index.mjs
+
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+KillSignal=SIGTERM
+
+# Memory cap. MemoryHigh throttles and forces the garbage collector to work
+# harder; MemoryMax is the hard wall where the kernel kills the process and
+# Restart=always brings it back. A 1 GB VPS survives both.
+MemoryHigh=512M
+MemoryMax=768M
+TasksMax=256
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sank
+
+# Hardening. ProtectSystem=strict makes the whole filesystem read-only to this
+# process; ReadWritePaths punches the only two holes it needs.
+#
+#   /opt/sank/data     the database, plus the `-wal` and `-shm` sidecars WAL
+#                      mode keeps next to it
+#   /opt/sank/backups  not used on this server — cron owns backups here and runs
+#                      as a separate process — but the in-process backup task
+#                      writes there when BACKUP_DIR is set, and a path that is
+#                      writable and unused is cheaper than one that is missing
+#                      the day somebody sets it.
+#
+# Note what is NOT writable: the release directory itself. That is deliberate.
+# If a later phase ever writes uploaded files to disk, they need a directory of
+# their own under /opt/sank and a line added here — writing them inside
+# `current` would fail, and it should.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/sank/data /opt/sank/backups
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

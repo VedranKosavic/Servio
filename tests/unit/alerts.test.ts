@@ -317,6 +317,10 @@ describe('the rule keys and the log templates agree', () => {
    */
   const NON_LOG_CALLERS: Partial<Record<AlertRuleKey, string>> = {
     health: 'server/tasks/{backup,nightly}.ts — a task that failed (§10)',
+    // The only alert about something that did *not* happen, which is why there
+    // is no log kind behind it: nobody closed the night. `log()` records events,
+    // and an absence is not one.
+    shift_not_closed: 'server/tasks/nightly.ts — still open past closing + 3 h (§10)',
   }
 
   it.each(LOG_KINDS)('%s: its telegram rule is a declared key', (kind) => {

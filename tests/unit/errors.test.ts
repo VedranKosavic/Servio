@@ -13,7 +13,10 @@
 import { describe, expect, it } from 'vitest'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { ERROR_MESSAGES, errorMessage } from '#shared/errors'
+import {
+  ADMIN_ERRORS, AUTH_ERRORS, ERROR_MESSAGES, MONEY_ERRORS, SHIFT_ERRORS,
+  STOCK_ERRORS, SYNC_ERRORS, errorMessage,
+} from '#shared/errors'
 import { COMMON_ERRORS } from '#shared/errors/common'
 
 const ROOTS = ['server/services', 'server/api', 'server/middleware', 'server/utils']
@@ -102,6 +105,43 @@ describe('ERROR_MESSAGES', () => {
     const orphans = Object.keys(ERROR_MESSAGES)
       .filter(code => !thrown.has(code) && !IMPLICIT.includes(code))
     expect(orphans).toEqual([])
+  })
+
+  /**
+   * One code, one sentence — checked across the fragments, not just in the
+   * merged object.
+   *
+   * `shared/errors.ts` spreads seven fragments into one `Record`, so a code
+   * written in two of them does not collide, it *silently loses*: the later
+   * spread wins and the earlier sentence becomes dead text that reads like it
+   * ships. Two of these had already happened by WP8 — `PENDING_OUTBOX` in
+   * `auth` and `shifts`, `USER_NOT_FOUND` in `auth` and `money` — and neither
+   * was visible to any assertion above, because the merged object is perfectly
+   * consistent either way. The only place the duplicate exists is here.
+   */
+  it('defines every code in exactly one fragment', () => {
+    const fragments: Record<string, Record<string, string>> = {
+      common: COMMON_ERRORS, auth: AUTH_ERRORS, money: MONEY_ERRORS,
+      shifts: SHIFT_ERRORS, stock: STOCK_ERRORS, sync: SYNC_ERRORS,
+      admin: ADMIN_ERRORS,
+    }
+
+    const homes = new Map<string, string[]>()
+    for (const [fragment, codes] of Object.entries(fragments)) {
+      for (const code of Object.keys(codes)) {
+        homes.set(code, [...(homes.get(code) ?? []), fragment])
+      }
+    }
+
+    const duplicated = [...homes.entries()]
+      .filter(([, where]) => where.length > 1)
+      .map(([code, where]) => `${code} is defined in ${where.join(' and ')}`)
+      .sort()
+
+    expect(duplicated).toEqual([])
+
+    // …and the walker really did look at all seven fragments.
+    expect(homes.size).toBe(Object.keys(ERROR_MESSAGES).length)
   })
 
   it('writes the sentences in Bosnian, not in English', () => {
