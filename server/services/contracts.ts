@@ -9,24 +9,27 @@
  *
  * So they all import from **here**, and this file has two halves:
  *
- *   **Real, and staying real.** Five helpers WP0 implements properly, because
- *   WP0's own tests walk them the moment the new triggers exist: a
+ *   **Real, and staying real.** The shift helpers WP0 implements properly,
+ *   because WP0's own tests walk them the moment the new triggers exist: a
  *   `orders_shift_required` trigger with no `ensureOpenShift` behind it is a
  *   database that refuses every order. WP2/WP3/WP4 extend these in place —
  *   summaries, logging, custodians — rather than replacing the call sites.
  *
- *   **Typed stubs.** Everything else throws `NOT_IMPLEMENTED` with a real
- *   signature, so a package written against it compiles and typechecks today
- *   and starts working the day its owner lands the implementation. None of them
- *   is on a path any WP0 test walks.
+ *   **Re-exports.** One line per function whose owning package has landed. The
+ *   signature never changed, so no caller ever did either. WP0's four stock
+ *   helpers (`unitCost`, `lastConfirmedCountAt`, `insertMovement`, `onHand`)
+ *   were written here as bodies because `services/stock.ts` was still Korak 1's
+ *   and had no shape to hold them; WP4 moved them to the file §6.8 names and
+ *   left a re-export behind.
  *
- * When a package lands, it replaces the stub body here with a re-export of its
- * own service — one line changed, no caller touched.
+ * A function whose package has not landed yet is a typed stub that throws
+ * `NOT_IMPLEMENTED`: a package written against it compiles and typechecks today
+ * and starts working the day its owner lands the implementation.
  */
-import { and, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { newId, nowIso } from '../utils/ids'
-import { businessDate, localDate, localTime } from '#shared/dates'
+import { businessDate } from '#shared/dates'
 import { mergeSettings, type Settings } from '#shared/settings'
 import { log } from './log'
 import type { Actor, Role } from '#shared/types'
@@ -51,24 +54,6 @@ export function getSettings(q: Queryable, venueId: string): Settings {
     .where(eq(schema.venues.id, venueId))
     .get()
   return mergeSettings(row?.json)
-}
-
-/**
- * What a quantity of this item is worth, in milli-feninga per base unit —
- * and whether that number is a guess.
- *
- * Fall back, flag, never silently zero. An item with a `last_cost_mfen` and no
- * moving average yet is priced at what it cost last time and labelled
- * *procijenjeno*, which is a far better answer on a screen than 0,00 KM. Only an
- * item with **neither** is genuinely unpriced, and a zero cost quietly switches
- * off variance, waste value and *utrošak* — so it is reported, never assumed.
- */
-export function unitCost(item: { avgCostMfen: number, lastCostMfen: number }): {
-  mfen: number
-  estimated: boolean
-} {
-  const mfen = item.avgCostMfen || item.lastCostMfen || 0
-  return { mfen, estimated: item.avgCostMfen === 0 }
 }
 
 /** The shift that is taking money right now, if any. */
@@ -168,115 +153,27 @@ export function nextShiftSeq(tx: Tx, venueId: string, shiftId: string): number {
   return (row?.max ?? 0) + 1
 }
 
-/**
- * When this item was last counted and that count confirmed. `null` when it never
- * was — which is the normal case for most of the shelf.
- */
-export function lastConfirmedCountAt(
-  q: Queryable, venueId: string, stockItemId: string,
-): string | null {
-  const row = q.select({ at: schema.stockCounts.submittedAt })
-    .from(schema.stockCountLines)
-    .innerJoin(schema.stockCounts, eq(schema.stockCounts.id, schema.stockCountLines.countId))
-    .where(and(
-      eq(schema.stockCountLines.venueId, venueId),
-      eq(schema.stockCountLines.stockItemId, stockItemId),
-      eq(schema.stockCounts.status, 'confirmed'),
-    ))
-    .orderBy(desc(schema.stockCounts.submittedAt))
-    .get()
-  return row?.at ?? null
-}
-
-export interface MovementInput {
-  stockItemId: string
-  type: typeof schema.stockMovements.$inferInsert['type']
-  qtyDelta: number
-  unitCostMfen: number
-  refType?: string | null
-  refId?: string | null
-  userId?: string | null
-  shiftId?: string | null
-  note?: string | null
-  occurredAt: string
-  createdAt?: string
-}
+// ===========================================================================
+// Landed packages — one line each, re-exporting the owner's service
+// ===========================================================================
 
 /**
- * The one way a stock movement is written — and the one place the late-sync
- * offset lives.
+ * WP4 (`services/stock.ts`). The five ledger primitives §6.8 puts in that file.
  *
- * On hand is `SUM(qty_delta)`, always, with no bounds on the sum. So a movement
- * that arrives dated **before** a confirmed count is a problem: the bottle it
- * describes was already off the shelf when somebody counted the shelf, and the
- * count already accounts for it. Adding it now would subtract it twice.
- *
- * The fix is not to refuse the row — refusing a back-dated delivery only teaches
- * an honest bartender to lie about `delivered_at`. The fix is a mirror row that
- * cancels it (`late_sync`, the opposite quantity, the same cost and date), so the
- * ledger keeps both facts: what happened, and why it does not move today's stock.
- *
- * `late_sync` and `count_adjust` are exempt, or the offsets would offset each
- * other forever.
+ * WP0 wrote `unitCost`, `lastConfirmedCountAt`, `insertMovement` and `onHand`
+ * here rather than there, because `stock.ts` was still Korak 1's and had no
+ * shape to hold them; they moved to their documented home unchanged, and this
+ * line keeps every existing caller — `orders.ts`, `adjustments.ts`, `admin.ts` —
+ * importing exactly what it imported before.
  */
-export function insertMovement(tx: Tx, venueId: string, m: MovementInput): string {
-  const createdAt = m.createdAt ?? nowIso()
-  const id = newId()
-
-  tx.insert(schema.stockMovements).values({
-    id,
-    venueId,
-    stockItemId: m.stockItemId,
-    type: m.type,
-    qtyDelta: m.qtyDelta,
-    unitCostMfen: m.unitCostMfen,
-    refType: m.refType ?? null,
-    refId: m.refId ?? null,
-    userId: m.userId ?? null,
-    shiftId: m.shiftId ?? null,
-    note: m.note ?? null,
-    occurredAt: m.occurredAt,
-    createdAt,
-  }).run()
-
-  if (m.type !== 'late_sync' && m.type !== 'count_adjust') {
-    const countedAt = lastConfirmedCountAt(tx, venueId, m.stockItemId)
-    if (countedAt && m.occurredAt <= countedAt) {
-      tx.insert(schema.stockMovements).values({
-        id: newId(),
-        venueId,
-        stockItemId: m.stockItemId,
-        type: 'late_sync',
-        qtyDelta: -m.qtyDelta,
-        unitCostMfen: m.unitCostMfen,
-        refType: 'stock_movement',
-        refId: id,
-        userId: m.userId ?? null,
-        shiftId: m.shiftId ?? null,
-        note: `kasno sinhronizovano · popis ${localDate(countedAt)} ${localTime(countedAt)}`,
-        occurredAt: m.occurredAt,
-        createdAt,
-      }).run()
-    }
-  }
-
-  return id
-}
-
-/** On hand: the whole ledger for one item, summed. Never a stored balance. */
-export function onHand(q: Queryable, venueId: string, stockItemId: string): number {
-  const row = q.select({ sum: sql<number | null>`coalesce(sum(${schema.stockMovements.qtyDelta}), 0)` })
-    .from(schema.stockMovements)
-    .where(and(
-      eq(schema.stockMovements.venueId, venueId),
-      eq(schema.stockMovements.stockItemId, stockItemId),
-    ))
-    .get()
-  return row?.sum ?? 0
-}
+export {
+  insertMovement, lastConfirmedCountAt, onHand, theoreticalAt, unitCost,
+} from './stock'
+export type { MovementInput } from './stock'
 
 // ===========================================================================
-// Typed stubs — the signature is the contract; the body lands with its package
+// The rest — a re-export where the package has landed, a typed stub where it
+// has not; the signature is the contract either way
 // ===========================================================================
 
 /**

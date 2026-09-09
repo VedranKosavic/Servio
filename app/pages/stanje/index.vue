@@ -68,16 +68,23 @@ const sheetError = ref<string | null>(null)
 const toast = ref<string | null>(null)
 const { start: hideToastLater } = useTimeoutFn(() => { toast.value = null }, 2500, { immediate: false })
 
-async function postDelivery(line: { stock_item_id: string, qty: number, note?: string }) {
-  const userId = session.state.userId
-  if (!userId || posting.value) return
+async function postDelivery(delivery: {
+  supplier_name: string
+  line: { stock_item_id: string, loose: number, packs: number, line_cost_fen: number, note?: string }
+}) {
+  if (posting.value) return
 
   posting.value = true
   sheetError.value = null
   try {
-    // The route answers with the whole refreshed list, so the screen is correct
-    // the moment the sheet closes — no waiting for the next poll.
-    items.value = await api.postDelivery({ user_id: userId, lines: [line] })
+    // The route answers with the posted delivery note now, not the stock list,
+    // so the screen refreshes itself rather than swapping the array in place.
+    await api.postDelivery({
+      client_id: crypto.randomUUID(),
+      supplier_name: delivery.supplier_name,
+      lines: [delivery.line],
+    })
+    await refresh()
     sheetOpen.value = false
     toast.value = 'Prijem proknjižen'
     hideToastLater()
