@@ -4,7 +4,8 @@
  *
  * There is **one** activity record in Šank (CLAUDE.md): `log_entries`, written
  * by `log()` inside the same transaction as the event, feeding the owner's
- * *Dnevnik* page and the Telegram mirror. There is no separate audit table, and
+ * *Dnevnik* page and the in-app attention list. There is no separate audit
+ * table, and
  * locks and payments are deliberately not entries — they are the ledger.
  *
  * `LOG_KINDS` is **frozen for Korak 2** and `kind` is typed, so calling `log()`
@@ -16,10 +17,11 @@
  *
  *   `quiet`     — a routine record. The Dnevnik's *važno* filter hides these
  *                 unless a later entry resolves one.
- *   `telegram`  — the ✔ column: which of the thirteen `ALERT_RULE_KEYS` this
- *                 kind queues, and (optionally) under what condition. A kind
- *                 marked here with a key that is not in that list would throw
- *                 when it fired, so `alerts.test.ts` checks both directions.
+ *   `alert`     — the ✔ column: which of the thirteen `ALERT_RULE_KEYS` this
+ *                 kind queues onto the attention list, and (optionally) under
+ *                 what condition. A kind marked here with a key that is not in
+ *                 that list would throw when it fired, so `alerts.test.ts`
+ *                 checks both directions.
  *   `group`     — the Dnevnik's filter chips.
  *
  * Bodies are `.loose()`: the documented fields are validated, and extra context
@@ -55,11 +57,11 @@ export interface LogTemplate<B = unknown> {
   /** Routine: hidden behind the Dnevnik's *važno* filter. */
   quiet?: true
   /**
-   * The Telegram mirror. `when` decides per event — a settlement is mirrored
-   * only when it lands outside tolerance, a comp only when it is a large one —
-   * and receives the venue's settings because that is where the thresholds live.
+   * The attention list. `when` decides per event — a settlement is raised only
+   * when it lands outside tolerance, a comp only when it is a large one — and
+   * receives the venue's settings because that is where the thresholds live.
    */
-  telegram?: { rule: AlertRuleKey, when?: (body: B, settings: Settings) => boolean }
+  alert?: { rule: AlertRuleKey, when?: (body: B, settings: Settings) => boolean }
   group: LogGroup
 }
 
@@ -87,7 +89,7 @@ function defineLog<S extends z.ZodType>(t: {
   body: S
   title: (b: z.infer<S>, n: LogNames) => string
   quiet?: true
-  telegram?: { rule: AlertRuleKey, when?: (b: z.infer<S>, s: Settings) => boolean }
+  alert?: { rule: AlertRuleKey, when?: (b: z.infer<S>, s: Settings) => boolean }
   group: LogGroup
 }): LogTemplate<z.infer<S>> {
   return t as LogTemplate<z.infer<S>>
@@ -109,7 +111,7 @@ export const LOG = {
 
   shift_closed: defineLog({
     group: 'smjena',
-    telegram: { rule: 'shift_closed' },
+    alert: { rule: 'shift_closed' },
     body: body({
       shift_id: id,
       promet_fen: fen,
@@ -129,7 +131,7 @@ export const LOG = {
 
   shift_forced: defineLog({
     group: 'smjena',
-    telegram: { rule: 'shift_forced' },
+    alert: { rule: 'shift_forced' },
     body: body({ shift_id: id, note: z.string(), missing_user_ids: z.array(id).optional() }),
     title: b => `Smjena prisilno zatvorena · ${b.note}`,
   }),
@@ -146,9 +148,9 @@ export const LOG = {
 
   waiter_finished: defineLog({
     group: 'novac',
-    // Mirrored only when the envelope did not match — a settlement that lands
+    // Raised only when the envelope did not match — a settlement that lands
     // inside tolerance is the normal end of a normal night.
-    telegram: { rule: 'cash_variance', when: b => !b.within_tolerance },
+    alert: { rule: 'cash_variance', when: b => !b.within_tolerance },
     body: body({
       settlement_id: id,
       shift_id: id,
@@ -167,7 +169,7 @@ export const LOG = {
 
   settlement_late: defineLog({
     group: 'novac',
-    telegram: { rule: 'settlement_late' },
+    alert: { rule: 'settlement_late' },
     body: body({ settlement_id: id, shift_id: id, user_id: id, declared_fen: fen }),
     title: (b, n) => `Naknadna predaja · ${n.user(b.user_id)} · ${n.formatKm(b.declared_fen)}`,
   }),
@@ -197,7 +199,7 @@ export const LOG = {
     group: 'storno',
     // The two cases the owner has to see: money already in the till going back
     // out, and an admin PIN typed on somebody else's phone.
-    telegram: { rule: 'void_after_payment', when: b => Boolean(b.was_paid || b.foreign_device) },
+    alert: { rule: 'void_after_payment', when: b => Boolean(b.was_paid || b.foreign_device) },
     body: body({
       adjustment_id: id, tab_id: id, table_id: id.optional(),
       user_id: id, approver_id: id.optional(),
@@ -234,7 +236,7 @@ export const LOG = {
 
   comp_decided: defineLog({
     group: 'storno',
-    telegram: { rule: 'comp_large', when: (b, s) => b.amount_fen >= s.comp_large_fen },
+    alert: { rule: 'comp_large', when: (b, s) => b.amount_fen >= s.comp_large_fen },
     body: body({
       adjustment_id: id, tab_id: id, user_id: id, approver_id: id.optional(),
       line: z.string(), amount_fen: fen, reason: z.string(),
@@ -269,7 +271,7 @@ export const LOG = {
 
   payment_reversed: defineLog({
     group: 'novac',
-    telegram: { rule: 'payment_reversed' },
+    alert: { rule: 'payment_reversed' },
     // §8 gives this kind two writers: `insertReversal`, which writes a negative
     // `payments` row, and `insertRefund`, which writes a `cash_movements` one.
     // Neither id is therefore required — the row it points at is named by
@@ -350,7 +352,7 @@ export const LOG = {
 
   late_after_settle: defineLog({
     group: 'novac',
-    telegram: { rule: 'late_after_settle' },
+    alert: { rule: 'late_after_settle' },
     // Two writers again (§8): a round locked after the settlement, and a
     // payment taken after it. A payment has no order, so `order_id` is optional
     // and `payment_id` names the row in that case.
@@ -367,7 +369,7 @@ export const LOG = {
 
   late_after_close: defineLog({
     group: 'novac',
-    telegram: { rule: 'late_after_close' },
+    alert: { rule: 'late_after_close' },
     body: body({
       tab_id: id, order_id: id, shift_id: id.optional(), table_id: id.optional(),
       user_id: id.optional(), amount_fen: fen, count: z.int(),
@@ -399,7 +401,7 @@ export const LOG = {
   payout_requested: defineLog({
     group: 'novac',
     // Over the owner's threshold it is his decision, so he has to hear about it.
-    telegram: { rule: 'payout_pending', when: (b, s) => b.amount_fen > s.payout_owner_fen },
+    alert: { rule: 'payout_pending', when: (b, s) => b.amount_fen > s.payout_owner_fen },
     body: body({ movement_id: id, user_id: id, amount_fen: fen, reason: z.string(), note: z.string().nullish() }),
     title: (b, n) =>
       `Isplata iz kase · ${n.user(b.user_id)} · ${n.formatKm(b.amount_fen)}`
@@ -453,7 +455,7 @@ export const LOG = {
 
   count_confirmed: defineLog({
     group: 'roba',
-    telegram: {
+    alert: {
       rule: 'stock_variance',
       when: (b, s) => Math.abs(b.variance_fen) > s.variance_alert_fen,
     },
@@ -580,7 +582,7 @@ export const LOG = {
 
   lockout: defineLog({
     group: 'uredaji',
-    telegram: { rule: 'device_lockout' },
+    alert: { rule: 'device_lockout' },
     body: body({ device_id: id.nullish(), user_id: id.nullish(), fails: z.int() }),
     title: (b, n) => `PIN zaključan · ${n.device(b.device_id)} · ${b.fails} pogrešnih`,
   }),

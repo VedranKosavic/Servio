@@ -7,7 +7,7 @@
  * not four.
  *
  * **Nothing here carries a secret.** `MeUser` deliberately has no `pin_hash`,
- * no `password_hash`, no `email` and no `telegram_chat_id`: `GET /api/auth/users`
+ * no `password_hash` and no `email`: `GET /api/auth/users`
  * is served *before* any session exists, to whoever is holding an enrolled
  * device, and it must contain no more than the lock screen draws.
  * `api-shapes.test.ts` walks every response and fails on any key matching

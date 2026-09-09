@@ -25,7 +25,7 @@ export function getBootstrap(db: Queryable, venueId: string, actor: Actor): Boot
   const me = getMe(db, venueId, actor)
 
   // Column by column, never `select()` (§5.7). This table carries `pin_hash`,
-  // `password_hash`, `email` and `telegram_chat_id` since Korak 2; a `SELECT *`
+  // `password_hash` and `email` since Korak 2; a `SELECT *`
   // that someone later forgets to map is every phone in the café holding the
   // owner's password hash. `api-shapes.test.ts` sweeps every response for the
   // shape of those keys, and this is the query that must not produce them.

@@ -48,8 +48,9 @@ export interface LogInput {
 }
 
 /**
- * Write one Dnevnik entry, and queue its Telegram mirror when the kind is
- * marked ✔ in §8.
+ * Write one Dnevnik entry, and put it on the in-app attention list when the
+ * kind is marked ✔ in §8. Nothing is sent anywhere: the Dnevnik and that list
+ * are the only two channels (§9).
  *
  * **`ref` must be the object the entry is about, never the entry itself.**
  * `alert_events` dedupes on `(venue_id, rule_key, ref_type, ref_id)` with
@@ -97,10 +98,10 @@ export function log(tx: Tx, venueId: string, e: LogInput): string {
 
   bump(tx, venueId, 'log', id)
 
-  const mirror = template.telegram
-  if (mirror && (!mirror.when || (mirror.when as (b: unknown, s: typeof settings) => boolean)(body, settings))) {
+  const attention = template.alert
+  if (attention && (!attention.when || (attention.when as (b: unknown, s: typeof settings) => boolean)(body, settings))) {
     queueAlert(tx, venueId, {
-      ruleKey: mirror.rule,
+      ruleKey: attention.rule,
       ref: e.ref ?? { type: 'log', id },
       payload: { title_bs: titleBs, log_id: id },
       at,

@@ -26,7 +26,7 @@ Route paths keep the word `owner` (`/api/owner/live`, `/api/owner/log`) because 
 | Stock | typed deliveries, waste, spot/full counts (submit → confirm → `count_adjust`), corrections, theoretical stock, on-hand, category and nargila reports |
 | Sync | `changes` feed + `GET /api/changes?since=`, ETag on heavy GETs, device heartbeat, `bus.emit` hook points |
 | Log | `log_entries` written inside the same transaction as the event, admin-only read (*Dnevnik*) |
-| Alerts | `alert_events`, console sender in dev, Telegram HTTP sender when a token is set, the 13 `ALERT_RULE_KEYS` of §9 |
+| Alerts | `alert_events` as the in-app attention record — the 13 `ALERT_RULE_KEYS` of §9, queued and never sent anywhere (§9) |
 | Admin | CRUD for products, categories, tables, stock items, recipes, users, devices, settings, `price_history` |
 | Owner reads | `/api/owner/live` (Puls), shift list + shift detail + lines, stock, categories, nargila |
 | Ops | `deploy/` copied from snajper, systemd unit, rsync deploy with health gate, hourly + daily SQLite backups, nightly task |
@@ -34,7 +34,7 @@ Route paths keep the word `owner` (`/api/owner/live`, `/api/owner/log`) because 
 
 ### Explicitly Korak 3 (do not build)
 
-Chat (`chat_*`), uploads, roster (`shift_templates`, `roster_*`, `swap_requests`), receipt scanning (`delivery_scans`, `supplier_aliases`), `locations` and transfers, `rules` + acknowledgements, free-text products, partial-quantity voids, count drafts on the server and the witness step, settlement corrections/chains, Telegram link codes and in-app alert acknowledgement, nightly summary recompute (`drift`), SSE, web push, `stock_below_par`.
+Chat (`chat_*`), uploads, roster (`shift_templates`, `roster_*`, `swap_requests`), receipt scanning (`delivery_scans`, `supplier_aliases`), `locations` and transfers, `rules` + acknowledgements, free-text products, partial-quantity voids, count drafts on the server and the witness step, settlement corrections/chains, in-app alert acknowledgement and outcomes, nightly summary recompute (`drift`), SSE, `stock_below_par`.
 
 **One consequence worth naming, because it shapes §6.10.** In-app acknowledgement is Korak 3, so Korak 2's owner screen must never show a row that no tap can clear. `OwnerLive` therefore has **two** lists, not one: `attention[]` holds only rows with a decide route (a pending void, comp, payout, `float_out`, unpaid tab, settlement, count), and every other flag — clock skew, an early close, a stale device, an uncovered payment, a shift with no opening count — goes into `flags[]`, which is **derived from a time window** (the open shift, or the last 24 h when none is open) and self-clears when the condition stops being true or the shift closes. Nothing accumulates, and no `acknowledged_at` column is needed. PLAN F13's ★ `flag_outcome` kind and `POST /api/owner/attention/dismiss` are Korak 3 with it.
 
@@ -135,7 +135,7 @@ export interface Actor {
 
 **Tests.** vitest, node env, `openDatabase(':memory:')` + `seed(db)` through `makeFixture()`. Extend the fixture, never mock the database. Every new transaction gets an atomicity test (force a throw mid-way → zero rows) and every phone-born mutation a replay test (two calls → one row). Existing invariant tests are never weakened; a change to one needs a sentence in the PR naming the invariant that moved.
 
-**Language.** Bosnian in every UI string, log title and Telegram message (PLAN §12 labels verbatim). English in identifiers, codes, comments and this document.
+**Language.** Bosnian in every UI string and log title (PLAN §12 labels verbatim). English in identifiers, codes, comments and this document.
 
 ---
 
@@ -157,7 +157,6 @@ One migration, `server/database/migrations/0001_korak2.sql`, generated from `ser
 | `pin_pepper_v` | `INTEGER NOT NULL DEFAULT 1` | which `PIN_PEPPER` the stored hash was made with; §5.3 rotates by re-hashing at next login |
 | `password_hash` | `TEXT` | admins only |
 | `email` | `TEXT` | lowercase, trimmed |
-| `telegram_chat_id` | `TEXT` | pasted by the admin in *Postavke* |
 | `log_seen_at` | `TEXT` | Dnevnik badge |
 | `created_at` | `TEXT NOT NULL DEFAULT ''` | backfilled by `UPDATE users SET created_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE created_at = ''` |
 
@@ -225,7 +224,7 @@ Three pieces of surface here are **reserved and never written in Korak 2**, and 
 
 **`log_entries`** — the Dnevnik. `id`, `venue_id`, `kind TEXT NOT NULL`, `title_bs TEXT NOT NULL`, `body_json TEXT NOT NULL`, `ref_type TEXT`, `ref_id TEXT`, `actor_id TEXT` (NULL = *Sistem*), `device_id TEXT`, `shift_id TEXT`, `business_date TEXT NOT NULL`, `resolves_id TEXT`, `created_at NOT NULL`, `redacted_at TEXT`. Indexes `(venue_id, created_at, id)`, `(venue_id, kind, created_at)`, `(venue_id, actor_id, created_at)`, `(venue_id, ref_type, ref_id)`, `(venue_id, shift_id)`, `(venue_id, resolves_id)`.
 
-**`alert_events`** — `id`, `venue_id`, `rule_key TEXT NOT NULL`, `ref_type TEXT NOT NULL`, `ref_id TEXT NOT NULL`, `payload_json TEXT NOT NULL`, `created_at NOT NULL`, `send_after TEXT NOT NULL`, `sent_at TEXT`, `attempts INTEGER NOT NULL DEFAULT 0`, `last_error TEXT`. `UNIQUE(venue_id, rule_key, ref_type, ref_id)` — the dedupe key; `alert_events_unsent_idx (venue_id, sent_at, send_after)`.
+**`alert_events`** — `id`, `venue_id`, `rule_key TEXT NOT NULL`, `ref_type TEXT NOT NULL`, `ref_id TEXT NOT NULL`, `payload_json TEXT NOT NULL`, `created_at NOT NULL`, `send_after TEXT NOT NULL`, `sent_at TEXT`, `attempts INTEGER NOT NULL DEFAULT 0`, `last_error TEXT`. `UNIQUE(venue_id, rule_key, ref_type, ref_id)` — the dedupe key; `alert_events_unsent_idx (venue_id, sent_at, send_after)`. Since §9 lost its sender, `sent_at`, `attempts` and `last_error` are unwritten leftovers kept only to avoid a table rebuild.
 
 **`price_history`** — `id`, `venue_id`, `product_id NOT NULL`, `price_fen INTEGER NOT NULL`, `valid_from NOT NULL`, `valid_to TEXT`, `changed_by TEXT`. `price_history_open_uq UNIQUE(venue_id, product_id) WHERE valid_to IS NULL`, index `(venue_id, product_id, valid_from)`. The seed inserts one open row per product.
 
@@ -582,7 +581,7 @@ Order: (1) not `/api/` → pass; (2) route in `ROUTE_ROLES` with `'public'` → 
 The three shapes every screen boots from live in `shared/types/auth.ts` (WP1's fragment), and `getMe(q: Queryable, venueId, actor): MeContext` in `services/auth.ts` is the only thing that builds them — `GET /api/me`, `POST /api/auth/pin`, `POST /api/auth/admin/login` and `GET /api/bootstrap` all return the same objects, so the client has one parser:
 
 ```ts
-export interface MeUser {          // never carries pin_hash, password_hash, email or telegram_chat_id
+export interface MeUser {          // never carries pin_hash, password_hash or email
   id: string, name: string, initials: string, role: Role,
   active: boolean, pin_len: 4 | 6, has_pin: boolean,
 }
@@ -1089,17 +1088,17 @@ export function getLogEntry(db, venueId, id): LogEntry & { request?, resolver? }
 export function markLogSeen(db, venueId, userId, at): { log_seen_at: string }
 ```
 
-`log` parses `body` with `LOG[kind].body` (Zod), renders `title_bs = LOG[kind].title(body, names)` with lazy name lookups (`user`, `product`, `table`, `category`, `stockItem`, `device`, `formatKm`, `localTime`), computes `business_date` once, inserts, `bump('log')`, and when `LOG[kind].telegram` matches, queues the alert as:
+`log` parses `body` with `LOG[kind].body` (Zod), renders `title_bs = LOG[kind].title(body, names)` with lazy name lookups (`user`, `product`, `table`, `category`, `stockItem`, `device`, `formatKm`, `localTime`), computes `business_date` once, inserts, `bump('log')`, and when `LOG[kind].alert` matches, queues the attention item as:
 
 ```ts
 queueAlert(tx, venueId, {
-  ruleKey: LOG[kind].telegram.rule,
+  ruleKey: LOG[kind].alert.rule,
   ref: e.ref ?? { type: 'log', id: logId },   // ← the object, not the entry
   payload: { title_bs, log_id: logId },
 })
 ```
 
-**The `ref` must be the object the alert is about, not the entry that described it.** `alert_events`' dedupe key is `(venue_id, rule_key, ref_type, ref_id)` with `INSERT OR IGNORE`, and a fresh log-entry uuid per event makes it a key that never collides and therefore never dedupes — the mechanism would be decoration. Passing the caller's own `ref` gives it teeth: a void decided twice on the same adjustment queues one `void_after_payment`; a shift closed and then re-summarised queues one `shift_closed` for `('shift', shift_id)`; `count_confirmed` dedupes on the count. `LOG[kind].telegram.rule` therefore also fixes the *shape* of the ref a caller must pass, and `log.test.ts` asserts every telegram-bearing kind is called with a `ref` in the fixture. The fallback to the entry id exists only for a kind with no natural object, and the heartbeat's `clock_skew` keeps its own composed key (`deviceId + ':' + businessDate` — once per device per business date). A `resolvesId` marks the request entry resolved. An unknown kind throws 500 `LOG_TEMPLATE_MISSING`, which is why `LOG_KINDS` is frozen in `shared/logTemplates.ts` and `kind` is typed `LogKind` — a call to a missing kind is a typecheck error, not a shift close that fails at 03:10.
+**The `ref` must be the object the alert is about, not the entry that described it.** `alert_events`' dedupe key is `(venue_id, rule_key, ref_type, ref_id)` with `INSERT OR IGNORE`, and a fresh log-entry uuid per event makes it a key that never collides and therefore never dedupes — the mechanism would be decoration. Passing the caller's own `ref` gives it teeth: a void decided twice on the same adjustment queues one `void_after_payment`; a shift closed and then re-summarised queues one `shift_closed` for `('shift', shift_id)`; `count_confirmed` dedupes on the count. `LOG[kind].alert.rule` therefore also fixes the *shape* of the ref a caller must pass, and `log.test.ts` asserts every alert-bearing kind is called with a `ref` in the fixture. The fallback to the entry id exists only for a kind with no natural object, and the heartbeat's `clock_skew` keeps its own composed key (`deviceId + ':' + businessDate` — once per device per business date). A `resolvesId` marks the request entry resolved. An unknown kind throws 500 `LOG_TEMPLATE_MISSING`, which is why `LOG_KINDS` is frozen in `shared/logTemplates.ts` and `kind` is typed `LogKind` — a call to a missing kind is a typecheck error, not a shift close that fails at 03:10.
 
 `shared/types/sync.ts` again, since `log_entries` is WP5's:
 
@@ -1120,10 +1119,10 @@ export interface LogEntry {
 
 ```ts
 export function queueAlert(tx: Tx, venueId, a: { ruleKey, ref: { type, id }, payload }): string | null
-export function drainAlerts(db: Db, sender: AlertSender): Promise<void>
+export function sendAfter(rule: AlertRuleKey, at: string, tz: string): string
 ```
 
-`queueAlert` is `INSERT OR IGNORE` on the unique key (a second call for the same object is a no-op), with `send_after = now`, or the next 10:00 local when the local time is 03:00–10:00 and the rule is not `shift_closed`, `cash_variance` or `health`. `drainAlerts` is the only async code in the services: it selects unsent rows whose `send_after` has passed with `attempts < 8`, renders `payload.title_bs + '\n' + PUBLIC_URL + '/a/dnevnik/' + log_id`, sends to every active `admin` with a `telegram_chat_id`, sets `sent_at`; a failure increments `attempts` and backs off `60 × attempts` seconds.
+`queueAlert` is `INSERT OR IGNORE` on the unique key (a second call for the same object is a no-op), with `send_after = now`, or the next 10:00 local when the local time is 03:00–10:00 and the rule is not `shift_closed`, `cash_variance` or `health`. It is synchronous and writes inside the caller's transaction, like `log` and `bump`. **There is no drainer and no sender** — nothing in Šank sends anything outward (§9); `alert_events` is the in-app attention list's own table and `/a` reads it directly, filtering on `send_after <= now`.
 
 `admin.ts` — one exported function per route, every write one transaction with `log()` + `bump()`: `listProducts/createProduct/updateProduct` (a `price_fen` change closes the open `price_history` row and inserts a new one, `log('price_changed')`, `bump('menu')`), `setRecipe` (delete + insert, atomic), category / table / stock-item CRUD (`base_unit` immutable once a movement exists → 409 `UNIT_FROZEN`; creating a stock item requires `last_cost_mfen > 0`), `createUser`/`updateUser` (an admin cannot deactivate himself → 400 `SELF_DEACTIVATE`; PIN length 4 or 6 checked against nothing but the body — both are legal for every role, 6 is recommended for admins), `getSettings`/`updateSettings` (one `settings_changed` entry per changed key). Admin never deletes: `active = 0`, `available = 0`, `revoked_at`. Devices and PIN reset live in the auth package's `devices.ts`, not here.
 
@@ -1286,7 +1285,7 @@ Every route: `readValidatedJson(event, schema)` → `guard(() => service(useDb()
 
 ## 8. Log kinds
 
-`shared/logTemplates.ts` — `LOG[kind] = { body: ZodType, title(body, names): string, quiet?: true, telegram?: { rule, when?(body) }, group }`. `LOG_KINDS` is frozen for Korak 2; `kind` is typed, so a call to an undefined kind fails typecheck. ✔ = mirrored to Telegram (§9). Locks and payments are **not** entries.
+`shared/logTemplates.ts` — `LOG[kind] = { body: ZodType, title(body, names): string, quiet?: true, alert?: { rule, when?(body) }, group }`. `LOG_KINDS` is frozen for Korak 2; `kind` is typed, so a call to an undefined kind fails typecheck. ✔ = raised onto the in-app attention list (§9). Locks and payments are **not** entries.
 
 | kind | Bosnian title template | body fields | written when | quiet | ✔ |
 |---|---|---|---|---|---|
@@ -1336,19 +1335,15 @@ Every route: `readValidatedJson(event, schema)` → `guard(() => service(useDb()
 
 ## 9. Alerts v1
 
-`alert_events` + `drainAlerts` + one sender interface:
+**Nothing is sent anywhere. There is no Telegram, no e-mail, no push, no web hook and no bot.** The *Dnevnik* and the in-app attention list on *Puls* are the only two channels the owner has, and both live behind his own login. This is a product decision, not a missing feature: the owner reads the app, the app does not chase him.
 
-```ts
-export interface AlertSender { send(chatId: string, text: string): Promise<void> }
-```
+What survives is `alert_events` + `queueAlert` — the **in-app *obavijesti* record**. It is the subset of Dnevnik entries worth surfacing at the top of *Puls* rather than leaving in the stream: already deduped on the object, already time-gated, already carrying the `log_id` that `/a/dnevnik/:id` opens. `/a` (Phase 2) reads the table directly with `sent_at` ignored and `send_after <= now`.
 
-- `consoleSender` prints `[alert] <chat> <text>` — the default, and the only sender in dev and in tests.
-- `telegramSender(token)` is ten lines of `fetch('https://api.telegram.org/bot<token>/sendMessage', …)`. **No grammy, no `bot.start()`, no long polling** — a dev machine holding the same token would steal the VPS's updates, and nothing in Korak 2 needs to *receive* a message. The admin pastes his chat id (from @userinfobot) into `PATCH /api/admin/users/:id`; one sentence in `deploy/README-DEPLOY.md` explains how.
-- Sending runs from `server/tasks/alerts.ts` on a `*/1 * * * *` schedule, plus a 500 ms-debounced `bus` listener in `server/plugins/alerts.ts`. A one-minute worst case is fine for a mirror.
+Removed with the sending: `AlertSender` and both implementations, `drainAlerts`, `server/tasks/alerts.ts`, `server/plugins/alerts.ts`, `TELEGRAM_BOT_TOKEN`, and `users.telegram_chat_id` (dropped by migration `0002_no_telegram.sql` — a plain SQLite `DROP COLUMN`, safe because no index, trigger or view named the column). `alert_events.sent_at`, `attempts` and `last_error` stay in the schema as unwritten leftovers rather than costing a table rebuild; a reader must not treat `sent_at IS NULL` as "not yet delivered", because nothing delivers.
 
-Rule keys (v1), frozen in `shared/constants.ts` as `ALERT_RULE_KEYS`: `shift_closed`, `shift_forced`, `cash_variance` (a `waiter_finished` outside tolerance — the tolerance word and `declared_fen`, never the diff), `settlement_late`, `void_after_payment` (`void_decided` with `was_paid` or `foreign_device`), `payment_reversed`, `comp_large`, `late_after_settle`, `late_after_close`, `stock_variance` (`count_confirmed` over `variance_alert_fen`), `payout_pending`, `device_lockout`, `health` (a backup or nightly task failure). Dedupe on `(venue_id, rule_key, ref_type, ref_id)` with `INSERT OR IGNORE`; quiet hours 03:00–10:00 local via `send_after`, with `shift_closed`, `cash_variance` and `health` exempt. Every message ends with `PUBLIC_URL + '/a/dnevnik/' + log_id`. The hourly cap, the digest, in-app acknowledgement and Telegram link codes are Korak 3.
+Rule keys (v1), frozen in `shared/constants.ts` as `ALERT_RULE_KEYS`: `shift_closed`, `shift_forced`, `cash_variance` (a `waiter_finished` outside tolerance — the tolerance word and `declared_fen`, never the diff), `settlement_late`, `void_after_payment` (`void_decided` with `was_paid` or `foreign_device`), `payment_reversed`, `comp_large`, `late_after_settle`, `late_after_close`, `stock_variance` (`count_confirmed` over `variance_alert_fen`), `payout_pending`, `device_lockout`, `health` (a backup or nightly task failure). Dedupe on `(venue_id, rule_key, ref_type, ref_id)` with `INSERT OR IGNORE`; quiet hours 03:00–10:00 local via `send_after`, with `shift_closed`, `cash_variance` and `health` exempt — an item queued at 04:00 is written and kept, it simply does not head the list before 10:00. Every payload carries `title_bs` and `log_id`, so a row on *Puls* links to `/a/dnevnik/<log_id>`. The hourly cap, the digest and in-app acknowledgement are Korak 3.
 
-**§8's ✔ column and this list are one set, checked by a test.** `queueAlert` needs a `rule_key`, so a kind marked ✔ with no key here is a kind that would throw at 03:10 on a shift close. `alerts.test.ts` asserts both directions: every `LOG[kind].telegram.rule` is in `ALERT_RULE_KEYS`, and every key in `ALERT_RULE_KEYS` is either produced by some `LOG[kind].telegram` or by a named non-log caller (`health` from `server/tasks/*`, `clock_skew` from the heartbeat's own composed key, §4.3). That is why `shift_opened` and `payout_decided` lost their ✔ — a mirror of every shift opening is noise, and telling the owner about the decision he just made is noise — and why `settlement_late`, `payment_reversed` and `late_after_close` gained keys.
+**§8's ✔ column and this list are one set, checked by a test.** `queueAlert` needs a `rule_key`, so a kind marked ✔ with no key here is a kind that would throw at 03:10 on a shift close. `alerts.test.ts` asserts both directions: every `LOG[kind].alert.rule` is in `ALERT_RULE_KEYS`, and every key in `ALERT_RULE_KEYS` is either produced by some `LOG[kind].alert` or by a named non-log caller (`health` from `server/tasks/*`, `clock_skew` from the heartbeat's own composed key, §4.3). That is why `shift_opened` and `payout_decided` lost their ✔ — an item for every shift opening is noise, and telling the owner about the decision he just made is noise — and why `settlement_late`, `payment_reversed` and `late_after_close` gained keys.
 
 ---
 
@@ -1367,9 +1362,9 @@ Five of the seven files are copied from `~/Projects/snajper/deploy` and renamed 
 | `/etc/cron.d/sank-backup` | `0 12-23,0-4 * * *` → `backups/hourly/` keep 48; `0 5 * * *` → `backups/daily/` keep 30; one log file `backups/backup.log` |
 | `deploy/deploy.env.example`, `deploy/README-DEPLOY.md` | Bosnian glosses, health check, restore steps, "aplikacija ne radi → papirni blok", and the sentence that a backup file is a key to the till |
 
-Env in `/opt/sank/.env`: `DB_PATH=/opt/sank/data/sank.db`, `PIN_PEPPER` (32 random bytes), `TRUST_PROXY=1`, `PUBLIC_URL`, `TELEGRAM_BOT_TOKEN?`, `NITRO_PORT`, `NITRO_HOST`. `BACKUP_DIR` is deliberately **not** set on the VPS (cron owns backups there) and is set in the dev `.env`. Exposed through `runtimeConfig` as `{ pinPepper, telegramBotToken, publicUrl, trustProxy }` — nothing reaches the client. `SESSION_SECRET` is gone: sessions are random tokens stored as sha256 and there is nothing to sign; the one secret is the PIN pepper. PLAN §5's `/var/lib/sank/sank.db` is updated to `/opt/sank/data/sank.db` in the same PR — one tree to back up and hand over.
+Env in `/opt/sank/.env`: `DB_PATH=/opt/sank/data/sank.db`, `PIN_PEPPER` (32 random bytes), `TRUST_PROXY=1`, `PUBLIC_URL`, `NITRO_PORT`, `NITRO_HOST`. There is no `TELEGRAM_BOT_TOKEN` and no notification secret of any kind (§9). `BACKUP_DIR` is deliberately **not** set on the VPS (cron owns backups there) and is set in the dev `.env`. Exposed through `runtimeConfig` as `{ pinPepper, publicUrl, trustProxy }` — nothing reaches the client. `SESSION_SECRET` is gone: sessions are random tokens stored as sha256 and there is nothing to sign; the one secret is the PIN pepper. PLAN §5's `/var/lib/sank/sank.db` is updated to `/opt/sank/data/sank.db` in the same PR — one tree to back up and hand over.
 
-`server/tasks/nightly.ts` (Nitro `experimental.tasks`, `scheduledTasks: { '15 * * * *': ['nightly'], '* * * * *': ['alerts'], '35 * * * *': ['backup'] }`, cron in UTC because the unit sets `TZ=UTC`): every hour it computes the local hour, and at local 05:xx claims `task_runs(task='nightly', business_date=yesterday)` with `INSERT OR IGNORE` (no row inserted → already done) and runs: the `shift_not_closed` alert when a shift is still open past `closing_time + 3 h`, `DELETE FROM changes WHERE created_at < now − 7 d`, `DELETE FROM sessions WHERE expires_at < now − 30 d`. Failure → `queueAlert('health')`. Off-box backups (rsync to the owner's machine) are a README step, not code.
+`server/tasks/nightly.ts` (Nitro `experimental.tasks`, `scheduledTasks: { '15 * * * *': ['nightly'], '35 * * * *': ['backup'] }` — two tasks, because the alert drainer is gone with the sender (§9); cron in UTC because the unit sets `TZ=UTC`): every hour it computes the local hour, and at local 05:xx claims `task_runs(task='nightly', business_date=yesterday)` with `INSERT OR IGNORE` (no row inserted → already done) and runs: the `shift_not_closed` alert when a shift is still open past `closing_time + 3 h`, `DELETE FROM changes WHERE created_at < now − 7 d`, `DELETE FROM sessions WHERE expires_at < now − 30 d`. Failure → `queueAlert('health')`. Off-box backups (rsync to the owner's machine) are a README step, not code.
 
 ---
 
@@ -1460,7 +1455,7 @@ Every WP below owns its own service files, its own `server/api/**` subtree, its 
 
 ## 13. Open decisions for Vedran and the owner
 
-1. **Cash count scope at close.** This document compares `cash_counted_fen` against the drawer **plus the waiters who have settled**, and reports everyone else as `outstanding_fen`. If the owner counts only the drawer and keeps the envelopes sealed, add `cash_count_scope: 'venue'|'drawer'` to the settings and switch the comparison — one line, but it changes what the Telegram pazar message means.
+1. **Cash count scope at close.** This document compares `cash_counted_fen` against the drawer **plus the waiters who have settled**, and reports everyone else as `outstanding_fen`. If the owner counts only the drawer and keeps the envelopes sealed, add `cash_count_scope: 'venue'|'drawer'` to the settings and switch the comparison — one line, but it changes what the pazar figure on *Puls* means.
 2. **`float_out` acknowledgement.** Born `pending` until the receiver taps *Primio sam* or types his PIN. That is one extra tap at hand-over. Confirm the owner wants it (the alternative lets a bartender move a shortfall onto a colleague).
 3. **Refunds without a void.** The design allows `cash_movements(type='refund')` with no linked adjustment (an admin hands money back for a complaint on a paid tab). Confirm.
 4. **Locks and payments after a settlement** are accepted and flagged, not refused (PLAN F10 says `409 SETTLED`). Refusing loses the sale entirely — the guest paid and no line exists — so the server records it, adds it to the settler's expected, and alerts. Confirm the change to PLAN F10.
@@ -1480,7 +1475,7 @@ Everything critical and major in the three reviews is applied above, except the 
 1. **Per-device `orders.client_seq` gap detection at settlement** (security, major #8 part 2) — rejected. It adds a client-minted counter the server cannot verify, and the accept-and-flag rule for post-settlement locks already removes the incentive to lie about the outbox. What we keep is the evidence: `waiter_settlements.unsent_reported_json`.
 2. **`order_events` as a second who-did-what ledger** (all five designs referenced it) — rejected for Korak 2. CLAUDE.md says there is one activity record; every Korak 2 use (`pay_duplicate_attempt`, `pay_uncovered`, `tab_moved`, `unpaid_marked`, `late_after_settle`) is a quiet `log_entries` kind instead, which costs one table, two triggers and one insert on the hottest path less. `device_offline` moves with it to Korak 3.
 3. **`changes` as an append-only ledger with a 500-row window, `stock_partial` and a trigger dropped by the nightly prune** — rejected. A cursor is not history; guarding it with a no-delete trigger and then routinely disabling that trigger weakens the mechanism everything else depends on. `changes` has no triggers and is pruned with a plain `DELETE`, and it is listed in `schema.test.ts` as deliberately unguarded.
-4. **Telegram link codes, grammy long polling, in-app acknowledgement and outcomes, the hourly cap and the digest** — deferred to Korak 3. The brief asks for a console sender in dev and Telegram when a token is set; a `fetch` sender plus a pasted chat id delivers exactly that with no fourth global unique index and no bot process fighting a dev machine for updates.
+4. **Telegram, and every other outward channel** — not deferred, *dropped*. The brief asked for a console sender in dev and a Telegram sender in production; the owner decided the app is the channel, so the sender, the drainer, the token and the chat-id column are gone and `alert_events` is the in-app attention record instead (§9). In-app acknowledgement and outcomes, the hourly cap and the digest stay Korak 3.
 5. **Server-side count drafts (`draft_json`, `PUT /counts/:id/lines`) and the witness step** — deferred. The phone already holds drafts in IndexedDB exactly like the cart; `witnessed_by`/`witnessed_at` stay as columns so Korak 3 adds a route and no migration. This removes four routes and a four-branch trigger a junior would not be able to debug.
 6. **Delivery drafts, `PATCH /deliveries/:id` and `/post`** — deferred. `POST /api/stock/deliveries` always posts; the `status` column stays with default `'posted'` so the Korak 3 scan flow can insert a draft. `delivery_lines` gets plain append-only triggers instead of a cross-table sub-select trigger.
 7. **Settlement chains (`supersedes_id`), a separate `/settle_late` route, `self_accepted`, and the nightly summary recompute with `drift` entries** — rejected/deferred. One settlement per person per shift with a plain unique index; one `settle` route that behaves differently on a closed shift; `self_accepted` is derived at read; the drift detector's only job was catching a bug in `summarizeShift`, which the `SUMMARY_MISMATCH` assertion at write time now does synchronously.

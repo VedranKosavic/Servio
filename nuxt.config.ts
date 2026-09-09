@@ -56,9 +56,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     /** 32 random bytes. Changing it invalidates every stored PIN. */
     pinPepper: process.env.PIN_PEPPER ?? '',
-    /** Optional: with no token the alert mirror logs to the journal instead. */
-    telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? '',
-    /** Used to build the deep link in a Telegram message. */
+    /** The address the outside world uses; deploy checks it against nginx. */
     publicUrl: process.env.PUBLIC_URL ?? '',
     /** '1' only behind `deploy/nginx.conf`, which overwrites the header (§5.4). */
     trustProxy: process.env.TRUST_PROXY ?? '',
@@ -90,8 +88,6 @@ export default defineNuxtConfig({
     scheduledTasks: {
       // Hourly at :15 — flag a shift nobody closed, and at local 05:xx prune.
       '15 * * * *': ['nightly'],
-      // Every minute — the floor under the debounced drain in plugins/alerts.ts.
-      '* * * * *': ['alerts'],
       // Hourly at :35 — a no-op unless BACKUP_DIR is set, which the VPS does not.
       '35 * * * *': ['backup'],
     },

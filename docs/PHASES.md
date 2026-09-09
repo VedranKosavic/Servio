@@ -34,13 +34,13 @@ WP9 first: the start screen becomes real PIN login, `user_id` disappears from ev
 
 ### Phase 4 — Ekipa (Harun)
 
-The Korak 3 team features, backend and UI together, because by then Phase 1 is finished and `server/**` is free: chat (`chat_*` tables, `canSee`, channels *Svi* / *Konobari* / *Admini*, images and uploads), the roster (`shift_templates`, weeks, publish, swap requests), the *Dnevnik* filters and laptop table, receipt scanning (`POST /api/uploads` → Claude vision → draft delivery), and the Telegram mirror beyond the v1 rule set.
+The Korak 3 team features, backend and UI together, because by then Phase 1 is finished and `server/**` is free: chat (`chat_*` tables, `canSee`, channels *Svi* / *Konobari* / *Admini*, images and uploads), the roster (`shift_templates`, weeks, publish, swap requests), the *Dnevnik* filters and laptop table, receipt scanning (`POST /api/uploads` → Claude vision → draft delivery), and the *obavijesti* list on *Puls* beyond the v1 rule set (acknowledgement, outcomes, the digest). **Chat lives in the app; there is no Telegram and no outward notification of any kind** — the Dnevnik and that attention list are the only channels (BACKEND §9).
 
 **Done when:** PLAN §13 Phase 3b's done-when list passes.
 
 ### Phase 5 — Pilot, deploy, polish (both)
 
-Onboarding evening with the owner, one week with the paper blok in parallel, the KPI chips, the restore drill, and the bug queue that a real night produces. Whoever wrote the code fixes the bug; no ownership rules apply during the pilot beyond "say what you are touching".
+Onboarding evening with the owner, one week with the paper blok in parallel, the KPI chips, the restore drill, and the bug queue that a real night produces. **No web push, and no notification channel of any kind** — what PLAN once deferred to this phase is dropped, not postponed (BACKEND §9). Whoever wrote the code fixes the bug; no ownership rules apply during the pilot beyond "say what you are touching".
 
 ### What runs concurrently
 

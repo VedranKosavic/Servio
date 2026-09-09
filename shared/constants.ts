@@ -116,11 +116,12 @@ export const PIN_BEARING_ROUTES = [
 ] as const
 
 /**
- * The fourteen things worth waking the owner for (BACKEND §9). `queueAlert`
+ * The fourteen things worth the owner's attention (BACKEND §9). `queueAlert`
  * takes one of these, so a log kind marked ✔ with no key here is a kind that
- * would throw at 03:10 on a shift close.
+ * would throw at 03:10 on a shift close. They surface **inside the app**, on
+ * the *Puls* attention list — nothing is sent anywhere.
  *
- * Deliberately absent: a mirror of every shift *opening* is noise, and telling
+ * Deliberately absent: an item for every shift *opening* is noise, and telling
  * the owner about the payout decision he just made is noise.
  *
  * **`shift_not_closed` is WP8's, and it is the one key with no log kind behind
@@ -159,7 +160,7 @@ export type AlertRuleKey = typeof ALERT_RULE_KEYS[number]
 /** Quiet hours, local: an alert queued inside them waits until 10:00. */
 export const QUIET_HOURS_FROM = 3
 export const QUIET_HOURS_TO = 10
-/** …except these three, which are the reason the owner has a phone. */
+/** …except these three, which are the reason he opens the app at all. */
 export const QUIET_HOURS_EXEMPT: AlertRuleKey[] = ['shift_closed', 'cash_variance', 'health']
 
 // ---------------------------------------------------------------------------

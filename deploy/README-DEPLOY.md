@@ -31,8 +31,7 @@ The end state:
                                  /opt/sank/current ──▶ (that one)
                                  systemd runs: node .output/server/index.mjs
                                    ├── the waiters' phones on /k
-                                   ├── the owner's dashboard on /a
-                                   └── the alert mirror to Telegram
+                                   └── the owner's dashboard on /a
                                  nginx on 443 ──▶ 127.0.0.1:3100
                                  /opt/sank/data/sank.db     ← the till
                                  /opt/sank/backups/         ← hourly + nightly
@@ -179,19 +178,22 @@ nano /opt/sank/.env
 `nano` is the simple text editor. Arrow keys to move, type, then **Ctrl+O**,
 Enter to save and **Ctrl+X** to quit.
 
-The file is already written and mostly correct. Two lines need you:
+The file is already written and mostly correct. One line needs you:
 
 ```
 PUBLIC_URL=https://sank.example.ba
-TELEGRAM_BOT_TOKEN=
 ```
 
-- **`PUBLIC_URL`** is the address the outside world uses. Telegram alerts link
-  to `PUBLIC_URL + /a/dnevnik/<id>`, so a wrong value here is a batch of alerts
-  whose links go nowhere. Put the real domain in the day you have one.
-- **`TELEGRAM_BOT_TOKEN`** is optional — it is the alert mirror to the owner's
-  phone. From @BotFather. Empty is not an error: alerts are still computed,
-  logged and shown inside the app, just not sent anywhere.
+- **`PUBLIC_URL`** is the address the outside world uses — the one the café
+  types into a phone. Put the real domain in the day you have one, and make it
+  the same host as `server_name` in `nginx.conf`.
+
+There is **no notification setting anywhere in this file, and no step in this
+guide that sets one up.** Šank sends nothing outward: no Telegram bot, no
+e-mail, no push. Everything worth the owner's attention is written to the
+database as it happens, and he reads it in the app — the *Dnevnik*, and the
+attention list on *Puls*. Nothing to register, no token to paste, and no café
+data leaving this machine.
 
 `deploy/deploy.env.example` in the repo documents every line of this file,
 including the four variables that must **not** appear in it. Read it once.
@@ -215,9 +217,9 @@ including the four variables that must **not** appear in it. Read it once.
 > that line empty.
 >
 > Unlike some Nuxt projects, **none of these names has a prefix**. The server
-> reads `PIN_PEPPER`, `DB_PATH`, `TRUST_PROXY`, `PUBLIC_URL` and
-> `TELEGRAM_BOT_TOKEN` straight from the environment, so what you write is what
-> the code sees. `nuxt.config.ts` declares four of them under `runtimeConfig`
+> reads `PIN_PEPPER`, `DB_PATH`, `TRUST_PROXY` and `PUBLIC_URL` straight from
+> the environment, so what you write is what the code sees. `nuxt.config.ts`
+> declares three of them under `runtimeConfig`
 > as well — that block is server-only and is there as the one written list of
 > every secret the app may hold, not as a second way to set them.
 

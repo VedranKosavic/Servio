@@ -415,17 +415,17 @@ describe('users', () => {
       .toThrow(/himself/)
   })
 
-  it('takes the Telegram chat id without ever putting it in the Dnevnik', () => {
+  it('takes the admin e-mail without ever putting it in the Dnevnik', () => {
     const haris = f.userId('Haris')
-    const saved = updateUser(f.db, f.venueId, admin(), haris, { telegram_chat_id: '123456789' })
-    expect(saved.telegram_chat_id).toBe('123456789')
+    const saved = updateUser(f.db, f.venueId, admin(), haris, { email: 'haris@lounge.ba' })
+    expect(saved.email).toBe('haris@lounge.ba')
 
-    // §8's bodies carry ids and integers, never a chat id — `log.test.ts` greps
-    // every rendered body for exactly this, and the entry below is the one an
-    // admin CRUD route could most easily get wrong.
+    // §8's bodies carry ids and integers, never a contact detail — `log.test.ts`
+    // greps every rendered body for exactly this, and the entry below is the one
+    // an admin CRUD route could most easily get wrong.
     for (const entry of entries('user_changed')) {
-      expect(entry.bodyJson).not.toContain('123456789')
-      expect(entry.titleBs).not.toContain('123456789')
+      expect(entry.bodyJson).not.toContain('haris@lounge.ba')
+      expect(entry.titleBs).not.toContain('haris@lounge.ba')
     }
   })
 

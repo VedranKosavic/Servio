@@ -274,6 +274,17 @@ describe('a database that already holds Korak 1 data', () => {
       ]) {
         expect([t, tables.has(t)]).toEqual([t, true])
       }
+
+      // 0002 dropped `users.telegram_chat_id`. A plain SQLite DROP COLUMN is
+      // safe for it — nothing indexes it, no trigger and no view names it
+      // (`users_email_uq` is on `email` alone) — so there is no table rebuild
+      // here, and an old database that had the column comes out without it.
+      const userColumns = new Set(
+        sqlite.prepare(`PRAGMA table_info(users)`).all()
+          .map(r => (r as { name: string }).name),
+      )
+      expect(userColumns.has('telegram_chat_id')).toBe(false)
+      expect(userColumns.has('email')).toBe(true)
     } finally {
       sqlite.close()
     }

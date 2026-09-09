@@ -820,7 +820,6 @@ const USER_LABELS: Record<string, string> = {
   role: 'uloga',
   active: 'aktivan',
   email: 'e-mail',
-  telegram_chat_id: 'Telegram',
 }
 
 const USER_COLUMNS: Record<string, string> = {
@@ -829,7 +828,6 @@ const USER_COLUMNS: Record<string, string> = {
   role: 'role',
   active: 'active',
   email: 'email',
-  telegram_chat_id: 'telegramChatId',
 }
 
 /**
@@ -850,7 +848,6 @@ function toUser(row: typeof schema.users.$inferSelect): UserAdmin {
     pin_len: row.pinLen === 6 ? 6 : 4,
     has_pin: row.pinHash !== null,
     email: row.email,
-    telegram_chat_id: row.telegramChatId,
     created_at: row.createdAt,
   }
 }
@@ -899,7 +896,6 @@ export function createUser(
       pinPepperV: 1,
       passwordHash: null,
       email: body.email ?? null,
-      telegramChatId: body.telegram_chat_id ?? null,
       logSeenAt: null,
       createdAt: now,
     }).run()
@@ -919,8 +915,8 @@ export function createUser(
 }
 
 /**
- * `PATCH /api/admin/users/:id` — rename, re-role, deactivate, or paste a
- * Telegram chat id.
+ * `PATCH /api/admin/users/:id` — rename, re-role, deactivate, or set the
+ * admin's e-mail.
  *
  * **An admin cannot deactivate himself** (400 `SELF_DEACTIVATE`). It is not
  * paternalism: the admin session is the only door into `/a` that does not need a
@@ -952,16 +948,13 @@ export function updateUser(
       ...(patch.role !== undefined ? { role: patch.role } : {}),
       ...(patch.active !== undefined ? { active: flag(patch.active, 1) } : {}),
       ...(patch.email !== undefined ? { email: patch.email ?? null } : {}),
-      ...(patch.telegram_chat_id !== undefined
-        ? { telegramChatId: patch.telegram_chat_id ?? null }
-        : {}),
     }).where(eq(schema.users.id, userId)).run()
 
     if (labels.length) {
       log(tx, venueId, {
         kind: 'user_changed',
-        // The body carries the *what*, never the value: an entry that stored a
-        // pasted chat id would put it in the Dnevnik and in the Telegram mirror.
+        // The body carries the *what*, never the value: an entry that stored
+        // an e-mail address would put it in the Dnevnik for everyone to read.
         body: { user_id: userId, what: deactivated ? 'deaktiviran' : 'promijenjen' },
         actorId: actor.userId,
         ref: { type: 'user', id: userId },

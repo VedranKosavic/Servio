@@ -1,6 +1,6 @@
 /**
- * `PATCH /api/admin/users/:id` — rename, re-role, deactivate, or paste the
- * Telegram chat id the alerts go to (§9).
+ * `PATCH /api/admin/users/:id` — rename, re-role, deactivate, or set the
+ * e-mail an admin logs in with.
  *
  * An admin deactivating himself is 400 `SELF_DEACTIVATE`: the admin session is
  * the only door into `/a` that needs no device.

@@ -200,8 +200,6 @@ export interface UserAdmin {
   has_pin: boolean
   /** Admins only; the laptop login. Never the password itself. */
   email: string | null
-  /** Where this admin's Telegram mirror goes (§9). */
-  telegram_chat_id: string | null
   created_at: string
 }
 

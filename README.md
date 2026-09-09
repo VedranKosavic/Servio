@@ -12,7 +12,12 @@ the Korak 2 schema and its append-only triggers, PIN sessions on enrolled device
 deny-by-default authorization, the money core (rounds, tabs, payments, voids and comps), shifts
 with blind cash settlement, bar stock with counts and the two owner reports, the change feed, the
 *Dnevnik*, admin CRUD, the owner dashboard's reads, and the deploy kit in [deploy/](deploy/).
-724 tests, `npm run typecheck && npm test && npm run build` green.
+715 tests, `npm run typecheck && npm test && npm run build` green.
+
+**Šank notifies nobody.** There is no Telegram bot, no e-mail, no push and no outward channel of
+any kind: the owner reads the *Dnevnik* and the attention list inside the app, and the team chat
+will live in the app too. Nothing to install, nothing to configure, and no café data leaving the
+box it runs on.
 
 What is left is **WP9**, the waiter and bartender screens under `app/`: they are still Korak 1's
 and still send a `user_id` in the body instead of using the session, so they need the start screen

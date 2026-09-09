@@ -171,8 +171,6 @@ export const createUserBody = z.object({
   pin,
   /** Admins only: email + password is the one way into `/a` on a laptop. */
   email: z.email().max(120).trim().toLowerCase().nullish(),
-  /** Pasted from @userinfobot; where this admin's Telegram mirror goes (§9). */
-  telegram_chat_id: z.string().trim().max(40).nullish(),
 }).strict()
 
 /**
@@ -186,7 +184,6 @@ export const updateUserBody = z.object({
   role,
   active: z.boolean(),
   email: z.email().max(120).trim().toLowerCase().nullish(),
-  telegram_chat_id: z.string().trim().max(40).nullish(),
 }).strict().partial()
 
 /**

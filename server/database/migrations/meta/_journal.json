@@ -15,6 +15,13 @@
       "when": 1788959302503,
       "tag": "0001_korak2",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788977845491,
+      "tag": "0002_no_telegram",
+      "breakpoints": true
     }
   ]
 }

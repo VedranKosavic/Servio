@@ -135,7 +135,6 @@ export function seed(db: Db, opts: SeedOptions = {}): void {
         // admin has one.
         passwordHash: devSecrets && isAdmin ? memoHash(DEV_ADMIN_PASSWORD, userId) : null,
         email: devSecrets && isAdmin ? DEV_ADMIN_EMAIL : null,
-        telegramChatId: null,
         logSeenAt: null,
         createdAt: now,
       }).run()

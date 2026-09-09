@@ -72,9 +72,9 @@ Environment=DB_PATH=/opt/sank/data/sank.db
 Environment=NITRO_PORT=3100
 Environment=NITRO_HOST=127.0.0.1
 
-# The operator's file: PIN_PEPPER, TRUST_PROXY, PUBLIC_URL and the optional
-# Telegram token. Mode 600, owned by sank. systemd reads it once, at start, so
-# every change to it needs a `systemctl restart sank`.
+# The operator's file: PIN_PEPPER, TRUST_PROXY and PUBLIC_URL. Mode 600, owned
+# by sank. systemd reads it once, at start, so every change to it needs a
+# `systemctl restart sank`.
 EnvironmentFile=/opt/sank/.env
 
 ExecStart=/usr/bin/node .output/server/index.mjs

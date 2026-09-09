@@ -422,7 +422,7 @@ describe('the scheduled tasks', () => {
     .sort()
 
   it('are the same set as the files in server/tasks', () => {
-    expect(onDisk).toEqual(['alerts', 'backup', 'nightly'])
+    expect(onDisk).toEqual(['backup', 'nightly'])
     expect(scheduled).toEqual(onDisk)
   })
 
@@ -431,8 +431,8 @@ describe('the scheduled tasks', () => {
   })
 
   it('do nothing while a test suite owns the database', async () => {
-    // Every task's first line. Without it, `npm test` would take real backups,
-    // prune real rows and try to reach Telegram.
+    // Every task's first line. Without it, `npm test` would take real backups
+    // and prune real rows.
     for (const name of onDisk) {
       const source = readFileSync(join(TASKS_DIR, `${name}.ts`), 'utf8')
       expect(source, `${name} does not check tasksDisabled()`).toMatch(/tasksDisabled\(\)/)

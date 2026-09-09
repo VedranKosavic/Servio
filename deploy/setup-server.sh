@@ -238,18 +238,14 @@ PIN_PEPPER=$PEPPER
 # the header himself. If nginx is ever removed, remove this line with it.
 TRUST_PROXY=1
 
-# Where the app answers as the outside world sees it. Telegram alerts link to
-# it: PUBLIC_URL + /a/dnevnik/<id>. Fill in the real domain once there is one.
+# Where the app answers as the outside world sees it - the address the owner
+# types on his phone. Fill in the real domain once there is one.
 PUBLIC_URL=https://sank.example.ba
 
 # The port and interface. 127.0.0.1 means "this machine only" - the firewall
 # does not open $APP_PORT, nginx is what publishes the app.
 NITRO_PORT=$APP_PORT
 NITRO_HOST=127.0.0.1
-
-# Optional: the Telegram alert mirror. Empty = alerts are computed and logged
-# but nothing is sent. The token comes from @BotFather.
-TELEGRAM_BOT_TOKEN=
 
 # NOT SET HERE, DELIBERATELY - see deploy/deploy.env.example:
 #   SANK_DEV_ENROL   would hand an enrolled device cookie to the whole internet
@@ -259,7 +255,7 @@ EOF
   chown "$APP_USER:$APP_USER" "$APP_DIR/.env"
   chmod 600 "$APP_DIR/.env"
   info "wrote $APP_DIR/.env (mode 600) with a fresh PIN_PEPPER"
-  info "set PUBLIC_URL, and TELEGRAM_BOT_TOKEN if you want the alert mirror"
+  info "set PUBLIC_URL to the real domain"
 fi
 
 # --- 5. the native module ----------------------------------------------------
@@ -429,7 +425,7 @@ ${C_OK}Server ready.${C_OFF}
 Next, in this order (details in deploy/README-DEPLOY.md):
 
   1. Look over $APP_DIR/.env
-       nano $APP_DIR/.env         (PUBLIC_URL, and the Telegram token if you want it)
+       nano $APP_DIR/.env         (PUBLIC_URL - the real domain)
      The PIN pepper is already generated. Copy that line somewhere safe.
   2. Put a database in $APP_DIR/data/sank.db, from the Mac. The seeding
      script needs the source tree, which is not on this server, so the file is

@@ -94,8 +94,6 @@ export const users = sqliteTable('users', {
   passwordHash: text('password_hash'),
   /** Lowercase, trimmed. */
   email: text('email'),
-  /** Pasted by the admin in *Postavke*; where the Telegram mirror sends. */
-  telegramChatId: text('telegram_chat_id'),
   /** The Dnevnik badge: everything after this is "new". */
   logSeenAt: text('log_seen_at'),
   createdAt: text('created_at').notNull().default(''),
@@ -939,9 +937,11 @@ export const logEntries = sqliteTable('log_entries', {
 ])
 
 /**
- * One queued Telegram mirror. The unique key is the dedupe: `INSERT OR IGNORE`
- * on `(venue, rule, ref_type, ref_id)` means a void decided twice on the same
- * adjustment sends one message. `send_after` implements quiet hours.
+ * One item for the in-app attention list. The unique key is the dedupe:
+ * `INSERT OR IGNORE` on `(venue, rule, ref_type, ref_id)` means a void decided
+ * twice on the same adjustment raises one item. `send_after` is the earliest it
+ * may surface (quiet hours). Nothing sends anything: `sent_at`, `attempts` and
+ * `last_error` are leftovers from the removed sender and stay unwritten (§9).
  */
 export const alertEvents = sqliteTable('alert_events', {
   id: text('id').primaryKey(),
