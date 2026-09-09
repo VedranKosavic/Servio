@@ -32,8 +32,8 @@ const API_DIR = resolve(process.cwd(), 'server/api')
 const PENDING_DELETION = new Set(['POST /api/tabs/:id/pay'])
 
 /**
- * The routes whose files exist today: Korak 1's, plus WP1's, WP5's and WP2's
- * rows of the work-package table. Everything else in `ROUTE_ROLES` belongs to a
+ * The routes whose files exist today: Korak 1's, plus WP1's, WP5's, WP2's and
+ * WP6's rows of the work-package table. Everything else in `ROUTE_ROLES` belongs to a
  * package that has not merged — `/api/payments` and `/api/tabs/**` are WP3's,
  * `/api/stock/counts` is WP4's — which is why this is an explicit list and not a
  * prefix match.
@@ -63,6 +63,19 @@ const LANDED = new Set([
   'POST /api/shifts/:id/opening-float',
   'POST /api/cash-movements/:id/decide', 'POST /api/cash-movements/:id/ack',
   'GET /api/me/shift', 'GET /api/me/shift/lines', 'GET /api/me/shifts',
+  // WP6 — admin CRUD. `api/admin/users/**` is WP6's including `:id/pin`, which
+  // calls WP1's `resetPin`; `api/admin/{enrol-codes,devices}` above stay WP1's
+  // (§12's ownership table names both, so neither is claimed twice).
+  'GET /api/admin/products', 'POST /api/admin/products',
+  'PATCH /api/admin/products/:id', 'PUT /api/admin/products/:id/recipe',
+  'GET /api/admin/categories', 'POST /api/admin/categories',
+  'PATCH /api/admin/categories/:id',
+  'GET /api/admin/tables', 'POST /api/admin/tables', 'PATCH /api/admin/tables/:id',
+  'GET /api/admin/stock-items', 'POST /api/admin/stock-items',
+  'PATCH /api/admin/stock-items/:id',
+  'GET /api/admin/users', 'POST /api/admin/users',
+  'PATCH /api/admin/users/:id', 'POST /api/admin/users/:id/pin',
+  'GET /api/admin/settings', 'PATCH /api/admin/settings',
 ])
 
 /** Every `.get.ts` / `.post.ts` / `.patch.ts` under `server/api/**`, as a key. */
