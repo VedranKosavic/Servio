@@ -87,6 +87,19 @@ const LANDED = new Set([
   'POST /api/tabs/:id/move', 'POST /api/tabs/:id/assign', 'POST /api/tabs/:id/accept',
   'POST /api/adjustments', 'POST /api/adjustments/:id/decide', 'GET /api/adjustments/pending',
   'POST /api/drafts/discard',
+  // WP4 — the shelf. `POST /api/stock/deliveries` is above with Korak 1's rows
+  // because the key has existed since then; the file moved into a folder when
+  // the GET and the reversal joined it, and the key did not change. §12 splits
+  // `api/owner/**`: `stock`, `categories` and `nargila` are WP4's reports,
+  // `live`, `shifts` and `shift/**` are WP7's.
+  'POST /api/stock/opening', 'GET /api/stock/deliveries',
+  'POST /api/stock/deliveries/:id/reverse',
+  'POST /api/stock/waste', 'POST /api/stock/waste/:id/approve',
+  'POST /api/stock/corrections',
+  'POST /api/stock/counts', 'GET /api/stock/counts', 'GET /api/stock/counts/:id',
+  'POST /api/stock/counts/:id/confirm',
+  'GET /api/owner/stock', 'GET /api/owner/stock/:id/movements',
+  'GET /api/owner/categories', 'GET /api/owner/nargila',
 ])
 
 /** Every `.get.ts` / `.post.ts` / `.patch.ts` under `server/api/**`, as a key. */

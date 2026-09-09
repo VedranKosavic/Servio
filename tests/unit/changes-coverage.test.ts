@@ -20,7 +20,10 @@ import { makeFixture, type Fixture } from '../helpers/db'
 import { maxSeq } from '../../server/services/changes'
 import { createOrder } from '../../server/services/orders'
 import { markPrepared } from '../../server/services/prep'
-import { createDelivery } from '../../server/services/stock'
+import {
+  correctStock, createDelivery, approveWaste, logWaste, reverseDelivery, setOpeningStock,
+} from '../../server/services/stock'
+import { confirmCount, submitCount } from '../../server/services/counts'
 import {
   acceptTab, assignTab, decideUnpaid, markUnpaid, moveTab, tabMoney,
 } from '../../server/services/tabs'
@@ -113,11 +116,79 @@ const CALLS: Record<string, () => void> = {
     markPrepared(f.db, f.venueId, order.order_id, f.userId('Emir'))
   },
 
-  [join('stock', 'deliveries.post.ts')]: () => {
-    createDelivery(f.db, f.venueId, {
-      user_id: f.userId('Emir'),
-      lines: [{ stock_item_id: f.stockItemId('Coca-Cola 0,25 l'), qty: 24 }],
+  // WP4 — the shelf. Every one of these ends in `bump('stock')`, because
+  // *Stanje šanka* and the aroma grid on the shisha sheet are stale the moment
+  // a crate lands, a bottle breaks or a count is signed.
+  [join('stock', 'deliveries', 'index.post.ts')]: () => {
+    createDelivery(f.db, f.venueId, f.adminActor(), {
+      client_id: randomUUID(),
+      supplier_name: 'Coca-Cola HBC',
+      lines: [{
+        stock_item_id: f.stockItemId('Coca-Cola 0,25 l'),
+        packs: 1, loose: 0, line_cost_fen: 2400,
+      }],
     })
+  },
+
+  [join('stock', 'deliveries', '[id]', 'reverse.post.ts')]: () => {
+    const delivery = createDelivery(f.db, f.venueId, f.adminActor(), {
+      client_id: randomUUID(),
+      supplier_name: 'Coca-Cola HBC',
+      lines: [{
+        stock_item_id: f.stockItemId('Fanta 0,25 l'),
+        packs: 0, loose: 24, line_cost_fen: 2400,
+      }],
+    })
+    reverseDelivery(f.db, f.venueId, f.adminActor(), delivery.id, { note: 'pogrešna faktura' })
+  },
+
+  [join('stock', 'opening.post.ts')]: () => {
+    setOpeningStock(f.db, f.venueId, f.adminActor(), {
+      lines: [{ stock_item_id: f.stockItemId('Coca-Cola 0,25 l'), qty: 79, unit_cost_mfen: 95_000 }],
+    })
+  },
+
+  [join('stock', 'waste', 'index.post.ts')]: () => {
+    logWaste(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(),
+      stock_item_id: f.stockItemId('Coca-Cola 0,25 l'),
+      qty: 1,
+      reason: 'razbijeno',
+    })
+  },
+
+  [join('stock', 'waste', '[id]', 'approve.post.ts')]: () => {
+    const waste = logWaste(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(),
+      stock_item_id: f.stockItemId('Coca-Cola 0,25 l'),
+      qty: 1,
+      reason: 'razbijeno',
+    })
+    approveWaste(f.db, f.venueId, f.actor('Emir'), waste.id)
+  },
+
+  [join('stock', 'corrections.post.ts')]: () => {
+    correctStock(f.db, f.venueId, f.adminActor(), {
+      stock_item_id: f.stockItemId('Limun'),
+      type: 'correction',
+      qty_delta: -3,
+      note: 'pokvarili se',
+    })
+  },
+
+  [join('stock', 'counts', 'index.post.ts')]: () => {
+    submitCount(f.db, f.venueId, f.actor('Emir'), {
+      kind: 'full', phase: 'adhoc',
+      lines: [{ stock_item_id: f.stockItemId('Red Bull'), packs: 0, loose: 28 }],
+    })
+  },
+
+  [join('stock', 'counts', '[id]', 'confirm.post.ts')]: () => {
+    const count = submitCount(f.db, f.venueId, f.actor('Emir'), {
+      kind: 'full', phase: 'adhoc',
+      lines: [{ stock_item_id: f.stockItemId('Red Bull'), packs: 0, loose: 27, note: 'fali jedan' }],
+    })
+    confirmCount(f.db, f.venueId, f.adminActor(), count.id, {})
   },
 
   // WP3 — the money core. `POST /api/tabs/:id/pay` is gone; `POST /api/payments`

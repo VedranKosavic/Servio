@@ -209,18 +209,46 @@ describe('GET /api/stock and POST /api/stock/deliveries', () => {
     expect(cola.last_movement?.type).toBe('sale')
   })
 
-  it('adds a delivery and returns the updated list', () => {
-    const updated = createDelivery(f.db, f.venueId, {
-      user_id: f.userId('Emir'),
+  /**
+   * WP4's envelope, per the note at the top of this file: Korak 1's
+   * `createDelivery` took a `user_id` and answered with the whole stock list;
+   * §7's takes the actor from the session and answers with one `DeliveryView`.
+   */
+  it('adds a delivery and answers with the DeliveryView', () => {
+    const delivery = createDelivery(f.db, f.venueId, f.actor('Emir'), {
+      client_id: randomUUID(),
+      supplier_name: 'Coca-Cola HBC',
+      invoice_no: 'R-1201',
       lines: [
-        { stock_item_id: f.stockItemId('Coca-Cola 0,25 l'), qty: 48, note: 'dvije gajbe' },
-        { stock_item_id: f.stockItemId('Ugalj (kocke)'), qty: 64 },
+        {
+          stock_item_id: f.stockItemId('Coca-Cola 0,25 l'),
+          packs: 2, loose: 0, line_cost_fen: 4800, note: 'dvije gajbe',
+        },
+        {
+          stock_item_id: f.stockItemId('Ugalj (kocke)'),
+          packs: 0, loose: 64, line_cost_fen: 1600,
+        },
       ],
     })
 
-    expect(updated.find(i => i.name === 'Coca-Cola 0,25 l')!.on_hand).toBe(79 + 48)
-    expect(updated.find(i => i.name === 'Ugalj (kocke)')!.on_hand).toBe(103 + 64)
-    expect(updated.find(i => i.name === 'Ugalj (kocke)')!.last_movement?.ref_label).toBe('prijem robe')
+    expect(delivery.supplier_name).toBe('Coca-Cola HBC')
+    expect(delivery.invoice_no).toBe('R-1201')
+    expect(delivery.total_fen).toBe(6400)
+    expect(delivery.status).toBe('posted')
+    expect(delivery.entered_by_name).toBe('Emir')
+    expect(delivery.already_applied).toBe(false)
+    expect(delivery.lines).toHaveLength(2)
+    // 2 gajbe × 24 = 48 boca, and 4 800 fen over 48 is 100 000 mfen a bottle.
+    expect(delivery.lines[0]).toMatchObject({
+      item_name: 'Coca-Cola 0,25 l', packs: 2, loose: 0, qty: 48,
+      line_cost_fen: 4800, unit_cost_mfen: 100_000,
+    })
+
+    const stock = getStock(f.db, f.venueId)
+    expect(stock.find(i => i.name === 'Coca-Cola 0,25 l')!.on_hand).toBe(79 + 48)
+    expect(stock.find(i => i.name === 'Ugalj (kocke)')!.on_hand).toBe(103 + 64)
+    expect(stock.find(i => i.name === 'Ugalj (kocke)')!.last_movement?.ref_label)
+      .toBe('prijem robe')
   })
 })
 

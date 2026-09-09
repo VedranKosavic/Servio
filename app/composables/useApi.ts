@@ -23,7 +23,9 @@ import type {
   PaymentResult,
   Prep,
   PrepOrder,
+  DeliveryView,
   StockItem,
+  StockResponse,
   TablesStateResponse,
 } from '#shared/types'
 
@@ -104,12 +106,18 @@ export function useApi() {
     markPrepared: (orderId: string, userId: string) =>
       request<PrepOrder>(`/api/prep/${orderId}/done`, { method: 'POST', body: { user_id: userId } }),
 
-    /** *Stanje šanka* — every item with its on-hand sum and last movement. */
-    getStock: () => request<StockItem[]>('/api/stock'),
+    /**
+     * *Stanje šanka* — every item with its on-hand sum and last movement.
+     *
+     * The route answers `{ seq, items }` now (BACKEND §7); the envelope is
+     * unwrapped here so the screen keeps reading a plain list. WP9 rewires the
+     * whole app to the `seq` cursor and this line goes with it.
+     */
+    getStock: () => request<StockResponse>('/api/stock').then(r => r.items),
 
-    /** *Prijem robe*. Quantities in base units; returns the updated list. */
+    /** *Prijem robe*. Returns the posted delivery note (BACKEND §6.8). */
     postDelivery: (body: CreateDeliveryBody) =>
-      request<StockItem[]>('/api/stock/deliveries', { method: 'POST', body }),
+      request<DeliveryView>('/api/stock/deliveries', { method: 'POST', body }),
 
     getHealth: () => request<Health>('/api/health'),
   }
