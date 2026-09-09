@@ -26,6 +26,8 @@ useHead({ title: 'Završi smjenu' })
 
 const api = useApi()
 const me = useMe()
+useOutbox()
+const { blocked, blockedText, pending } = useSync()
 
 const shift = ref<MyShift | null>(null)
 const loading = ref(true)
@@ -87,11 +89,20 @@ const checklist = computed(() => [
 
 const declared = computed(() => parseKm(declaredRaw.value))
 const canSettle = computed(() =>
-  !!brief.value && declared.value !== null && declared.value >= 0 && !settling.value)
+  !!brief.value && declared.value !== null && declared.value >= 0 && !settling.value
+  // The server already refuses this with `409 PENDING_OUTBOX`, but a waiter
+  // standing at the till with the envelope in his hand should be told *before*
+  // the request leaves, not after a round trip that fails.
+  && !blocked.value)
 
 async function settle() {
   const shiftId = brief.value?.id
   if (!shiftId || declared.value === null || settling.value) return
+
+  if (blocked.value) {
+    settleError.value = `${blockedText.value} — sačekaj da odu.`
+    return
+  }
 
   settling.value = true
   settleError.value = null
@@ -99,10 +110,10 @@ async function settle() {
   try {
     reveal.value = await api.settleShift(shiftId, {
       declared_fen: declared.value,
-      // The phone's own count of rounds it has not managed to send. No outbox
-      // yet, so it reports zero — truthfully, which is the only way it is worth
-      // reporting at all.
-      outbox_len: 0,
+      // The phone's own count of rounds it has not managed to send. Zero by the
+      // time we get here — the guard above saw to that — but reported honestly
+      // rather than hard-coded, which is the only way it is worth reporting.
+      outbox_len: pending.value,
     })
     // The strip drops the moment a settlement exists: re-read it for the
     // summary, the movements and the accepted-by line.
@@ -133,7 +144,13 @@ function diffLabel(fen: number): string {
 <template>
   <ClientOnly>
     <div class="flex flex-1 flex-col">
-      <WaiterHeader title="Završi smjenu" back-to="/k" />
+      <WaiterHeader title="Završi smjenu" back-to="/k">
+        <template #right>
+          <WaiterSyncChip compact />
+        </template>
+      </WaiterHeader>
+
+      <WaiterOutboxBanner />
 
       <main class="flex flex-1 flex-col gap-4 py-4">
         <p v-if="loading" class="py-10 text-center text-text-2">
@@ -305,6 +322,11 @@ function diffLabel(fen: number): string {
                 >
                 <span class="shrink-0 text-text-2">KM</span>
               </div>
+
+              <!-- The same sentence the server would send back, said first. -->
+              <p v-if="blocked" class="rounded-xl bg-warn-soft px-3 py-2 text-[15px] text-warn" role="status">
+                {{ blockedText }} — smjena se ne može završiti dok ne odu.
+              </p>
 
               <p v-if="settleError" class="rounded-xl bg-danger-soft px-3 py-2 text-[15px] text-danger" role="alert">
                 {{ settleError }}

@@ -24,6 +24,7 @@
  *   with no body (see the `etag` note in `useApi.ts`).
  */
 import { useDocumentVisibility, useIntervalFn } from '@vueuse/core'
+import { useOutboxStore } from '~/stores/outbox'
 import type {
   ChangesResult, MeContext, PendingCounts, Prep, StockItem, TablesStateResponse,
 } from '#shared/types'
@@ -66,6 +67,7 @@ const HEARTBEAT_MS = 60_000
 export function useChanges(handlers: ChangeHandlers, options: ChangesOptions = {}) {
   const api = useApi()
   const meState = useMe()
+  const outbox = useOutboxStore()
   const intervalMs = options.intervalMs ?? 15_000
 
   /**
@@ -82,6 +84,8 @@ export function useChanges(handlers: ChangeHandlers, options: ChangesOptions = {
   const cursor = ref(0)
   /** Did the last attempt reach the server? What the sync chip renders. */
   const ok = ref(true)
+  /** The same answer, shared app-wide, so `useSync()` can paint the chip. */
+  const pollOk = useState<boolean>('sank:poll-ok', () => true)
   const lastOkAt = ref<number | null>(null)
   const menuVersion = useState<number | null>('sank:menu-version', () => null)
 
@@ -120,14 +124,25 @@ export function useChanges(handlers: ChangeHandlers, options: ChangesOptions = {
     if (inFlight) return
     inFlight = true
     try {
+      // **The flush runs before the poll, always** (PHASE3 §2.2). Reading the
+      // room before sending what changed it is how a phone shows a table it
+      // already emptied — the answer would arrive describing a world one round
+      // out of date, and the waiter would tap *Naplati* on a total that is
+      // already wrong. Each queued POST has an 8 s ceiling and the run stops on
+      // the first network error, so this can never hold the poll open for long.
+      await outbox.flush()
       apply(await api.getChanges(cursor.value))
       ok.value = true
+      pollOk.value = true
       lastOkAt.value = Date.now()
     } catch (err) {
       // A revoked device or an expired session ends the screen; anything else
       // just turns the chip red and leaves what is on screen alone. Showing
       // stale tables is honest as long as the chip says the data is not current.
-      if (!(await meState.handleAuthError(err))) ok.value = false
+      if (!(await meState.handleAuthError(err))) {
+        ok.value = false
+        pollOk.value = false
+      }
     } finally {
       inFlight = false
     }
@@ -138,13 +153,19 @@ export function useChanges(handlers: ChangeHandlers, options: ChangesOptions = {
    * bumps nothing — a heartbeat that touched `changes` would invalidate every
    * waiter's ETag once a minute and undo the whole point of the feed.
    *
-   * `pending` is the length of this phone's offline outbox. There is no outbox
-   * yet (it lands later in Phase 3), so it reports the truth: nothing queued.
+   * `pending` is the length of this phone's offline outbox, and since Phase 3
+   * there is one to count.
    */
   async function beat(): Promise<void> {
     try {
+      const oldest = outbox.oldestPendingAt
       const result = await api.heartbeat({
-        pending: 0,
+        // The truth, at last: how much money and stock this phone is still
+        // holding on to. `POST /api/stock/counts` refuses a count while a
+        // device reports a queue, so this number is not decoration — it is the
+        // gate that stops a popis being taken against a stale on-hand.
+        pending: outbox.pending,
+        ...(oldest ? { oldest_pending_at: oldest } : {}),
         client_now: new Date().toISOString(),
         app_version: APP_VERSION,
         standalone: import.meta.client
@@ -181,6 +202,15 @@ export function useChanges(handlers: ChangeHandlers, options: ChangesOptions = {
       void beat()
       heart.resume()
     }
+  })
+
+  // **A heartbeat after every successful flush** (§2.3), and not only every
+  // 60 s. The count screen's `409 PENDING_OUTBOX` names the phone that is
+  // holding things up; a bartender who has just watched a waiter reconnect
+  // should not have to wait out a minute of stale evidence before *Predaj*
+  // works.
+  watch(() => outbox.flushedAt, (at) => {
+    if (at > 0 && options.heartbeat !== false) void beat()
   })
 
   return { ok, cursor, lastOkAt, refresh }

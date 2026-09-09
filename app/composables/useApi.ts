@@ -147,6 +147,17 @@ async function request<T>(url: string, options?: {
    * without asking the server first.
    */
   etag?: boolean
+  /**
+   * A ceiling on how long this request may hang, in milliseconds.
+   *
+   * Café wifi does not usually refuse a request — it accepts it and then says
+   * nothing, forever, which is worse: the outbox would sit on one entry all
+   * night and the poll would never come back. `AbortSignal.timeout(ms)` is the
+   * browser's own stopwatch; when it fires, `$fetch` rejects, and the outbox
+   * counts that as a *network* error rather than a failure, because the request
+   * may well have landed. The replay key is what makes that harmless.
+   */
+  timeoutMs?: number
 }): Promise<T> {
   try {
     return await rawFetch(url, {
@@ -155,12 +166,29 @@ async function request<T>(url: string, options?: {
       // The session and device cookies. Same-origin fetches would send them
       // anyway; saying so means an installed PWA on a different origin does too.
       credentials: 'include',
+      ...(options?.timeoutMs && import.meta.client
+        ? { signal: AbortSignal.timeout(options.timeoutMs) }
+        : {}),
       ...(options?.etag && import.meta.client ? { cache: 'default' as RequestCache } : {}),
     }) as T
   } catch (err) {
     throw toApiError(err)
   }
 }
+
+/**
+ * The five routes the offline outbox may post to, and the only place their URLs
+ * are written (WP0, PHASE3 §2.2). Money and stock; nothing else is queueable.
+ */
+const OUTBOX_URLS = {
+  order: '/api/orders',
+  pay: '/api/payments',
+  unpaid: '/api/tabs/unpaid',
+  adjust: '/api/adjustments',
+  waste: '/api/stock/waste',
+} as const
+
+export type OutboxRoute = keyof typeof OUTBOX_URLS
 
 export function useApi() {
   return {
@@ -217,7 +245,16 @@ export function useApi() {
      * for the floor plan, the tickets or the stock.
      */
     getChanges: (since: number) =>
-      request<ChangesResult>(`/api/changes?since=${since}`, { etag: true }),
+      request<ChangesResult>(`/api/changes?since=${since}`, { etag: true, timeoutMs: 4000 }),
+
+    /**
+     * The outbox's one door (§2.2). The body has already been validated by the
+     * screen that queued it and is posted back unchanged, however late — which
+     * is why this takes an opaque `unknown` rather than a union of five bodies:
+     * the entry on disk may have been written by yesterday's build.
+     */
+    sendQueued: <T>(kind: OutboxRoute, body: unknown) =>
+      request<T>(OUTBOX_URLS[kind], { method: 'POST', body, timeoutMs: 8000 }),
 
     /** Menu, floor plan, staff and aromas. Once, then only when `menu_version` moves. */
     getBootstrap: () => request<Bootstrap>('/api/bootstrap', { etag: true }),

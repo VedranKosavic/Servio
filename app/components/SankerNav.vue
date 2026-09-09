@@ -1,15 +1,23 @@
 <script setup lang="ts">
 /**
- * The bartender's whole navigation: two pills, always in reach of a thumb.
+ * The bartender's whole navigation: three pills, always in reach of a thumb.
+ *
+ * All three are listed from day one, and *Na čekanju* renders greyed out with
+ * *stiže uskoro* until WP1 builds `/s/cekanje` — a nav that grows a tab every
+ * week teaches nobody where anything is. No later package edits this file.
  *
  * `sticky bottom-0` keeps the bar on screen while the ticket list scrolls; the
  * negative margin lets it run edge to edge inside the layout's `px-4` column.
  */
-defineProps<{ active: 'narudzbe' | 'stanje' }>()
+defineProps<{ active: 'narudzbe' | 'cekanje' | 'stanje' }>()
+
+/** Flip to true in the PR that lands `/s/cekanje` (WP1). */
+const CEKANJE_READY = false
 
 const PILL = 'flex min-h-12 flex-1 items-center justify-center rounded-full border text-base font-semibold'
 const ON = 'bg-accent text-accent-ink border-accent'
 const OFF = 'bg-surface-2 text-text-2 border-line'
+const DISABLED = 'bg-surface-2 text-muted border-line'
 </script>
 
 <template>
@@ -17,6 +25,18 @@ const OFF = 'bg-surface-2 text-text-2 border-line'
     <NuxtLink to="/s" :class="[PILL, active === 'narudzbe' ? ON : OFF]">
       Narudžbe
     </NuxtLink>
+
+    <NuxtLink
+      v-if="CEKANJE_READY"
+      to="/s/cekanje"
+      :class="[PILL, active === 'cekanje' ? ON : OFF]"
+    >
+      Na čekanju
+    </NuxtLink>
+    <span v-else :class="[PILL, DISABLED]" aria-disabled="true" title="stiže uskoro">
+      Na čekanju
+    </span>
+
     <NuxtLink to="/stanje" :class="[PILL, active === 'stanje' ? ON : OFF]">
       Stanje šanka
     </NuxtLink>

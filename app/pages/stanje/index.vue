@@ -26,7 +26,8 @@ const api = useApi()
 const me = useMe()
 
 const items = ref<StockItem[]>([])
-const { ok: online, lastOkAt, refresh } = useChanges({
+useOutbox()
+const { lastOkAt, refresh } = useChanges({
   stock: (list) => {
     items.value = list
   },
@@ -129,10 +130,7 @@ async function postDelivery(delivery: {
       <h1 class="flex-1 truncate text-xl font-bold">
         Stanje šanka
       </h1>
-      <span v-if="!online" class="chip chip-danger">
-        <span class="size-2 rounded-full bg-current" />
-        Nema veze
-      </span>
+      <WaiterSyncChip />
       <button
         v-if="canReceive"
         type="button"

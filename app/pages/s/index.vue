@@ -12,7 +12,10 @@ import { useTimestamp } from '@vueuse/core'
 useHead({ title: 'Narudžbe' })
 
 const me = useMe()
-const { open, done, busy, errorMessage, online, loaded, markDone } = usePrepPolling()
+// The bartender queues stock too (otpis, popis), so the flush timers live here
+// as well; the chip in the header reads the same store.
+useOutbox()
+const { open, done, busy, errorMessage, loaded, markDone } = usePrepPolling()
 
 // Who is holding the tablet is the server's answer now, not localStorage's:
 // *Gotovo* is recorded against the session, so a screen with no session has
@@ -33,41 +36,26 @@ const now = useTimestamp({ interval: 2000 })
       <h1 class="flex-1 truncate text-xl font-bold">
         Šank · narudžbe
       </h1>
-      <span class="chip" :class="online ? 'chip-good' : 'chip-danger'">
-        <span class="size-2 rounded-full bg-current" />
-        {{ online ? 'Sinhronizovano' : 'Nema veze' }}
-      </span>
-      <div class="relative">
-        <button
-          type="button"
-          class="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface-2 text-sm font-bold"
-          aria-label="Korisnik"
-          @click="menuOpen = !menuOpen"
-        >
-          {{ me.user.value?.initials ?? '?' }}
-        </button>
-
-        <template v-if="menuOpen">
-          <div class="fixed inset-0 z-30" @click="menuOpen = false" />
-          <div class="card absolute right-0 top-full z-40 mt-2 flex w-60 flex-col gap-2 p-2">
-            <p class="px-2 pt-1 text-sm text-text-2">
-              {{ me.user.value?.name }}
-            </p>
-            <NuxtLink to="/k/smjena" class="btn w-full">
-              Završi smjenu
-            </NuxtLink>
-            <button type="button" class="btn btn-ghost w-full" @click="me.logout()">
-              Promijeni korisnika
-            </button>
-          </div>
-        </template>
-      </div>
+      <WaiterSyncChip />
+      <button
+        type="button"
+        class="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface-2 text-sm font-bold"
+        aria-label="Korisnik"
+        @click="menuOpen = true"
+      >
+        {{ me.user.value?.initials ?? '?' }}
+      </button>
     </header>
+
+    <WaiterOutboxBanner />
 
     <main class="flex flex-1 flex-col gap-3 py-4">
       <p v-if="errorMessage" class="rounded-xl bg-danger-soft px-3 py-2 text-[15px] text-danger">
         {{ errorMessage }}
       </p>
+
+      <WaiterFailedCard />
+      <WaiterUpdatePrompt />
 
       <TicketCard
         v-for="(order, index) in open"
@@ -91,5 +79,7 @@ const now = useTimestamp({ interval: 2000 })
     </main>
 
     <SankerNav active="narudzbe" />
+
+    <WaiterAvatarSheet v-if="menuOpen" @close="menuOpen = false" />
   </div>
 </template>
