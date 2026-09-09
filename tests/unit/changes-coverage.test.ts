@@ -24,6 +24,13 @@ import { createDelivery } from '../../server/services/stock'
 import { payTab } from '../../server/services/tabs'
 import { markLogSeen } from '../../server/services/log'
 import { enrolDevice, mintEnrolCode, revokeDevice, unlockDevice } from '../../server/services/devices'
+import {
+  closeShift, forceClose, leaveShift, openShift, reviewShift, startClosing,
+} from '../../server/services/shifts'
+import {
+  acknowledgeFloat, decideCashMovement, moveFloat, pickup, requestPayout, setOpeningFloat,
+} from '../../server/services/cash'
+import { acceptSettlement, settle } from '../../server/services/settlements'
 import { schema } from '../helpers/db'
 
 const API_DIR = fileURLToPath(new URL('../../server/api', import.meta.url))
@@ -138,6 +145,107 @@ const CALLS: Record<string, () => void> = {
       .run()
     unlockDevice(f.db, f.venueId, f.adminActor(), deviceId)
   },
+
+  // WP2 — the shift, the drawer and the envelope. Every one of these ends in
+  // `bump('shift')`: the floor plan's `ShiftBrief` and every waiter's own strip
+  // are read out of the shift, so a close that no phone learns about is a
+  // building full of screens still showing the night as open.
+  [join('shifts', 'open.post.ts')]: () => {
+    openShift(f.db, f.venueId, f.actor('Amar'), {})
+  },
+
+  [join('shifts', '[id]', 'closing.post.ts')]: () => {
+    startClosing(f.db, f.venueId, f.adminActor(), f.openShift({ members: ['Amar'] }))
+  },
+
+  [join('shifts', '[id]', 'close.post.ts')]: () => {
+    closeShift(f.db, f.venueId, f.adminActor(), nightReadyToClose(), {
+      cash_counted_fen: 0, closing_note: 'test', pin: HARIS_PIN,
+    })
+  },
+
+  [join('shifts', '[id]', 'force-close.post.ts')]: () => {
+    forceClose(f.db, f.venueId, f.adminActor(), f.openShift({ members: ['Amar'] }), {
+      note: 'telefon crko',
+    })
+  },
+
+  [join('shifts', '[id]', 'review.post.ts')]: () => {
+    const shiftId = nightReadyToClose()
+    closeShift(f.db, f.venueId, f.adminActor(), shiftId, {
+      cash_counted_fen: 0, closing_note: 'test', pin: HARIS_PIN,
+    })
+    reviewShift(f.db, f.venueId, f.adminActor(), shiftId, { card_total_fen: 0 })
+  },
+
+  [join('shifts', '[id]', 'leave.post.ts')]: () => {
+    leaveShift(f.db, f.venueId, f.actor('Amar'), f.openShift({ members: ['Amar'] }))
+  },
+
+  [join('shifts', '[id]', 'float.post.ts')]: () => {
+    moveFloat(f.db, f.venueId, f.adminActor(), f.openShift({ members: ['Amar'] }), {
+      type: 'float_out', user_id: f.userId('Amar'), amount_fen: 5_000,
+    })
+  },
+
+  [join('shifts', '[id]', 'payout.post.ts')]: () => {
+    requestPayout(f.db, f.venueId, f.actor('Amar'), f.openShift({ members: ['Amar'] }), {
+      amount_fen: 2_000, reason: 'dobavljac',
+    })
+  },
+
+  [join('shifts', '[id]', 'pickup.post.ts')]: () => {
+    pickup(f.db, f.venueId, f.adminActor(), f.openShift({ members: ['Amar'] }), {
+      amount_fen: 3_000,
+    })
+  },
+
+  [join('shifts', '[id]', 'opening-float.post.ts')]: () => {
+    setOpeningFloat(f.db, f.venueId, f.adminActor(), f.openShift({ members: ['Amar'] }), {
+      fen: 10_000,
+    })
+  },
+
+  [join('shifts', '[id]', 'settle.post.ts')]: () => {
+    const shiftId = f.openShift({ members: ['Amar'] })
+    settle(f.db, f.venueId, f.actor('Amar'), shiftId, { declared_fen: 0, outbox_len: 0 })
+  },
+
+  [join('shifts', '[id]', 'settlements', '[sid]', 'accept.post.ts')]: () => {
+    const shiftId = f.openShift({ members: ['Amar', 'Emir'] })
+    const settlementId = f.settle('Amar')
+    acceptSettlement(f.db, f.venueId, f.actor('Emir'), shiftId, settlementId)
+  },
+
+  [join('cash-movements', '[id]', 'decide.post.ts')]: () => {
+    f.openShift({ members: ['Amar'] })
+    const movementId = f.cashMovement({
+      type: 'payout', amountFen: 2_000, user: 'Amar', status: 'pending',
+    })
+    decideCashMovement(f.db, f.venueId, f.adminActor(), movementId, { outcome: 'approved' })
+  },
+
+  [join('cash-movements', '[id]', 'ack.post.ts')]: () => {
+    f.openShift({ members: ['Amar'] })
+    const movementId = f.cashMovement({
+      type: 'float_out', amountFen: 5_000, user: 'Amar', status: 'pending',
+    })
+    acknowledgeFloat(f.db, f.venueId, f.actor('Amar'), movementId)
+  },
+}
+
+/** Haris's seeded dev PIN — `closeShift` runs the real `verifyPinMetered`. */
+const HARIS_PIN = '123456'
+
+/**
+ * A night the close will accept: an opening count (or it is `NO_OPEN_COUNT`),
+ * and no tab left open (or it is `OPEN_TABS`). No money changes hands, so the
+ * expectation is 0 and `cash_counted_fen: 0` is inside tolerance.
+ */
+function nightReadyToClose(): string {
+  const shiftId = f.openShift({ members: ['Amar', 'Emir'] })
+  f.submitCount('Emir', ['Kafa (mljevena)'], { phase: 'open' })
+  return shiftId
 }
 
 /**

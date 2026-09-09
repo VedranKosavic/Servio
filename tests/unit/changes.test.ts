@@ -44,9 +44,24 @@ describe('maxSeq', () => {
 
 describe('bump inside a transaction', () => {
   it('a lock bumps table, prep and stock', () => {
+    // The shift is opened first, so this measures the lock's own three bumps
+    // (§6.1 step 11) and nothing else. The case below covers the other half.
+    f.openShift({ members: ['Amar'] })
     lockOne()
     const entities = f.db.select().from(schema.changes).all().map(r => r.entity)
     expect(new Set(entities)).toEqual(new Set(['table', 'prep', 'stock']))
+  })
+
+  it('the first lock of the evening also bumps log, because it opens the night', () => {
+    // `ensureOpenShift` writes `shift_opened` when it creates a shift (§8), and
+    // `log()` bumps. So the very first lock carries a fourth entity that no
+    // later lock does — which is the shape of the evening, not a stray bump.
+    lockOne()
+    const entities = f.db.select().from(schema.changes).all().map(r => r.entity)
+    expect(new Set(entities)).toEqual(new Set(['table', 'prep', 'stock', 'log']))
+
+    const kinds = f.db.select().from(schema.logEntries).all().map(r => r.kind)
+    expect(kinds).toEqual(['shift_opened'])
   })
 
   it('a transaction that throws leaves maxSeq unchanged', () => {

@@ -29,8 +29,8 @@ import { SankError } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
 import { businessDate, localDate, localTime } from '#shared/dates'
 import { mergeSettings, type Settings } from '#shared/settings'
-import type { Actor, ChangeEntity, LogKind, Role } from '#shared/types'
-import type { AlertRuleKey } from '#shared/constants'
+import { log } from './log'
+import type { Actor, Role } from '#shared/types'
 import type { Queryable, Tx } from './types'
 
 type ShiftRow = typeof schema.shifts.$inferSelect
@@ -118,8 +118,17 @@ export function joinShift(
  * It never redirects a round to a past shift: the answer is always the shift
  * that is open now.
  *
- * WP2 extends this in place with `log('shift_opened')` and `setCustodian`;
- * both need helpers (`log`, WP5) that do not exist yet.
+ * **The `shift_opened` entry is written here, not by the caller** (§8: the kind's
+ * trigger is "`ensureOpenShift` creates a shift, from a first lock or an opening
+ * count"). WP0 could not write it because `log` was a stub and WP2 left it out
+ * for the same reason; WP5's `log` is real now, so it is here — `auto: true`,
+ * because a shift born this way was opened by somebody serving a table, not by
+ * somebody tapping *Otvori smjenu*. `shifts.ts`'s explicit `openShift` writes
+ * its own entry with `auto: false` and never comes through this function.
+ *
+ * `setCustodian` stays with its callers: the custodian of the stock is whoever
+ * submitted the opening count (§6.8), which is WP4's business and not every
+ * first lock's.
  */
 export function ensureOpenShift(
   tx: Tx, venueId: string, actor: Actor, at: string, clientAt?: string,
@@ -146,6 +155,16 @@ export function ensureOpenShift(
 
   const shift = tx.select().from(schema.shifts).where(eq(schema.shifts.id, id)).get()!
   joinShift(tx, venueId, id, actor.userId, actor.role, at)
+
+  log(tx, venueId, {
+    kind: 'shift_opened',
+    body: { shift_id: id, user_id: actor.userId, at, auto: true },
+    actorId: actor.userId,
+    deviceId: actor.deviceId,
+    ref: { type: 'shift', id },
+    shiftId: id,
+  })
+
   return { shift, created: true }
 }
 
@@ -269,8 +288,16 @@ export function onHand(q: Queryable, venueId: string, stockItemId: string): numb
 // Typed stubs — the signature is the contract; the body lands with its package
 // ===========================================================================
 
-/** WP5 (`services/log.ts`). Writes one Dnevnik entry inside the caller's transaction. */
-export { log } from './log'
+/**
+ * WP5 (`services/log.ts`). Writes one Dnevnik entry inside the caller's
+ * transaction.
+ *
+ * Imported rather than re-exported straight through, because `ensureOpenShift`
+ * above calls it: a bare `export … from` gives this module no local binding.
+ * `log.ts` imports `getSettings` back out of here, which is the same cycle every
+ * other line in this file lives with — safe, because nothing runs at load.
+ */
+export { log }
 
 /** WP5 (`services/changes.ts`). One `changes` row; a mutation without one is a bug. */
 export { bump } from './changes'
@@ -291,43 +318,34 @@ export { queueAlert } from './alerts'
 export { heartbeat } from './heartbeat'
 
 /** WP2 (`services/cash.ts`). The reconciliation: venue = drawer + Σ waiters. */
-export function expectedCash(_q: Queryable, _venueId: string, _shiftId: string): {
-  venue_expected_fen: number
-  drawer_expected_fen: number
-  by_user: { user_id: string, expected_fen: number }[]
-} {
-  return notImplemented('expectedCash')
-}
+export { expectedCash } from './cash'
 
 /** WP2. Has this person already settled this shift? A later lock is `post_settle`. */
-export function hasLiveSettlement(
-  _q: Queryable, _venueId: string, _shiftId: string, _userId: string,
-): boolean {
-  return notImplemented('hasLiveSettlement')
-}
+export { hasLiveSettlement } from './settlements'
 
-/** WP1 (§6.6). The one outbox check: refuses while a phone still holds rounds. */
+/**
+ * §6.6's one outbox check: refuses while a phone still holds rounds.
+ *
+ * Two branches touched this line and agreed. WP2 corrected the **signature** —
+ * an `opts.userId` (a settle looks at one person's phones, a count at every
+ * phone in the shift) and stale devices *returned* rather than thrown, so a
+ * phone switched off in a drawer is reported instead of blocking an envelope —
+ * and left the body a stub, because §6.6 puts the implementation in
+ * `services/devices.ts` beside the `devices.pending_count` column it reads, and
+ * that file is WP1's. WP1 then wrote exactly that body, widened to the same
+ * signature. There is one signature and it is the one `settle` calls; the stub
+ * is gone.
+ */
 export { assertNoPendingOutbox } from './devices'
 
 /** WP2. The custodian of the stock for this shift. */
-export function setCustodian(_tx: Tx, _venueId: string, _shiftId: string, _userId: string): void {
-  return notImplemented('setCustodian')
-}
+export { setCustodian } from './shifts'
 
 /** WP2. Does this shift have a submitted count of that phase? Blocks the close. */
-export function hasSubmittedCount(
-  _q: Queryable, _venueId: string, _shiftId: string, _phase: 'open' | 'close',
-): boolean {
-  return notImplemented('hasSubmittedCount')
-}
+export { hasSubmittedCount } from './shifts'
 
 /** WP2. A new `shift_summaries` version: 'close', 'decision' or 'late'. */
-export function writeSummaryVersion(
-  _tx: Tx, _venueId: string, _shiftId: string,
-  _reason: 'close' | 'decision' | 'late', _at: string,
-): number {
-  return notImplemented('writeSummaryVersion')
-}
+export { writeSummaryVersion } from './summaries'
 
 /** WP1 (`services/auth.ts`). Takes `Db`, not `Tx`: it owns its own attempt rows. */
 export { verifyPinMetered } from './auth'
@@ -339,7 +357,15 @@ export function resolvePaymentShift(
   return notImplemented('resolvePaymentShift')
 }
 
-/** WP3. A negative payment row plus its `cash_movements(type='refund')` twin. */
+/**
+ * WP3. A negative payment row plus its `cash_movements(type='refund')` twin.
+ *
+ * **For WP3:** the `cash_movements` half already exists — WP2 shipped
+ * `insertRefund(tx, venueId, actor, shiftId, { amountFen, adjustmentId?, note?, at })`
+ * in `services/cash.ts`, which is §6.5's signature and not this stub's. WP3
+ * writes the payment row, calls that, and replaces this line with its own
+ * re-export; the two names collide only here, and only until it does.
+ */
 export function insertRefund(_tx: Tx, _venueId: string, _r: {
   tabId: string
   amountFen: number

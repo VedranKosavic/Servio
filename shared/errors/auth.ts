@@ -39,12 +39,10 @@ export const AUTH_ERRORS = {
   NO_SESSION: 'Nisi prijavljen.',
   SESSION_REVOKED: 'Prijava je istekla. Prijavi se ponovo.',
 
-  /**
-   * Thrown by `assertNoPendingOutbox` in `services/devices.ts` (§6.6), which is
-   * WP1's file — so the sentence lives in WP1's fragment, beside the throw. WP2
-   * and WP4 call it through `contracts.ts` and need no message of their own.
-   */
-  PENDING_OUTBOX: 'Telefon još nije poslao sve ture. Sačekaj da se sinhronizuje.',
+  // `PENDING_OUTBOX` was written here too, beside the `assertNoPendingOutbox`
+  // throw in `services/devices.ts`. WP2 wrote it in `errors/shifts.ts` as well,
+  // and `SHIFT_ERRORS` is spread after `AUTH_ERRORS`, so that is the sentence a
+  // phone actually shows. One code, one sentence: WP2's is the one that ships.
 
   // -- The PIN rules ---------------------------------------------------------
   ADMIN_DEVICE_ONLY: 'Vlasnik se PIN-om prijavljuje samo na svom telefonu.',

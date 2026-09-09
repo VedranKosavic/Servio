@@ -32,10 +32,11 @@ const API_DIR = resolve(process.cwd(), 'server/api')
 const PENDING_DELETION = new Set(['POST /api/tabs/:id/pay'])
 
 /**
- * The routes whose files exist today: Korak 1's, plus WP1's and WP5's rows of
- * the work-package table. Everything else in `ROUTE_ROLES` belongs to a package
- * that has not merged — `/api/me/shift*` are WP2's, `/api/payments` is WP3's —
- * which is why this is an explicit list and not a prefix match.
+ * The routes whose files exist today: Korak 1's, plus WP1's, WP5's and WP2's
+ * rows of the work-package table. Everything else in `ROUTE_ROLES` belongs to a
+ * package that has not merged — `/api/payments` and `/api/tabs/**` are WP3's,
+ * `/api/stock/counts` is WP4's — which is why this is an explicit list and not a
+ * prefix match.
  *
  * **WP8 deletes it** and compares the two sets outright.
  */
@@ -52,6 +53,16 @@ const LANDED = new Set([
   // *route* even though the device it writes is WP1's subject.
   'GET /api/changes', 'POST /api/devices/heartbeat',
   'GET /api/owner/log', 'GET /api/owner/log/:id', 'POST /api/owner/log/seen',
+  // WP2 — the shift, the drawer, the envelope. §12 splits `api/me/**`: the
+  // session envelope `GET /api/me` is WP1's above, the three shift reads here.
+  'POST /api/shifts/open', 'POST /api/shifts/:id/closing', 'POST /api/shifts/:id/close',
+  'POST /api/shifts/:id/force-close', 'POST /api/shifts/:id/review',
+  'POST /api/shifts/:id/settle', 'POST /api/shifts/:id/settlements/:id/accept',
+  'POST /api/shifts/:id/leave', 'POST /api/shifts/:id/float',
+  'POST /api/shifts/:id/payout', 'POST /api/shifts/:id/pickup',
+  'POST /api/shifts/:id/opening-float',
+  'POST /api/cash-movements/:id/decide', 'POST /api/cash-movements/:id/ack',
+  'GET /api/me/shift', 'GET /api/me/shift/lines', 'GET /api/me/shifts',
 ])
 
 /** Every `.get.ts` / `.post.ts` / `.patch.ts` under `server/api/**`, as a key. */
