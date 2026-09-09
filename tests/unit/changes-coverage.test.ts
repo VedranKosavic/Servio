@@ -24,6 +24,11 @@ import { createDelivery } from '../../server/services/stock'
 import { payTab } from '../../server/services/tabs'
 import { markLogSeen } from '../../server/services/log'
 import { enrolDevice, mintEnrolCode, revokeDevice, unlockDevice } from '../../server/services/devices'
+import { resetPin } from '../../server/services/auth'
+import {
+  createCategory, createProduct, createStockItem, createTable, createUser, setRecipe,
+  updateCategory, updateProduct, updateSettings, updateStockItem, updateTable, updateUser,
+} from '../../server/services/admin'
 import { schema } from '../helpers/db'
 
 const API_DIR = fileURLToPath(new URL('../../server/api', import.meta.url))
@@ -138,6 +143,80 @@ const CALLS: Record<string, () => void> = {
       .run()
     unlockDevice(f.db, f.venueId, f.adminActor(), deviceId)
   },
+
+  // WP6's thirteen catalogue writes. Each one bumps the entity whose payload the
+  // screens re-read (§4.1): `menu` for anything `/api/bootstrap` carries,
+  // `table` for the live floor plan, `stock` for the shelf, `user` for the staff
+  // list, `settings` for the venue. The one exception is the PIN reset, which
+  // bumps nothing of its own — it hands over to WP1's `resetPin`, whose two
+  // Dnevnik entries bump `log` inside the same transaction, and there is nothing
+  // else about a new PIN for a phone to re-read.
+  [join('admin', 'products', 'index.post.ts')]: () => {
+    createProduct(f.db, f.venueId, f.adminActor(), {
+      category_id: firstCategory(), name: 'Espresso', price_fen: 200,
+    })
+  },
+
+  [join('admin', 'products', '[id]', 'index.patch.ts')]: () => {
+    updateProduct(f.db, f.venueId, f.adminActor(), f.productId('Kafa'), { price_fen: 180 })
+  },
+
+  [join('admin', 'products', '[id]', 'recipe.put.ts')]: () => {
+    setRecipe(f.db, f.venueId, f.adminActor(), f.productId('Kafa'), {
+      lines: [{ stock_item_id: f.stockItemId('Šećer'), qty: 6 }],
+    })
+  },
+
+  [join('admin', 'categories', 'index.post.ts')]: () => {
+    createCategory(f.db, f.venueId, f.adminActor(), { name: 'Kokteli' })
+  },
+
+  [join('admin', 'categories', '[id]', 'index.patch.ts')]: () => {
+    updateCategory(f.db, f.venueId, f.adminActor(), firstCategory(), { sort: 9 })
+  },
+
+  [join('admin', 'tables', 'index.post.ts')]: () => {
+    createTable(f.db, f.venueId, f.adminActor(), {
+      name: 'Sto 99', zone: 'basta', col: 1, row: 3,
+    })
+  },
+
+  [join('admin', 'tables', '[id]', 'index.patch.ts')]: () => {
+    updateTable(f.db, f.venueId, f.adminActor(), f.tableId('Sto 1'), { sort: 5 })
+  },
+
+  [join('admin', 'stock-items', 'index.post.ts')]: () => {
+    createStockItem(f.db, f.venueId, f.adminActor(), {
+      name: 'Sprite 0,25 l', kind: 'pice', base_unit: 'kom', last_cost_mfen: 90_000,
+    })
+  },
+
+  [join('admin', 'stock-items', '[id]', 'index.patch.ts')]: () => {
+    updateStockItem(f.db, f.venueId, f.adminActor(), f.stockItemId('Cedevita'), { par_qty: 12 })
+  },
+
+  [join('admin', 'users', 'index.post.ts')]: () => {
+    createUser(f.db, f.venueId, f.adminActor(), {
+      name: 'Nedim', initials: 'NE', role: 'waiter', pin: '1234',
+    })
+  },
+
+  [join('admin', 'users', '[id]', 'index.patch.ts')]: () => {
+    updateUser(f.db, f.venueId, f.adminActor(), f.userId('Amar'), { initials: 'AB' })
+  },
+
+  [join('admin', 'users', '[id]', 'pin.post.ts')]: () => {
+    resetPin(f.db, f.venueId, f.adminActor(), f.userId('Amar'), '4321')
+  },
+
+  [join('admin', 'settings.patch.ts')]: () => {
+    updateSettings(f.db, f.venueId, f.adminActor(), { cash_tolerance_fen: 700 })
+  },
+}
+
+/** The seed's first category — `createProduct` needs one and none is named in the fixture. */
+function firstCategory(): string {
+  return f.db.select({ id: schema.categories.id }).from(schema.categories).all()[0]!.id
 }
 
 /**

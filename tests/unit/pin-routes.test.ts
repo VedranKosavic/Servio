@@ -38,6 +38,16 @@ const NOT_AN_APPROVAL: Record<string, string> = {
   // `authLimiter` (keyed on the device, not on an approver), because at the
   // moment it is called there is no approver and no session to key on.
   pinLoginBody: 'POST /api/auth/pin',
+
+  // The two admin routes that **write** a PIN rather than verify one (WP6,
+  // §6.10). Nothing here is checked against a stored secret, so there is no
+  // guess to meter and no `(deviceId, approverUserId)` to key `pinLimiter` on:
+  // the authority is the admin's own session, which `ROUTE_ROLES` already
+  // restricts to `['admin']`. Both go through the same 4-or-6-digit rule and
+  // `POST /api/admin/users/:id/pin` hands straight to WP1's `resetPin`, which is
+  // the one function in the app that hashes a PIN with the pepper.
+  createUserBody: 'POST /api/admin/users',
+  resetUserPinBody: 'POST /api/admin/users/:id/pin',
 }
 
 /** Every exported Zod object in the fragments, by export name. */

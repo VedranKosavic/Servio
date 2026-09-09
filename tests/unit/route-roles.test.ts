@@ -52,6 +52,19 @@ const LANDED = new Set([
   // *route* even though the device it writes is WP1's subject.
   'GET /api/changes', 'POST /api/devices/heartbeat',
   'GET /api/owner/log', 'GET /api/owner/log/:id', 'POST /api/owner/log/seen',
+  // WP6 — admin CRUD. `api/admin/users/**` is WP6's including `:id/pin`, which
+  // calls WP1's `resetPin`; `api/admin/{enrol-codes,devices}` above stay WP1's
+  // (§12's ownership table names both, so neither is claimed twice).
+  'GET /api/admin/products', 'POST /api/admin/products',
+  'PATCH /api/admin/products/:id', 'PUT /api/admin/products/:id/recipe',
+  'GET /api/admin/categories', 'POST /api/admin/categories',
+  'PATCH /api/admin/categories/:id',
+  'GET /api/admin/tables', 'POST /api/admin/tables', 'PATCH /api/admin/tables/:id',
+  'GET /api/admin/stock-items', 'POST /api/admin/stock-items',
+  'PATCH /api/admin/stock-items/:id',
+  'GET /api/admin/users', 'POST /api/admin/users',
+  'PATCH /api/admin/users/:id', 'POST /api/admin/users/:id/pin',
+  'GET /api/admin/settings', 'PATCH /api/admin/settings',
 ])
 
 /** Every `.get.ts` / `.post.ts` / `.patch.ts` under `server/api/**`, as a key. */
