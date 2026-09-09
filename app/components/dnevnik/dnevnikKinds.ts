@@ -257,6 +257,14 @@ const MONEY_KEYS = new Set([
 const MONEY_BEFORE_AFTER: LogKind[] = ['price_changed', 'float_override']
 
 /**
+ * `settings_changed` is the third one, but only sometimes: the body carries the
+ * setting's `key`, and a `*_fen` key is money while `early_close_min` is not.
+ */
+function settingIsMoney(body: Record<string, unknown>): boolean {
+  return typeof body.key === 'string' && body.key.endsWith('_fen')
+}
+
+/**
  * The reason enums, in Bosnian.
  *
  * `VOID_REASONS`, `COMP_REASONS`, the unpaid reasons and the payout reasons are
@@ -290,13 +298,18 @@ export interface DnevnikFact {
 export function bodyFacts(kind: LogKind, body: Record<string, unknown>): DnevnikFact[] {
   const facts: DnevnikFact[] = []
 
-  for (const [key, label] of Object.entries(FACT_LABEL)) {
+  for (const [key, label0] of Object.entries(FACT_LABEL)) {
     const value = body[key]
     if (value === undefined || value === null || value === '') continue
 
+    // `label` means the device on the device kinds and the setting's name here,
+    // and "Uređaj · Tolerancija kase" is a sentence about the wrong thing.
+    const label = key === 'label' && kind === 'settings_changed' ? 'Postavka' : label0
+
     const isMoney = MONEY_KEYS.has(key)
-      || ((key === 'before' || key === 'after')
-        && typeof value === 'number' && MONEY_BEFORE_AFTER.includes(kind))
+      || ((key === 'before' || key === 'after') && typeof value === 'number'
+        && (MONEY_BEFORE_AFTER.includes(kind)
+          || (kind === 'settings_changed' && settingIsMoney(body))))
 
     if (isMoney && typeof value === 'number') {
       facts.push({ label, value: signedKm(value), numeric: true })

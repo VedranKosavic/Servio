@@ -383,7 +383,7 @@ describe('GET /api/owner/live', () => {
     expect(live.shift?.id).toBe(shiftId)
     expect(Object.keys(live.open).sort()).toEqual(['tables', 'total_fen'])
     expect(Object.keys(live.pending).sort())
-      .toEqual(['adjustments', 'payouts', 'settlements', 'unpaid'])
+      .toEqual(['adjustments', 'counts', 'payouts', 'settlements', 'unpaid'])
     for (const p of [live.storna, live.gratis, live.self_voids, live.waste]) {
       expect(Object.keys(p).sort()).toEqual(['count', 'fen'])
     }

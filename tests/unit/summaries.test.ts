@@ -15,7 +15,7 @@
  * takings rather than quietly deducted from them.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
 import { closeTab, expectReconciled, lockComped, markUnpaid, rawClose } from '../helpers/shifts'
 
@@ -373,6 +373,16 @@ describe('a whole night', () => {
     expect(view.cash_movements).toHaveLength(5)
     expect(view.settlements.map(s => s.user_name)).toEqual(['Amar'])
     expect(view.counts.map(c => c.phase)).toEqual(['open'])
+    // The count card's manjak is the sum of its own lines, not 0: the correlated
+    // subquery behind it used to compare `count_id` against the wrong table's
+    // `id` and matched nothing, so the owner was asked to sign off a shortfall
+    // the page told him was zero.
+    const lineVariance = f.db.select({ n: sql<number>`coalesce(sum(variance_fen), 0)` })
+      .from(schema.stockCountLines)
+      .where(eq(schema.stockCountLines.countId, view.counts[0]!.id))
+      .get()!.n
+    expect(lineVariance).not.toBe(0)
+    expect(view.counts[0]!.variance_fen).toBe(lineVariance)
     expect(view.late_after_close).toEqual({ count: 0, fen: 0, user_names: [] })
   })
 

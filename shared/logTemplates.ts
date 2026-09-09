@@ -95,6 +95,20 @@ function defineLog<S extends z.ZodType>(t: {
   return t as LogTemplate<z.infer<S>>
 }
 
+/**
+ * The payout reasons, in Bosnian.
+ *
+ * They are stored as slugs because they are *values*, not text — but a slug
+ * printed inside a Bosnian sentence is an English word on a Bosnian screen,
+ * which CLAUDE.md calls a bug. Anything a later reason adds falls through
+ * unchanged rather than disappearing.
+ */
+const PAYOUT_REASON_BS: Record<string, string> = {
+  dobavljac: 'dobavljač',
+  sitno: 'sitno',
+  ostalo: 'ostalo',
+}
+
 // ---------------------------------------------------------------------------
 // The list
 // ---------------------------------------------------------------------------
@@ -405,7 +419,7 @@ export const LOG = {
     body: body({ movement_id: id, user_id: id, amount_fen: fen, reason: z.string(), note: z.string().nullish() }),
     title: (b, n) =>
       `Isplata iz kase · ${n.user(b.user_id)} · ${n.formatKm(b.amount_fen)}`
-      + ` · ${b.reason} · čeka odobrenje`,
+      + ` · ${PAYOUT_REASON_BS[b.reason] ?? b.reason} · čeka odobrenje`,
   }),
 
   payout_decided: defineLog({
@@ -541,7 +555,12 @@ export const LOG = {
   settings_changed: defineLog({
     group: 'postavke',
     body: body({ key: z.string(), label: z.string(), before: z.unknown(), after: z.unknown() }),
-    title: b => `Postavke promijenjene · ${b.label} ${String(b.before)} → ${String(b.after)}`,
+    // A `*_fen` setting is money and is written as money — 5,00 KM, never 500.
+    title: (b, n) => {
+      const v = (x: unknown) =>
+        b.key.endsWith('_fen') && typeof x === 'number' ? n.formatKm(x) : String(x)
+      return `Postavke promijenjene · ${b.label} ${v(b.before)} → ${v(b.after)}`
+    },
   }),
 
   user_changed: defineLog({

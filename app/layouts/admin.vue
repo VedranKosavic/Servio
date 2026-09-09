@@ -95,9 +95,19 @@ async function signOut() {
       </NuxtLink>
 
       <div class="a-nav-foot">
-        <div class="a-venue">{{ me.venue.value?.name ?? 'Lounge' }}</div>
+        <!-- Same reason as the line below: the venue's real name only exists on
+             the client, so a server-rendered fallback would mismatch it. -->
+        <ClientOnly>
+          <div class="a-venue">{{ me.venue.value?.name ?? 'Lounge' }}</div>
+        </ClientOnly>
         <div class="a-who">
-          <span>{{ me.user.value?.name ?? '' }} · vlasnik</span>
+          <!-- The session is a httpOnly cookie the client-only `admin` middleware
+               resolves, so SSR has no user and the client does. Rendering half
+               the sentence on the server is a hydration mismatch on every /a
+               page; ClientOnly keeps the whole line off the server render. -->
+          <ClientOnly>
+            <span>{{ me.user.value?.name }} · vlasnik</span>
+          </ClientOnly>
           <button type="button" class="a-signout" @click="signOut">Odjavi se</button>
         </div>
         <p v-if="!changes.ok.value" class="a-offline">Nema veze sa serverom</p>

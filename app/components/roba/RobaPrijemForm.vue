@@ -115,6 +115,17 @@ const problems = computed(() => {
 
 const canSend = computed(() => problems.value.length === 0)
 
+/**
+ * Has the owner started filling this in?
+ *
+ * `problems` is what keeps *Proknjiži* disabled from the first paint, and that
+ * is right — but printing the same list before a single field has been touched
+ * greets an empty form with three complaints about fields nobody has had a
+ * chance to fill. So the list waits for intent: the first edit, or a click on
+ * the disabled button, which is somebody asking why it is disabled.
+ */
+const touched = ref(false)
+
 function addLine() {
   lines.value = [...lines.value, blankLine()]
 }
@@ -165,6 +176,7 @@ async function send() {
     deliveredOn.value = ''
     note.value = ''
     lines.value = [blankLine()]
+    touched.value = false
     emit('posted')
   } catch (err) {
     error.value = apiErrorText(err)
@@ -175,7 +187,7 @@ async function send() {
 </script>
 
 <template>
-  <UiCard title="Novi prijem robe">
+  <UiCard title="Novi prijem robe" @input="touched = true" @change="touched = true">
     <div class="a-head-fields">
       <UiField v-model="supplier" label="Dobavljač" placeholder="Npr. Zvečevo d.o.o." />
       <UiField v-model="invoiceNo" label="Broj otpremnice" placeholder="2026-1189" />
@@ -219,12 +231,16 @@ async function send() {
         <strong><UiMoney :fen="total" /></strong>
       </div>
       <UiButton variant="soft" @click="addLine">Dodaj stavku</UiButton>
-      <UiButton variant="primary" :disabled="!canSend" :pending="sending" @click="send">
-        Proknjiži
-      </UiButton>
+      <!-- The wrapper catches the click the disabled button swallows, so asking
+           why *Proknjiži* is grey is what shows the list of reasons. -->
+      <span @click="touched = true">
+        <UiButton variant="primary" :disabled="!canSend" :pending="sending" @click="send">
+          Proknjiži
+        </UiButton>
+      </span>
     </div>
 
-    <ul v-if="problems.length > 0" class="a-problems">
+    <ul v-if="touched && problems.length > 0" class="a-problems">
       <li v-for="problem in problems" :key="problem">{{ problem }}</li>
     </ul>
 
@@ -266,6 +282,12 @@ async function send() {
 .a-total { display: flex; align-items: baseline; gap: 8px; margin-right: auto; }
 .a-total-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
 .a-total strong { font-size: 20px; font-weight: 600; }
+
+/* A disabled <button> swallows its own clicks without letting them bubble, so
+   the wrapper around *Proknjiži* would never hear one. Taking the button out of
+   hit-testing lets the click land on the wrapper, which is what turns the list
+   of reasons on for somebody asking why the button is grey. */
+.a-foot span > :deep(button:disabled) { pointer-events: none; }
 
 .a-problems { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
 .a-error { margin: 0; color: var(--danger); font-size: 14px; }

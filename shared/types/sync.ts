@@ -39,12 +39,23 @@ export interface ChangeRow {
   seq: number
 }
 
-/** The four queues the owner and the bartender act on. */
+/**
+ * The queues the owner and the bartender act on.
+ *
+ * These are the same rows `attentionItems()` assembles, as counts — so a badge
+ * on a page that has not read *Puls* says the same number the list would. The
+ * one row this cannot see is a waiter who has not handed over at all during a
+ * `closing` shift: that one needs `expectedCash()`, which lives on the other
+ * side of the `bump()` import, so a badge drawn mid-close can still sit one
+ * under the list until *Puls* publishes its own length.
+ */
 export interface PendingCounts {
   adjustments: number
   unpaid: number
   payouts: number
   settlements: number
+  /** Popisi waiting for *Primijeni*. */
+  counts: number
 }
 
 export interface CountBrief {

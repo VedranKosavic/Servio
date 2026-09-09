@@ -42,7 +42,7 @@ export interface AdminChangeHandlers {
 }
 
 const EMPTY_PENDING: PendingCounts = {
-  adjustments: 0, unpaid: 0, payouts: 0, settlements: 0,
+  adjustments: 0, unpaid: 0, payouts: 0, settlements: 0, counts: 0,
 }
 
 /**
@@ -152,13 +152,17 @@ export function useAdminChanges(handlers: AdminChangeHandlers = {}) {
 
   /**
    * *Puls*' badge is the length of its own `attention[]`, which only that page
-   * reads — the feed carries the four queue counts, not the assembled list. So
-   * the sum of the queues seeds the badge on every other page, and *Puls*
-   * publishes the exact number the moment it has one.
+   * reads — the feed carries the queue counts, not the assembled list. So the
+   * sum of the queues seeds the badge on every other page, and *Puls* publishes
+   * the exact number the moment it has one.
+   *
+   * The sum has to include every queue the list does, or an owner who lands on
+   * *Smjene* is told there is nothing waiting when there is. `counts` is why
+   * the badge used to read one short of the list it counts.
    */
   const attentionCount = computed(() => attention.value || (
     pending.value.adjustments + pending.value.unpaid
-    + pending.value.payouts + pending.value.settlements
+    + pending.value.payouts + pending.value.settlements + pending.value.counts
   ))
 
   /** *Puls* calls this after every read and after every decision. */

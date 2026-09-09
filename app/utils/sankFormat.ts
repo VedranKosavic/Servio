@@ -107,6 +107,13 @@ export function movementShortLabel(movement: StockLastMovement): string {
       return 'prijem'
     case 'opening':
       return 'početno'
+    case 'waste':
+      return 'otpis'
+    case 'count_adjust':
+      return 'popis'
+    case 'return_supplier':
+      return 'povrat'
+    // Only `correction` is left, and that is the word for it.
     default:
       return 'korekcija'
   }

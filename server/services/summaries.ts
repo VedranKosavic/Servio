@@ -819,10 +819,14 @@ export function getOwnerShift(q: Queryable, venueId: string, shiftId: string): O
 
   const counts: ShiftCountBrief[] = q.select({
     count: schema.stockCounts,
+    // The outer column is written out by hand, not interpolated: drizzle renders
+    // `${schema.stockCounts.id}` unqualified as `"id"`, and inside this subquery
+    // SQLite resolves that against `stock_count_lines.id` — a column that also
+    // exists there — so the join never matched and every count read 0,00 KM.
     variance: sql<number>`(
       select coalesce(sum(l.variance_fen), 0)
-      from stock_count_lines l where l.count_id = ${schema.stockCounts.id}
-    )`,
+      from stock_count_lines l where l.count_id = stock_counts.id
+    )`.mapWith(Number),
   })
     .from(schema.stockCounts)
     .where(and(

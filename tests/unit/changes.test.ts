@@ -194,15 +194,20 @@ describe('menuVersion and pendingCounts', () => {
     expect(menuVersion(f.db, f.venueId)).toBe(seq)
   })
 
-  it('counts the four queues', () => {
-    const shiftId = f.openShift({ members: ['Amar'] })
+  // The badge in the /a nav is this sum, so a queue missing here is a badge
+  // smaller than the attention list it counts.
+  it('counts every queue the attention list assembles', () => {
+    const shiftId = f.openShift({ members: ['Amar', 'Emir'] })
     const lock = f.lock('Amar', 'Sto 3', [{ product: 'Kafa' }])
     f.voidLine('Amar', lock.lineIds[0]!)
     f.cashMovement({ type: 'payout', amountFen: 6000, user: 'Amar', status: 'pending' })
     f.settle('Amar')
+    f.submitCount('Emir', ['Kafa (mljevena)'])
 
     const pending = pendingCounts(f.db, f.venueId)
-    expect(pending).toEqual({ adjustments: 1, unpaid: 0, payouts: 1, settlements: 1 })
+    expect(pending).toEqual({
+      adjustments: 1, unpaid: 0, payouts: 1, settlements: 1, counts: 1,
+    })
     expect(shiftId).toBeTruthy()
   })
 })

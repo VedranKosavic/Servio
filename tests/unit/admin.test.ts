@@ -21,6 +21,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { and, eq, isNull } from 'drizzle-orm'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
+import { formatKm } from '../../shared/money'
 import { maxSeq } from '../../server/services/changes'
 import { requireRole } from '../../server/utils/auth'
 import { resetPin } from '../../server/services/auth'
@@ -93,7 +94,12 @@ describe('products and the price history', () => {
     expect(before).toHaveLength(1)
     expect(before[0]!.validTo).toBeNull()
 
-    const at = '2026-09-09T21:00:00.000Z'
+    // Off the fixture's clock, not a literal: a hardcoded instant is *before*
+    // the seeded row's `valid_from` for a couple of minutes a year, and then
+    // the two rows sort the other way round and this test fails on the wall
+    // clock rather than on the code.
+    f.clock.advance(3600)
+    const at = f.clock.now()
     const after = updateProduct(f.db, f.venueId, admin(), kafa, { price_fen: 180 }, at)
 
     const rows = priceRows(kafa)
@@ -467,8 +473,10 @@ describe('settings', () => {
     expect(written).toHaveLength(2)
     expect(written.map(e => JSON.parse(e.bodyJson).key).sort())
       .toEqual(['cash_tolerance_fen', 'variance_alert_fen'])
+    // A `*_fen` setting is money in the Dnevnik too, not raw feninga. The space
+    // before "KM" is the non-breaking one `formatKm` writes.
     expect(written.map(e => e.titleBs)).toContain(
-      'Postavke promijenjene · Tolerancija kase 500 → 700',
+      `Postavke promijenjene · Tolerancija kase ${formatKm(500)} → ${formatKm(700)}`,
     )
   })
 

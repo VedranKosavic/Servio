@@ -35,6 +35,7 @@ const error = computed(() =>
     :open="open"
     :title="user ? `Novi PIN · ${user.name}` : 'Novi PIN'"
     :pending="pending"
+    :content-key="result ? 'done' : 'form'"
     @close="emit('close')"
   >
     <template #footer>

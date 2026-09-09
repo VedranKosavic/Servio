@@ -62,6 +62,21 @@ export function toleranceFen(baseFen: number, settings: Settings): number {
   )
 }
 
+/**
+ * Why there is no number in the *Razlika gotovine* box, in one phrase.
+ *
+ * Two different facts used to share one sentence: "there is no counted cash" was
+ * worded as "smjena nije zatvorena", so a force-closed shift said *zatvorena ·
+ * prisilno zatvorena* in its header and *smjena nije zatvorena* two tiles down.
+ * The status decides the wording; the missing count only decides that there is
+ * a wording to choose.
+ */
+export function noCashCountReason(shift: Shift): string {
+  if (shift.status === 'open' || shift.status === 'closing') return 'smjena nije zatvorena'
+  if (shift.closed_kind === 'forced') return 'prisilno zatvorena — kasa nije brojana'
+  return 'kasa nije brojana'
+}
+
 /** *u toleranciji* / *van tolerancije* — the shift's own cash difference. */
 export function cashVerdict(
   diffFen: number | null, baseFen: number, settings: Settings,
@@ -299,7 +314,7 @@ export function cashRows(
   rows.push({
     key: 'counted',
     label: 'Prebrojano',
-    sub: shift.cash_counted_fen === null ? 'smjena još nije zatvorena' : undefined,
+    sub: shift.cash_counted_fen === null ? noCashCountReason(shift) : undefined,
     fen: summary.counted_cash_fen,
   })
 

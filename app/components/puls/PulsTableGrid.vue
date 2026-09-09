@@ -103,14 +103,16 @@ button.a-tbl { cursor: pointer; }
 .a-tbl-top {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 4px;
+  align-items: baseline;
+  gap: 2px;
   min-width: 0;
 }
 
-/* On a 104 px phone tile "Sto 12" and "1 h 40" only just fit. The age is the
-   word that carries the colour's meaning, so it never shrinks; the name
-   truncates instead, and a table is called "Sto 12", not a sentence. */
+/* On a 104 px phone tile "Sto 12" and "1 h 40" only just fit — and measured at
+   390 px they did not: the name needed 42 px and got 40, so every busy table
+   read "Sto …". The name is the one identifier the owner needs and the colour
+   already carries the age, so the two pixels come out of the gap and the age's
+   font size instead of out of the name. */
 .a-tbl-top b {
   font-size: 14px;
   white-space: nowrap;
@@ -120,7 +122,7 @@ button.a-tbl { cursor: pointer; }
 }
 
 .a-tbl-top small {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;

@@ -59,6 +59,13 @@ function unitOf(id: string): string {
   return props.items.find(item => item.id === id)?.base_unit ?? ''
 }
 
+/** The shelf item a 1:1 product sells directly, by name — null for the rest. */
+const sellsItemName = computed(() => {
+  const id = props.product?.sells_stock_item_id
+  if (!id) return null
+  return props.items.find(item => item.id === id)?.name ?? null
+})
+
 function addLine() {
   if (lines.value.length >= MAX_LINES) return
   lines.value.push({ stock_item_id: options.value[0]?.value ?? '', qty: null })
@@ -99,7 +106,11 @@ function save() {
     :pending="pending"
     @close="emit('close')"
   >
-    <p class="p-note">
+    <p v-if="sellsItemName" class="p-note">
+      Koliko robe jedna prodaja skine sa šanka. Ovaj artikal je vezan direktno
+      za robu, pa mu normativ nije potreban.
+    </p>
+    <p v-else class="p-note">
       Koliko robe jedna prodaja skine sa šanka. Prazan normativ znači da se
       prodajom ništa ne troši.
     </p>
@@ -135,6 +146,14 @@ function save() {
         </UiButton>
       </div>
     </div>
+
+    <!-- A 1:1 product (`sells_stock_item_id`) has no recipe *because* it needs
+         none — one sale is one bottle off the shelf. Saying "ne skida robu"
+         there is the opposite of the truth, and an owner who believes it adds a
+         line and double-deducts the shelf. -->
+    <p v-else-if="sellsItemName" class="p-empty">
+      Jedna prodaja skida 1 × {{ sellsItemName }} — normativ nije potreban.
+    </p>
 
     <p v-else class="p-empty">Nema normativa — prodaja ovog artikla ne skida robu.</p>
 

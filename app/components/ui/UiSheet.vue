@@ -15,6 +15,12 @@ const props = withDefaults(defineProps<{
   /** The one primary action's label. Omit for a sheet that only shows things. */
   action?: string
   pending?: boolean
+  /**
+   * Bump this when the panel's content is replaced while the sheet stays open —
+   * a form that becomes a confirmation — so focus moves into the new content
+   * instead of falling out of the dialog.
+   */
+  contentKey?: string | number
 }>(), { pending: false })
 
 const emit = defineEmits<{ close: [], confirm: [] }>()
@@ -42,22 +48,46 @@ function onKeydown(event: KeyboardEvent) {
   const first = items[0]!
   const last = items[items.length - 1]!
   const active = document.activeElement
+  const inside = !!panel.value?.contains(active)
 
-  if (event.shiftKey && (active === first || !panel.value?.contains(active))) {
+  if (event.shiftKey && (active === first || !inside)) {
     event.preventDefault()
     last.focus()
-  } else if (!event.shiftKey && active === last) {
+  } else if (!event.shiftKey && (active === last || !inside)) {
     event.preventDefault()
     first.focus()
   }
 }
 
-watch(() => props.open, async (open) => {
+/**
+ * Esc is listened for on the **document**, not on the root element.
+ *
+ * Bound to the element, it only fires while focus is inside the sheet — and the
+ * moment a sheet swaps its content (a form that becomes "PIN je postavljen ·
+ * Zatvori") the focused control is gone, `document.activeElement` falls back to
+ * `<body>`, and Esc stops working with the scrim still covering the page. The
+ * Tab trap moved with it for the same reason.
+ */
+useEventListener(
+  // A getter, because `document` does not exist during the server render.
+  () => (import.meta.client ? document : null),
+  'keydown',
+  (event: KeyboardEvent) => { if (props.open) onKeydown(event) },
+)
+
+/**
+ * Focus follows the content, not just the opening.
+ *
+ * `contentKey` is how a caller says "this is a different panel now" — the same
+ * sheet showing a success state instead of a form. Without it the focus trap
+ * has nothing inside it to trap.
+ */
+watch(() => [props.open, props.contentKey], async ([open]) => {
   if (!import.meta.client) return
   document.body.style.overflow = open ? 'hidden' : ''
   if (!open) return
   await nextTick()
-  focusables()[0]?.focus()
+  ;(focusables()[0] ?? panel.value)?.focus()
 }, { immediate: true })
 
 onBeforeUnmount(() => {
@@ -67,11 +97,12 @@ onBeforeUnmount(() => {
 
 <template>
   <Teleport to="body">
-    <div v-if="open" class="a-sheet-root" @keydown="onKeydown">
+    <div v-if="open" class="a-sheet-root">
       <div class="a-scrim" @click="emit('close')" />
       <div
         ref="panel"
         class="a-sheet"
+        tabindex="-1"
         role="dialog"
         aria-modal="true"
         :aria-label="title"

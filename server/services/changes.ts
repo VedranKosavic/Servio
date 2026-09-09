@@ -131,7 +131,12 @@ export function getChanges(
   if (entities.has('shift')) result.shift = shiftSnapshot(db, venueId, actor)
   // The queues are decisions, and a waiter decides nothing: §4.1 attaches
   // `pending` for admins and bartenders only.
-  if (entities.has('adjustment') && !isStaffFloor) result.pending = pendingCounts(db, venueId)
+  //
+  // All three entities, not just `adjustment`: a payout and a settlement bump
+  // `shift` and a popis bumps `count`, so gating on `adjustment` alone left the
+  // badge showing whatever the last void had left behind.
+  const queuesMoved = entities.has('adjustment') || entities.has('shift') || entities.has('count')
+  if (queuesMoved && !isStaffFloor) result.pending = pendingCounts(db, venueId)
   if (entities.has('menu') || entities.has('settings')) {
     result.menu_version = menuVersion(db, venueId)
   }
@@ -208,12 +213,15 @@ function listCountBriefs(db: Queryable, venueId: string): CountBrief[] {
 }
 
 /**
- * The four queues, as counts.
+ * The queues, as counts.
  *
- * These are `count(*)`s over four ledgers rather than calls into four packages'
+ * These are `count(*)`s over the ledgers rather than calls into each package's
  * `pendingFor()` — the *decidable list* is `owner.ts`'s job (§6.10) and needs
  * titles, amounts and route pairs; the feed needs only "is there anything", so
  * a badge can appear on a phone that is not the owner's.
+ *
+ * Every queue `attentionItems()` assembles has to be counted here, or the nav
+ * badge on a page that has not read *Puls* is smaller than the list it counts.
  */
 export function pendingCounts(db: Queryable, venueId: string): PendingCounts {
   const count = (n: number | null | undefined) => n ?? 0
@@ -254,11 +262,22 @@ export function pendingCounts(db: Queryable, venueId: string): PendingCounts {
     ))
     .get()?.n
 
+  // A submitted popis is a decision too — *Primijeni* on the Smjena page and an
+  // `approve` row on *Puls* — so it belongs in the same badge.
+  const counts = db.select({ n: sql<number>`count(*)` })
+    .from(schema.stockCounts)
+    .where(and(
+      eq(schema.stockCounts.venueId, venueId),
+      eq(schema.stockCounts.status, 'submitted'),
+    ))
+    .get()?.n
+
   return {
     adjustments: count(adjustments),
     unpaid: count(unpaid),
     payouts: count(payouts),
     settlements: count(settlements),
+    counts: count(counts),
   }
 }
 

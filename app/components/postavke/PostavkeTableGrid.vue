@@ -24,10 +24,10 @@ const emit = defineEmits<{ pick: [id: string] }>()
 
 const mine = computed(() => props.tables.filter(table => table.zone === props.zone))
 
-/** Draw as many rows as are used, never fewer than four, never more than 12. */
+/** Draw as many rows as are used — the group bands push this past 12. */
 const rows = computed(() => {
-  const used = mine.value.reduce((max, table) => Math.max(max, table.row), 0)
-  return Math.min(12, Math.max(4, used))
+  const used = mine.value.reduce((max, table) => Math.max(max, rowOf(table)), 0)
+  return Math.min(40, Math.max(4, used))
 })
 
 const cols = computed(() => {
@@ -35,11 +35,24 @@ const cols = computed(() => {
   return Math.min(12, Math.max(4, used))
 })
 
+/**
+ * The square a table occupies, for the purpose of "are two of these on top of
+ * each other".
+ *
+ * The group is part of it. A `grp` is its own little container — the VIP box's
+ * two tables deliberately reuse col 3, rows 1-2 *inside the box*, which the
+ * seed says out loud — so keying on col:row alone flagged four correctly set-up
+ * tables as *poklapanje*.
+ */
+function squareOf(table: TableAdmin): string {
+  return `${table.grp ?? ''}:${table.col}:${table.row}`
+}
+
 /** More than one table on the same square — visible, and worth saying out loud. */
 const clashes = computed(() => {
   const seen = new Map<string, number>()
   for (const table of mine.value) {
-    const key = `${table.col}:${table.row}`
+    const key = squareOf(table)
     seen.set(key, (seen.get(key) ?? 0) + 1)
   }
   return new Set([...seen.entries()].filter(([, n]) => n > 1).map(([key]) => key))
@@ -48,11 +61,32 @@ const clashes = computed(() => {
 function toneOf(table: TableAdmin): string {
   // The clash wins: two tables on one square hides one of them behind the
   // other, and that is the thing worth seeing first.
-  if (clashes.value.has(`${table.col}:${table.row}`)) return 'clash'
+  if (clashes.value.has(squareOf(table))) return 'clash'
   if (!table.active) return 'off'
   if (table.has_open_tab) return 'busy'
   return ''
 }
+
+/**
+ * A grouped table is drawn on its own row band under the loose ones, so the
+ * preview stops painting the VIP box over Sto 11 and Sto 12. Every group gets
+ * one band; within it the group keeps its own col/row.
+ */
+const groups = computed(() =>
+  [...new Set(mine.value.map(t => t.grp).filter((g): g is string => !!g))].sort())
+
+function rowOf(table: TableAdmin): number {
+  if (!table.grp) return table.row
+  return looseRows.value + groups.value.indexOf(table.grp) * groupRows.value + table.row
+}
+
+/** The tallest ungrouped table's row — where the group bands start. */
+const looseRows = computed(() =>
+  mine.value.filter(t => !t.grp).reduce((max, t) => Math.max(max, t.row), 0))
+
+/** Every group gets the same band height, so the bands do not overlap. */
+const groupRows = computed(() =>
+  mine.value.filter(t => t.grp).reduce((max, t) => Math.max(max, t.row), 0))
 </script>
 
 <template>
@@ -70,11 +104,11 @@ function toneOf(table: TableAdmin): string {
         type="button"
         class="p-cell"
         :class="[toneOf(table), { on: activeId === table.id }]"
-        :style="{ gridColumn: table.col, gridRow: table.row }"
+        :style="{ gridColumn: table.col, gridRow: rowOf(table) }"
         @click="emit('pick', table.id)"
       >
         <b>{{ table.name }}</b>
-        <small v-if="clashes.has(`${table.col}:${table.row}`)">poklapanje</small>
+        <small v-if="clashes.has(squareOf(table))">poklapanje</small>
         <small v-else-if="!table.active">ugašen</small>
         <small v-else-if="table.has_open_tab">zauzet</small>
         <small v-else-if="table.grp">{{ table.grp }}</small>

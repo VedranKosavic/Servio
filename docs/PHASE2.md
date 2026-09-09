@@ -385,18 +385,19 @@ Every package obeys all of these; a PR that breaks one is not merged.
 
 One script creates a realistic night **through the API**, then a human walks the five pages against it. No fixtures, no seeded shortcuts: everything below goes in through the same routes a phone uses, so a green walkthrough proves the dashboard reads the real ledger.
 
-### 5.1 `scripts/phase2-night.ts`
+### 5.1 `scripts/phase2-night.mjs`
 
-Run against a dev server with `SANK_DEV_ENROL=1`:
+Run against a dev server on a freshly seeded database:
 
 ```
-npm run dev                       # terminal 1, port 3100
-npx tsx scripts/phase2-night.ts   # terminal 2
+rm -f data/sank.db*                # a fresh, seeded venue
+npm run dev -- --port 3100         # terminal 1
+node scripts/phase2-night.mjs      # terminal 2 (SANK_BASE overrides the port)
 ```
 
-Plain `fetch` with a per-actor cookie jar, no test framework. It prints each step and ends with a summary of the ids it created. In order:
+Plain `fetch` with a per-actor cookie jar, no test framework and no build step. It prints each step and ends with a summary of the ids it created and the `/api/owner/live` read they should produce. In order:
 
-1. **Three waiters and a bartender.** `POST /api/dev/enrol` once per actor to get a device cookie, then `POST /api/auth/pin` as Amar, Lejla and Dino (waiters) and Emir (bartender), from the seed. Admin cookie via `POST /api/auth/admin/login` with `haris@lounge.ba / lounge`.
+1. **Three waiters and a bartender, on four real devices.** Admin cookie first, via `POST /api/auth/admin/login` with `haris@lounge.ba / lounge`; then, per actor, `POST /api/admin/enrol-codes { mode: 'personal', bound_user_id, label }` as the admin, `POST /api/devices/enrol { code }` as the phone, and `POST /api/auth/pin` as the person — Amar, Lejla and Dino (waiters) and Emir (bartender), from the seed. **Not** `POST /api/dev/enrol`: that door reuses one shared dev device row and rotates its token on every call, so the second actor's enrol invalidates the first actor's cookie and the next request comes back `401 DEVICE_MISMATCH`. The script also sends `PATCH /api/admin/settings { payment_methods: ['cash', 'card'] }` here, because the seed venue takes cash only and step 4's card payment would otherwise be a `400 METHOD_NOT_ALLOWED`.
 2. **The shift opens on the first lock** — no explicit open call, so the auto-open path is exercised.
 3. **~12 orders.** `POST /api/orders`, each with a fresh `client_id`: four tables for Amar (including one shisha with two flavours), four for Lejla, three for Dino, one cross-waiter round; 30–60 s apart on `client_created_at` so the *Zadnje stavke* feed has a real order.
 4. **Two payments.** `POST /api/payments` — one cash with change, one card — covering two of Amar's tables.
@@ -404,7 +405,7 @@ Plain `fetch` with a per-actor cookie jar, no test framework. It prints each ste
 6. **One unpaid tab.** `POST /api/tabs/unpaid` on one of Lejla's tables, reason `walked_out`, left `pending_review`.
 7. **One payout above the owner threshold.** `POST /api/shifts/:id/payout` for 60,00 KM by Emir — a second `attention` row that needs the admin.
 8. **A settlement.** Amar declares blind through `POST /api/shifts/:id/settle` with a `declared_fen` deliberately 4,00 KM short — inside tolerance, so the verdict word is *u toleranciji*.
-9. **A submitted count.** `POST /api/stock/counts` with `kind: 'full'`, `phase: 'close'`, ~10 lines, three of them off tolerance, left **submitted** so *Primijeni* has something to do.
+9. **A submitted count.** `POST /api/stock/counts` with `kind: 'full'`, `phase: 'close'`, ~10 lines, three of them off tolerance, left **submitted** so *Primijeni* has something to do. Every line carries a `note`: a line outside tolerance without one makes the whole post the documented `422 NOTE_REQUIRED` naming the item ids.
 10. **A delivery**, so Roba has a movement to show: `POST /api/stock/deliveries`, two lines with real `line_cost_fen`.
 11. It does **not** close the shift. The walkthrough closes it by hand from the app, because closing is one of the things being verified.
 

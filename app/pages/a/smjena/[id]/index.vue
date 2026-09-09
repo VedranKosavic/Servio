@@ -17,7 +17,7 @@
  * adjustment, a count being confirmed. There is no `setInterval` here.
  */
 import { ApiSideError } from '~/composables/useApi'
-import { cashVerdict, decimalBs, perBowl, stockVarianceNote } from '~/components/smjena/smjenaLogic'
+import { cashVerdict, decimalBs, noCashCountReason, perBowl, stockVarianceNote } from '~/components/smjena/smjenaLogic'
 import type { OwnerShift, Settings } from '#shared/types'
 
 definePageMeta({ middleware: 'admin', layout: 'admin' })
@@ -272,7 +272,7 @@ async function submitSheet() {
             <span class="a-sub">
               <span>KM</span>
               <UiPill v-if="cashWord" :tone="cashWord.tone">{{ cashWord.word }}</UiPill>
-              <span v-else>smjena nije zatvorena</span>
+              <span v-else>{{ noCashCountReason(data.shift) }}</span>
             </span>
           </template>
         </UiTile>
