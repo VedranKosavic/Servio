@@ -1,7 +1,8 @@
 import tailwindcss from '@tailwindcss/vite'
-// The wordmark, from the one file that holds it. The config is read before
-// Nuxt's auto-imports exist, so this is the one place it is imported by path.
-import { APP_DESCRIPTION, APP_NAME } from './shared/brand'
+// The wordmark and the browser-chrome colours, from the one file that holds
+// them. The config is read before Nuxt's auto-imports exist, so this is the
+// one place they are imported by path.
+import { APP_DESCRIPTION, APP_NAME, THEME_COLOR_DARK } from './shared/brand'
 
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
@@ -40,8 +41,8 @@ export default defineNuxtConfig({
       // starting at the waiter app is right for the phones that install this.
       start_url: '/konobar',
       scope: '/',
-      background_color: '#0e0e12',
-      theme_color: '#0e0e12',
+      background_color: THEME_COLOR_DARK,
+      theme_color: THEME_COLOR_DARK,
       icons: [
         { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
         { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
@@ -182,7 +183,7 @@ export default defineNuxtConfig({
       // an installed PWA) in the app background, so the page does not end at a
       // white strip.
       meta: [
-        { name: 'theme-color', content: '#0e0e12' },
+        { name: 'theme-color', content: THEME_COLOR_DARK },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
         { name: 'apple-mobile-web-app-title', content: APP_NAME },

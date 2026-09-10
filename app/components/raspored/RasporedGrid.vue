@@ -125,7 +125,7 @@ const days = computed(() => props.week.days.map(d => d.work_date))
   top: 0;
   z-index: 2;
   background: var(--surface-2);
-  font-size: 13px;
+  font-size: var(--text-micro);
   font-weight: 600;
   color: var(--ink-2);
   white-space: nowrap;
@@ -146,7 +146,7 @@ const days = computed(() => props.week.days.map(d => d.work_date))
 
 .r-tpl { display: table-cell; }
 .r-tpl span { display: block; font-weight: 600; }
-.r-tpl small { display: block; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.r-tpl small { display: block; color: var(--muted); font-size: var(--text-caption); font-variant-numeric: tabular-nums; }
 
 .r-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 
@@ -158,7 +158,7 @@ const days = computed(() => props.week.days.map(d => d.work_date))
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: 18px;
+  font-size: var(--text-section);
   line-height: 1;
   cursor: pointer;
 }
@@ -170,7 +170,7 @@ const days = computed(() => props.week.days.map(d => d.work_date))
   background: transparent;
   padding: 0;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-caption);
   color: var(--muted);
   text-decoration: underline;
   cursor: pointer;

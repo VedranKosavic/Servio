@@ -35,6 +35,8 @@ const emit = defineEmits<{
   remove: [message: ChatMessage]
 }>()
 
+useSheetDismiss(() => emit('close'))
+
 const mine = computed(() => props.message.author_id === props.userId)
 const ageS = computed(() => (Date.now() - Date.parse(props.message.at)) / 1000)
 
@@ -72,10 +74,10 @@ const ROW = 'flex min-h-13 items-center rounded-control px-3 py-2.5 text-left te
 </script>
 
 <template>
-  <div class="fixed inset-0 z-40 bg-black/60" @click="emit('close')" />
+  <div class="sheet-scrim fixed inset-0 z-40" @click="emit('close')" />
 
   <div
-    class="fixed inset-x-0 bottom-0 z-50 flex max-h-[85vh] flex-col gap-1 overflow-y-auto rounded-t-2xl border-t border-line bg-surface p-2 pb-5"
+    class="sheet-panel fixed inset-x-0 bottom-0 z-50 flex max-h-[92dvh] flex-col gap-1 overflow-y-auto p-2 pb-5"
     role="dialog"
     aria-label="Poruka"
   >

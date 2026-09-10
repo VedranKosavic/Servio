@@ -107,13 +107,13 @@ const anyone = computed(() => props.people.length > 0)
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: var(--text-micro);
   font-weight: 700;
 }
 
 .r-who { display: flex; flex-direction: column; min-width: 0; flex-grow: 1; }
 .r-name { font-weight: 600; }
-.r-who small { color: var(--muted); font-size: 12px; }
+.r-who small { color: var(--muted); font-size: var(--text-caption); }
 
 .r-empty { margin: 0; color: var(--muted); }
 .r-error { margin: 4px 0 0; color: var(--danger); font-weight: 500; }

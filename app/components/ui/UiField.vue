@@ -162,4 +162,12 @@ function onInput(event: Event) {
   /* 16 px, because anything smaller makes iOS Safari zoom the page on focus. */
   .a-input { height: 44px; font-size: var(--text-section); }
 }
+
+/* The waiter and bartender floor is 48 px — see the note in `UiButton`. */
+html:not([data-theme='light']) .a-input {
+  height: 48px;
+  font-size: var(--text-body);
+}
+
+html:not([data-theme='light']) .a-textarea { height: auto; }
 </style>

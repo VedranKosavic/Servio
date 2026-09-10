@@ -299,9 +299,10 @@ const staleOnCount = computed(() => result.value?.stale_devices ?? [])
       <template v-else>
         <!-- Which count this is. A segmented control, not three copper
              buttons: choosing a phase is not a primary action. -->
-        <WaiterSeg
+        <UiSeg
+          block
           label="Vrsta popisa"
-          :options="PHASES.map(p => ({ id: p.key, label: p.label }))"
+          :options="PHASES.map(p => ({ value: p.key, label: p.label }))"
           :model-value="phase"
           @update:model-value="phase = $event as Phase"
         />

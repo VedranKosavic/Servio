@@ -37,6 +37,8 @@ const emit = defineEmits<{
   comp: []
 }>()
 
+useSheetDismiss(() => emit('close'))
+
 const text = ref(props.initial ?? '')
 const field = ref<HTMLInputElement | null>(null)
 
@@ -56,10 +58,10 @@ function saveText() {
 
 <template>
   <div class="fixed inset-0 z-50">
-    <div class="absolute inset-0 bg-black/55" @click="emit('close')" />
+    <div class="sheet-scrim" @click="emit('close')" />
 
     <div
-      class="absolute inset-x-0 bottom-0 mx-auto flex max-h-[92dvh] w-full max-w-3xl flex-col gap-3 overflow-y-auto rounded-t-[20px] border-t border-line bg-surface px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-3"
+      class="sheet-panel absolute inset-x-0 bottom-0 mx-auto flex max-h-[92dvh] w-full max-w-3xl flex-col gap-3 overflow-y-auto px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-3"
       role="dialog"
       aria-label="Napomena"
     >

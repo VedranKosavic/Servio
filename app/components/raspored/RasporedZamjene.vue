@@ -213,7 +213,7 @@ const tone = (s: SwapStatus) =>
 
 <style scoped>
 .r-tab { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.r-quiet { margin: 0; color: var(--muted); font-size: 13px; }
+.r-quiet { margin: 0; color: var(--muted); font-size: var(--text-micro); }
 .r-error { margin: 0; color: var(--danger); font-weight: 500; }
 .r-act { white-space: nowrap; }
 .r-act :deep(.a-btn) + :deep(.a-btn) { margin-left: 6px; }

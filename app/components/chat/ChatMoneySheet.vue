@@ -17,13 +17,15 @@
 defineProps<{ busy?: boolean, canAdmini?: boolean }>()
 
 const emit = defineEmits<{ close: [], send: [], admini: [] }>()
+
+useSheetDismiss(() => emit('close'))
 </script>
 
 <template>
-  <div class="fixed inset-0 z-40 bg-black/60" @click="emit('close')" />
+  <div class="sheet-scrim fixed inset-0 z-40" @click="emit('close')" />
 
   <div
-    class="fixed inset-x-0 bottom-0 z-50 flex flex-col gap-3 rounded-t-2xl border-t border-line bg-surface px-4 pb-6 pt-4"
+    class="sheet-panel fixed inset-x-0 bottom-0 z-50 flex flex-col gap-3 px-4 pb-6 pt-4"
     role="dialog"
     aria-label="Iznosi u kanalu"
   >

@@ -14,6 +14,8 @@
  */
 const emit = defineEmits<{ close: [] }>()
 
+useSheetDismiss(() => emit('close'))
+
 const me = useMe()
 const { blocked, blockedText } = useSync()
 const wakeLock = useWakeLock()
@@ -60,10 +62,10 @@ function noteFor(item: (typeof WAITER_MENU)[number]): string | null {
 
 <template>
   <!-- A tap anywhere outside closes the sheet; the sheet itself sits above it. -->
-  <div class="fixed inset-0 z-40 bg-black/60" @click="emit('close')" />
+  <div class="sheet-scrim fixed inset-0 z-40" @click="emit('close')" />
 
   <div
-    class="fixed inset-x-0 bottom-0 z-50 flex max-h-[85vh] flex-col rounded-t-2xl border-t border-line bg-surface pb-5"
+    class="sheet-panel fixed inset-x-0 bottom-0 z-50 flex max-h-[92dvh] flex-col pb-5"
     role="dialog"
     aria-label="Korisnik"
   >

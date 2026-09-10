@@ -24,7 +24,7 @@ useHead({
   title: 'Prijava',
   htmlAttrs: { 'data-theme': 'light' },
   // Both faces are loaded app-wide in `nuxt.config.ts` (docs/DESIGN.md §1).
-  meta: [{ name: 'theme-color', content: '#1b2427' }],
+  meta: [{ name: 'theme-color', content: THEME_COLOR_LIGHT }],
 })
 
 const email = ref('')

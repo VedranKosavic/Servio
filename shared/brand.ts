@@ -25,3 +25,24 @@ export const APP_TAGLINE = 'Kontrolna ploča'
 
 /** The PWA's description, and the one line that says what this is. */
 export const APP_DESCRIPTION = 'Narudžbe, smjene i stanje šanka'
+
+/**
+ * The browser-chrome colours — the address bar on a phone, the PWA splash.
+ *
+ * They live here for the same reason the wordmark does: `nuxt.config.ts` writes
+ * the manifest and the dark `theme-color` before Nuxt's auto-imports exist, and
+ * two `.vue` files write the light one, so without a shared constant the value
+ * is typed out three times and drifts. It already had: the dark chrome was
+ * `#0e0e12`, a grey from before the palette was rebuilt, while the page behind
+ * it had become `#0b0d11`.
+ *
+ * **These are the only two hex values outside `app/assets/css/`.** They have to
+ * be literals — a `<meta>` tag cannot read a CSS custom property — so each one
+ * names the token it must equal, and the pair moves when that token moves.
+ */
+
+/** `--color-bg` in `main.css`: the dark ground of /konobar, /sanker and the lock screen. */
+export const THEME_COLOR_DARK = '#0b0d11'
+
+/** `--nav` in `admin.css`: the dark rail the dashboard hangs its chrome off. */
+export const THEME_COLOR_LIGHT = '#1b2427'

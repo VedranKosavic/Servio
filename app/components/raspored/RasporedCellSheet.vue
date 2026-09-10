@@ -99,8 +99,8 @@ const span = computed(() => props.person
 .r-cell { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .r-span { margin: 0; font-weight: 600; }
 .r-now { margin: 0; color: var(--ink-2); }
-.r-note { margin: 0; color: var(--ink-2); font-size: 14px; }
-.r-quiet { margin: 0; color: var(--muted); font-size: 13px; }
+.r-note { margin: 0; color: var(--ink-2); font-size: var(--text-label); }
+.r-quiet { margin: 0; color: var(--muted); font-size: var(--text-micro); }
 .r-error { margin: 0; color: var(--danger); font-weight: 500; }
 
 .r-acts { display: flex; flex-wrap: wrap; gap: 8px; }

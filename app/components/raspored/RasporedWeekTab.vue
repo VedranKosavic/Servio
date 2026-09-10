@@ -276,10 +276,10 @@ const removeCell = () => cellRun(() => api.removeAssignment(cell.value!.id))
 .r-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .r-nav { display: flex; align-items: center; gap: 8px; }
 .r-when { display: flex; align-items: center; gap: 8px; }
-.r-when strong { font-variant-numeric: tabular-nums; font-size: 16px; }
+.r-when strong { font-variant-numeric: tabular-nums; font-size: var(--text-body); }
 .r-acts { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
 
-.r-quiet { margin: 0; color: var(--muted); font-size: 13px; }
+.r-quiet { margin: 0; color: var(--muted); font-size: var(--text-micro); }
 .r-error { margin: 0; color: var(--danger); font-weight: 500; }
 .r-ask { margin: 0; }
 

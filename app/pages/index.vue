@@ -779,7 +779,7 @@ const ROLE_LABEL: Record<string, string> = {
 /* The role is there to be found, not read: it never competes with the name. */
 .face-role {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--text-caption);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-weight: 600;

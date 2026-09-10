@@ -80,7 +80,7 @@ const emit = defineEmits<{
   max-width: 80%;
   text-align: center;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--text-micro);
 }
 
 .a-row { display: flex; justify-content: flex-start; }
@@ -103,11 +103,11 @@ const emit = defineEmits<{
 
 .a-bubble.mine { background: var(--accent-soft); border-color: var(--accent-soft); }
 
-.a-who { font-size: 13px; color: var(--muted); }
+.a-who { font-size: var(--text-micro); color: var(--muted); }
 .a-gone { font-style: italic; color: var(--muted); }
-.a-quote { border-left: 2px solid var(--accent); padding-left: 8px; font-size: 13px; color: var(--ink-2); }
+.a-quote { border-left: 2px solid var(--accent); padding-left: 8px; font-size: var(--text-micro); color: var(--ink-2); }
 .a-text { white-space: pre-wrap; overflow-wrap: anywhere; }
-.a-at { align-self: flex-end; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.a-at { align-self: flex-end; font-size: var(--text-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .a-photo {
   width: 320px;

@@ -177,10 +177,10 @@ function firstLine(day: HoursRow['days'][number]): string {
 .r-tab { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 
 .r-month { display: flex; align-items: center; gap: 8px; }
-.r-month strong { font-size: 14px; min-width: 120px; text-align: center; }
+.r-month strong { font-size: var(--text-label); min-width: 120px; text-align: center; }
 
 .r-n { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.r-quiet { margin: 0; color: var(--muted); font-size: 13px; }
+.r-quiet { margin: 0; color: var(--muted); font-size: var(--text-micro); }
 .r-error { margin: 0; color: var(--danger); font-weight: 500; }
 
 .r-caveat {
@@ -189,7 +189,7 @@ function firstLine(day: HoursRow['days'][number]): string {
   border-radius: 10px;
   background: var(--surface-2);
   color: var(--ink-2);
-  font-size: 13px;
+  font-size: var(--text-micro);
 }
 
 .r-row { cursor: pointer; }
@@ -203,7 +203,7 @@ function firstLine(day: HoursRow['days'][number]): string {
   gap: 10px;
   flex-wrap: wrap;
   padding: 4px 0;
-  font-size: 13px;
+  font-size: var(--text-micro);
 }
 
 .r-date { font-weight: 600; min-width: 90px; font-variant-numeric: tabular-nums; }

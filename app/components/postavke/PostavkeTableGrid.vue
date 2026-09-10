@@ -142,7 +142,7 @@ const groupRows = computed(() =>
 }
 
 .p-cell b { font-size: var(--text-label); font-weight: 600; }
-.p-cell small { font-size: 11px; color: var(--muted); }
+.p-cell small { font-size: var(--text-caption); color: var(--muted); }
 
 .p-cell.busy { background: var(--warn-soft); border-color: var(--warn); }
 .p-cell.busy small { color: var(--warn); }

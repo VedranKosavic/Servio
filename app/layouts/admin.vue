@@ -33,7 +33,7 @@ const changes = useAdminChanges()
 // so this only flips the theme and the browser chrome.
 useHead({
   htmlAttrs: { 'data-theme': 'light' },
-  meta: [{ name: 'theme-color', content: '#1b2427' }],
+  meta: [{ name: 'theme-color', content: THEME_COLOR_LIGHT }],
 })
 
 /**
@@ -345,7 +345,7 @@ async function signOut() {
    grows taller than every other one. */
 /* 10 and 11 px live only inside the dark rail, below the scale on purpose: a
    badge's digits, a tab's label and the "soon" note are furniture, not text. */
-.a-nav-soon small { font-size: 11px; white-space: nowrap; flex-shrink: 0; }
+.a-nav-soon small { font-size: var(--text-caption); white-space: nowrap; flex-shrink: 0; }
 
 /* The current page: a raised well, copper ink, and a copper spine down the
    left edge. Louder than every other row, quieter than a button. */
@@ -376,7 +376,7 @@ async function signOut() {
   border-radius: var(--radius-chip);
   background: var(--danger);
   color: var(--on-accent);
-  font-size: 11px;
+  font-size: var(--text-caption);
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -410,7 +410,7 @@ async function signOut() {
 }
 
 .a-venue-eyebrow {
-  font-size: 10px;
+  font-size: var(--text-caption);
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -483,7 +483,7 @@ async function signOut() {
   white-space: nowrap;
 }
 
-.a-who-text small { font-size: 11px; color: var(--nav-muted); }
+.a-who-text small { font-size: var(--text-caption); color: var(--nav-muted); }
 
 .a-signout {
   flex-shrink: 0;
@@ -559,7 +559,7 @@ async function signOut() {
     gap: 3px;
     color: var(--nav-muted);
     text-decoration: none;
-    font-size: 11px;
+    font-size: var(--text-caption);
     font-weight: 600;
   }
 

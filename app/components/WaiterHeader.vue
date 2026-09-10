@@ -14,7 +14,9 @@
  * is the `.eyebrow` under it and takes the small fact a screen would otherwise
  * bury at the bottom (how many tables are open, whose shift this is).
  *
- * The bartender screens bring their own header — this one is not shared.
+ * **Every dark screen's header is this one.** `SankerHeader` is this component
+ * with the sync chip and the avatar in the `right` slot — the bartender bar is
+ * a usage, not a second implementation, so the two areas cannot drift.
  */
 defineProps<{
   title: string
@@ -32,7 +34,8 @@ defineProps<{
     <NuxtLink
       v-if="backTo"
       :to="backTo"
-      class="-ml-2 flex size-12 shrink-0 items-center justify-center rounded-control text-text-2 transition-colors active:bg-surface-2"
+      class="-ml-2 flex shrink-0 items-center justify-center rounded-control text-text-2 transition-colors active:bg-surface-2"
+      :style="{ width: 'var(--tap)', height: 'var(--tap)' }"
       aria-label="Nazad"
     >
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -41,8 +44,13 @@ defineProps<{
     </NuxtLink>
 
     <div class="flex min-w-0 grow flex-col justify-center">
-      <span class="page-title truncate">{{ title }}</span>
-      <span v-if="sub" class="eyebrow truncate">{{ sub }}</span>
+      <!--
+        An `h1`, not a styled span: this *is* the name of the screen, and it is
+        the landmark a screen reader jumps to. `.page-title` carries the size,
+        so the tag is free to be the honest one.
+      -->
+      <h1 class="page-title m-0 truncate">{{ title }}</h1>
+      <p v-if="sub" class="eyebrow m-0 truncate">{{ sub }}</p>
     </div>
 
     <slot name="right" />

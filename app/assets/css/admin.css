@@ -115,8 +115,11 @@
    * their own `font-size: 28px` page title.
    *
    * Seven steps, 12 → 28, because a dense table needs more rungs at the bottom
-   * of the ladder than the phone does. Line height and tracking travel with the
-   * step, as they do in `main.css`.
+   * of the ladder than the phone does. Every one of the seven *names* is
+   * declared in `main.css`, `micro` included — this block only re-values them,
+   * exactly as it re-values the colours. Nothing here invents a step, because a
+   * step that exists in one theme only is a component with no font-size in the
+   * other, and the `ui/` primitives are rendered by both.
    *
    *   caption 12  a table header, an eyebrow, a timestamp
    *   micro   13  a second line under a row, an inline meta
@@ -158,6 +161,11 @@
      It is loaded app-wide in `nuxt.config.ts`; `--font-display` in `main.css`
      is the same stack under the name the rest of the app uses. */
   --font-title: var(--font-display);
+
+  /* The dashboard is read sitting down, often with a mouse: 44, not the floor's
+     48. Every shared primitive sizes itself off this, so it is correct in both
+     areas without either one knowing the other exists. */
+  --tap: 44px;
 }
 
 /**
@@ -171,6 +179,6 @@ html[data-theme='light'] body {
   background: var(--bg);
   color: var(--ink);
   color-scheme: light;
-  font-size: 15px;
+  font-size: var(--text-body);
   line-height: 1.4;
 }

@@ -183,8 +183,8 @@ onBeforeUnmount(() => {
 .a-sheet-x {
   margin-left: auto;
   margin-right: -8px;
-  width: 44px;
-  height: 44px;
+  width: var(--tap);
+  height: var(--tap);
   border: 0;
   background: transparent;
   color: var(--muted);

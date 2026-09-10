@@ -138,7 +138,7 @@ button.a-tbl:hover { box-shadow: var(--shadow-raise); }
 /* 11 px, below the scale on purpose: the age is the tile's third encoding of
    the same fact and must never compete with the table's name. */
 .a-tbl-top small {
-  font-size: 11px;
+  font-size: var(--text-caption);
   color: var(--muted);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;

@@ -91,6 +91,22 @@ withDefaults(defineProps<{
   .small { height: 44px; padding: 0 14px; font-size: var(--text-label); }
 }
 
+/**
+ * The waiter and bartender screens borrow this button (the roster lives on
+ * `/konobar/raspored` and `/sanker/raspored` as well as on the dashboard), and
+ * their floor is 48 px, not the dashboard's 44 — a tray in one hand, standing
+ * up, in the dark. The dark theme is the absence of `data-theme='light'`, so
+ * the primitive reads the *area* it is rendered in rather than the viewport,
+ * and one component serves both without a second copy.
+ */
+html:not([data-theme='light']) .a-btn,
+html:not([data-theme='light']) .a-btn.small {
+  height: 48px;
+  padding: 0 18px;
+  font-size: var(--text-body);
+  border-radius: var(--radius-control);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .a-spin { animation-duration: 2s; }
 }

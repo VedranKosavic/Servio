@@ -64,7 +64,9 @@ defineProps<{ blocks: Block[] }>()
 
 .doc-h2 {
   margin: 8px 0 0;
-  font-size: 1.15em;
+  /* A heading inside the document is a step of the scale, not a multiple of
+     whatever the surrounding paragraph happens to be. */
+  font-size: var(--text-section);
   font-weight: 700;
   line-height: 1.25;
 }
@@ -73,7 +75,7 @@ defineProps<{ blocks: Block[] }>()
 
 .doc-h3 {
   margin: 6px 0 0;
-  font-size: 1em;
+  font-size: var(--text-body);
   font-weight: 700;
 }
 

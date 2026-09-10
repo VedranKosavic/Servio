@@ -46,6 +46,8 @@ const emit = defineEmits<{
   unpaid: [reason: 'walked_out' | 'dispute' | 'other']
 }>()
 
+useSheetDismiss(() => emit('close'))
+
 type Mode = 'main' | 'custom' | 'unpaid'
 const mode = ref<Mode>(props.initialMode)
 const receivedRaw = ref('')

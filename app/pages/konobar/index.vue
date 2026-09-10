@@ -402,8 +402,8 @@ const openTabsLine = computed(() => {
 
 /** The two halves of the room, as the segmented control reads them. */
 const ZONES = [
-  { id: 'unutra', label: 'Unutra' },
-  { id: 'basta', label: 'Bašta' },
+  { value: 'unutra', label: 'Unutra' },
+  { value: 'basta', label: 'Bašta' },
 ] as const
 
 /** *+ Bez stola*: this phone's own table-less tab, or a fresh one. */
@@ -569,7 +569,8 @@ function openLoose() {
           </button>
         </div>
 
-        <WaiterSeg
+        <UiSeg
+          block
           label="Zona"
           :options="ZONES"
           :model-value="zone"

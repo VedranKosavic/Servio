@@ -22,19 +22,21 @@ defineProps<{
   round: string
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   close: []
   /** Hand over to `AdjVoidSheet` — the page swaps the sheets. */
   storno: []
 }>()
+
+useSheetDismiss(() => emit('close'))
 </script>
 
 <template>
   <div class="fixed inset-0 z-50">
-    <div class="absolute inset-0 bg-black/55" @click="$emit('close')" />
+    <div class="sheet-scrim" @click="$emit('close')" />
 
     <div
-      class="absolute inset-x-0 bottom-0 mx-auto flex w-full max-w-3xl flex-col gap-3 rounded-t-[20px] border-t border-line bg-surface px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-3"
+      class="sheet-panel absolute inset-x-0 bottom-0 mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-3"
       role="dialog"
       aria-label="Zaključena stavka"
     >

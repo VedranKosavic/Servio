@@ -62,7 +62,7 @@ const drift = computed(() => {
   border: 1px solid var(--line);
   background: var(--surface);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-micro);
   color: var(--ink);
   cursor: pointer;
   text-align: left;
@@ -80,19 +80,19 @@ const drift = computed(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: var(--text-caption);
   font-weight: 700;
   color: var(--ink-2);
 }
 
 .r-nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .struck { text-decoration: line-through; }
-.r-tag { color: var(--ink-2); font-size: 11px; white-space: nowrap; }
+.r-tag { color: var(--ink-2); font-size: var(--text-caption); white-space: nowrap; }
 .r-drift { color: var(--muted); }
 
 @media (max-width: 1023px) {
   /* A thumb, not a mouse pointer. */
-  .r-chip { min-height: 44px; font-size: 15px; padding-right: 12px; }
-  .r-in { width: 36px; height: 36px; border-radius: 18px; font-size: 13px; }
+  .r-chip { min-height: 44px; font-size: var(--text-body); padding-right: 12px; }
+  .r-in { width: 36px; height: 36px; border-radius: 18px; font-size: var(--text-micro); }
 }
 </style>

@@ -53,8 +53,8 @@ const team = ref<LoginUser[]>([])
 
 const which = ref<'ova' | 'sljedeca'>('ova')
 const SEGMENTS = [
-  { id: 'ova', label: 'Ova sedmica' },
-  { id: 'sljedeca', label: 'Sljedeća' },
+  { value: 'ova', label: 'Ova sedmica' },
+  { value: 'sljedeca', label: 'Sljedeća' },
 ] as const
 
 const week = computed<RosterWeekView | null>(() => {
@@ -261,7 +261,8 @@ const colleagues = computed(() =>
           </section>
 
           <!-- Which week. A control, not two primary actions. -->
-          <WaiterSeg
+          <UiSeg
+            block
             label="Sedmica"
             :options="SEGMENTS"
             :model-value="which"
@@ -349,9 +350,9 @@ const colleagues = computed(() =>
       <!-- *Preuzimam*: one confirmation, because taking a shift is a promise to
            be there. `409 DOUBLE_SHIFT` turns the same sheet into the second ask. -->
       <div v-if="taking" class="fixed inset-0 z-50">
-        <div class="absolute inset-0 bg-black/55" @click="taking = null" />
+        <div class="sheet-scrim" @click="taking = null" />
         <div
-          class="absolute inset-x-0 bottom-0 mx-auto flex w-full max-w-3xl flex-col gap-3 rounded-t-[20px] border-t border-line bg-surface px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-3"
+          class="sheet-panel absolute inset-x-0 bottom-0 mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-3"
           role="dialog"
           aria-label="Preuzimanje smjene"
         >

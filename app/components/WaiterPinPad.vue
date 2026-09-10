@@ -220,7 +220,7 @@ const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
   background: var(--surface-2);
   color: var(--ink);
   font-family: inherit;
-  font-size: 26px;
+  font-size: var(--text-title);
   font-weight: 600;
   cursor: pointer;
   transition:

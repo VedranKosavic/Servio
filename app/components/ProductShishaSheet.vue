@@ -30,6 +30,8 @@ const emit = defineEmits<{
   confirm: [flavourIds: string[], note: string | null]
 }>()
 
+useSheetDismiss(() => emit('close'))
+
 const MAX = 3
 const selected = ref<string[]>([])
 const note = ref<string | null>(null)
@@ -50,9 +52,9 @@ const canAdd = computed(() => selected.value.length > 0)
 
 <template>
   <div class="fixed inset-0 z-50">
-    <div class="absolute inset-0 bg-black/55" @click="emit('close')" />
+    <div class="sheet-scrim" @click="emit('close')" />
 
-    <div class="absolute inset-x-0 bottom-0 mx-auto flex max-h-[85dvh] w-full max-w-3xl flex-col gap-3 rounded-t-[20px] border-t border-line bg-surface px-4 pb-6 pt-3">
+    <div class="sheet-panel absolute inset-x-0 bottom-0 mx-auto flex max-h-[85dvh] w-full max-w-3xl flex-col gap-3 px-4 pb-6 pt-3">
       <div class="mx-auto h-1 w-10 rounded-sm bg-line" />
 
       <div class="flex items-center gap-3">

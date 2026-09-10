@@ -36,6 +36,8 @@ const emit = defineEmits<{
   close: []
 }>()
 
+useSheetDismiss(() => emit('close'))
+
 const approverId = ref<string | null>(props.approvers[0]?.id ?? null)
 const pin = ref('')
 
@@ -68,10 +70,10 @@ function submit() {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-40 bg-black/60" @click="emit('close')" />
+  <div class="sheet-scrim fixed inset-0 z-40" @click="emit('close')" />
 
   <div
-    class="fixed inset-x-0 bottom-0 z-50 flex max-h-[92vh] flex-col gap-3 overflow-y-auto rounded-t-2xl border-t border-line bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+    class="sheet-panel fixed inset-x-0 bottom-0 z-50 flex max-h-[92dvh] flex-col gap-3 overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
     role="dialog"
     aria-label="Odobrenje otpisa"
   >

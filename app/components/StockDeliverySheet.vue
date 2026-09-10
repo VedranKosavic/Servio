@@ -71,6 +71,8 @@ const emit = defineEmits<{
   }]
 }>()
 
+useSheetDismiss(() => emit('close'))
+
 type Mode = 'note' | 'pick' | 'line'
 const mode = ref<Mode>('note')
 

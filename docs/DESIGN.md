@@ -361,10 +361,16 @@ the page on focus.
 ## 9. Rules for the next screen
 
 1. No hex values outside `main.css` and `admin.css`. If a colour is missing, add
-   a token.
-2. No ad-hoc font sizes. Use a step, or add one here first.
+   a token. The one exception is the pair in `shared/brand.ts` that paints the
+   browser's own chrome — a `<meta>` tag cannot read a custom property — and
+   each of those names the token it must equal.
+2. No ad-hoc font sizes. Use a step, or add one here first — and add it to
+   `main.css`, which declares every name. `admin.css` only re-values them, so a
+   step invented there alone is a shared primitive with no size on the dark
+   screens.
 3. `.num` on every digit that is money, a quantity or a time.
-4. 48 px targets on the phone screens, 44 px on `/admin`.
+4. Targets come from `var(--tap)`: 48 px on the phone screens, 44 px on
+   `/admin`. Read the token rather than writing either number.
 5. Copper for the primary action and for the person's own state. Nothing else.
 6. Depth is a surface step plus a border. Reach for a shadow only when something
    really floats.
@@ -374,25 +380,41 @@ the page on focus.
 
 ---
 
-## 9. Waiting to be consolidated
+## 10. One primitive per job
 
 Screens are allowed to build a primitive the system lacks, inside their own
 components folder, as long as it is written against the tokens and listed here.
+Three redesign branches did exactly that in parallel, so three of them arrived
+twice. They have been folded together; this is the record of where each landed,
+because the useful part is the *rule*, not the history.
 
-**`app/components/waiter/WaiterSeg.vue`** — a segmented control: one track, one
-thumb that slides, two or three choices. It came out of `/konobar` needing three
-of them (the zone on the floor plan, the phase on *Brzi popis*, the week on
-*Raspored*), all of which had been drawn as two full-width copper buttons — and
-two primary-looking buttons are not a control, they are two actions competing
-with whatever they sit above. The thumb is **material, never copper**: choosing
-which half of the room to look at is neither a primary action nor the person's
-own state. Its segments stay plain `<button aria-pressed>` rather than
-`role="tab"`, because nothing here controls a tabpanel.
+**The segmented control is `app/components/ui/UiSeg.vue`.** `/konobar` had built
+`WaiterSeg` — one track, one thumb that slides — for the zone on the floor plan,
+the phase on *Brzi popis* and the week on *Raspored*, all of which had been drawn
+as two full-width copper buttons, and two primary-looking buttons are not a
+control, they are two actions competing with whatever they sit above. `/admin`
+had `UiSeg`, an inline pill. They are one component now: `UiSeg` with a `block`
+prop for the full-width sliding form. The thumb is **material, never copper** —
+choosing which half of the room to look at is neither a primary action nor the
+person's own state — and the segments stay plain `<button aria-pressed>` rather
+than `role="tab"`, because nothing here controls a tabpanel.
 
-It is the dark twin of `/admin`'s `UiSeg` and the two should become one class in
-`main.css` the next time either is touched.
+**The dark page header is `WaiterHeader`.** `SankerHeader` is that component with
+the sync chip and the avatar passed to its `right` slot — a usage, not a second
+implementation.
 
-**Also worth folding in**, both currently scoped CSS inside their component: the
-floor-plan table tile (`FloorTable.vue`) and the menu tile (`ProductTile.vue`).
-Each is a card with a badge and a 44–48 px control hanging off a corner, and
-between them they are the whole of `/konobar`'s tap surface.
+**Every bottom sheet is `.sheet-scrim` + `.sheet-panel`**, and behaviour comes
+from `useSheetDismiss`. Seventeen dark sheets had each hand-written the same
+chrome and drifted: `bg-black/55` beside `bg-black/60`, `rounded-t-[20px]` beside
+`rounded-t-2xl`, three different max heights, and not one of them closed on
+Escape or locked the page behind it the way `/admin`'s `UiSheet` always had.
+
+**Hit targets come from `--tap`** — 48 px in `main.css`, 44 px in `admin.css`. A
+shared primitive reads the token and is correct in the area it renders in,
+instead of guessing from the viewport width. This is what makes `UiButton` and
+`UiField` safe to use on `/konobar/raspored`.
+
+**Left alone on purpose:** `FloorTable.vue` and `ProductTile.vue` keep their
+scoped CSS. Each is used by exactly one screen, and a component with one caller
+is where its own layout belongs — the system owns what is shared, not everything
+that exists.

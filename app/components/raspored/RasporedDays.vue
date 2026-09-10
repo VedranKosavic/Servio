@@ -115,14 +115,14 @@ const cards = computed(() => props.week.days.map((day, d) => ({
 
 .r-day.now { border-color: var(--accent); }
 
-.r-day h3 { margin: 0; font-size: 15px; font-weight: 700; }
+.r-day h3 { margin: 0; font-size: var(--text-section); font-weight: 700; }
 
 .r-row { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .r-row + .r-row { border-top: 1px solid var(--line); padding-top: 10px; }
 
 .r-tpl { display: flex; align-items: baseline; gap: 8px; }
-.r-tpl span { font-weight: 600; font-size: 14px; }
-.r-tpl small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.r-tpl span { font-weight: 600; font-size: var(--text-label); }
+.r-tpl small { color: var(--muted); font-size: var(--text-caption); font-variant-numeric: tabular-nums; }
 
 .r-people { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 
@@ -134,7 +134,7 @@ const cards = computed(() => props.week.days.map((day, d) => ({
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: 22px;
+  font-size: var(--text-title);
   line-height: 1;
   cursor: pointer;
 }
@@ -145,11 +145,11 @@ const cards = computed(() => props.week.days.map((day, d) => ({
   padding: 0 4px;
   min-height: 44px;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-micro);
   color: var(--muted);
   text-decoration: underline;
   cursor: pointer;
 }
 
-.r-empty { margin: 0; color: var(--muted); font-size: 14px; }
+.r-empty { margin: 0; color: var(--muted); font-size: var(--text-label); }
 </style>
