@@ -30,6 +30,7 @@ import type { LogKind } from '#shared/types'
 type IconName =
   | 'pulse' | 'money' | 'box' | 'list' | 'users' | 'calendar'
   | 'chevron-right' | 'check' | 'x' | 'clock' | 'more'
+  | 'chat' | 'image'
 
 /** The tint on the 32 px icon tile. `plain` is the quiet grey of the mockup. */
 export type DnevnikTone = 'plain' | 'accent' | 'good' | 'bad'
@@ -42,6 +43,8 @@ export const DNEVNIK_GROUPS: Array<{ key: LogGroup, label: string }> = [
   { key: 'roba', label: 'Roba' },
   { key: 'postavke', label: 'Postavke' },
   { key: 'uredaji', label: 'Uređaji' },
+  // Phase 4 — Razgovor, Raspored, Pravila: everything about the team itself.
+  { key: 'ekipa', label: 'Ekipa' },
 ]
 
 /** The short Bosnian name of every kind — the *Vrsta* filter reads this. */
@@ -109,6 +112,35 @@ export const KIND_LABEL: Record<LogKind, string> = {
   device_unlocked: 'Uređaj otključan',
   lockout: 'PIN zaključan',
   clock_skew: 'Sat uređaja odstupa',
+
+  // Ekipa — Razgovor
+  chat_money_warned: 'Iznos u kanalu',
+  chat_muted: 'Utišan u razgovoru',
+  chat_image_removed: 'Slika uklonjena',
+  chat_deleted_by_admin: 'Poruku obrisao vlasnik',
+  chat_cap_hit: 'Limit slika dostignut',
+  chat_pin_changed: '"Za naručiti" izmijenjeno',
+
+  // Ekipa — Raspored
+  roster_published: 'Raspored objavljen',
+  roster_changed: 'Raspored izmijenjen',
+  roster_absent: 'Nije došao',
+  roster_sick: 'Bolovanje prijavljeno',
+  swap_requested: 'Traži zamjenu',
+  swap_accepted: 'Zamjena prihvaćena',
+  swap_assigned: 'Zamjena dodijeljena',
+  swap_declined: 'Zamjena odbijena',
+  swap_cancelled: 'Zamjena povučena',
+  template_changed: 'Šablon smjene promijenjen',
+
+  // Ekipa — Pravila
+  rules_published: 'Objavljena nova Pravila',
+  rules_acked: 'Pravila potvrđena',
+
+  // Roba — prijem sa slike
+  delivery_scanned: 'Otpremnica pročitana sa slike',
+  delivery_discarded: 'Sken odbačen',
+  alias_linked: 'Naziv dobavljača povezan',
 }
 
 /** The default icon of a group; a kind below may override it. */
@@ -119,9 +151,26 @@ const GROUP_ICON: Record<LogGroup, IconName> = {
   roba: 'box',
   postavke: 'list',
   uredaji: 'users',
+  ekipa: 'chat',
 }
 
 const ICON: Partial<Record<LogKind, IconName>> = {
+  roster_published: 'calendar',
+  roster_changed: 'calendar',
+  roster_absent: 'x',
+  roster_sick: 'clock',
+  swap_requested: 'calendar',
+  swap_accepted: 'check',
+  swap_assigned: 'check',
+  swap_declined: 'x',
+  swap_cancelled: 'x',
+  template_changed: 'calendar',
+  rules_published: 'list',
+  rules_acked: 'check',
+  chat_image_removed: 'image',
+  chat_cap_hit: 'image',
+  delivery_scanned: 'image',
+  delivery_discarded: 'x',
   shift_closed: 'check',
   shift_reviewed: 'check',
   waiter_finished: 'check',
@@ -147,15 +196,18 @@ const BAD: LogKind[] = [
   'pay_duplicate_attempt', 'pay_uncovered', 'cross_waiter_lock',
   'late_after_settle', 'late_after_close', 'float_override', 'override',
   'self_void_capped', 'waste_capped', 'device_revoked', 'lockout', 'clock_skew',
+  'roster_absent', 'delivery_discarded',
 ]
 
 const GOOD: LogKind[] = [
   'shift_reviewed', 'settlement_accepted', 'unpaid_decided', 'count_confirmed',
   'delivery_posted', 'device_unlocked', 'payout_decided',
+  'swap_accepted', 'swap_assigned', 'rules_acked',
 ]
 
 const ACCENT: LogKind[] = [
   'shift_closed', 'waiter_finished', 'opening_set',
+  'roster_published', 'rules_published',
 ]
 
 export interface DnevnikLook {

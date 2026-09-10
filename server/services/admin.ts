@@ -31,6 +31,7 @@ import { hashSecret } from '../utils/password'
 import { emitChange } from '../utils/bus'
 import { bump, getSettings, log, unitCost } from './contracts'
 import { maxSeq } from './changes'
+import { onUserDeactivated } from './roster'
 import type { Actor, Db, Queryable, Tx } from './types'
 import type {
   CategoryAdmin, ChangeEntity, PinResetResult, ProductAdmin, RecipeLine,
@@ -961,6 +962,15 @@ export function updateUser(
         at: now,
       })
     }
+
+    /**
+     * Phase 4: a plan that still names somebody who no longer works here is a
+     * plan nobody trusts. Deactivating turns his future `planned` rows into
+     * `removed` (note "deaktiviran") and cancels his live swap requests — in
+     * **this** transaction, so a failed user patch leaves the roster alone.
+     */
+    if (deactivated) onUserDeactivated(tx, venueId, actor, userId, now)
+
     bump(tx, venueId, 'user', userId)
   })
 

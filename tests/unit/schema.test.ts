@@ -94,9 +94,15 @@ describe('unique indexes', () => {
     for (const table of tableNames()) {
       if (table === '__drizzle_migrations') continue
       const pk = columns(table).filter(c => c.pk > 0).sort((a, b) => a.pk - b.pk).map(c => c.name)
+      // Two composite keys, and both are deliberate: a shift summary is
+      // versioned, and `chat_reads` is one cursor per person per channel — a
+      // surrogate `id` on either would let a second row exist for the same
+      // thing, which is the bug the key is there to prevent.
       const expected = table === 'shift_summaries'
         ? ['shift_id', 'version']
-        : table === 'changes' ? ['seq'] : ['id']
+        : table === 'chat_reads'
+          ? ['venue_id', 'channel_id', 'user_id']
+          : table === 'changes' ? ['seq'] : ['id']
       expect([table, pk]).toEqual([table, expected])
     }
   })
@@ -124,7 +130,13 @@ describe('the triggers survived the migration', () => {
       .prepare(`SELECT DISTINCT tbl_name AS t FROM sqlite_master WHERE type='trigger'`)
       .all()
       .map(r => (r as { t: string }).t)
-    for (const table of ['changes', 'sessions', 'enrol_codes', 'devices', 'task_runs']) {
+    for (const table of [
+      'changes', 'sessions', 'enrol_codes', 'devices', 'task_runs',
+      // Phase 4: a pinned note, a read cursor, a template, a week header and a
+      // learned alias are plans and bookmarks, not ledgers (triggers.sql says
+      // so at the top). The roster's history is `log_entries`.
+      'chat_channels', 'chat_reads', 'shift_templates', 'roster_weeks', 'supplier_aliases',
+    ]) {
       expect(guarded).not.toContain(table)
     }
   })
@@ -158,6 +170,18 @@ describe('the seed', () => {
       const row = open.find(p => p.productId === product.id)
       expect(row?.priceFen).toBe(product.priceFen)
     }
+  })
+
+  it('seeds the three chat channels and the two shift templates', () => {
+    const channels = f.db.select().from(schema.chatChannels).all()
+    expect(channels.map(c => c.kind).sort()).toEqual(['admini', 'konobari', 'svi'])
+    // Names are Bosnian and are what every screen prints; nobody creates,
+    // renames or deletes a channel.
+    expect(channels.find(c => c.kind === 'svi')?.name).toBe('Svi')
+
+    const templates = f.db.select().from(schema.shiftTemplates).all()
+    expect(templates.map(t => `${t.name} ${t.startTime}-${t.endTime}`).sort())
+      .toEqual(['Dnevna 08:00-16:00', 'Večernja 16:00-01:00'])
   })
 
   it('turns on the one setting the dev bar tablet needs', () => {

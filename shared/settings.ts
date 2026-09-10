@@ -69,6 +69,25 @@ export const DEFAULT_SETTINGS = {
   grams_per_bowl_default: 20,
   gpb_band_pct: 15,
   coals_per_bowl_alert: 5,
+
+  // -- Phase 4: Razgovor, slike i Raspored ----------------------------------
+  // Every one of these is published on *Pravila*, which is the point of them
+  // being settings at all: a threshold the staff cannot read is a rule nobody
+  // agreed to (PLAN §8).
+
+  /** How long the author of a text message may delete it himself. */
+  chat_delete_own_s: 900,
+  /** 200 MB of chat photos per venue per month. */
+  chat_image_month_bytes: 209_715_200,
+  /** 30 MB and 25 files per person per day, across both upload kinds. */
+  upload_user_day_bytes: 31_457_280,
+  upload_user_day_files: 25,
+  /** After this many days a chat photo is unlinked; the message stays. */
+  chat_retention_days: 90,
+  /** Minutes past `start_time` before *Sati* prints a late arrival. */
+  roster_late_grace_min: 30,
+  /** Phase 5 — read by nothing in Phase 4. A swap needs no owner confirmation in v1. */
+  swap_needs_owner: false,
 }
 
 export type Settings = typeof DEFAULT_SETTINGS
@@ -124,6 +143,14 @@ export const settingsSchema = z.object({
   grams_per_bowl_default: z.number().min(1).max(200),
   gpb_band_pct: z.number().min(0).max(100),
   coals_per_bowl_alert: z.int().min(0).max(100),
+
+  chat_delete_own_s: z.int().min(0).max(86_400),
+  chat_image_month_bytes: z.int().min(0).max(10_737_418_240),
+  upload_user_day_bytes: z.int().min(0).max(1_073_741_824),
+  upload_user_day_files: z.int().min(0).max(500),
+  chat_retention_days: z.int().min(1).max(3650),
+  roster_late_grace_min: z.int().min(0).max(240),
+  swap_needs_owner: z.boolean(),
 }).strict().partial()
 
 export type SettingsPatch = z.infer<typeof settingsSchema>
@@ -180,4 +207,11 @@ export const SETTINGS_LABELS: Partial<Record<keyof Settings, string>> = {
   grams_per_bowl_default: 'Grama po luli',
   gpb_band_pct: 'Dozvoljeno odstupanje (%)',
   coals_per_bowl_alert: 'Žara po luli',
+  chat_delete_own_s: 'Brisanje svoje poruke (sekundi)',
+  chat_image_month_bytes: 'Slike u razgovoru — mjesečno',
+  upload_user_day_bytes: 'Slike po osobi — dnevno',
+  upload_user_day_files: 'Slika po osobi dnevno',
+  chat_retention_days: 'Slike u razgovoru se čuvaju (dana)',
+  roster_late_grace_min: 'Tolerancija kašnjenja (min)',
+  swap_needs_owner: 'Zamjenu potvrđuje vlasnik',
 }

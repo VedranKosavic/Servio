@@ -22,8 +22,12 @@
  * Bosnian sentence with its numbers filled in.
  */
 import { ApiSideError } from '~/composables/useApi'
+import type { ChannelKind } from '#shared/chat'
 import type {
+  Assignment,
   CategoriesReport,
+  ChatPage,
+  ChatSince,
   ConfirmCountBody,
   ConfirmResult,
   CountView,
@@ -46,8 +50,17 @@ import type {
   OwnerLive,
   OwnerShift,
   OwnerShiftRow,
+  HoursRow,
   OwnerStockReport,
   PinResetResult,
+  PostMessageResult,
+  RosterWeekView,
+  RuleVersion,
+  RulesView,
+  ScanDraft,
+  ShiftTemplateView,
+  SwapRequestView,
+  UploadResult,
   ProductAdmin,
   CategoryAdmin,
   Settings,
@@ -66,7 +79,16 @@ import type {
 // that sends it — one definition, two uses.
 import type {
   AdminLoginBody,
+  AssignmentBody,
+  AssignmentPatch,
   CreateCategoryBody,
+  DiscardScanBody,
+  LinkAliasBody,
+  PostMessageBody,
+  PublishRulesBody,
+  SetPinBody,
+  ShiftTemplateBody,
+  ShiftTemplatePatch,
   CreateProductBody,
   CreateStockItemBody,
   CreateTableBody,
@@ -114,7 +136,7 @@ function toApiError(err: unknown): ApiSideError {
 }
 
 async function request<T>(url: string, options?: {
-  method?: 'GET' | 'POST' | 'PATCH' | 'PUT'
+  method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
   body?: unknown
   /**
    * A GET the server ETags.
@@ -417,5 +439,122 @@ export function useAdminApi() {
     /** Opening *Dnevnik* clears the nav badge. */
     markLogSeen: () =>
       request<unknown>('/api/owner/log/seen', { method: 'POST', body: {} }),
+
+    // -- Razgovor (Phase 4) --------------------------------------------------
+    //
+    // `/a` sees *Svi* and *Admini* and **never *Konobari*** — not as an empty
+    // row, not as a hidden tab. The server builds the answer from `canSee`, so
+    // there is nothing here for a screen to remember to filter.
+
+    getChatSince: (cursor?: number) =>
+      request<ChatSince>(`/api/chat/since${cursor ? `?cursor=${cursor}` : ''}`),
+
+    getChatHistory: (channel: ChannelKind, beforeSeq?: number, limit = 50) =>
+      request<ChatPage>(
+        `/api/chat/${channel}/messages?limit=${limit}`
+        + (beforeSeq ? `&before_seq=${beforeSeq}` : ''),
+      ),
+
+    postChatMessage: (channel: ChannelKind, body: PostMessageBody) =>
+      request<PostMessageResult>(`/api/chat/${channel}/messages`, { method: 'POST', body }),
+
+    /** *Naručeno ✓* is `{ cleared: true }`, and it is the owner's alone. */
+    setChatPin: (channel: ChannelKind, body: SetPinBody) =>
+      request<{ ok: true }>(`/api/chat/${channel}/pin`, { method: 'POST', body }),
+
+    deleteChatMessage: (id: string) =>
+      request<{ ok: true }>(`/api/chat/messages/${id}/delete`, { method: 'POST', body: {} }),
+
+    forwardChatMessage: (id: string, to: ChannelKind) =>
+      request<PostMessageResult>(`/api/chat/messages/${id}/forward`, { method: 'POST', body: { to } }),
+
+    markChatRead: (channel: ChannelKind, seq: number) =>
+      request<{ ok: true }>('/api/chat/read', { method: 'POST', body: { channel, seq } }),
+
+    /** *Utišaj* — `null` lifts it. */
+    muteChatUser: (userId: string, until: string | null) =>
+      request<{ ok: true }>(`/api/chat/users/${userId}/mute`, { method: 'POST', body: { until } }),
+
+    uploadImage: (blob: Blob, kind: 'chat' | 'delivery' = 'chat') => {
+      const form = new FormData()
+      form.append('image', blob, 'slika.jpg')
+      form.append('kind', kind)
+      return request<UploadResult>('/api/uploads', { method: 'POST', body: form })
+    },
+
+    // -- Raspored (Phase 4) --------------------------------------------------
+
+    getRoster: (from: string, to: string) =>
+      request<RosterWeekView[]>(`/api/roster${qs({ from, to })}`),
+
+    /** *Kopiraj prošlu sedmicu* — the regular people, not the one-off covers. */
+    copyRosterWeek: (weekStart: string) =>
+      request<RosterWeekView>('/api/roster/weeks/copy', {
+        method: 'POST', body: { week_start: weekStart },
+      }),
+
+    publishRosterWeek: (weekStart: string) =>
+      request<RosterWeekView>('/api/roster/weeks/publish', {
+        method: 'POST', body: { week_start: weekStart },
+      }),
+
+    addAssignment: (body: AssignmentBody) =>
+      request<Assignment>('/api/roster/assignments', { method: 'POST', body }),
+
+    /** *Nije došao* / *Bolestan* / *Vrati* — status and note, never a person. */
+    patchAssignment: (id: string, body: AssignmentPatch) =>
+      request<Assignment>(`/api/roster/assignments/${id}`, { method: 'PATCH', body }),
+
+    removeAssignment: (id: string) =>
+      request<{ ok: true }>(`/api/roster/assignments/${id}`, { method: 'DELETE' }),
+
+    listSwaps: (status?: string) =>
+      request<SwapRequestView[]>(`/api/roster/swaps${qs({ status })}`),
+
+    /** *Dodijeli* — the avatar picker names a taker and accepts in one transaction. */
+    assignSwap: (id: string, toUserId: string, forceDouble = false) =>
+      request<SwapRequestView>(`/api/roster/swaps/${id}/assign`, {
+        method: 'POST',
+        body: { to_user_id: toUserId, ...(forceDouble ? { force_double: true } : {}) },
+      }),
+
+    declineSwap: (id: string) =>
+      request<SwapRequestView>(`/api/roster/swaps/${id}/decline`, { method: 'POST', body: {} }),
+
+    /** *Sati* — planned against worked. "Prva akcija nije dolazak." */
+    getRosterHours: (month: string) =>
+      request<HoursRow[]>(`/api/roster/hours${qs({ month })}`),
+
+    getShiftTemplates: () => request<ShiftTemplateView[]>('/api/admin/shift-templates'),
+    createShiftTemplate: (body: ShiftTemplateBody) =>
+      request<ShiftTemplateView>('/api/admin/shift-templates', { method: 'POST', body }),
+    updateShiftTemplate: (id: string, body: ShiftTemplatePatch) =>
+      request<ShiftTemplateView>(`/api/admin/shift-templates/${id}`, { method: 'PATCH', body }),
+
+    // -- Pravila (Phase 4) ---------------------------------------------------
+
+    getRules: () => request<RulesView>('/api/rules'),
+    /** Versions, and — on the current one — who has acknowledged it and when. */
+    getRuleVersions: () => request<RuleVersion[]>('/api/admin/rules'),
+    publishRules: (body: PublishRulesBody) =>
+      request<RulesView>('/api/admin/rules', { method: 'POST', body }),
+
+    // -- Prijem sa slike (Phase 4) -------------------------------------------
+
+    /**
+     * The photo, then the read. It takes seconds, not milliseconds — the screen
+     * says "Čitam sliku…" rather than pretending otherwise.
+     */
+    scanDelivery: (uploadId: string) =>
+      request<ScanDraft>('/api/stock/deliveries/scan', {
+        method: 'POST', body: { upload_id: uploadId },
+      }),
+
+    /** *Poveži* — so the second photo from this supplier comes back green. */
+    linkSupplierAlias: (body: LinkAliasBody) =>
+      request<{ ok: true }>('/api/stock/supplier-aliases', { method: 'POST', body }),
+
+    discardScan: (id: string, body: DiscardScanBody) =>
+      request<{ ok: true }>(`/api/stock/scans/${id}/discard`, { method: 'POST', body }),
   }
 }

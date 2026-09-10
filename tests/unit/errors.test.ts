@@ -14,7 +14,8 @@ import { describe, expect, it } from 'vitest'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import {
-  ADMIN_ERRORS, AUTH_ERRORS, ERROR_MESSAGES, MONEY_ERRORS, SHIFT_ERRORS,
+  ADMIN_ERRORS, AUTH_ERRORS, CHAT_ERRORS, ERROR_MESSAGES, MONEY_ERRORS,
+  ROSTER_ERRORS, RULES_ERRORS, SCAN_ERRORS, SHIFT_ERRORS,
   STOCK_ERRORS, SYNC_ERRORS, errorMessage,
 } from '#shared/errors'
 import { COMMON_ERRORS } from '#shared/errors/common'
@@ -123,7 +124,8 @@ describe('ERROR_MESSAGES', () => {
     const fragments: Record<string, Record<string, string>> = {
       common: COMMON_ERRORS, auth: AUTH_ERRORS, money: MONEY_ERRORS,
       shifts: SHIFT_ERRORS, stock: STOCK_ERRORS, sync: SYNC_ERRORS,
-      admin: ADMIN_ERRORS,
+      admin: ADMIN_ERRORS, chat: CHAT_ERRORS, roster: ROSTER_ERRORS,
+      rules: RULES_ERRORS, scan: SCAN_ERRORS,
     }
 
     const homes = new Map<string, string[]>()

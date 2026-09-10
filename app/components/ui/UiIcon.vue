@@ -12,6 +12,9 @@
 export type IconName =
   | 'pulse' | 'money' | 'box' | 'list' | 'users' | 'calendar'
   | 'chevron-right' | 'check' | 'x' | 'clock' | 'more'
+  // Phase 4. `chat` is *Razgovor*, `image` is a photo in a thread; `calendar`
+  // already covers *Raspored*. Same 24 px grid, same stroke, still no emoji.
+  | 'chat' | 'image'
 
 withDefaults(defineProps<{
   name: IconName
@@ -67,6 +70,17 @@ withDefaults(defineProps<{
     <template v-else-if="name === 'clock'">
       <circle cx="12" cy="12" r="8" />
       <path d="M12 8v4l3 2" />
+    </template>
+
+    <path
+      v-else-if="name === 'chat'"
+      d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-5 4z"
+    />
+
+    <template v-else-if="name === 'image'">
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <circle cx="8.5" cy="10" r="1.5" />
+      <path d="M21 16l-5-5-6 6-2-2-5 5" />
     </template>
 
     <template v-else-if="name === 'more'">

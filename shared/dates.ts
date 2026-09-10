@@ -204,3 +204,62 @@ export function syncLagS(clientCreatedAtAdj: string, now: string): number {
   const lag = (Date.parse(now) - Date.parse(clientCreatedAtAdj)) / 1000
   return Math.max(0, Math.round(lag))
 }
+
+/**
+ * The Monday of the week a business date belongs to, as `YYYY-MM-DD`.
+ *
+ * The roster is the only thing in Šank that thinks in weeks, and it thinks in
+ * ISO ones: Monday first, Sunday last. Deliberately plain calendar arithmetic on
+ * a `YYYY-MM-DD` string with no zone in sight — a `work_date` is a *date* the
+ * owner picked, not an instant, so there is nothing here for a DST night to
+ * corrupt. Use `businessDate(iso)` first when what you have is a timestamp.
+ */
+export function weekStart(businessDay: string): string {
+  const [year, month, day] = businessDay.split('-').map(Number)
+  const ms = Date.UTC(year!, month! - 1, day!)
+  // getUTCDay(): 0 = Sunday. Monday is 1, so Sunday counts back six days.
+  const dow = new Date(ms).getUTCDay()
+  const back = (dow + 6) % 7
+  const d = new Date(ms - back * 86_400_000)
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
+}
+
+/** `n` days after a `YYYY-MM-DD` date. Negative `n` goes back. */
+export function addDays(businessDay: string, n: number): string {
+  const [year, month, day] = businessDay.split('-').map(Number)
+  const d = new Date(Date.UTC(year!, month! - 1, day!) + n * 86_400_000)
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
+}
+
+/** "pon", "uto" … — the three-letter Bosnian weekday of a `YYYY-MM-DD` date. */
+const DAY_NAMES_BS = ['ned', 'pon', 'uto', 'sri', 'čet', 'pet', 'sub'] as const
+
+export function weekdayBs(businessDay: string): string {
+  const [year, month, day] = businessDay.split('-').map(Number)
+  return DAY_NAMES_BS[new Date(Date.UTC(year!, month! - 1, day!)).getUTCDay()]!
+}
+
+/** `"2026-09-18"` → `"18.09."` — the short written date the roster grid uses. */
+export function shortDateBs(businessDay: string): string {
+  const [, month, day] = businessDay.split('-')
+  return `${day}.${month}.`
+}
+
+/**
+ * Nominal hours between two `HH:MM` wall-clock strings, `end <= start` meaning
+ * the shift ends the next day.
+ *
+ * No timezone and no DST: PHASE4 §2.7 is explicit that rostering is nominal.
+ * 16:00–01:00 is nine hours on every date of the year, including the two the
+ * clocks change, because that is what the owner wrote on the plan.
+ */
+export function plannedHours(startTime: string, endTime: string): number {
+  const toMin = (t: string) => {
+    const [h, m] = t.split(':').map(Number)
+    return (h ?? 0) * 60 + (m ?? 0)
+  }
+  const start = toMin(startTime)
+  const end = toMin(endTime)
+  const span = end <= start ? end + 24 * 60 - start : end - start
+  return Math.round((span / 60) * 100) / 100
+}

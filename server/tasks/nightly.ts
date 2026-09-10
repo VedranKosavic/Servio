@@ -34,6 +34,8 @@ import type { Settings } from '#shared/settings'
 import { getSettings } from '../services/contracts'
 import { queueAlert } from '../services/alerts'
 import { pruneChanges } from '../services/changes'
+import { expireChatImages, gcOrphans } from '../services/uploads'
+import { unfilledSwaps } from '../services/roster'
 import { alertTaskFailure, claimTaskRun, recordTaskRun, tasksDisabled, venueIds } from '../utils/tasks'
 
 /** `changes` is a cursor, not history: a week is longer than any phone is offline. */
@@ -42,6 +44,8 @@ const CHANGES_KEEP_DAYS = 7
 const SESSIONS_KEEP_DAYS = 30
 /** The hour, local, at which the daily half runs. */
 const NIGHTLY_HOUR = 5
+/** An upload no message references after this long is an abandoned send. */
+const ORPHAN_AGE_MIN = 60
 
 /**
  * When should this shift have been closed?
@@ -97,6 +101,31 @@ export function checkOpenShifts(db: Db, venueId: string, at = nowIso()): string[
 }
 
 /**
+ * A *Traži zamjenu* nobody has taken and the shift has arrived.
+ *
+ * The alert dedupes on the request id, so this fires once however many hours it
+ * runs — and it goes onto the in-app *Zahtijeva pažnju* list and **nowhere
+ * else**: there is no sender in this application (CLAUDE.md).
+ */
+export function checkUnfilledSwaps(db: Db, venueId: string, at = nowIso()): string[] {
+  const settings = getSettings(db, venueId)
+  const today = businessDate(at, settings.timezone, settings.business_day_start_hour)
+  const open = unfilledSwaps(db, venueId, today)
+
+  for (const request of open) {
+    db.transaction((tx) => {
+      queueAlert(tx, venueId, {
+        ruleKey: 'swap_unfilled',
+        ref: { type: 'swap_request', id: request.id },
+        payload: { title_bs: 'Zamjena još nije preuzeta.', swap_request_id: request.id },
+        at,
+      })
+    })
+  }
+  return open.map(r => r.id)
+}
+
+/**
  * The daily half: throw away what nobody will ask for again. Both deletes are
  * plain SQL on tables `shared/constants.ts` lists as deliberately unguarded —
  * a cursor and a credential, not a ledger.
@@ -121,13 +150,25 @@ export function nightlyRun(db: Db, at = nowIso()): void {
 
     try {
       checkOpenShifts(db, venueId, at)
+      checkUnfilledSwaps(db, venueId, at)
+      // Hourly, like the shift check and for the same reason: an orphan is a
+      // send that failed, and a failed send should not cost the venue a photo's
+      // worth of disk until tomorrow morning.
+      gcOrphans(db, venueId, ORPHAN_AGE_MIN, at)
 
       if (Number(localTime(at, settings.timezone).slice(0, 2)) !== NIGHTLY_HOUR) continue
       if (!claimTaskRun(db, venueId, 'nightly', day, at)) continue
 
       const pruned = pruneNightly(db, at)
+      // Chat photos expire; **delivery photos never do** — they are evidence
+      // beside a posted delivery and follow the ledger, so a 400-day-old
+      // otpremnica is untouched (PHASE4 §2.6).
+      const expired = expireChatImages(db, venueId, settings.chat_retention_days, at)
       recordTaskRun(db, venueId, 'nightly', day, true, undefined, at)
-      console.info(`[sank] nightly ${day}: ${pruned.changes} changes, ${pruned.sessions} sessions pruned`)
+      console.info(
+        `[sank] nightly ${day}: ${pruned.changes} changes, ${pruned.sessions} sessions,`
+        + ` ${expired} chat photos pruned`,
+      )
     } catch (err) {
       recordTaskRun(db, venueId, 'nightly', day, false, err instanceof Error ? err.message : String(err), at)
       alertTaskFailure(db, venueId, 'nightly', day, err, at)

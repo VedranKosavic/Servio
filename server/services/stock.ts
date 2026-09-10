@@ -35,6 +35,7 @@ import type { Actor, Role } from '#shared/types'
 import type { Db, Queryable, Tx } from './types'
 import { bump, getSettings, log, verifyPinMetered } from './contracts'
 import { listStockItems } from './admin'
+import { applyScan } from './scan'
 
 type StockItemRow = typeof schema.stockItems.$inferSelect
 
@@ -521,7 +522,11 @@ export function createDelivery(
       deliveredAt,
       totalFen: lines.reduce((sum, l) => sum + l.lineCostFen, 0),
       status: 'posted',
-      source: 'manual',
+      // Written for the first time in Phase 4. A `scan` delivery is the same
+      // ledger row as a typed one — the owner corrected every line before it
+      // got here, and the movements below do not know the difference.
+      source: body.source ?? 'manual',
+      scanId: body.scan_id ?? null,
       note: body.note ?? null,
       enteredBy: actor.userId,
       postedBy: actor.userId,
@@ -590,6 +595,10 @@ export function createDelivery(
       ref: { type: 'delivery', id },
       at: now,
     })
+
+    // Same transaction as the movements: there is no window in which a posted
+    // delivery points at a scan that is still `parsed`.
+    if (body.scan_id) applyScan(tx, venueId, body.scan_id)
 
     bump(tx, venueId, 'stock')
     return { id, replayed: false }
@@ -707,6 +716,8 @@ export function getDelivery(q: Queryable, venueId: string, deliveryId: string): 
     entered_by: header.d.enteredBy,
     entered_by_name: header.enteredByName ?? '',
     note: header.d.note,
+    source: header.d.source,
+    scan_id: header.d.scanId,
     lines: lines.map(({ l, itemName }) => ({
       stock_item_id: l.stockItemId,
       item_name: itemName,

@@ -39,10 +39,15 @@ export const TRIGGER_NAMES = [
   'auth_attempts_no_update',
   'cash_movements_no_delete',
   'cash_movements_update_guard',
+  'chat_messages_frozen_cols',
+  'chat_messages_no_delete',
+  'chat_messages_status_guard',
   'deliveries_no_delete',
   'deliveries_update_guard',
   'delivery_lines_no_delete',
   'delivery_lines_no_update',
+  'delivery_scans_no_delete',
+  'delivery_scans_status_guard',
   'line_adjustments_no_delete',
   'line_adjustments_update_guard',
   'log_entries_no_delete',
@@ -58,6 +63,10 @@ export const TRIGGER_NAMES = [
   'payments_shift_required',
   'price_history_no_delete',
   'price_history_update_guard',
+  'roster_assignments_frozen_cols',
+  'roster_assignments_status_guard',
+  'rules_no_delete',
+  'rules_no_update',
   'shift_members_no_delete',
   'shift_members_update_guard',
   'shift_summaries_no_delete',
@@ -71,18 +80,33 @@ export const TRIGGER_NAMES = [
   'stock_counts_update_guard',
   'stock_movements_no_delete',
   'stock_movements_no_update',
+  'swap_requests_no_delete',
+  'swap_requests_status_guard',
   'tabs_assigned_required',
   'tabs_frozen_cols',
   'tabs_no_delete',
   'tabs_status_guard',
+  'uploads_no_delete',
+  'uploads_update_guard',
   'waiter_settlements_no_delete',
   'waiter_settlements_update_guard',
   'waste_events_no_delete',
   'waste_events_update_guard',
 ] as const
 
-/** Tables whose rows are cursors or credentials, not history — no triggers, on purpose. */
-export const UNGUARDED_TABLES = ['changes', 'sessions', 'enrol_codes', 'task_runs'] as const
+/**
+ * Tables whose rows are cursors, credentials or plans — not history. No
+ * triggers, on purpose, and `triggers.sql` says why beside each group.
+ *
+ * Phase 4 adds five: a pinned note, a read cursor, a shift template, a week
+ * header and a learned supplier alias are all things somebody is meant to
+ * rewrite. The roster's *history* is `log_entries`, written by
+ * `services/roster.ts` inside the same transaction as every change.
+ */
+export const UNGUARDED_TABLES = [
+  'changes', 'sessions', 'enrol_codes', 'task_runs',
+  'chat_channels', 'chat_reads', 'shift_templates', 'roster_weeks', 'supplier_aliases',
+] as const
 
 /** Tables allowed to have no `venue_id` column. */
 export const VENUELESS_TABLES = [
@@ -148,6 +172,14 @@ export const ALERT_RULE_KEYS = [
   'device_lockout',
   /** Nobody closed the night: still `open` three hours past `closing_time`. */
   'shift_not_closed',
+  /**
+   * Phase 4. A *Traži zamjenu* nobody has taken and the shift is upon us, and a
+   * waiter who reported sick. Both surface **inside the app**, on the *Puls*
+   * attention list, and the reason is on `/a` *Zamjene* and in *Dnevnik* — never
+   * in chat (PLAN §8: "Bolovanje vidi samo vlasnik").
+   */
+  'swap_unfilled',
+  'roster_sick',
   /** A backup or a nightly task that failed. */
   'health',
 ] as const
@@ -207,6 +239,8 @@ export const RATE_LIMITS = {
   pin: { limit: 10, windowS: 60 },
   /** Keyed by `deviceId ?? sessionId`. */
   orders: { limit: 60, windowS: 60 },
+  /** Sending chat messages. Keyed by `deviceId ?? sessionId` (PHASE4 §2.5). */
+  chat: { limit: 10, windowS: 60 },
 } as const
 
 /** Every money field in a body: `z.int().min(0).max(MAX_MONEY_FEN)`. */

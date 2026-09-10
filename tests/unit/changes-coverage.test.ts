@@ -45,6 +45,19 @@ import {
   updateCategory, updateProduct, updateSettings, updateStockItem, updateTable, updateUser,
 } from '../../server/services/admin'
 import { schema } from '../helpers/db'
+import {
+  deleteMessage, forwardMessage, muteUser, postMessage, setPin,
+} from '../../server/services/chat'
+import {
+  addAssignment, copyWeek, createTemplate, decideSwap, patchAssignment,
+  publishWeek, removeAssignment, requestSwap, updateTemplate,
+} from '../../server/services/roster'
+import { ackRules, publishRules } from '../../server/services/rules'
+import { discardScan, linkAlias, scanDelivery, setScanModel, stubScanModel } from '../../server/services/scan'
+import { createUpload } from '../../server/services/uploads'
+import { businessDate, addDays, weekStart } from '../../shared/dates'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 
 const API_DIR = fileURLToPath(new URL('../../server/api', import.meta.url))
 const MUTATING = /\.(post|put|patch|delete)\.ts$/
@@ -77,6 +90,22 @@ const EXEMPT = [
   // has something to check, and nothing on any screen changes because of it
   // (§6.1). A `bump` here would invalidate every phone's ETag for a non-event.
   /^drafts[\\/]discard\.post\.ts$/,
+  /**
+   * Phase 4's two, and both belong to the first reason above.
+   *
+   * `POST /api/chat/read` is a **read cursor**: it fires every few seconds from
+   * every phone that has a channel open, and a bump would invalidate every
+   * waiter's ETag on every tick — exactly the heartbeat's argument. The
+   * requester's own `MAX(last_read_seq)` is in the ETag instead, so his badge
+   * still moves and nobody else's poll notices (PHASE4 §2.11).
+   *
+   * `POST /api/uploads` writes an **orphan nobody can see**: no message points
+   * at it yet, no screen renders it, and the hourly GC will unlink it if none
+   * ever does. The message that references it is the event, and that one bumps
+   * `chat`.
+   */
+  /^chat[\\/]read\.post\.ts$/,
+  /^uploads[\\/]index\.post\.ts$/,
 ]
 
 function mutatingRoutes(dir = API_DIR): string[] {
@@ -90,16 +119,26 @@ function mutatingRoutes(dir = API_DIR): string[] {
 }
 
 let f: Fixture
+let uploadDir: string
 
-beforeEach(() => { f = makeFixture() })
-afterEach(() => { f.close() })
+beforeEach(() => {
+  f = makeFixture()
+  uploadDir = mkdtempSync(join(tmpdir(), 'sank-uploads-'))
+  process.env.UPLOAD_DIR = uploadDir
+})
+
+afterEach(() => {
+  f.close()
+  delete process.env.UPLOAD_DIR
+  rmSync(uploadDir, { recursive: true, force: true })
+})
 
 /**
  * One call per mutating route, keyed by its file. A route whose package has not
  * landed is simply not here yet — and the enumeration test below says so by
  * name the moment it is.
  */
-const CALLS: Record<string, () => void> = {
+const CALLS: Record<string, () => void | Promise<void>> = {
   'orders.post.ts': () => {
     createOrder(f.db, f.venueId, f.actor('Amar'), {
       client_id: randomUUID(),
@@ -464,6 +503,185 @@ const CALLS: Record<string, () => void> = {
   [join('admin', 'settings.patch.ts')]: () => {
     updateSettings(f.db, f.venueId, f.adminActor(), { cash_tolerance_fen: 700 })
   },
+
+  // Phase 4 — Razgovor. Every one of these ends in `bump('chat')` and **only**
+  // `chat`: a message must never invalidate the floor plan's ETag (PHASE4 §2.11).
+  [join('chat', '[channel]', 'messages.post.ts')]: () => {
+    postMessage(f.db, f.venueId, f.actor('Amar'), 'svi', {
+      client_id: randomUUID(), kind: 'text', body: 'nema leda',
+    })
+  },
+
+  [join('chat', '[channel]', 'pin.post.ts')]: () => {
+    setPin(f.db, f.venueId, f.actor('Amar'), 'svi', { append: 'led' })
+  },
+
+  [join('chat', 'messages', '[id]', 'delete.post.ts')]: () => {
+    const sent = postMessage(f.db, f.venueId, f.actor('Amar'), 'svi', {
+      client_id: randomUUID(), kind: 'text', body: 'greška',
+    })
+    deleteMessage(f.db, f.venueId, f.actor('Amar'), sent.message.id)
+  },
+
+  [join('chat', 'messages', '[id]', 'forward.post.ts')]: () => {
+    const sent = postMessage(f.db, f.venueId, f.actor('Amar'), 'konobari', {
+      client_id: randomUUID(), kind: 'text', body: 'šank je prljav',
+    })
+    forwardMessage(f.db, f.venueId, f.actor('Amar'), sent.message.id, 'admini')
+  },
+
+  [join('chat', 'users', '[id]', 'mute.post.ts')]: () => {
+    muteUser(f.db, f.venueId, f.adminActor(), f.userId('Amar'), null)
+  },
+
+  // Phase 4 — Raspored. `bump('roster')`, and the publish also bumps `chat`
+  // because it posts one *Svi* line.
+  [join('roster', 'weeks', 'copy.post.ts')]: () => {
+    copyWeek(f.db, f.venueId, f.adminActor(), nextWeek())
+  },
+
+  [join('roster', 'weeks', 'publish.post.ts')]: () => {
+    publishWeek(f.db, f.venueId, f.adminActor(), nextWeek())
+  },
+
+  [join('roster', 'assignments', 'index.post.ts')]: () => {
+    addAssignment(f.db, f.venueId, f.adminActor(), {
+      work_date: soon(), template_id: templateId(), user_id: f.userId('Amar'),
+    })
+  },
+
+  [join('roster', 'assignments', '[id].patch.ts')]: () => {
+    patchAssignment(f.db, f.venueId, f.adminActor(), assignment('Amar'), { note: 'dolazi kasnije' })
+  },
+
+  [join('roster', 'assignments', '[id].delete.ts')]: () => {
+    removeAssignment(f.db, f.venueId, f.adminActor(), assignment('Amar'))
+  },
+
+  [join('roster', 'swaps', 'index.post.ts')]: () => {
+    requestSwap(f.db, f.venueId, f.actor('Amar'), {
+      assignment_id: assignment('Amar'), reason: 'zamjena',
+    })
+  },
+
+  [join('roster', 'swaps', '[id]', 'accept.post.ts')]: () => {
+    decideSwap(f.db, f.venueId, f.actor('Lejla'), swap('Amar'), 'accept')
+  },
+
+  [join('roster', 'swaps', '[id]', 'decline.post.ts')]: () => {
+    decideSwap(f.db, f.venueId, f.actor('Lejla'), swap('Amar', f.userId('Lejla')), 'decline')
+  },
+
+  [join('roster', 'swaps', '[id]', 'cancel.post.ts')]: () => {
+    decideSwap(f.db, f.venueId, f.actor('Amar'), swap('Amar'), 'cancel')
+  },
+
+  [join('roster', 'swaps', '[id]', 'assign.post.ts')]: () => {
+    decideSwap(f.db, f.venueId, f.adminActor(), swap('Amar'), 'assign', {
+      to_user_id: f.userId('Dino'),
+    })
+  },
+
+  [join('admin', 'shift-templates', 'index.post.ts')]: () => {
+    createTemplate(f.db, f.venueId, f.adminActor(), {
+      name: 'Noćna', start_time: '22:00', end_time: '06:00',
+    })
+  },
+
+  [join('admin', 'shift-templates', '[id].patch.ts')]: () => {
+    updateTemplate(f.db, f.venueId, f.adminActor(), templateId(), { sort: 7 })
+  },
+
+  // Phase 4 — Pravila. `bump('rules')`, so every phone's ack gate re-evaluates.
+  [join('admin', 'rules', 'index.post.ts')]: () => {
+    publishRules(f.db, f.venueId, f.adminActor(), { body_md: RULES_MD })
+  },
+
+  [join('me', 'rules', 'ack.post.ts')]: () => {
+    publishRules(f.db, f.venueId, f.adminActor(), { body_md: RULES_MD })
+    ackRules(f.db, f.venueId, f.actor('Amar'), 1)
+  },
+
+  // Phase 4 — Prijem sa slike. The scan bumps `stock`, because *Roba* is where
+  // the draft and then the delivery show up.
+  [join('stock', 'deliveries', 'scan.post.ts')]: async () => {
+    setScanModel(stubScanModel())
+    await scanDelivery(f.db, f.venueId, f.adminActor(), { upload_id: deliveryPhoto() })
+    setScanModel(null)
+  },
+
+  [join('stock', 'scans', '[id]', 'discard.post.ts')]: async () => {
+    setScanModel(stubScanModel())
+    const draft = await scanDelivery(f.db, f.venueId, f.adminActor(), { upload_id: deliveryPhoto() })
+    setScanModel(null)
+    discardScan(f.db, f.venueId, f.adminActor(), draft.scan_id, { reason: 'pogrešna slika' })
+  },
+
+  [join('stock', 'supplier-aliases.post.ts')]: () => {
+    linkAlias(f.db, f.venueId, f.adminActor(), {
+      alias: 'coca cola 0,25', stock_item_id: f.stockItemId('Coca-Cola 0,25 l'),
+    })
+  },
+}
+
+const RULES_MD = '# Pravila\n\nOvo je tekst pravila koji svi vide na telefonu.'
+
+/** The seeded *Večernja*. */
+function templateId(): string {
+  return f.db.select().from(schema.shiftTemplates).all()
+    .find(t => t.name === 'Večernja')!.id
+}
+
+/** A date the roster will accept: today, in business-day terms. */
+function soon(): string {
+  return businessDate(f.clock.now())
+}
+
+function nextWeek(): string {
+  return addDays(weekStart(soon()), 7)
+}
+
+/** One planned row for `name`, created if this fixture has not made one yet. */
+function assignment(name: string): string {
+  const existing = f.db.select().from(schema.rosterAssignments).all()
+    .find(a => a.userId === f.userId(name) && a.status === 'planned')
+  if (existing) return existing.id
+  return addAssignment(f.db, f.venueId, f.adminActor(), {
+    work_date: soon(), template_id: templateId(), user_id: f.userId(name),
+  }).id
+}
+
+/** One live request from `name`, optionally named at somebody. */
+function swap(name: string, toUserId?: string): string {
+  return requestSwap(f.db, f.venueId, f.actor(name), {
+    assignment_id: assignment(name),
+    ...(toUserId ? { to_user_id: toUserId } : {}),
+    reason: 'zamjena',
+  }).id
+}
+
+/**
+ * One delivery photo on disk. `UPLOAD_DIR` points at a scratch directory for
+ * the whole file (see `beforeEach`), so nothing here touches `data/`.
+ *
+ * The bytes are a real, minimal JPEG: `createUpload` checks the magic bytes
+ * before anything else, and a buffer of zeroes would be refused as `NOT_JPEG`.
+ */
+function deliveryPhoto(): string {
+  return createUpload(
+    f.db, f.venueId, f.adminActor(), { bytes: jpegBytes(), filename: 'otpremnica.jpg' }, 'delivery',
+  ).id
+}
+
+/** `FF D8 FF E0` + a JFIF header + a 1×1 SOF0 frame + `FF D9`. */
+export function jpegBytes(): Buffer {
+  return Buffer.from([
+    0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00,
+    0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
+    0xFF, 0xC0, 0x00, 0x11, 0x08, 0x00, 0x01, 0x00, 0x01,
+    0x03, 0x01, 0x11, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01,
+    0xFF, 0xD9,
+  ])
 }
 
 /** One locked round on a named table, through the real service. */
@@ -542,18 +760,27 @@ describe('every mutating route bumps the change feed', () => {
     ).toEqual([])
   })
 
-  it.each(Object.keys(CALLS))('%s grows maxSeq', (route) => {
+  // `await` because exactly one registered call is asynchronous: `scanDelivery`
+  // is the only async service in the codebase (it awaits the model **around**
+  // its transactions, never inside one).
+  it.each(Object.keys(CALLS))('%s grows maxSeq', async (route) => {
     // The route file still has to exist — a call left behind after a route is
     // deleted (WP3 deletes `tabs/[id]/pay`) is dead weight, not coverage.
     expect(routes, `${route} is registered but has no route file`).toContain(route)
 
     const before = maxSeq(f.db, f.venueId)
-    CALLS[route]!()
+    await CALLS[route]!()
     expect(maxSeq(f.db, f.venueId)).toBeGreaterThan(before)
   })
 
-  it('the exemptions are the §4.1 names, the dev enrol, WP1\'s credential writes and *Odbaci*', () => {
-    expect(EXEMPT).toHaveLength(6)
+  it('the exemptions are the §4.1 names, the dev enrol, WP1\'s credential writes, *Odbaci* and Phase 4\'s two', () => {
+    expect(EXEMPT).toHaveLength(8)
+    // Phase 4's two, each for the heartbeat's reason: a read cursor and an
+    // orphan upload are not events (PHASE4 §2.11).
+    expect(EXEMPT.some(rx => rx.test(join('chat', 'read.post.ts')))).toBe(true)
+    expect(EXEMPT.some(rx => rx.test(join('uploads', 'index.post.ts')))).toBe(true)
+    // …and nothing wider: sending a message is an event and must bump.
+    expect(EXEMPT.some(rx => rx.test(join('chat', '[channel]', 'messages.post.ts')))).toBe(false)
     expect(EXEMPT.some(rx => rx.test(join('devices', 'heartbeat.post.ts')))).toBe(true)
     expect(EXEMPT.some(rx => rx.test(join('auth', 'pin.post.ts')))).toBe(true)
     expect(EXEMPT.some(rx => rx.test(join('admin', 'enrol-codes.post.ts')))).toBe(true)

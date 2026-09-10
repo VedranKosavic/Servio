@@ -49,7 +49,10 @@ export interface LogNames {
   localTime: (iso: string) => string
 }
 
-export type LogGroup = 'smjena' | 'novac' | 'storno' | 'roba' | 'postavke' | 'uredaji'
+export type LogGroup =
+  | 'smjena' | 'novac' | 'storno' | 'roba' | 'postavke' | 'uredaji'
+  /** Phase 4: Razgovor, Raspored, Pravila — everything about the team itself. */
+  | 'ekipa'
 
 export interface LogTemplate<B = unknown> {
   body: z.ZodType<B>
@@ -112,6 +115,13 @@ const COUNT_PHASE_BS: Record<string, string> = {
   open: 'otvaranje',
   close: 'zatvaranje',
   adhoc: 'usput',
+}
+
+/** The three channel kinds, in Bosnian, for the Dnevnik's sentences. */
+const CHANNEL_BS: Record<string, string> = {
+  svi: 'Svi',
+  konobari: 'Konobari',
+  admini: 'Admini',
 }
 
 const PAYOUT_REASON_BS: Record<string, string> = {
@@ -607,6 +617,198 @@ export const LOG = {
       }[b.what]
       return `${what} · ${n.user(b.user_id)}`
     },
+  }),
+
+
+  // -- Ekipa: Razgovor ------------------------------------------------------
+  /**
+   * The money guard (PHASE4 §2.5). It never blocks a message: PLAN §8 says
+   * nobody's pazar belongs in *Svi* or *Konobari*, and the way that rule is kept
+   * is a confirm sheet on the phone and this quiet record — not a refusal a
+   * waiter would learn to route around by writing "šesto dvanaest".
+   *
+   * `money_ack` is what tells "the sheet was shown and he sent anyway" apart
+   * from "the sheet never appeared".
+   */
+  chat_money_warned: defineLog({
+    group: 'ekipa',
+    quiet: true,
+    body: body({ user_id: id, channel: z.string(), money_ack: z.boolean().optional() }),
+    title: (b, n) =>
+      `Iznos u kanalu ${CHANNEL_BS[b.channel] ?? b.channel} · ${n.user(b.user_id)}`
+      + suffix(b.money_ack, 'potvrdio i poslao'),
+  }),
+
+  chat_muted: defineLog({
+    group: 'ekipa',
+    body: body({ user_id: id, until: iso.nullable() }),
+    title: (b, n) =>
+      b.until
+        ? `Utišan u razgovoru · ${n.user(b.user_id)} · do ${n.localTime(b.until)}`
+        : `Utišanje ukinuto · ${n.user(b.user_id)}`,
+  }),
+
+  /** *Ukloni sliku* — any member of *Konobari* may take a photo down, at any age. */
+  chat_image_removed: defineLog({
+    group: 'ekipa',
+    quiet: true,
+    body: body({ author_id: id.nullish(), remover_id: id, channel: z.string() }),
+    title: (b, n) =>
+      `Slika uklonjena · ${n.user(b.author_id)} → uklonio ${n.user(b.remover_id)}`,
+  }),
+
+  chat_deleted_by_admin: defineLog({
+    group: 'ekipa',
+    quiet: true,
+    body: body({ author_id: id.nullish(), channel: z.string() }),
+    title: (b, n) =>
+      `Poruku obrisao vlasnik · ${n.user(b.author_id)}`
+      + ` · ${CHANNEL_BS[b.channel] ?? b.channel}`,
+  }),
+
+  chat_cap_hit: defineLog({
+    group: 'ekipa',
+    quiet: true,
+    body: body({ user_id: id, cap: z.enum(['user', 'venue']) }),
+    title: (b, n) =>
+      `Limit slika dostignut · ${n.user(b.user_id)}`
+      + ` · ${b.cap === 'user' ? 'dnevni' : 'mjesečni'}`,
+  }),
+
+  chat_pin_changed: defineLog({
+    group: 'ekipa',
+    quiet: true,
+    body: body({ user_id: id, channel: z.string(), cleared: z.boolean().optional() }),
+    title: (b, n) =>
+      (b.cleared ? 'Naručeno označeno' : '"Za naručiti" izmijenjeno')
+      + ` · ${n.user(b.user_id)}`,
+  }),
+
+  // -- Ekipa: Raspored ------------------------------------------------------
+  roster_published: defineLog({
+    group: 'ekipa',
+    body: body({ week_start: z.string() }),
+    title: b => `Raspored objavljen · sedmica od ${b.week_start}`,
+  }),
+
+  roster_changed: defineLog({
+    group: 'ekipa',
+    quiet: true,
+    body: body({ work_date: z.string().optional(), week_start: z.string().optional(), what: z.string() }),
+    title: b => `Raspored izmijenjen · ${b.work_date ?? b.week_start ?? ''} · ${b.what}`,
+  }),
+
+  /** *Nije došao*. Important on purpose: it is the start of a conversation. */
+  roster_absent: defineLog({
+    group: 'ekipa',
+    body: body({ assignment_id: id, user_id: id, work_date: z.string() }),
+    title: (b, n) => `Nije došao · ${n.user(b.user_id)} · ${b.work_date}`,
+  }),
+
+  /**
+   * Bolovanje. An attention row for the owner and nothing in chat: the *Konobari*
+   * line a `bolest` request posts is identical to a plain `zamjena` one, because
+   * a distinct wording would itself be the reason (PLAN §8).
+   */
+  roster_sick: defineLog({
+    group: 'ekipa',
+    alert: { rule: 'roster_sick' },
+    body: body({ assignment_id: id, user_id: id, work_date: z.string() }),
+    title: (b, n) => `Bolovanje prijavljeno · ${n.user(b.user_id)} · ${b.work_date}`,
+  }),
+
+  swap_requested: defineLog({
+    group: 'ekipa',
+    quiet: true,
+    body: body({
+      swap_request_id: id, assignment_id: id, user_id: id,
+      to_user_id: id.nullish(), reason: z.string(), work_date: z.string(),
+    }),
+    title: (b, n) =>
+      `Traži zamjenu · ${n.user(b.user_id)} · ${b.work_date}`
+      + (b.to_user_id ? ` → ${n.user(b.to_user_id)}` : ' · otvoreno'),
+  }),
+
+  swap_accepted: defineLog({
+    group: 'ekipa',
+    body: body({
+      swap_request_id: id, assignment_id: id,
+      from_user_id: id, to_user_id: id, work_date: z.string(),
+    }),
+    title: (b, n) =>
+      `Zamjena prihvaćena · ${b.work_date} · ${n.user(b.to_user_id)} umjesto ${n.user(b.from_user_id)}`,
+  }),
+
+  swap_assigned: defineLog({
+    group: 'ekipa',
+    body: body({
+      swap_request_id: id, assignment_id: id,
+      from_user_id: id, to_user_id: id, work_date: z.string(),
+    }),
+    title: (b, n) =>
+      `Zamjena dodijeljena · ${b.work_date} · ${n.user(b.to_user_id)} umjesto ${n.user(b.from_user_id)}`,
+  }),
+
+  swap_declined: defineLog({
+    group: 'ekipa',
+    quiet: true,
+    body: body({ swap_request_id: id, assignment_id: id, user_id: id }),
+    title: (b, n) => `Zamjena odbijena · ${n.user(b.user_id)}`,
+  }),
+
+  swap_cancelled: defineLog({
+    group: 'ekipa',
+    quiet: true,
+    body: body({ swap_request_id: id, assignment_id: id, user_id: id, note: z.string().optional() }),
+    title: (b, n) => `Zamjena povučena · ${n.user(b.user_id)}` + suffix(Boolean(b.note), b.note ?? ''),
+  }),
+
+  template_changed: defineLog({
+    group: 'ekipa',
+    quiet: true,
+    body: body({ template_id: id, what: z.string(), name: z.string() }),
+    title: b => `Šablon smjene ${b.what} · ${b.name}`,
+  }),
+
+  // -- Ekipa: Pravila -------------------------------------------------------
+  rules_published: defineLog({
+    group: 'ekipa',
+    body: body({ version: z.int(), chars: z.int().optional() }),
+    title: b => `Objavljena nova Pravila · v${b.version}`,
+  }),
+
+  rules_acked: defineLog({
+    group: 'ekipa',
+    quiet: true,
+    body: body({ user_id: id, version: z.int() }),
+    title: (b, n) => `Pravila potvrđena · ${n.user(b.user_id)} · v${b.version}`,
+  }),
+
+  // -- Roba: prijem sa slike ------------------------------------------------
+  delivery_scanned: defineLog({
+    group: 'roba',
+    quiet: true,
+    body: body({
+      scan_id: id, upload_id: id, lines: z.int(),
+      green: z.int().optional(), error: z.boolean().optional(),
+    }),
+    title: b =>
+      `Otpremnica pročitana sa slike · ${b.lines} stavki`
+      + (b.green === undefined ? '' : ` · ${b.green} prepoznato`)
+      + suffix(b.error, 'nije pročitano'),
+  }),
+
+  delivery_discarded: defineLog({
+    group: 'roba',
+    body: body({ scan_id: id, reason: z.string() }),
+    title: b => `Sken odbačen · ${b.reason}`,
+  }),
+
+  alias_linked: defineLog({
+    group: 'roba',
+    quiet: true,
+    body: body({ alias: z.string(), stock_item_id: id, supplier: z.string().nullish() }),
+    title: (b, n) => `Naziv dobavljača povezan · "${b.alias}" → ${n.stockItem(b.stock_item_id)}`,
   }),
 
   // -- Uređaji --------------------------------------------------------------

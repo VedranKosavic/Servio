@@ -729,3 +729,234 @@ BEFORE DELETE ON auth_attempts
 BEGIN
   SELECT RAISE(ABORT, 'append-only');
 END;
+
+-- ===========================================================================
+-- PHASE 4 — RAZGOVOR, UPLOADS, RASPORED, PRAVILA, SKEN
+-- ===========================================================================
+--
+-- Tables with NO triggers, deliberately, added by Phase 4:
+--
+--   chat_channels, chat_reads, shift_templates, roster_weeks, supplier_aliases
+--     — a pinned note, a read cursor, a template and a learned alias are plans
+--     and bookmarks, not ledgers. `chat_channels.pinned_text` is *Za naručiti*
+--     and is meant to be rewritten twenty times a week; every version of it is
+--     kept anyway, as a `chat_pin_changed` system message in the thread. Every
+--     roster write still goes through `services/roster.ts`, which writes a
+--     `log_entries` row with before/after in the same transaction — that is
+--     where the history of the plan lives.
+
+-- chat_messages — the identity of a message never moves. A body may change on
+-- exactly one path: the Phase 5 retention rewrite, together with `redacted_at`.
+DROP TRIGGER IF EXISTS chat_messages_frozen_cols;
+CREATE TRIGGER chat_messages_frozen_cols
+BEFORE UPDATE ON chat_messages
+WHEN NOT (
+  OLD.id IS NEW.id
+  AND OLD.venue_id IS NEW.venue_id
+  AND OLD.channel_id IS NEW.channel_id
+  AND OLD.client_id IS NEW.client_id
+  AND OLD.seq IS NEW.seq
+  AND OLD.kind IS NEW.kind
+  AND OLD.upload_id IS NEW.upload_id
+  AND OLD.reply_to_id IS NEW.reply_to_id
+  AND OLD.forwarded_from_id IS NEW.forwarded_from_id
+  AND OLD.author_id IS NEW.author_id
+  AND OLD.device_id IS NEW.device_id
+  AND OLD.system_key IS NEW.system_key
+  AND OLD.created_at IS NEW.created_at
+)
+BEGIN
+  SELECT RAISE(ABORT, 'chat_messages: frozen column changed');
+END;
+
+-- Two independent one-way transitions and nothing else:
+--
+--   1. the soft delete — `deleted_at`/`deleted_by` NULL -> set, once. The body
+--      **stays**: it is moderation evidence, and the placeholder on screen says
+--      who removed it and when, never what it said.
+--   2. the retention rewrite — `redacted_at` NULL -> set, once, together with
+--      the body replaced by the fixed sentence. Nothing in Phase 4 writes it.
+DROP TRIGGER IF EXISTS chat_messages_status_guard;
+CREATE TRIGGER chat_messages_status_guard
+BEFORE UPDATE ON chat_messages
+WHEN NOT (
+  -- 1. the soft delete
+  (
+    OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL
+    AND OLD.deleted_by IS NULL AND NEW.deleted_by IS NOT NULL
+    AND OLD.body IS NEW.body
+    AND OLD.redacted_at IS NEW.redacted_at
+  )
+  -- 2. the retention rewrite
+  OR (
+    OLD.redacted_at IS NULL AND NEW.redacted_at IS NOT NULL
+    AND NEW.body = 'Uklonjeno · retencija'
+    AND OLD.deleted_at IS NEW.deleted_at
+    AND OLD.deleted_by IS NEW.deleted_by
+  )
+)
+BEGIN
+  SELECT RAISE(ABORT, 'chat_messages: only a first soft delete or the retention rewrite');
+END;
+
+DROP TRIGGER IF EXISTS chat_messages_no_delete;
+CREATE TRIGGER chat_messages_no_delete
+BEFORE DELETE ON chat_messages
+BEGIN
+  SELECT RAISE(ABORT, 'append-only');
+END;
+
+-- uploads — the row outlives the file. `deleted_at` is stamped when the GC
+-- unlinks; the row is never DELETEd, which is how the reference count and the
+-- collector stay honest.
+DROP TRIGGER IF EXISTS uploads_update_guard;
+CREATE TRIGGER uploads_update_guard
+BEFORE UPDATE ON uploads
+WHEN NOT (
+  OLD.id IS NEW.id
+  AND OLD.venue_id IS NEW.venue_id
+  AND OLD.kind IS NEW.kind
+  AND OLD.path IS NEW.path
+  AND OLD.bytes IS NEW.bytes
+  AND OLD.width IS NEW.width
+  AND OLD.height IS NEW.height
+  AND OLD.mime IS NEW.mime
+  AND OLD.created_by IS NEW.created_by
+  AND OLD.device_id IS NEW.device_id
+  AND OLD.created_at IS NEW.created_at
+  AND OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL
+)
+BEGIN
+  SELECT RAISE(ABORT, 'uploads: only deleted_at, once, NULL -> value');
+END;
+
+DROP TRIGGER IF EXISTS uploads_no_delete;
+CREATE TRIGGER uploads_no_delete
+BEFORE DELETE ON uploads
+BEGIN
+  SELECT RAISE(ABORT, 'append-only');
+END;
+
+-- roster_assignments — the mutable roster is the documented exception to
+-- append-only (PLAN §6), but the transitions are not free. A cell *change* is a
+-- new row plus a `removed` row, never an overwrite: the eight frozen columns are
+-- what makes that true.
+--
+-- A hard DELETE is allowed, and only while the week is unpublished — that rule
+-- lives in `services/roster.ts`, because the trigger cannot see the week.
+DROP TRIGGER IF EXISTS roster_assignments_frozen_cols;
+CREATE TRIGGER roster_assignments_frozen_cols
+BEFORE UPDATE ON roster_assignments
+WHEN NOT (
+  OLD.id IS NEW.id
+  AND OLD.venue_id IS NEW.venue_id
+  AND OLD.work_date IS NEW.work_date
+  AND OLD.template_id IS NEW.template_id
+  AND OLD.user_id IS NEW.user_id
+  AND OLD.start_time IS NEW.start_time
+  AND OLD.end_time IS NEW.end_time
+  AND OLD.created_by IS NEW.created_by
+  AND OLD.created_at IS NEW.created_at
+)
+BEGIN
+  SELECT RAISE(ABORT, 'roster_assignments: frozen column changed');
+END;
+
+-- `swapped -> *` aborts: a taken shift is history.
+DROP TRIGGER IF EXISTS roster_assignments_status_guard;
+CREATE TRIGGER roster_assignments_status_guard
+BEFORE UPDATE ON roster_assignments
+WHEN NOT (
+  (OLD.status = 'planned' AND NEW.status IN ('planned', 'swapped', 'sick', 'absent', 'removed'))
+  OR (OLD.status = 'sick' AND NEW.status IN ('sick', 'planned', 'swapped'))
+  OR (OLD.status = 'absent' AND NEW.status IN ('absent', 'planned'))
+  -- an owner un-removing a cell before publish
+  OR (OLD.status = 'removed' AND NEW.status IN ('removed', 'planned'))
+)
+BEGIN
+  SELECT RAISE(ABORT, 'roster_assignments: illegal transition');
+END;
+
+-- swap_requests — `pending` is the only status anything may move out of, and
+-- `status`, `to_user_id`, `decided_by` and `decided_at` are the only columns
+-- that may move at all.
+DROP TRIGGER IF EXISTS swap_requests_status_guard;
+CREATE TRIGGER swap_requests_status_guard
+BEFORE UPDATE ON swap_requests
+WHEN NOT (
+  OLD.id IS NEW.id
+  AND OLD.venue_id IS NEW.venue_id
+  AND OLD.assignment_id IS NEW.assignment_id
+  AND OLD.from_user_id IS NEW.from_user_id
+  AND OLD.reason IS NEW.reason
+  AND OLD.note IS NEW.note
+  AND OLD.created_at IS NEW.created_at
+  AND OLD.status = 'pending'
+  AND NEW.status IN ('accepted', 'declined', 'cancelled')
+)
+BEGIN
+  SELECT RAISE(ABORT, 'swap_requests: only pending -> accepted|declined|cancelled');
+END;
+
+DROP TRIGGER IF EXISTS swap_requests_no_delete;
+CREATE TRIGGER swap_requests_no_delete
+BEFORE DELETE ON swap_requests
+BEGIN
+  SELECT RAISE(ABORT, 'append-only');
+END;
+
+-- rules — versions are append-only. A correction is a new version, which is the
+-- whole reason the table has a `version` column instead of a `body_md` the owner
+-- edits in place: "what did the rules say when Amar acknowledged them?" is a row.
+DROP TRIGGER IF EXISTS rules_no_update;
+CREATE TRIGGER rules_no_update
+BEFORE UPDATE ON rules
+BEGIN
+  SELECT RAISE(ABORT, 'append-only');
+END;
+
+DROP TRIGGER IF EXISTS rules_no_delete;
+CREATE TRIGGER rules_no_delete
+BEFORE DELETE ON rules
+BEGIN
+  SELECT RAISE(ABORT, 'append-only');
+END;
+
+-- delivery_scans — `raw_json`, `error` and `parsed_at` are writable on the
+-- `uploaded -> parsed` move only; after that the row is a record of what the
+-- model said, and *Proknjiži* or *Odbaci* is the only thing left to do to it.
+DROP TRIGGER IF EXISTS delivery_scans_status_guard;
+CREATE TRIGGER delivery_scans_status_guard
+BEFORE UPDATE ON delivery_scans
+WHEN NOT (
+  OLD.id IS NEW.id
+  AND OLD.venue_id IS NEW.venue_id
+  AND OLD.upload_id IS NEW.upload_id
+  AND OLD.model IS NEW.model
+  AND OLD.created_by IS NEW.created_by
+  AND OLD.created_at IS NEW.created_at
+  AND (
+    (OLD.status = 'uploaded' AND NEW.status = 'parsed')
+    OR (
+      OLD.status IN ('uploaded', 'parsed') AND NEW.status = 'discarded'
+      AND OLD.raw_json IS NEW.raw_json
+      AND OLD.parsed_at IS NEW.parsed_at
+    )
+    OR (
+      OLD.status = 'parsed' AND NEW.status = 'applied'
+      AND OLD.raw_json IS NEW.raw_json
+      AND OLD.error IS NEW.error
+      AND OLD.parsed_at IS NEW.parsed_at
+    )
+  )
+)
+BEGIN
+  SELECT RAISE(ABORT, 'delivery_scans: illegal transition');
+END;
+
+DROP TRIGGER IF EXISTS delivery_scans_no_delete;
+CREATE TRIGGER delivery_scans_no_delete
+BEFORE DELETE ON delivery_scans
+BEGIN
+  SELECT RAISE(ABORT, 'append-only');
+END;

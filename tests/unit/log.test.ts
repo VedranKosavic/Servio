@@ -209,6 +209,50 @@ function bodyFor(kind: LogKind, f: Fixture): Record<string, unknown> {
     device_unlocked: { device_id: uid(), label: 'Šank tablet', via: 'unlock' },
     lockout: { device_id: uid(), user_id: user, fails: 10 },
     clock_skew: { device_id: uid(), skew_s: -420 },
+
+    // -- Ekipa: Razgovor ----------------------------------------------------
+    chat_money_warned: { user_id: user, channel: 'svi', money_ack: true },
+    chat_muted: { user_id: user, until: at },
+    chat_image_removed: { author_id: user, remover_id: approver, channel: 'konobari' },
+    chat_deleted_by_admin: { author_id: user, channel: 'svi' },
+    chat_cap_hit: { user_id: user, cap: 'user' },
+    chat_pin_changed: { user_id: user, channel: 'svi', cleared: false },
+
+    // -- Ekipa: Raspored ----------------------------------------------------
+    roster_published: { week_start: '2026-09-14' },
+    roster_changed: { work_date: '2026-09-18', what: 'dodan', user_id: user },
+    roster_absent: { assignment_id: uid(), user_id: user, work_date: '2026-09-18' },
+    roster_sick: { assignment_id: uid(), user_id: user, work_date: '2026-09-18' },
+    swap_requested: {
+      swap_request_id: uid(), assignment_id: uid(), user_id: user,
+      to_user_id: null, reason: 'zamjena', work_date: '2026-09-18',
+    },
+    swap_accepted: {
+      swap_request_id: uid(), assignment_id: uid(),
+      from_user_id: user, to_user_id: approver, work_date: '2026-09-18',
+    },
+    swap_assigned: {
+      swap_request_id: uid(), assignment_id: uid(),
+      from_user_id: user, to_user_id: approver, work_date: '2026-09-18',
+    },
+    swap_declined: { swap_request_id: uid(), assignment_id: uid(), user_id: approver },
+    swap_cancelled: {
+      swap_request_id: uid(), assignment_id: uid(), user_id: user,
+      note: 'vlasnik promijenio ćeliju',
+    },
+    template_changed: { template_id: uid(), what: 'promijenjen', name: 'Večernja' },
+
+    // -- Ekipa: Pravila -----------------------------------------------------
+    rules_published: { version: 3, chars: 4200 },
+    rules_acked: { user_id: user, version: 3 },
+
+    // -- Roba: prijem sa slike ----------------------------------------------
+    delivery_scanned: { scan_id: uid(), upload_id: uid(), lines: 8, green: 6, error: false },
+    delivery_discarded: { scan_id: uid(), reason: 'pogrešna slika' },
+    alias_linked: {
+      alias: 'coca cola 0 25', stock_item_id: f.stockItemId('Coca-Cola 0,25 l'),
+      supplier: 'Coca-Cola HBC',
+    },
   }
   return bodies[kind]
 }
@@ -216,7 +260,7 @@ function bodyFor(kind: LogKind, f: Fixture): Record<string, unknown> {
 describe('every LOG_KINDS member', () => {
   it('has a fixture, so this sweep cannot silently skip a new kind', () => {
     for (const kind of LOG_KINDS) expect(bodyFor(kind, f), kind).toBeDefined()
-    expect(LOG_KINDS.length).toBeGreaterThan(40)
+    expect(LOG_KINDS.length).toBeGreaterThan(60)
   })
 
   it.each(LOG_KINDS)('%s parses its fixture and renders a Bosnian title', (kind) => {
