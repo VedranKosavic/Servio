@@ -86,8 +86,13 @@ const unsentTone = computed<'plain' | 'warn'>(() =>
       :sub="adjustmentsSub"
     />
 
-    <UiTile label="Ko radi" value="">
-      <template #value>
+    <!-- A tile leads with the number (DESIGN §8). This one used to open with a
+         line of names at body weight in the widest card of the row, so on a
+         normal night it was a 320 × 140 box holding one word and the row lost
+         the baseline the other five share. The count is the figure; the names
+         and the two pills are the second line, which is where they belong. -->
+    <UiTile label="Ko radi" :value="live.who.length">
+      <template #sub>
         <PulsWhoStrip :who="live.who" :unsent="live.unsent" />
       </template>
     </UiTile>

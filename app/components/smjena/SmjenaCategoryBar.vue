@@ -66,13 +66,15 @@ function to(kat: string) {
 
 .s-seg { display: block; min-width: 2px; }
 
-/* Five steps of the palette, reused round-robin. They are tints of the tokens
-   and not new colours, so the bar cannot drift away from the rest of `/admin`. */
-.n0, .s-dot.n0 { background: var(--accent); }
-.n1, .s-dot.n1 { background: var(--good); }
-.n2, .s-dot.n2 { background: var(--warn); }
-.n3, .s-dot.n3 { background: var(--accent-ink); }
-.n4, .s-dot.n4 { background: var(--ink-2); }
+/* The categorical ramp, reused round-robin. Not the semantic tokens: a slice
+   drawn in `--accent` claimed the primary action's colour and a slice drawn in
+   `--good` said "this is fine" about a category whose only distinction is that
+   it sorted second. `--cat-*` carry position and nothing else (DESIGN §2). */
+.n0, .s-dot.n0 { background: var(--cat-1); }
+.n1, .s-dot.n1 { background: var(--cat-2); }
+.n2, .s-dot.n2 { background: var(--cat-3); }
+.n3, .s-dot.n3 { background: var(--cat-4); }
+.n4, .s-dot.n4 { background: var(--cat-5); }
 
 .s-legend {
   list-style: none;

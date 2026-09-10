@@ -127,7 +127,7 @@ const UNPAID_REASONS = [
         <!-- The notes people actually pay with -->
         <template v-if="mode === 'main'">
           <button type="button" class="btn btn-primary btn-lg" :disabled="busy" @click="payExact">
-            Tačno · <span class="num">{{ formatKm(remainingFen) }}</span>
+            Tačno ·<span class="num">{{ formatKm(remainingFen) }}</span>
           </button>
 
           <div v-if="notes.length" class="grid grid-cols-3 gap-2.5">
@@ -160,8 +160,14 @@ const UNPAID_REASONS = [
             </button>
           </div>
 
+          <!-- One weighted action and one way out. These two used to be the same
+               ghost button, stacked and identical, at one in the morning on the
+               screen where money is taken: *Nije plaćeno* leaves an unpaid tab
+               on the waiter's name for the owner to decide on, *Otkaži* only
+               closes the sheet. `.btn-danger` is the system's soft ground with
+               danger ink, which is what it is for. -->
           <div class="mt-1 flex flex-col gap-2.5 border-t border-line-soft pt-3">
-            <button type="button" class="btn btn-ghost" :disabled="busy" @click="mode = 'unpaid'">
+            <button type="button" class="btn btn-danger" :disabled="busy" @click="mode = 'unpaid'">
               Nije plaćeno
             </button>
             <button type="button" class="btn btn-ghost" @click="emit('close')">
@@ -174,6 +180,13 @@ const UNPAID_REASONS = [
         <template v-else-if="mode === 'custom'">
           <label class="flex flex-col gap-2">
             <span class="eyebrow">Koliko je gost dao</span>
+            <!-- `self-stretch`, so the input's own box is the whole 60 px well
+                 rather than the 28 px of text inside it: a waiter counting an
+                 envelope taps the visible slot, not the glyphs in it.
+                 `.input-num` sets a *min*-height, so a percentage height would
+                 resolve against nothing — the flex item has to stretch. The
+                 wrapping `<label>` is what makes the well focus the field, and
+                 a second one nested inside it would not be valid HTML. -->
             <span class="input input-num flex items-center gap-2 px-4">
               <input
                 v-model="receivedRaw"
@@ -181,7 +194,7 @@ const UNPAID_REASONS = [
                 inputmode="decimal"
                 placeholder="0,00"
                 aria-label="Koliko je gost dao"
-                class="num min-w-0 flex-1 bg-transparent text-right text-title font-semibold outline-none placeholder:text-muted"
+                class="num min-w-0 flex-1 self-stretch bg-transparent text-right text-title font-semibold outline-none placeholder:text-muted"
               >
               <span class="shrink-0 text-label font-normal text-text-2">KM</span>
             </span>

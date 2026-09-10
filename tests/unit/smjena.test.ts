@@ -419,13 +419,13 @@ describe('the Manjak robe note', () => {
    * confirmed count has no shortage figure at all, and the tile has to say so.
    */
   it('distinguishes no count, an unapplied one, and a clean one', () => {
-    expect(stockVarianceNote([])).toBe('KM · nema popisa')
+    expect(stockVarianceNote([])).toBe('nema popisa')
     expect(stockVarianceNote([count({ status: 'submitted', confirmed_at: null })]))
-      .toBe('KM · popis još nije primijenjen')
-    expect(stockVarianceNote([count({})])).toBe('KM · popis bez odstupanja')
+      .toBe('popis još nije primijenjen')
+    expect(stockVarianceNote([count({})])).toBe('popis bez odstupanja')
     expect(stockVarianceNote([count({ variance_fen: -620 })]))
-      .toBe('KM · 1 popis s odstupanjem')
+      .toBe('1 popis s odstupanjem')
     expect(stockVarianceNote([count({ variance_fen: -620 }), count({ id: 'c2', variance_fen: 5 })]))
-      .toBe('KM · 2 popisa s odstupanjem')
+      .toBe('2 popisa s odstupanjem')
   })
 })

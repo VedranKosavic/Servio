@@ -114,7 +114,7 @@ const src = computed(() => props.localSrc ?? props.message.image?.url ?? null)
           </span>
         </template>
 
-        <span class="num flex items-center gap-1 self-end text-xs text-muted">
+        <span class="num flex items-center gap-1 self-end text-caption text-muted">
           <template v-if="waiting">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <circle cx="12" cy="12" r="9" />

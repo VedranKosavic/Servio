@@ -120,6 +120,13 @@ are never the same colour: `--good #63b89f`, `--warn #e6b44f`,
 carries the meaning alone — a pill always contains the word too, because a
 colour-blind owner and a printed screenshot have to read the same thing.
 
+**A chart's colours are not meanings either.** `--cat-1` … `--cat-5` are five
+hues that are none of the meaning colours and none of the copper, and every
+chart draws its categories from them in order. A stacked bar that reached for
+`--accent` and then `--good` said "this one is mine" and "this one is fine"
+about two categories whose only difference was where they landed in a sorted
+list. The five are re-valued for paper in `admin.css` like every other token.
+
 ### Light — `/admin`
 
 Warm paper kept, contrast tightened for dense tables: `--bg #f2f0eb`,
@@ -161,7 +168,9 @@ a border. Shadows exist for exactly two things that genuinely float:
 thumb, on a phone, standing up. 44 px on `/admin` at a laptop, and 44 px there
 too for anything inline in a dense row; below 1024 px `/admin` goes to 44 as
 well. `.btn` is 48 by default, `.btn-lg` 56 for the one action a screen is
-about, `.btn-sm` 44 and never less.
+about, and `.btn-sm` — the inline one — reads `--tap`, so it is 48 on the phone
+screens and 44 on the dashboard, never less. **A text link with an underline is
+not a control**: an action inside a row is `.btn-sm`, which has a box.
 
 **The primary action bar on a phone** is `.action-bar`: sticky to the bottom,
 with the list scrolling under a gradient in the page's own ground, and its
@@ -190,7 +199,6 @@ Tailwind's utilities, so a utility on the same element always wins
 | `.empty` | a dashed card that says what is missing and what to do | never an empty box | |
 | `.note` / `-good` `-warn` `-danger` | the inline sentence a screen says back | soft ground, semantic ink | |
 | `.toast` | fixed, above the thumb, `--shadow-pop`, fades up | | |
-| `.sync` / `-ok` `-wait` `-off` | a dot and a word — never a spinner | good / warn / danger | |
 | `.eyebrow`, `.wordmark`, `.page-title`, `.section-title`, `.metric` | the type steps with family and weight attached | | |
 
 `/admin`'s Vue primitives (`UiButton`, `UiCard`, `UiPill`, `UiTile`, `UiField`,

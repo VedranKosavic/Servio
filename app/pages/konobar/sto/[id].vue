@@ -956,7 +956,7 @@ function lateWasNotPaid(row: TableState) {
             :disabled="sending"
             @click="confirmOpen = true"
           >
-            Zaključi · <span class="num">{{ formatKm(draftTotal) }}</span>
+            Zaključi ·<span class="num">{{ formatKm(draftTotal) }}</span>
           </button>
           <button
             v-else-if="hasTab"
@@ -964,7 +964,7 @@ function lateWasNotPaid(row: TableState) {
             class="btn btn-primary btn-lg grow"
             @click="openPay('main')"
           >
-            Naplati · <span class="num">{{ formatKm(localRemainingFen) }}</span>
+            Naplati ·<span class="num">{{ formatKm(localRemainingFen) }}</span>
           </button>
         </div>
       </div>

@@ -44,7 +44,7 @@ const me = useMe()
 
       <button
         type="button"
-        class="avatar s-avatar"
+        class="avatar avatar-accent s-avatar"
         aria-label="Korisnik i meni"
         @click="emit('menu')"
       >

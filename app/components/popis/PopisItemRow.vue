@@ -91,13 +91,17 @@ const fieldId = computed(() => `popis-${props.item.id}`)
 
     <div class="flex items-stretch gap-2">
       <label class="sr-only" :for="`${fieldId}-input`">{{ item.name }}</label>
+      <!-- The field's placeholder is an em dash and not "0": a grey zero on
+           fourteen rows, under a counter that says nothing has been counted and
+           a foot that says "upiši i nulu", is the screen contradicting itself.
+           The em dash is what the app writes everywhere else for "no value". -->
       <div class="flex grow items-center gap-2 rounded-control border border-line bg-surface-2 px-3">
         <input
           :id="`${fieldId}-input`"
-          class="num min-h-13 w-full bg-transparent text-2xl font-bold outline-none"
+          class="num min-h-13 w-full bg-transparent text-metric font-bold outline-none"
           inputmode="decimal"
           autocomplete="off"
-          placeholder="0"
+          placeholder="—"
           :value="value"
           @input="emit('update:value', ($event.target as HTMLInputElement).value)"
         >
@@ -108,7 +112,7 @@ const fieldId = computed(() => `popis-${props.item.id}`)
       <div v-if="packable" class="flex shrink-0 overflow-hidden rounded-control border border-line">
         <button
           type="button"
-          class="min-h-13 px-3 text-sm font-semibold"
+          class="min-h-13 px-3 text-label font-semibold"
           :class="unit === 'pack' ? 'bg-accent text-accent-ink' : 'bg-surface-2 text-text-2'"
           @click="emit('update:unit', 'pack')"
         >
@@ -116,7 +120,7 @@ const fieldId = computed(() => `popis-${props.item.id}`)
         </button>
         <button
           type="button"
-          class="min-h-13 px-3 text-sm font-semibold"
+          class="min-h-13 px-3 text-label font-semibold"
           :class="unit === 'base' ? 'bg-accent text-accent-ink' : 'bg-surface-2 text-text-2'"
           @click="emit('update:unit', 'base')"
         >
@@ -129,14 +133,18 @@ const fieldId = computed(() => `popis-${props.item.id}`)
       {{ hint }}
     </p>
 
-    <p v-if="needsNote" class="text-sm text-warn">
+    <p v-if="needsNote" class="text-label text-warn">
       Ova stavka odstupa više od dozvoljenog — napiši šta se desilo.
     </p>
 
+    <!-- A control with a box, not an underlined word: fourteen of these sit on
+         the first screen, and an underlined text link was both the only one in
+         `/konobar` and 19 px tall against a 48 px floor. `.btn-sm` reads
+         `--tap`, so it is right in either area without knowing which it is in. -->
     <button
       v-if="!noteOpen"
       type="button"
-      class="self-start text-label text-text-2 underline underline-offset-2"
+      class="btn btn-ghost btn-sm self-start"
       @click="noteOpen = true"
     >
       Napomena

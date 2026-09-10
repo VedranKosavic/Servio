@@ -24,7 +24,7 @@
  *     table was already paid. Only the person who carried the phone knows
  *     whether he took the money for it.
  */
-import { formatKm } from '#shared/money'
+import { formatAmount, formatKm } from '#shared/money'
 import type { ShiftBrief, TabDetail, TableState, Zone } from '#shared/types'
 import { stavke } from '~/components/order/OrderText'
 
@@ -189,7 +189,11 @@ function draftLabel(tableId: string): string {
   if (!draft) return 'nacrt'
   const fen = draft.lines.reduce(
     (sum, line) => sum + (priceById.value.get(line.product_id) ?? 0) * line.qty, 0)
-  return formatKm(fen)
+  // `formatAmount` and not `formatKm`, because `toCell()` in `FloorPlan` formats
+  // a live tab the same way and for the same reason: the currency on every tile
+  // is noise, and a draft reading "4,50 KM" beside a locked "6,00" put two money
+  // formats in one grid.
+  return formatAmount(fen)
 }
 
 function draftCount(tableId: string | null): number {
@@ -434,7 +438,11 @@ function openLoose() {
 
       <WaiterOutboxBanner />
 
-      <div class="flex flex-1 flex-col gap-4 py-4">
+      <!-- `pb-20`, the height of the `.action-bar` below: the bar is sticky and
+           its gradient paints over whatever the column ends with, which clipped
+           the last line of the hint. The column has to end above the bar, not
+           under it. -->
+      <div class="flex flex-1 flex-col gap-4 pb-20 pt-4">
         <!-- A queued body the server refused. It blocks its own table only. -->
         <WaiterFailedCard />
 
@@ -600,8 +608,10 @@ function openLoose() {
           </button>
         </div>
 
+        <!-- A sentence, not two arrows. This is the only place in the app that
+             used "→" as vocabulary, and the app speaks Bosnian everywhere else. -->
         <p class="text-center text-caption tracking-normal text-muted">
-          Dodirni sto → narudžba · dugi dodir → žar
+          Dodirni sto za narudžbu, zadrži za žar.
         </p>
       </div>
 

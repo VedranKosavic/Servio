@@ -133,12 +133,18 @@ function pick(value: string) {
   transition: transform var(--dur-fast) var(--ease-out-soft);
 }
 
+/* `nowrap`: a label that wraps opens the track to two lines while its
+   neighbours stay on one, and the segments then sit on three different
+   baselines beside a thumb that is taller than the text in it. A segment's
+   label is one or two words — if it does not fit, the label is wrong, not the
+   control. */
 .a-seg.block .a-seg-item {
   position: relative;
   z-index: 1;
   height: auto;
   min-height: var(--tap);
   padding: 0 12px;
+  white-space: nowrap;
   border-radius: var(--radius-chip);
   background: transparent;
   box-shadow: none;

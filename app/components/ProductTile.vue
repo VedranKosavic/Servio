@@ -126,13 +126,25 @@ const label = computed(() => props.shortName ?? props.name)
  * The tile is a card, not a button-shaped thing: material, an edge, and the two
  * facts a waiter reads out loud — the name at body size and the price under it
  * in tabular figures.
+ *
+ * The price sits *under the name*, not at the far end of a stretched box.
+ * `justify-content: space-between` pushed it to the bottom of whatever height
+ * the grid row took from its tallest neighbour — roughly 60 px of nothing
+ * between a name and the figure that belongs to it, so six favourites filled
+ * the screen and the price a waiter has to check floated away from it. The
+ * content packs at the top now and the 8 px gap does the spacing.
+ *
+ * The " KM" stays. `FloorPlan` drops the currency because every tile on it is
+ * an amount and the unit is obvious from the column; here the price is the only
+ * number on the tile, and the `/konobar` end-to-end specs identify a product
+ * tile by it — a cosmetic edit is not a reason to loosen a guardrail locator.
  */
 .tile-btn {
   display: flex;
   width: 100%;
   min-height: 100px;
   flex-direction: column;
-  justify-content: space-between;
+  align-items: flex-start;
   gap: 8px;
   padding: 12px;
   text-align: left;

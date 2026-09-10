@@ -168,10 +168,10 @@ async function confirm() {
       <span class="mx-auto h-1 w-10 shrink-0 rounded-full bg-line" />
 
       <div class="flex items-baseline gap-2">
-        <h2 class="min-w-0 flex-1 truncate text-xl font-bold">
+        <h2 class="min-w-0 flex-1 truncate text-section font-bold">
           {{ line.qty }}× {{ line.name }}
         </h2>
-        <span class="num shrink-0 text-2xl font-bold">{{ formatKm(line.amount_fen) }}</span>
+        <span class="num shrink-0 text-title font-bold">{{ formatKm(line.amount_fen) }}</span>
       </div>
       <p class="-mt-2 text-label text-text-2">
         {{ tableName }} · zaključene stavke se ne mijenjaju — možeš zatražiti storno.

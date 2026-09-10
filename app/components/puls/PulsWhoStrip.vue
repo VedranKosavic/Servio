@@ -45,15 +45,18 @@ const settled = computed(() => props.who.filter(person => person.settled))
   min-width: 0;
 }
 
+/* The strip is the tile's *second* line now — the count above it is the figure —
+   so the names read at label size in the secondary ink rather than competing
+   with the metric they sit under. */
 .a-who-names {
   margin: 0;
-  font-size: var(--text-body);
+  font-size: var(--text-label);
   font-weight: 600;
-  line-height: 1.3;
-  color: var(--ink);
+  line-height: 1.35;
+  color: var(--ink-2);
 }
 
-.a-who-none { margin: 0; font-size: var(--text-body); color: var(--muted); }
+.a-who-none { margin: 0; font-size: var(--text-label); color: var(--muted); }
 
 .a-who-pills {
   display: flex;

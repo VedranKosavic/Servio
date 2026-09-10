@@ -56,7 +56,7 @@ function give(userId: string) {
       <div class="flex grow items-center gap-2 rounded-control border border-line bg-surface-2 px-3">
         <input
           v-model="amounts[waiter.id]"
-          class="num min-h-12 w-full bg-transparent text-lg font-semibold outline-none"
+          class="num min-h-12 w-full bg-transparent text-section font-semibold outline-none"
           inputmode="decimal"
           autocomplete="off"
           placeholder="0,00"
@@ -75,7 +75,7 @@ function give(userId: string) {
       </button>
     </div>
 
-    <p v-for="(fen, userId) in given" :key="userId" class="num text-sm text-good">
+    <p v-for="(fen, userId) in given" :key="userId" class="num text-label text-good">
       Predano · {{ waiters.find(w => w.id === userId)?.name ?? '' }} · {{ formatKm(fen) }}
     </p>
 

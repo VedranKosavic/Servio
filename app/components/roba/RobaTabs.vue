@@ -84,12 +84,31 @@ function isActive(tab: Tab): boolean {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+
+  /**
+   * …and it says so at the edge it is cut at. A strip that clips a tab
+   * mid-word with nothing at the edge reads as broken layout rather than as
+   * "there is more this way".
+   *
+   * Two pairs of gradients and no JavaScript: the *covers* are attached
+   * `local`, so they sit on the ends of the scrolled content and slide away as
+   * it moves; the *shadows* are attached `scroll`, so they stay pinned to the
+   * visible box. Where the content ends, the cover hides the shadow — so an end
+   * that is really the end has a clean edge, and a cut one is shaded.
+   */
+  background:
+    linear-gradient(to right, var(--bg), transparent) left center / 24px 100% no-repeat local,
+    linear-gradient(to left, var(--bg), transparent) right center / 24px 100% no-repeat local,
+    linear-gradient(to right, var(--line), transparent) left center / 16px 100% no-repeat scroll,
+    linear-gradient(to left, var(--line), transparent) right center / 16px 100% no-repeat scroll;
 }
 
 .a-roba-tabs::-webkit-scrollbar { display: none; }
 
 .a-roba-tab {
-  height: 40px;
+  /* `--tap`: a tab is a navigation target and the floor is 44 px on the
+     dashboard at any width, not only below the breakpoint. */
+  height: var(--tap);
   padding: 0 12px;
   display: inline-flex;
   align-items: center;
@@ -112,7 +131,7 @@ function isActive(tab: Tab): boolean {
 }
 
 @media (max-width: 1023px) {
-  /* A thumb's target — 44 px, like every other control below the breakpoint. */
-  .a-roba-tab { height: 46px; font-size: var(--text-body); padding: 0 14px; }
+  /* Body size on a phone; the height already comes from `--tap`. */
+  .a-roba-tab { font-size: var(--text-body); padding: 0 14px; }
 }
 </style>

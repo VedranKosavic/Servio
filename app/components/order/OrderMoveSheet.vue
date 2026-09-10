@@ -102,7 +102,7 @@ const zoneLabel = (zone: VenueTable['zone']) => (zone === 'basta' ? 'Bašta' : '
             @click="emit('move', table.id)"
           >
             <span class="text-body font-semibold">{{ table.name }}</span>
-            <small class="text-xs font-normal text-text-2">{{ zoneLabel(table.zone) }}</small>
+            <small class="text-caption font-normal text-text-2">{{ zoneLabel(table.zone) }}</small>
           </button>
         </div>
       </template>
@@ -120,7 +120,7 @@ const zoneLabel = (zone: VenueTable['zone']) => (zone === 'basta' ? 'Bašta' : '
           :disabled="busy || offline"
           @click="emit('hand', person.id)"
         >
-          <span class="flex h-9 w-9 items-center justify-center rounded-full bg-surface-2 text-sm font-bold">
+          <span class="flex h-9 w-9 items-center justify-center rounded-full bg-surface-2 text-label font-bold">
             {{ person.initials }}
           </span>
           {{ person.name }}

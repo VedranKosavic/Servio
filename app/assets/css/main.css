@@ -69,6 +69,18 @@
 
   --color-scrim: rgb(6 8 11 / 0.72);
 
+  /* A chart's categories are not meanings. A stacked bar that reaches for
+     `--accent` for its first slice and `--good` for its second says "this one
+     is mine" and "this one is fine" about two categories whose only difference
+     is where they landed in a sorted list. These five hues are none of the
+     meaning colours and none of the copper: they carry position and nothing
+     else, and every chart in the app draws from them. */
+  --color-cat-1: #6b7f8c;
+  --color-cat-2: #8a7a63;
+  --color-cat-3: #5f7a6b;
+  --color-cat-4: #8e6f7d;
+  --color-cat-5: #7a7f5f;
+
   /* ---------------------------------------------------------------------- *
    * TYPE
    *
@@ -216,6 +228,13 @@
   --danger-soft: var(--color-danger-soft);
 
   --scrim: var(--color-scrim);
+
+  /* Position in a chart, never meaning. `admin.css` re-values the five. */
+  --cat-1: var(--color-cat-1);
+  --cat-2: var(--color-cat-2);
+  --cat-3: var(--color-cat-3);
+  --cat-4: var(--color-cat-4);
+  --cat-5: var(--color-cat-5);
 
   /* Durations, named for what they are attached to rather than for how long
      they are, so "make it snappier" is one edit here. */
@@ -468,9 +487,13 @@ button,
     font-size: var(--text-section);
   }
 
-  /** Inline in a row. Still 44 px, which is the floor even beside dense text. */
+  /**
+   * Inline in a row, and still a real target: the floor comes from `--tap`, so
+   * it is 48 px on the phone screens and 44 on `/admin` — never less than 44,
+   * and never a bare text link with an underline standing in for a control.
+   */
   .btn-sm {
-    min-height: 44px;
+    min-height: var(--tap);
     padding: 0 12px;
     border-radius: var(--radius-field);
     font-size: var(--text-label);
@@ -691,27 +714,14 @@ button,
     animation: toast-in var(--dur-base) var(--ease-out-soft);
   }
 
-  /** Is this screen talking to the server? A dot and a word, never a spinner. */
-  .sync {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: var(--text-caption);
-    letter-spacing: 0.04em;
-    color: var(--muted);
-  }
-
-  .sync::before {
-    content: "";
-    width: 7px;
-    height: 7px;
-    border-radius: var(--radius-chip);
-    background: currentcolor;
-  }
-
-  .sync-ok { color: var(--good); }
-  .sync-wait { color: var(--warn); }
-  .sync-off { color: var(--danger); }
+  /**
+   * "Is this screen talking to the server?" is one job with one primitive, and
+   * that primitive is `WaiterSyncChip` on `.chip` — colour *and* icon *and* the
+   * word, which a dot on its own cannot manage. A second `.sync` class describing
+   * a dot-and-word component nothing ever rendered used to live here; it was dead
+   * CSS for a component that was built differently, and two shapes for one job is
+   * the thing DESIGN §10 exists to stop.
+   */
 
   /* ---- sheet ----------------------------------------------------------- */
 

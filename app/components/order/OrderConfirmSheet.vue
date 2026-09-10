@@ -108,23 +108,30 @@ const totalFen = computed(() => rows.value.reduce((sum, r) => sum + r.lineFen, 0
             <span v-if="row.note" class="chip chip-warn">{{ row.note }}</span>
           </div>
 
-          <div class="flex items-center gap-2">
+          <!-- The note button is a pencil, not the three dots. The ellipsis is
+               the overflow menu in the *Sto N* header, and the same glyph doing
+               two jobs teaches a waiter one meaning and hands him the other —
+               here, sitting the same size and material beside − and +, it read
+               as part of the stepper. It also sits *with* the stepper now: the
+               row used to spend a whole line on a lone button at the far left
+               and ~180 px of nothing in the middle, which cost the sheet a
+               drink of the three that fit above the fold. -->
+          <div class="flex items-center justify-end gap-2">
             <button
               type="button"
               class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-surface"
               :aria-label="`Napomena · ${row.name}`"
               @click="emit('note', row.id)"
             >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-                <path d="M5 12h.01M12 12h.01M19 12h.01" />
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" />
               </svg>
             </button>
 
-            <span class="grow" />
-
             <button
               type="button"
-              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-surface text-xl font-bold"
+              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-surface text-section font-bold"
               :aria-label="`Skini jedan · ${row.name}`"
               @click="emit('remove', row.id)"
             >
@@ -133,7 +140,7 @@ const totalFen = computed(() => rows.value.reduce((sum, r) => sum + r.lineFen, 0
             <span class="num w-8 shrink-0 text-center text-body font-bold">{{ row.qty }}</span>
             <button
               type="button"
-              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-surface text-xl font-bold"
+              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-surface text-section font-bold"
               :aria-label="`Dodaj jedan · ${row.name}`"
               @click="emit('add', row.id)"
             >
@@ -145,7 +152,7 @@ const totalFen = computed(() => rows.value.reduce((sum, r) => sum + r.lineFen, 0
 
       <div class="flex items-baseline gap-2 border-t border-line pt-3">
         <span class="section-title grow">Ukupno</span>
-        <span class="num text-2xl font-bold">{{ formatKm(totalFen) }}</span>
+        <span class="num text-metric font-bold">{{ formatKm(totalFen) }}</span>
       </div>
 
       <button

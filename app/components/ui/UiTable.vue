@@ -37,11 +37,51 @@ withDefaults(defineProps<{
   /** A row lights up under the pointer. On when the whole row is a link. */
   hover?: boolean
 }>(), { hover: false })
+
+/**
+ * Is there a column off the right edge?
+ *
+ * A table that scrolls inside its own box is right; a table that scrolls
+ * *silently* is not. On a 390 px phone the column that goes over the edge is
+ * the money, and there was nothing at the edge to say so — no fade, no shadow,
+ * just a header clipped mid-word. The fade is drawn only while there is
+ * something behind it, so a table that fits has a clean edge.
+ */
+const scroller = ref<HTMLElement | null>(null)
+const more = ref(false)
+
+function measure() {
+  const el = scroller.value
+  if (!el) return
+  // A pixel of slack: sub-pixel widths make an exactly-fitting table report one
+  // hundredth of a pixel of overflow and paint a fade over nothing.
+  more.value = el.scrollLeft + el.clientWidth < el.scrollWidth - 1
+}
+
+let observer: ResizeObserver | null = null
+
+onMounted(() => {
+  measure()
+  if (scroller.value && typeof ResizeObserver !== 'undefined') {
+    observer = new ResizeObserver(measure)
+    observer.observe(scroller.value)
+  }
+})
+
+onBeforeUnmount(() => {
+  observer?.disconnect()
+  observer = null
+})
+
+// Rows arrive after the first read, so the measurement has to run again once
+// they are on screen rather than only on mount.
+onUpdated(measure)
 </script>
 
 <template>
-  <div class="a-table-wrap">
-    <table class="a-table" :class="{ hoverable: hover }">
+  <div class="a-table-box">
+    <div ref="scroller" class="a-table-wrap" @scroll="measure">
+      <table class="a-table" :class="{ hoverable: hover }">
       <thead>
         <tr>
           <th
@@ -60,17 +100,39 @@ withDefaults(defineProps<{
       <tbody v-else>
         <slot />
       </tbody>
-    </table>
+      </table>
+    </div>
+
+    <span v-if="more" class="a-table-fade" aria-hidden="true" />
+
     <p v-if="!loading && empty && !$slots.default" class="a-table-empty">{{ empty }}</p>
   </div>
 </template>
 
 <style scoped>
+/* The box holds the scroller and the edge fade; the scroller holds the table.
+   The fade cannot live inside the scroller — it would scroll away with the
+   rows it is there to point at. */
+.a-table-box { position: relative; min-width: 0; }
+
 .a-table-wrap {
   /* The table scrolls inside this box; the page body never scrolls sideways. */
   overflow-x: auto;
   min-width: 0;
   -webkit-overflow-scrolling: touch;
+}
+
+/* Twenty-four pixels of the card's own ground, fading out: enough to read as
+   "there is more this way" and not enough to hide a digit. It takes no pointer
+   events, so a thumb swiping the last column still swipes the table. */
+.a-table-fade {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 24px;
+  pointer-events: none;
+  background: linear-gradient(to left, var(--surface), transparent);
 }
 
 .a-table {

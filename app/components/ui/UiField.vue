@@ -66,18 +66,26 @@ function onInput(event: Event) {
   <div class="a-field">
     <label :for="id">{{ label }}</label>
 
-    <select
-      v-if="kind === 'select'"
-      :id="id"
-      class="a-input"
-      :value="shown"
-      :disabled="disabled"
-      @change="onInput"
-    >
-      <option v-for="option in options ?? []" :key="option.value" :value="option.value">
-        {{ option.label }}
-      </option>
-    </select>
+    <span v-if="kind === 'select'" class="a-select">
+      <select
+        :id="id"
+        class="a-input"
+        :value="shown"
+        :disabled="disabled"
+        @change="onInput"
+      >
+        <option v-for="option in options ?? []" :key="option.value" :value="option.value">
+          {{ option.label }}
+        </option>
+      </select>
+      <svg
+        class="a-select-chevron"
+        width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+      >
+        <path d="M6 9l6 6 6-6" />
+      </svg>
+    </span>
 
     <textarea
       v-else-if="kind === 'textarea'"
@@ -154,6 +162,43 @@ function onInput(event: Event) {
 .a-input.num { font-variant-numeric: tabular-nums; }
 .a-input:disabled { background: var(--surface-2); color: var(--muted); }
 .a-textarea { height: auto; min-height: 84px; padding: 10px 12px; line-height: 1.45; }
+
+/**
+ * A select, drawn by the app rather than by the operating system.
+ *
+ * Without `appearance: none` the browser paints its own arrow and its own inner
+ * chrome, which made the two selects on *Dnevnik* the only OS-styled controls on
+ * the whole dashboard — a different height, a different radius and a different
+ * grey from every field beside them. The chevron is the same one `UiIcon` draws,
+ * inlined as a data URI because a background image cannot read a stroke colour
+ * from a custom property.
+ *
+ * The chevron is a real inline SVG laid over the field rather than a data-URI
+ * background, because a data URI would have to spell the stroke colour out as a
+ * hex value — and no hex value lives outside `main.css` and `admin.css`
+ * (DESIGN rule 1). It takes no pointer events, so the whole box is still the
+ * select.
+ *
+ * It is a target too: `--tap`, at every width, because "pick one of a set" is
+ * exactly the kind of inline control DESIGN §3 puts a 44 px floor under.
+ */
+.a-select { position: relative; display: block; min-width: 0; }
+
+select.a-input {
+  appearance: none;
+  height: var(--tap);
+  padding-right: 34px;
+}
+
+.a-select-chevron {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: block;
+  color: var(--muted);
+  pointer-events: none;
+}
 
 .a-field-error { margin: 0; font-size: var(--text-micro); color: var(--danger); font-weight: 500; }
 .a-field-hint { margin: 0; font-size: var(--text-micro); color: var(--muted); }

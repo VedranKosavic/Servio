@@ -415,17 +415,21 @@ export function pluralBs(n: number, one: string, few: string, many: string): str
  * saying "0,00" without saying why would be the screen inventing a fact. So the
  * three cases are spelled out: no count, a count nobody has applied yet, and a
  * count that came back clean.
+ *
+ * It does **not** open with "KM ·". The unit belongs beside the figure, on the
+ * tile's `unit` prop (DESIGN §8) — carrying it in the sub line is what made the
+ * currency read as a second fact, and with the prop set it printed twice.
  */
 export function stockVarianceNote(counts: ShiftCountBrief[]): string {
-  if (counts.length === 0) return 'KM · nema popisa'
+  if (counts.length === 0) return 'nema popisa'
 
   const confirmed = counts.filter(c => c.status === 'confirmed')
-  if (confirmed.length === 0) return 'KM · popis još nije primijenjen'
+  if (confirmed.length === 0) return 'popis još nije primijenjen'
 
   const off = confirmed.filter(c => c.variance_fen !== 0).length
   return off === 0
-    ? 'KM · popis bez odstupanja'
-    : `KM · ${off} ${pluralBs(off, 'popis', 'popisa', 'popisa')} s odstupanjem`
+    ? 'popis bez odstupanja'
+    : `${off} ${pluralBs(off, 'popis', 'popisa', 'popisa')} s odstupanjem`
 }
 
 /**

@@ -43,9 +43,16 @@ const { pending, blockedText } = useSync()
 
 type Phase = 'open' | 'close' | 'adhoc'
 
+/**
+ * One word each. At 390 px *Početak smjene* and *Kraj smjene* wrapped to two
+ * lines while *Usput* stayed on one, so three labels sat on three baselines
+ * beside a two-line thumb — and it is the first thing on the screen. The page
+ * title already says *Brzi popis* and the note under the control says which
+ * count is missing, so "smjene" was carrying nothing.
+ */
 const PHASES: { key: Phase, label: string }[] = [
-  { key: 'open', label: 'Početak smjene' },
-  { key: 'close', label: 'Kraj smjene' },
+  { key: 'open', label: 'Početak' },
+  { key: 'close', label: 'Kraj' },
   { key: 'adhoc', label: 'Usput' },
 ]
 
@@ -312,15 +319,6 @@ const staleOnCount = computed(() => result.value?.stale_devices ?? [])
           zatvoriti bez vlasnika.
         </p>
 
-        <PopisFloatCard
-          v-if="showFloat"
-          :waiters="waiters"
-          :busy="floatBusy"
-          :error="floatError"
-          :given="floatGiven"
-          @float="giveFloat"
-        />
-
         <PopisPendingCard
           v-if="stuckDevices.length > 0"
           :devices="stuckDevices"
@@ -358,6 +356,19 @@ const staleOnCount = computed(() => result.value?.stale_devices ?? [])
             Nema stavki za brzi popis. Vlasnik bira šta se popisuje svaku smjenu.
           </p>
         </section>
+
+        <!-- *Dopuni smjenu* sits under the count, not above it. It is an
+             occasional errand for whoever holds the drawer, and it used to be
+             the first card on a screen named after counting — pushing *Stavke
+             za popis*, the thing the screen is for, below the fold. -->
+        <PopisFloatCard
+          v-if="showFloat"
+          :waiters="waiters"
+          :busy="floatBusy"
+          :error="floatError"
+          :given="floatGiven"
+          @float="giveFloat"
+        />
 
         <p v-if="submitError" class="note note-danger" role="alert">
           {{ submitError }}

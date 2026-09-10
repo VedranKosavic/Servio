@@ -32,7 +32,7 @@ defineEmits<{ close: [] }>()
   <div class="fixed inset-0 z-50 flex flex-col bg-bg">
     <header class="flex min-h-14 items-center gap-2.5 border-b border-line px-4 py-2">
       <span class="chip bg-line text-text">{{ tableName }}</span>
-      <span class="grow text-xl font-bold">Pregled narudžbe</span>
+      <span class="grow text-section font-bold">Pregled narudžbe</span>
       <button
         type="button"
         class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control"
@@ -51,7 +51,7 @@ defineEmits<{ close: [] }>()
         aria-hidden="true"
         class="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden"
       >
-        <span class="-rotate-[30deg] whitespace-nowrap text-center text-2xl font-bold uppercase leading-relaxed tracking-[0.12em] text-text opacity-[0.14]">
+        <span class="-rotate-[30deg] whitespace-nowrap text-center text-title font-bold uppercase leading-relaxed tracking-[0.12em] text-text opacity-[0.14]">
           interni pregled<br>nije fiskalni račun
         </span>
       </div>
@@ -60,7 +60,7 @@ defineEmits<{ close: [] }>()
         <template v-for="round in tab.orders" :key="round.id">
           <li v-for="row in round.lines" :key="row.id" class="flex items-baseline gap-3">
             <span
-              class="min-w-0 grow text-xl"
+              class="min-w-0 grow text-section"
               :class="row.status === 'storno' ? 'text-text-2 line-through' : ''"
             >
               <span class="num font-semibold">{{ row.qty }}×</span>
@@ -71,7 +71,7 @@ defineEmits<{ close: [] }>()
               <small v-if="row.status === 'gratis'" class="text-good"> · kuća časti</small>
             </span>
             <span
-              class="num shrink-0 text-xl font-semibold"
+              class="num shrink-0 text-section font-semibold"
               :class="row.status === 'storno' ? 'text-text-2 line-through' : ''"
             >{{ formatKm(row.charged_fen) }}</span>
           </li>
@@ -81,8 +81,8 @@ defineEmits<{ close: [] }>()
 
     <div class="border-t border-line px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-3">
       <div class="flex items-baseline gap-3">
-        <span class="grow text-xl font-semibold">Za platiti</span>
-        <span class="num text-4xl font-bold">{{ formatKm(tab.money.remaining_fen) }}</span>
+        <span class="grow text-section font-semibold">Za platiti</span>
+        <span class="num text-display font-bold">{{ formatKm(tab.money.remaining_fen) }}</span>
       </div>
       <p v-if="tab.money.paid_fen > 0" class="num mt-1 text-right text-label text-text-2">
         Već plaćeno {{ formatKm(tab.money.paid_fen) }} od {{ formatKm(tab.money.total_fen) }}

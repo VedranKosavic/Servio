@@ -150,10 +150,12 @@ const days = computed(() => props.week.days.map(d => d.work_date))
 
 .r-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 
+/* `--tap` on both axes: 32 px was a mouse-only target, and DESIGN §3 puts the
+   dashboard's 44 px floor under anything inline in a dense row too. */
 .r-add {
-  width: 32px;
-  height: 32px;
-  border-radius: 16px;
+  width: var(--tap);
+  height: var(--tap);
+  border-radius: var(--radius-chip);
   border: 1px dashed var(--line);
   background: transparent;
   color: var(--muted);

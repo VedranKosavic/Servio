@@ -82,14 +82,16 @@ const checklist = computed(() => [
       : `Otvorenih kod tebe: ${myOpenTabs.value}. Naplati ih prije predaje.`,
   },
   {
-    // There is no offline outbox yet (it lands later in Phase 3), so this is
-    // honestly always true — and stays a row, because the day the outbox exists
-    // it is the row that explains a refusal.
-    ok: true,
-    label: 'Sve narudžbe poslane',
-    detail: 'Ništa ne čeka na slanje s ovog telefona.',
-    // When the outbox lands, this row states the count the same way the one
-    // above does: `Čeka na slanje: n`.
+    // The same rule as the row above, and the row that explains the refusal:
+    // `canSettle` is false while anything is queued, so this line has to say the
+    // count rather than assert the happy case beside an amber marker.
+    ok: pending.value === 0,
+    label: pending.value === 0
+      ? 'Sve narudžbe poslane'
+      : `Čeka na slanje: ${pending.value}`,
+    detail: pending.value === 0
+      ? 'Ništa ne čeka na slanje s ovog telefona.'
+      : 'Sačekaj da odu — dok čekaju, pazar nije konačan.',
   },
 ])
 
@@ -288,10 +290,30 @@ function diffLabel(fen: number): string {
                 :key="item.label"
                 class="flex items-start gap-3 border-t border-line-soft pt-3 first:border-t-0 first:pt-0"
               >
+                <!-- The mark is drawn, not typed. Every other check in the app
+                     is an inline SVG (the sync chip, *Zahtijeva pažnju*), and
+                     the text glyphs rendered small and off-centre beside them —
+                     an operating rule, DESIGN rule 8. -->
                 <span
-                  class="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-chip text-caption font-bold tracking-normal"
+                  class="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-chip"
                   :class="item.ok ? 'bg-good-soft text-good' : 'bg-warn-soft text-warn'"
-                >{{ item.ok ? '✓' : '!' }}</span>
+                  aria-hidden="true"
+                >
+                  <svg
+                    v-if="item.ok"
+                    width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"
+                  >
+                    <path d="M20 6L9 17l-5-5" />
+                  </svg>
+                  <svg
+                    v-else
+                    width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"
+                  >
+                    <path d="M12 7v6M12 17v.01" />
+                  </svg>
+                </span>
                 <div class="min-w-0">
                   <div class="font-semibold">
                     {{ item.label }}
@@ -318,18 +340,25 @@ function diffLabel(fen: number): string {
               </div>
 
               <!-- The one number this screen asks for, in the system's numeric
-                   field: 60 px, tabular, and large enough to check twice. -->
-              <span class="input input-num flex items-center gap-2 px-4">
+                   field: 60 px, tabular, and large enough to check twice.
+
+                   A `<label>` and not a `<span>`, and the input stretches to
+                   fill it: the well is 60 px and the bare input inside it was
+                   28, so the top and bottom of the thing that looks like a
+                   field neither focused it nor took the tap. `.input-num` sets
+                   a *min*-height, so a percentage height resolves against
+                   nothing — the flex item has to stretch. -->
+              <label class="input input-num flex items-center gap-2 px-4">
                 <input
                   v-model="declaredRaw"
                   type="text"
                   inputmode="decimal"
                   placeholder="0,00"
-                  class="num min-w-0 flex-1 bg-transparent text-right text-title font-semibold outline-none placeholder:text-muted"
+                  class="num min-w-0 flex-1 self-stretch bg-transparent text-right text-title font-semibold outline-none placeholder:text-muted"
                   aria-label="Predani iznos"
                 >
                 <span class="shrink-0 text-label font-normal text-text-2">KM</span>
-              </span>
+              </label>
 
               <!-- The same sentence the server would send back, said first. -->
               <p v-if="blocked" class="note note-warn" role="status">

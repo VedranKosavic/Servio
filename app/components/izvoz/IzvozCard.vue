@@ -53,17 +53,26 @@ defineProps<{
   padding-top: 4px;
 }
 
+/* The filename in the app's own face. A monospaced stack written out by hand
+   here and again on the page put a third typeface on the owner's screen, in a
+   system that declares exactly two (DESIGN §1) and keeps every value in a token.
+   Tabular figures do the aligning a mono face was being asked for. */
 .i-file {
-  font-family: ui-monospace, "SFMono-Regular", "Menlo", monospace;
+  /* `<code>` takes the browser's own monospace unless it is told otherwise, so
+     the face has to be named here even though nothing sets it. */
+  font-family: var(--font-sans);
   font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
   color: var(--muted);
   flex-grow: 1;
   min-width: 0;
 }
 
-/* The kit's `primary` button, on an anchor. Same height, same radius, same ink. */
+/* The kit's `primary` button, on an anchor. Same height, same radius, same ink —
+   and the height comes from `--tap`, because 36 px was under the dashboard's
+   floor and this is the one thing the card is for. */
 .i-dl {
-  height: 36px;
+  height: var(--tap);
   border-radius: 10px;
   display: inline-flex;
   align-items: center;
@@ -80,6 +89,6 @@ defineProps<{
 .i-dl.off { background: var(--surface-2); color: var(--muted); cursor: default; }
 
 @media (max-width: 1023px) {
-  .i-dl { height: 44px; font-size: var(--text-body); padding: 0 18px; }
+  .i-dl { font-size: var(--text-body); padding: 0 18px; }
 }
 </style>

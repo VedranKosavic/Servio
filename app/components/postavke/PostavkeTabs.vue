@@ -58,12 +58,25 @@ const isOn = (to: string) => route.path === to
   border-bottom: 1px solid var(--line);
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+
+  /* The same edge shading `RobaTabs` uses, and for the same reason: eight tabs
+     on a 390 px phone are cut mid-word, and a silent cut reads as broken layout.
+     The covers are attached `local` and slide off with the content; the shadows
+     are attached `scroll` and stay on the box — so a real end is clean and a cut
+     one is shaded, with no JavaScript. */
+  background:
+    linear-gradient(to right, var(--bg), transparent) left center / 24px 100% no-repeat local,
+    linear-gradient(to left, var(--bg), transparent) right center / 24px 100% no-repeat local,
+    linear-gradient(to right, var(--line), transparent) left center / 16px 100% no-repeat scroll,
+    linear-gradient(to left, var(--line), transparent) right center / 16px 100% no-repeat scroll;
 }
 
 .p-tabs::-webkit-scrollbar { display: none; }
 
 .p-tab {
-  height: 40px;
+  /* `--tap`: a tab is a navigation target and the floor is 44 px on the
+     dashboard at any width, not only below the breakpoint. */
+  height: var(--tap);
   padding: 0 12px;
   color: var(--muted);
   font-size: var(--text-label);
@@ -86,6 +99,7 @@ const isOn = (to: string) => route.path === to
 }
 
 @media (max-width: 1023px) {
-  .p-tab { height: 46px; padding: 0 14px; font-size: var(--text-body); }
+  /* Body size on a phone; the height already comes from `--tap`. */
+  .p-tab { padding: 0 14px; font-size: var(--text-body); }
 }
 </style>

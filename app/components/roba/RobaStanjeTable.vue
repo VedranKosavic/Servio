@@ -239,7 +239,10 @@ function lastLine(row: StanjeRow): string {
 
 @media (max-width: 1023px) {
   /* The article name is the row's link into its ledger, so it is a thumb's
-     target and not a line of text with a tap area the height of a capital. */
-  .a-roba-link { min-height: 44px; }
+     target and not a line of text with a tap area the height of a capital.
+     It stays a text height on a laptop: twenty rows at `--tap` each would
+     cost this table a third of its density, which is the one thing the light
+     theme exists for (DESIGN §8). */
+  .a-roba-link { min-height: var(--tap); }
 }
 </style>

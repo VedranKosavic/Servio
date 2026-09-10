@@ -20,7 +20,10 @@ defineProps<{ flags: Flag[] }>()
   <div v-if="flags.length" class="a-flags">
     <p class="a-flags-note">
       <span class="a-flags-label">Za informaciju</span>
-      <span>nestaje samo od sebe kad uslov prestane</span>
+      <!-- "Uslov" is a programmer's word for a boolean and the sentence
+           explained the implementation. What the owner needs to know is that
+           there is nothing here to decide. -->
+      <span>ništa se ne odlučuje — nestaje kad se stanje popravi</span>
     </p>
     <div v-for="flag in flags" :key="flagKey(flag)" class="a-flag">
       <span class="a-flag-dot" aria-hidden="true" />

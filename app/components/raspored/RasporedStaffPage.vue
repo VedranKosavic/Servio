@@ -309,7 +309,7 @@ const colleagues = computed(() =>
                 @click="tap(person)"
               >
                 <span
-                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold"
+                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-label font-bold"
                   :class="person.user_id === myId
                     ? 'bg-accent text-accent-ink'
                     : 'bg-surface-2 text-text-2'"

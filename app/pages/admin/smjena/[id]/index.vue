@@ -252,25 +252,32 @@ async function submitSheet() {
         @review="review"
       />
 
+      <!-- `unit="KM"` and not `sub="KM"`: the unit sits beside the figure at
+           label size, because "86,00" with "KM" under it reads as two facts and
+           it is one (DESIGN §8). `PulsTiles` has always done it this way, and
+           the same primitive rendering two ways on the owner's two most-read
+           screens is what the redesign folded together. -->
       <div class="a-tiles">
-        <UiTile label="Pazar" :value="formatAmount(data.summary.promet_fen)" sub="KM" />
+        <UiTile label="Pazar" :value="formatAmount(data.summary.promet_fen)" unit="KM" />
         <UiTile
           label="Gotovina / kartica"
           :value="formatAmount(data.summary.cash_fen)"
-          :sub="`KM · kartica ${formatKm(data.summary.card_fen)}`"
+          unit="KM"
+          :sub="`kartica ${formatKm(data.summary.card_fen)}`"
         />
         <UiTile
           label="Gratis · storna"
           :value="formatAmount(data.summary.comp_fen)"
-          :sub="`KM · storna ${data.summary.void_count} · ${formatKm(data.summary.void_fen)}`"
+          unit="KM"
+          :sub="`storna ${data.summary.void_count} · ${formatKm(data.summary.void_fen)}`"
         />
         <UiTile
           label="Razlika gotovine"
           :value="data.summary.diff_fen === null ? '—' : signedAmount(data.summary.diff_fen)"
+          :unit="data.summary.diff_fen === null ? undefined : 'KM'"
         >
           <template #sub>
             <span class="a-sub">
-              <span>KM</span>
               <UiPill v-if="cashWord" :tone="cashWord.tone">{{ cashWord.word }}</UiPill>
               <span v-else>{{ noCashCountReason(data.shift) }}</span>
             </span>
@@ -279,6 +286,7 @@ async function submitSheet() {
         <UiTile
           label="Manjak robe"
           :value="signedAmount(data.summary.stock_variance_fen)"
+          unit="KM"
           :tone="data.summary.stock_variance_fen < 0 ? 'bad' : 'plain'"
           :sub="stockNote"
         />

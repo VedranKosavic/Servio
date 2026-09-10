@@ -15,6 +15,10 @@
  *
  * `tone` colours the number and nothing else, and it never carries the meaning
  * alone: a red figure always has a sub-line saying what is red about it.
+ *
+ * There is deliberately no slot for the value. A tile whose "figure" was a strip
+ * of names dropped the metric size and the display face and took the row's
+ * shared baseline with it; whatever is not a number belongs in `sub`.
  */
 withDefaults(defineProps<{
   /** The eyebrow: "Promet danas". */
@@ -32,8 +36,8 @@ withDefaults(defineProps<{
 <template>
   <div class="a-tile" :class="`t-${tone}`">
     <div class="a-tile-label">{{ label }}</div>
-    <div class="a-tile-value" :class="{ 'is-slot': !!$slots.value }">
-      <slot name="value">{{ value }}</slot><span v-if="unit && !$slots.value" class="a-tile-unit">{{ unit }}</span>
+    <div class="a-tile-value">
+      {{ value }}<span v-if="unit" class="a-tile-unit">{{ unit }}</span>
     </div>
     <div v-if="sub || $slots.sub" class="a-tile-sub"><slot name="sub">{{ sub }}</slot></div>
   </div>
@@ -101,16 +105,10 @@ withDefaults(defineProps<{
 .t-warn .a-tile-value { color: var(--warn); }
 .t-bad .a-tile-value { color: var(--danger); }
 
-/* A tile that is only a slot ("Ko radi") holds a strip of names, not a figure,
-   so it drops the display face and the metric size. */
-.a-tile-value.is-slot {
-  display: block;
-  font-family: var(--font-sans);
-  font-size: var(--text-body);
-  line-height: 1.4;
-  letter-spacing: 0;
-  font-weight: 400;
-}
+/* There is no escape hatch for a tile whose value is not a figure. *Ko radi*
+   used one, and the result was the widest card in the row holding one word at
+   body weight while the other five sat on a shared number baseline. A tile
+   leads with the number; anything that is not one goes in `sub`. */
 
 @media (max-width: 1023px) {
   .a-tile { min-height: 96px; padding: 12px 14px 14px; }

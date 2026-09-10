@@ -102,7 +102,7 @@ function submit() {
     </div>
 
     <div class="flex min-h-13 items-center gap-2 rounded-control border border-line bg-surface-2 px-3">
-      <span class="num grow text-2xl font-bold tracking-[0.4em]">
+      <span class="num grow text-title font-bold tracking-[0.4em]">
         {{ '•'.repeat(pin.length) }}
       </span>
       <button
@@ -120,7 +120,7 @@ function submit() {
         v-for="digit in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']"
         :key="digit"
         type="button"
-        class="btn min-h-14 text-xl"
+        class="btn min-h-14 text-section"
         :class="digit === '0' ? 'col-start-2' : ''"
         @click="press(digit)"
       >

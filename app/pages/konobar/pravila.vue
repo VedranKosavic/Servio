@@ -105,7 +105,7 @@ function stamp(iso: string | null): string {
 
       <main class="flex flex-1 flex-col gap-4 py-4" :class="mustAck ? 'pb-28' : ''">
         <section v-if="gate" class="card flex flex-col gap-2 p-4">
-          <h2 class="text-xl font-bold text-warn">
+          <h2 class="text-section font-bold text-warn">
             Nova verzija Pravila
           </h2>
           <p class="text-label text-text-2">
@@ -138,7 +138,7 @@ function stamp(iso: string | null): string {
           Pisana pravila još nisu objavljena. Brojevi ispod vrijede i bez njih.
         </p>
 
-        <h2 class="px-1 text-xl font-bold">
+        <h2 class="px-1 text-section font-bold">
           Pragovi
         </h2>
         <PravilaPragovi :settings="settings" />

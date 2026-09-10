@@ -485,18 +485,27 @@ async function signOut() {
 
 .a-who-text small { font-size: var(--text-caption); color: var(--nav-muted); }
 
+/* A real box, not an underlined word: this is on every page of the dashboard
+   and it measured 28 px against a 44 px floor. The underline goes with it — the
+   rail's rows are not underlined either, and a control that has a shape does not
+   need one to say it is a control. */
 .a-signout {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
   border: 0;
+  border-radius: var(--radius-field);
   background: transparent;
   color: var(--nav-muted);
   font: inherit;
   font-size: var(--text-caption);
-  text-decoration: underline;
-  text-underline-offset: 2px;
   cursor: pointer;
-  padding: 6px 2px;
+  padding: 0 10px;
+  transition: background var(--dur-fast) var(--ease-standard);
 }
+
+.a-signout:hover { background: var(--nav-well); }
 
 .a-signout:hover { color: var(--nav-ink); }
 

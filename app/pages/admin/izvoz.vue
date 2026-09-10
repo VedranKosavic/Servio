@@ -124,7 +124,9 @@ const links = computed(() => ({
 
 
 .a-note { margin: 0; color: var(--muted); font-size: var(--text-micro); max-width: 70ch; }
-.a-note code { font-family: ui-monospace, "SFMono-Regular", "Menlo", monospace; }
+/* The one `<code>` on the page is a single semicolon; it takes the app's own
+   face with tabular figures rather than a third typeface written out by hand. */
+.a-note code { font-family: var(--font-sans); font-variant-numeric: tabular-nums; color: var(--ink-2); }
 
 .i-grid {
   display: grid;

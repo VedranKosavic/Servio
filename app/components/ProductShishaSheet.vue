@@ -85,19 +85,27 @@ const canAdd = computed(() => selected.value.length > 0)
         </button>
       </div>
 
-      <div v-if="props.noteChips.length" class="flex flex-wrap gap-2">
-        <button
-          v-for="chip in props.noteChips"
-          :key="chip"
-          type="button"
-          class="pill h-12"
-          :class="note === chip
-            ? 'pill-on'
-            : ''"
-          @click="pickNote(chip)"
-        >
-          {{ chip }}
-        </button>
+      <!-- A different question, so it says so. Six flavour pills (pick 1–3,
+           they change what is made and what leaves the shelf) sitting directly
+           above three note pills (pick at most one) in the same shape, the same
+           size and the same material, with only the flavours labelled, gave the
+           waiter no way to see that the last row asks something else. -->
+      <div v-if="props.noteChips.length" class="flex flex-col gap-2 border-t border-line-soft pt-3">
+        <span class="eyebrow">Napomena</span>
+        <div class="flex flex-wrap gap-2">
+          <button
+            v-for="chip in props.noteChips"
+            :key="chip"
+            type="button"
+            class="pill h-12"
+            :class="note === chip
+              ? 'pill-on'
+              : ''"
+            @click="pickNote(chip)"
+          >
+            {{ chip }}
+          </button>
+        </div>
       </div>
 
       <button
@@ -106,7 +114,7 @@ const canAdd = computed(() => selected.value.length > 0)
         :disabled="!canAdd"
         @click="emit('confirm', [...selected], note)"
       >
-        Dodaj nargilu · <span class="num">{{ formatKm(props.product.price_fen) }}</span>
+        Dodaj nargilu ·<span class="num">{{ formatKm(props.product.price_fen) }}</span>
       </button>
       <button type="button" class="btn btn-ghost" @click="emit('close')">
         Otkaži

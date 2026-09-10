@@ -60,6 +60,15 @@
 
   --scrim: rgb(26 35 39 / 0.42);
 
+  /* The categorical ramp, deepened for paper: a slice has to read as a solid
+     block against `--surface` in daylight, where the dark theme's mid-tones go
+     pale. None of the five is a meaning colour and none of them is the copper. */
+  --cat-1: #4c6675;
+  --cat-2: #77664d;
+  --cat-3: #446254;
+  --cat-4: #755366;
+  --cat-5: #626749;
+
   /* The dark nav rail beside the light page. Its own small ladder, because it
      is the one piece of dark material in this theme. */
   --nav: #1b2427;
@@ -205,7 +214,11 @@ html[data-theme='light'] body {
 }
 
 .a-chip {
-  height: 32px;
+  /* `--tap`, at every width. A filter chip is inline in a dense row, which
+     DESIGN §3 puts a 44 px floor under on a laptop as well as on a phone —
+     32 px was a mouse-only target on a dashboard the owner also reads standing
+     up behind the bar. */
+  height: var(--tap);
   padding: 0 14px;
   border-radius: var(--radius-chip);
   border: 1px solid var(--line);
@@ -234,10 +247,10 @@ html[data-theme='light'] body {
   font-weight: 600;
 }
 
-/* Every chip a thumb's target on a phone. */
+/* A phone reads the same chip at body size; the height already comes from
+   `--tap`, which is 44 in this theme at any width. */
 @media (max-width: 1023px) {
   .a-chip {
-    height: 44px;
     padding: 0 16px;
     font-size: var(--text-body);
   }

@@ -146,7 +146,19 @@ const total = computed(() => rows.value.reduce((sum, row) => sum + row.promet_fe
   color: var(--ink);
 }
 
-.a-row :deep(a) { color: inherit; text-decoration: none; font-weight: 600; }
+/* The links fill their cells. A date rendered inline is a 17 px target and the
+   chevron a 20 px one — both well under the 44 px floor DESIGN §3 puts on
+   anything inline in a dense row, on a laptop as much as on a phone. */
+.a-row :deep(a) {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap);
+  color: inherit;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.a-row :deep(td.r a) { justify-content: flex-end; }
 .a-row :deep(a:hover) { text-decoration: underline; }
 
 @media (max-width: 1023px) {

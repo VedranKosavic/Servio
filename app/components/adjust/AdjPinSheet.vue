@@ -91,11 +91,11 @@ const ROLE_WORD: Record<string, string> = {
           class="btn btn-secondary btn-lg justify-start gap-3"
           @click="picked = user"
         >
-          <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-sm font-bold">
+          <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-label font-bold">
             {{ user.initials }}
           </span>
           <span class="min-w-0 flex-1 truncate text-left">{{ user.name }}</span>
-          <span class="shrink-0 text-sm font-normal text-text-2">
+          <span class="shrink-0 text-label font-normal text-text-2">
             {{ ROLE_WORD[user.role] ?? user.role }}
           </span>
         </button>
