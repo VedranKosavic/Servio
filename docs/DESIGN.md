@@ -283,7 +283,82 @@ used to be.
 
 ---
 
-## 8. Rules for the next screen
+## 8. The dashboard, as the second proof
+
+`/admin` is the same system in the other material. Screenshots, before and
+after: `docs/design-shots/admin/`.
+
+**Density is a value, so it swaps with the palette.** `admin.css` now restates
+the type steps as well as the colours — seven of them, 12 → 28, because a table
+of four-digit amounts read at a desk needs more rungs at the bottom of the ladder
+than a phone held at arm's length does:
+
+| Step | Light | Dark | Used for |
+| --- | --- | --- | --- |
+| `--text-caption` | 12 | 12 | a column header, an eyebrow, a timestamp |
+| `--text-micro` | 13 | — | a second line under a row, an inline meta |
+| `--text-label` | 14 | 14 | a table cell, a field label, a small button |
+| `--text-body` | 15 | 17 | a row, a sentence, a button, an input |
+| `--text-section` | 16 | 19 | a card heading |
+| `--text-title` | 24 | 24 | the page title |
+| `--text-metric` | 28 | 30 | the number a tile is about |
+
+`--text-micro` exists only under `[data-theme='light']`, so **it must not be
+used outside `/admin`** — a dark screen reading it would get no size at all.
+Ten and eleven pixels survive in exactly two places, both inside the dark rail
+(a badge's digits, a tab's label), and both are furniture rather than text.
+
+**Elevation on paper.** `main.css` sizes its shadows for a dark room, where a
+shadow has to be nearly black to register; dropped onto warm paper the same
+values read as soot. The light theme restates `--shadow-pop` and
+`--shadow-sheet` in the ink colour at a low alpha and adds two of its own:
+`--shadow-card`, one hairline of contact shadow so a card sits *on* the page
+rather than being a rectangle drawn on it, and `--shadow-raise` for a tile under
+the pointer. A rule alone is what makes a light dashboard look like a
+spreadsheet; a real drop shadow is what makes it look like 2014.
+
+**The rail is grouped and the current row is not a copper slab.** Eight flat
+rows is a list of links; three labelled groups (*Lokal*, *Ljudi*,
+*Podešavanje*) is a product with a shape. The current page used to be filled
+solid copper, which put the loudest colour in the theme on screen permanently
+and left nothing louder for the one button a page is about; it is now a raised
+well (`--nav-on`) with a copper spine and copper ink (`--nav-on-ink`). The rail
+carries the same mark the lock screen does, at a rail's size, and its foot is a
+venue block, the crossing link to `/konobar`, and the owner's own name in a
+circle.
+
+**One page head, one tab strip.** `UiPageHead` replaced fifteen hand-written
+copies of the same `font-size: 28px` title: an eyebrow (which part of the app),
+the title (which screen) and a sub line (the state of it), with a slot for the
+page's buttons and one for a drill-down's way back. *Roba* drew its tabs as a
+segmented well and *Meni i postavke* drew its as copper pills — two ideas of the
+same thing in one product; both are now an underlined bar whose only colour is
+the copper rule under the current tab.
+
+**Tiles lead with the number.** The unit sits beside the figure at label size
+instead of on a line of its own ("86,00" with "KM" under it reads as two facts,
+and it is one), the figure is the display face at `--text-metric`, and the
+second line says something the number does not. The eyebrow has a floor height
+so a row of tiles keeps one baseline whether or not a given tile wraps.
+
+**The attention list reads as work to do**: a tone marker on the left saying
+what *kind* of decision this is, the title at row weight, and the buttons on a
+right-hand rail so the whole column of them lines up. The flags underneath moved
+into a well — one step *down* the ladder from the decisions above them: same
+card, visibly not the same job. An empty list is good news and looks like it.
+
+**A `UiTable` is a list, not a spreadsheet**: `--line` under the sticky header,
+`--line-soft` between rows, the first cell carrying the weight, and `flush` on
+the card so the table reaches its edges instead of wasting the two columns it
+needed.
+
+Targets: 44 px on a laptop (38 px buttons plus their row's padding), 44 px for
+everything below 1024 px, and every input 16 px on a phone so iOS does not zoom
+the page on focus.
+
+---
+
+## 9. Rules for the next screen
 
 1. No hex values outside `main.css` and `admin.css`. If a colour is missing, add
    a token.

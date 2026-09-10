@@ -115,5 +115,5 @@ async function save(key: keyof Settings, value: number | Role[]) {
   background: var(--surface-2);
 }
 
-.p-foot { margin: 0; color: var(--muted); font-size: 13px; }
+.p-foot { margin: 0; color: var(--muted); font-size: var(--text-micro); }
 </style>

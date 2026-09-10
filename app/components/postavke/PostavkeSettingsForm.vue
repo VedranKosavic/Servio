@@ -207,7 +207,7 @@ function toggleRole(role: Role, on: boolean) {
 <style scoped>
 .p-groups { display: flex; flex-direction: column; gap: 14px; }
 
-.p-note { margin: 0; color: var(--muted); font-size: 13px; }
+.p-note { margin: 0; color: var(--muted); font-size: var(--text-micro); }
 
 /* `auto-fill` with a *maximum* track, not `1fr`: a threshold is four or five
    characters wide, and a 400 px box for "5,00" reads as a mistake. */
@@ -222,7 +222,7 @@ function toggleRole(role: Role, on: boolean) {
 .p-roles { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 
 .p-caption {
-  font-size: 12px;
+  font-size: var(--text-caption);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
@@ -236,8 +236,8 @@ function toggleRole(role: Role, on: boolean) {
 .p-caption :deep(.a-pill) { text-transform: none; letter-spacing: 0; }
 
 .p-role-list { display: flex; flex-wrap: wrap; gap: 12px; }
-.p-hint { font-size: 13px; color: var(--muted); }
-.p-error-line { font-size: 13px; color: var(--danger); }
+.p-hint { font-size: var(--text-micro); color: var(--muted); }
+.p-error-line { font-size: var(--text-micro); color: var(--danger); }
 
 @media (max-width: 1023px) {
   .p-fields { grid-template-columns: 1fr; }

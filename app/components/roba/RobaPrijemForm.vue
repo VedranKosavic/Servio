@@ -275,13 +275,18 @@ async function send() {
 }
 
 .a-line-foot { display: flex; align-items: center; gap: 12px; }
-.a-line-qty { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.a-line-qty { font-size: var(--text-micro); color: var(--muted); font-variant-numeric: tabular-nums; }
 .a-line-foot .a-btn { margin-left: auto; }
 
 .a-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .a-total { display: flex; align-items: baseline; gap: 8px; margin-right: auto; }
-.a-total-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
-.a-total strong { font-size: 20px; font-weight: 600; }
+.a-total-label { font-size: var(--text-caption); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+.a-total strong {
+  font-family: var(--font-display);
+  font-size: var(--text-title);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
 
 /* A disabled <button> swallows its own clicks without letting them bubble, so
    the wrapper around *Proknjiži* would never hear one. Taking the button out of
@@ -289,9 +294,9 @@ async function send() {
    of reasons on for somebody asking why the button is grey. */
 .a-foot span > :deep(button:disabled) { pointer-events: none; }
 
-.a-problems { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
-.a-error { margin: 0; color: var(--danger); font-size: 14px; }
-.a-ok { margin: 0; color: var(--good); font-size: 14px; }
+.a-problems { margin: 0; padding-left: 18px; color: var(--muted); font-size: var(--text-micro); }
+.a-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
+.a-ok { margin: 0; color: var(--good); font-size: var(--text-label); }
 
 @media (max-width: 1023px) {
   .a-head-fields { grid-template-columns: 1fr; }

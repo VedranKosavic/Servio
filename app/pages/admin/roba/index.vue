@@ -96,15 +96,18 @@ const totals = computed(() => report.value?.totals ?? null)
     <p v-if="error" class="a-error">{{ error }}</p>
 
     <div class="a-tiles">
-      <UiTile label="Vrijednost zaliha" :value="formatKm(totals?.value_fen ?? 0)" :sub="`${totals?.items ?? 0} artikala`" />
+      <UiTile
+        label="Vrijednost zaliha"
+        :value="formatAmount(totals?.value_fen ?? 0)"
+        unit="KM"
+        :sub="`${totals?.items ?? 0} artikala`"
+      />
       <UiTile label="U minusu" :value="totals?.u_minusu ?? 0" :tone="(totals?.u_minusu ?? 0) > 0 ? 'bad' : 'plain'" sub="ledger kaže da polica duguje" />
       <UiTile label="Nisko" :value="totals?.nisko ?? 0" :tone="(totals?.nisko ?? 0) > 0 ? 'warn' : 'plain'" sub="na minimumu ili ispod" />
       <UiTile label="Bez cijene" :value="totals?.bez_cijene ?? 0" :tone="(totals?.bez_cijene ?? 0) > 0 ? 'warn' : 'plain'" sub="svaki iznos od njih je 0,00 KM" />
     </div>
 
     <UiCard title="Stanje šanka" :count="`${shown.length} od ${rows.length}`">
-      <RobaStanjeTable :rows="shown" :loading="loading" />
-
       <div class="a-chips">
         <button
           v-for="chip in CHIPS"
@@ -122,12 +125,14 @@ const totals = computed(() => report.value?.totals ?? null)
           @click="filter = 'sve'"
         >Prikaži sve</button>
       </div>
+
+      <RobaStanjeTable :rows="shown" :loading="loading" />
     </UiCard>
   </div>
 </template>
 
 <style scoped>
-.a-page { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.a-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
 .a-tiles {
   display: grid;
@@ -135,28 +140,41 @@ const totals = computed(() => report.value?.totals ?? null)
   gap: 12px;
 }
 
-.a-error { margin: 0; color: var(--danger); font-size: 14px; }
+.a-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
 
 .a-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 
+/* The same chip as `UiPeriod`'s: a filter is a filter everywhere in the app,
+   and the copper *fill* stays reserved for the one primary button on a page. */
 .a-chip {
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 14px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--radius-chip);
   border: 1px solid var(--line);
   background: var(--surface);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-label);
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
-  color: var(--ink);
+  color: var(--ink-2);
   cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard);
 }
 
-.a-chip.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.a-chip:hover { border-color: var(--muted); color: var(--ink); }
+
+.a-chip.on {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent-text);
+  font-weight: 600;
+}
 
 @media (max-width: 1023px) {
   /* Tiles two-up, and every chip a thumb's target. */
   .a-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .a-chip { height: 44px; padding: 0 14px; font-size: 15px; }
+  .a-chip { height: 44px; padding: 0 16px; font-size: var(--text-body); }
 }
 </style>

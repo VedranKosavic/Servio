@@ -147,18 +147,18 @@ function save() {
   border-radius: 8px;
   background: var(--danger-soft);
   color: var(--danger);
-  font-size: 13px;
+  font-size: var(--text-micro);
 }
 
 .p-seg-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
 .p-caption {
-  font-size: 12px;
+  font-size: var(--text-caption);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
   font-weight: 600;
 }
 
-.p-note { margin: 0; color: var(--muted); font-size: 13px; }
+.p-note { margin: 0; color: var(--muted); font-size: var(--text-micro); }
 </style>

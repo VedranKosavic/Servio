@@ -119,33 +119,47 @@ function onInput(event: Event) {
 }
 
 .a-field label {
-  font-size: 12px;
+  font-size: var(--text-caption);
+  line-height: 1.3;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.09em;
   color: var(--muted);
   font-weight: 600;
 }
 
 .a-input {
   height: 40px;
-  border-radius: 10px;
+  border-radius: var(--radius-field);
   border: 1px solid var(--line);
   background: var(--field-bg);
   padding: 0 12px;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--text-body);
   color: var(--ink);
   width: 100%;
+  transition: border-color var(--dur-fast) var(--ease-standard);
 }
 
-.a-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.a-input.num { font-variant-numeric: tabular-nums; }
-.a-textarea { height: auto; padding: 10px 12px; line-height: 1.4; }
+.a-input::placeholder { color: var(--muted); }
+.a-input:hover:not(:disabled) { border-color: var(--muted); }
 
-.a-field-error { margin: 0; font-size: 13px; color: var(--danger); }
-.a-field-hint { margin: 0; font-size: 13px; color: var(--muted); }
+/* The ring is the copper that works as ink on paper, not the fill copper —
+   `--accent` at 2 px around a white field is a highlighter pen. */
+.a-input:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: -1px;
+  border-color: var(--accent-line);
+}
+
+.a-input.num { font-variant-numeric: tabular-nums; }
+.a-input:disabled { background: var(--surface-2); color: var(--muted); }
+.a-textarea { height: auto; min-height: 84px; padding: 10px 12px; line-height: 1.45; }
+
+.a-field-error { margin: 0; font-size: var(--text-micro); color: var(--danger); font-weight: 500; }
+.a-field-hint { margin: 0; font-size: var(--text-micro); color: var(--muted); }
 
 @media (max-width: 1023px) {
-  .a-input { height: 44px; font-size: 16px; }
+  /* 16 px, because anything smaller makes iOS Safari zoom the page on focus. */
+  .a-input { height: 44px; font-size: var(--text-section); }
 }
 </style>

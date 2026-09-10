@@ -47,25 +47,28 @@ defineProps<{ rows: LineRow[] }>()
 
 .a-feed-row {
   display: flex;
-  gap: 10px;
-  padding: 6px 0;
-  font-size: 13px;
-  border-bottom: 1px solid var(--surface-2);
-  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  font-size: var(--text-label);
+  border-bottom: 1px solid var(--line-soft);
+  align-items: baseline;
 }
 
 .a-feed-row:last-child { border-bottom: 0; }
 
 .a-feed-time {
   color: var(--muted);
-  width: 44px;
+  width: 40px;
   flex-shrink: 0;
+  font-size: var(--text-micro);
   font-variant-numeric: tabular-nums;
 }
 
 .a-feed-who {
-  width: 52px;
+  width: 54px;
   flex-shrink: 0;
+  color: var(--ink-2);
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -74,6 +77,7 @@ defineProps<{ rows: LineRow[] }>()
 .a-feed-what {
   flex-grow: 1;
   min-width: 0;
+  color: var(--ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -81,7 +85,7 @@ defineProps<{ rows: LineRow[] }>()
 
 .a-feed-what em { font-style: normal; color: var(--muted); }
 
-.a-feed-amt { margin-left: auto; flex-shrink: 0; }
+.a-feed-amt { margin-left: auto; flex-shrink: 0; font-weight: 500; }
 
 /* Only the item and its amount take the colour; the time and the name stay
    readable. The status word beside the item is what actually says which it is. */
@@ -90,10 +94,18 @@ defineProps<{ rows: LineRow[] }>()
 
 .a-feed-what em.a-feed-note { color: var(--muted); }
 
-.a-feed-empty { margin: 0; color: var(--muted); font-size: 14px; }
+.a-feed-empty {
+  margin: 0;
+  padding: 20px 16px;
+  text-align: center;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-field);
+  color: var(--muted);
+  font-size: var(--text-label);
+}
 
 @media (max-width: 1023px) {
-  .a-feed-row { padding: 10px 0; font-size: 14px; }
-  .a-feed-who { width: 46px; }
+  .a-feed-row { padding: 11px 0; font-size: var(--text-body); }
+  .a-feed-who { width: 48px; }
 }
 </style>

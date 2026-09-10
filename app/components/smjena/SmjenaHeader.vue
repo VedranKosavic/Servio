@@ -98,15 +98,12 @@ const exportLink = computed(() => ({
 
 <template>
   <header class="s-head">
-    <div class="s-head-title">
-      <h1>Smjena</h1>
-      <p class="s-head-line">{{ line }}</p>
-    </div>
-
-    <div class="s-head-right">
-      <UiPill :tone="pill.tone">{{ statusLabel }}</UiPill>
-      <NuxtLink :to="exportLink" class="s-head-export">Izvoz</NuxtLink>
-    </div>
+    <UiPageHead eyebrow="Lokal" title="Smjena" :sub="line">
+      <template #actions>
+        <UiPill :tone="pill.tone">{{ statusLabel }}</UiPill>
+        <NuxtLink :to="exportLink" class="s-head-export">Izvoz</NuxtLink>
+      </template>
+    </UiPageHead>
 
     <div v-if="shift.status === 'closed'" class="s-review">
       <UiField
@@ -134,76 +131,51 @@ const exportLink = computed(() => ({
 </template>
 
 <style scoped>
-.s-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px 16px;
-  align-items: start;
-}
+.s-head { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
-.s-head-title { min-width: 0; }
-
-.s-head-title h1 {
-  font-family: var(--font-title);
-  font-weight: 700;
-  font-size: 28px;
-  letter-spacing: -0.015em;
-  margin: 0;
-  line-height: 1.1;
-}
-
-.s-head-line {
-  margin: 2px 0 0;
-  color: var(--muted);
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-}
-
-.s-head-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
+/* Shaped like `UiButton`'s ghost, because it is one — a link that has to look
+   like the control beside it. */
 .s-head-export {
-  height: 36px;
+  height: 38px;
   display: inline-flex;
   align-items: center;
-  padding: 0 14px;
-  border-radius: 10px;
+  padding: 0 16px;
+  border-radius: var(--radius-field);
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--ink);
   font-weight: 600;
-  font-size: 14px;
+  font-size: var(--text-label);
   text-decoration: none;
 }
 
-/* The review row spans both columns: the two fields and the button read as one
-   action rather than as inputs that happen to sit near a heading. */
+.s-head-export:hover { background: var(--surface-3); border-color: var(--muted); }
+
+/* The review row is one action, so it sits in a well of its own rather than as
+   three controls loose under a heading. */
 .s-review {
-  grid-column: 1 / -1;
   display: flex;
   gap: 12px;
   align-items: flex-end;
   flex-wrap: wrap;
+  padding: 14px 16px;
+  border-radius: var(--radius-card);
+  background: var(--surface-2);
 }
 
 .s-review :deep(.a-field) { width: 220px; max-width: 100%; }
 
 .s-note {
-  grid-column: 1 / -1;
   margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-field);
+  background: var(--surface-2);
   color: var(--ink-2);
-  font-size: 14px;
+  font-size: var(--text-label);
 }
 
 @media (max-width: 1023px) {
-  .s-head { grid-template-columns: minmax(0, 1fr); }
-  .s-head-right { justify-content: flex-start; }
-  .s-head-export { height: 44px; }
+  .s-head-export { height: 44px; flex: 1; justify-content: center; }
   .s-review :deep(.a-field) { width: 100%; }
   .s-review :deep(.a-btn) { width: 100%; }
 }

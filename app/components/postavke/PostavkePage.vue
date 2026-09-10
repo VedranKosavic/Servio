@@ -19,13 +19,9 @@ defineProps<{
 
 <template>
   <div class="p-page">
-    <header class="p-head">
-      <div class="p-head-text">
-        <h1>{{ title }}</h1>
-        <p v-if="sub" class="p-sub">{{ sub }}</p>
-      </div>
-      <div v-if="$slots.actions" class="p-head-actions"><slot name="actions" /></div>
-    </header>
+    <UiPageHead eyebrow="Meni i postavke" :title="title" :sub="sub">
+      <template v-if="$slots.actions" #actions><slot name="actions" /></template>
+    </UiPageHead>
 
     <PostavkeTabs />
 
@@ -36,7 +32,7 @@ defineProps<{
 </template>
 
 <style scoped>
-.p-page { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.p-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
 /**
  * A wide table must scroll inside its own box and never drag the page sideways.
@@ -53,33 +49,13 @@ defineProps<{
  */
 .p-page :deep(.a-table-wrap) { contain: paint; }
 
-.p-head { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
-.p-head-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-
-.p-head h1 {
-  font-family: var(--font-title);
-  font-weight: 700;
-  font-size: 28px;
-  letter-spacing: -0.015em;
-  margin: 0;
-  line-height: 1.1;
-}
-
-.p-sub { margin: 0; color: var(--muted); font-size: 14px; }
-.p-head-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
-
 .p-error {
   margin: 0;
-  padding: 10px 12px;
-  border-radius: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-field);
   background: var(--danger-soft);
   color: var(--danger);
-  font-size: 14px;
+  font-size: var(--text-label);
   font-weight: 500;
-}
-
-@media (max-width: 1023px) {
-  .p-head h1 { font-size: 24px; }
-  .p-head-actions { margin-left: 0; width: 100%; }
 }
 </style>

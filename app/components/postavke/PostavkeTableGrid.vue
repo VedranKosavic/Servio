@@ -135,13 +135,13 @@ const groupRows = computed(() =>
   gap: 1px;
   padding: 0 8px;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-micro);
   cursor: pointer;
   min-width: 0;
   overflow: hidden;
 }
 
-.p-cell b { font-size: 14px; font-weight: 600; }
+.p-cell b { font-size: var(--text-label); font-weight: 600; }
 .p-cell small { font-size: 11px; color: var(--muted); }
 
 .p-cell.busy { background: var(--warn-soft); border-color: var(--warn); }

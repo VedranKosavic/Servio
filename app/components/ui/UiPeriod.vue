@@ -59,19 +59,32 @@ function applyCustom() {
 }
 
 .a-chip {
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 14px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--radius-chip);
   border: 1px solid var(--line);
   background: var(--surface);
   font: inherit;
-  font-size: 13px;
-  color: var(--ink);
+  font-size: var(--text-label);
+  font-weight: 500;
+  color: var(--ink-2);
   cursor: pointer;
   white-space: nowrap;
+  transition:
+    background var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard);
 }
 
-.a-chip.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.a-chip:hover { border-color: var(--muted); color: var(--ink); }
+
+/* A period is a filter, not the thing the page is for, so the chosen chip is a
+   copper *tint* — the solid fill stays reserved for the one primary button. */
+.a-chip.on {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent-text);
+  font-weight: 600;
+}
 
 .a-period-dates {
   display: flex;
@@ -82,13 +95,13 @@ function applyCustom() {
 
 .a-period-label {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-micro);
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
 @media (max-width: 1023px) {
-  .a-chip { height: 44px; padding: 0 14px; font-size: 15px; border-radius: 22px; }
+  .a-chip { height: 44px; padding: 0 16px; font-size: var(--text-body); }
   .a-period-keys { gap: 8px; }
 }
 </style>

@@ -132,11 +132,11 @@ const subtitle = computed(() => {
 
 <template>
   <div class="a-page">
-    <header class="a-page-head">
-      <NuxtLink :to="`/admin/smjena/${shiftId}`" class="a-back">Nazad na smjenu</NuxtLink>
-      <h1>Stavke</h1>
-      <p class="a-page-sub">{{ subtitle }}</p>
-    </header>
+    <UiPageHead title="Stavke" :sub="subtitle">
+      <template #eyebrow>
+        <NuxtLink :to="`/admin/smjena/${shiftId}`" class="a-back">Nazad na smjenu</NuxtLink>
+      </template>
+    </UiPageHead>
 
     <UiCard title="Filter">
       <div class="a-filters">
@@ -159,11 +159,11 @@ const subtitle = computed(() => {
 </template>
 
 <style scoped>
-.a-page { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.a-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
 .a-back {
   color: var(--accent-ink);
-  font-size: 13px;
+  font-size: var(--text-micro);
   font-weight: 600;
   text-decoration: none;
   display: inline-flex;
@@ -173,16 +173,7 @@ const subtitle = computed(() => {
 
 .a-back:hover { text-decoration: underline; }
 
-.a-page-head h1 {
-  font-family: var(--font-title);
-  font-weight: 700;
-  font-size: 28px;
-  letter-spacing: -0.015em;
-  margin: 2px 0 0;
-  line-height: 1.1;
-}
 
-.a-page-sub { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
 .a-error { margin: 0; color: var(--danger); }
 
 .a-filters {

@@ -187,7 +187,7 @@ function to(userId: string, kat: string) {
 
 .s-name { font-weight: 600; }
 .s-quiet { color: var(--muted); }
-.s-note { color: var(--muted); font-size: 13px; margin: 0; }
+.s-note { color: var(--muted); font-size: var(--text-micro); margin: 0; }
 
 :deep(a) { color: inherit; text-decoration: none; }
 :deep(a:hover) { text-decoration: underline; }
@@ -202,7 +202,7 @@ function to(userId: string, kat: string) {
   border-radius: 14px;
   border: 1px solid var(--line);
   background: var(--surface);
-  font-size: 13px;
+  font-size: var(--text-micro);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -228,7 +228,7 @@ function to(userId: string, kat: string) {
     align-items: center;
     gap: 10px;
     font-weight: 600;
-    font-size: 16px;
+    font-size: var(--text-section);
   }
 
   .s-card header :deep(.a-pill) { margin-left: auto; }
@@ -243,7 +243,7 @@ function to(userId: string, kat: string) {
   .s-card dl div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 
   .s-card dt {
-    font-size: 12px;
+    font-size: var(--text-caption);
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--muted);
@@ -252,6 +252,6 @@ function to(userId: string, kat: string) {
 
   .s-card dd { margin: 0; font-variant-numeric: tabular-nums; }
 
-  .s-chip { height: 44px; border-radius: 22px; padding: 0 14px; font-size: 15px; }
+  .s-chip { height: 44px; border-radius: 22px; padding: 0 14px; font-size: var(--text-body); }
 }
 </style>

@@ -47,12 +47,13 @@ const settled = computed(() => props.who.filter(person => person.settled))
 
 .a-who-names {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--text-body);
   font-weight: 600;
   line-height: 1.3;
+  color: var(--ink);
 }
 
-.a-who-none { margin: 0; font-size: 15px; color: var(--muted); }
+.a-who-none { margin: 0; font-size: var(--text-body); color: var(--muted); }
 
 .a-who-pills {
   display: flex;

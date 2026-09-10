@@ -106,7 +106,7 @@ function save() {
   border-radius: 8px;
   background: var(--danger-soft);
   color: var(--danger);
-  font-size: 13px;
+  font-size: var(--text-micro);
 }
 
 .p-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

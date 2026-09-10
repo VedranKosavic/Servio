@@ -54,7 +54,7 @@ defineProps<{
   border-radius: 14px;
   border: 1px solid var(--line);
   background: var(--surface);
-  font-size: 13px;
+  font-size: var(--text-micro);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -69,5 +69,5 @@ defineProps<{
 
 .a-eq :deep(.op) { color: var(--muted); font-weight: 600; }
 
-.a-muted { margin: 0; color: var(--muted); font-size: 14px; }
+.a-muted { margin: 0; color: var(--muted); font-size: var(--text-label); }
 </style>

@@ -96,13 +96,13 @@ const columns = [
 <style scoped>
 .s-totals {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--text-label);
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
 }
 
 .s-quiet { color: var(--muted); margin: 0; }
-td small.s-quiet { display: block; font-size: 12px; }
+td small.s-quiet { display: block; font-size: var(--text-caption); }
 
 .s-more { display: flex; justify-content: center; }
 

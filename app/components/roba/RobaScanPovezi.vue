@@ -111,8 +111,8 @@ async function save() {
 </template>
 
 <style scoped>
-.a-muted { margin: 0; color: var(--muted); font-size: 13px; }
-.a-error { margin: 0; color: var(--danger); font-size: 14px; }
+.a-muted { margin: 0; color: var(--muted); font-size: var(--text-micro); }
+.a-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
 
 .a-hits {
   margin: 0;
@@ -142,5 +142,5 @@ async function save() {
 
 .a-hit.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .a-hit-name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
-.a-hit-meta { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.a-hit-meta { margin-left: auto; font-size: var(--text-caption); color: var(--muted); white-space: nowrap; }
 </style>

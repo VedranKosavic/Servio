@@ -171,13 +171,12 @@ onMounted(() => { void load() })
 
 <template>
   <div class="a-page">
-    <header class="a-page-head">
-      <h1>Puls</h1>
-      <p class="a-page-sub">{{ headerLine || 'Šta se upravo dešava u lokalu' }}</p>
-      <p v-if="loadError" class="a-page-stale">
-        Nije osvježeno — {{ loadError }}
-      </p>
-    </header>
+    <UiPageHead
+      eyebrow="Lokal"
+      title="Puls"
+      :sub="headerLine || 'Šta se upravo dešava u lokalu'"
+      :stale="loadError ? `Nije osvježeno — ${loadError}` : undefined"
+    />
 
     <template v-if="live">
       <PulsTiles :live="live" />
@@ -266,33 +265,20 @@ onMounted(() => { void load() })
 </template>
 
 <style scoped>
-.a-page { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.a-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
-.a-page-head { display: flex; flex-direction: column; gap: 2px; }
-
-.a-page-head h1 {
-  font-family: var(--font-title);
-  font-weight: 700;
-  font-size: 28px;
-  letter-spacing: -0.015em;
-  margin: 0;
-  line-height: 1.1;
-}
-
-.a-page-sub { margin: 0; color: var(--muted); font-size: 14px; }
-.a-page-stale { margin: 2px 0 0; color: var(--danger); font-size: 13px; }
-.a-muted { margin: 0; color: var(--ink-2); }
-.a-error { margin: 0; color: var(--danger); }
+.a-muted { margin: 0; color: var(--ink-2); font-size: var(--text-label); }
+.a-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
 
 /* The mockup's 7 / 5 split: the lists on the left, the floor plan on the right. */
 .a-cols {
   display: grid;
   grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-  gap: 18px;
+  gap: 16px;
   align-items: start;
 }
 
-.a-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.a-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
 /* -- the tab sheet ------------------------------------------------------- */
 
@@ -300,11 +286,17 @@ onMounted(() => { void load() })
   display: flex;
   align-items: baseline;
   gap: 8px;
-  padding-bottom: 8px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--line);
+  font-size: var(--text-label);
 }
 
-.a-tab-total { margin-left: auto; font-weight: 600; }
+.a-tab-total {
+  margin-left: auto;
+  font-family: var(--font-display);
+  font-size: var(--text-section);
+  font-weight: 700;
+}
 
 .a-tab-order { display: flex; flex-direction: column; gap: 4px; }
 
@@ -312,14 +304,16 @@ onMounted(() => { void load() })
   display: flex;
   gap: 8px;
   align-items: baseline;
-  font-size: 13px;
+  font-size: var(--text-micro);
 }
+
+.a-tab-order-head b { font-size: var(--text-label); }
 
 .a-tab-line {
   display: flex;
   gap: 10px;
   align-items: baseline;
-  font-size: 14px;
+  font-size: var(--text-label);
   font-variant-numeric: tabular-nums;
 }
 
@@ -328,7 +322,6 @@ onMounted(() => { void load() })
 .a-tab-mark { color: var(--danger); }
 
 @media (max-width: 1023px) {
-  .a-cols { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  .a-page-head h1 { font-size: 24px; }
+  .a-cols { grid-template-columns: minmax(0, 1fr); gap: 16px; }
 }
 </style>

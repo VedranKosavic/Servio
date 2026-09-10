@@ -50,18 +50,19 @@ watch(() => route.params.id, load, { immediate: true })
 
 <template>
   <div class="a-page">
-    <header class="a-page-head">
-      <NuxtLink to="/admin/dnevnik" class="a-back">
-        <UiIcon name="chevron-right" :size="18" class="a-back-icon" />
-        Dnevnik
-      </NuxtLink>
-      <h1>{{ head }}</h1>
-      <p v-if="entry" class="a-page-sub">
+    <UiPageHead :title="head">
+      <template #eyebrow>
+        <NuxtLink to="/admin/dnevnik" class="a-back">
+          <UiIcon name="chevron-right" :size="16" class="a-back-icon" />
+          Dnevnik
+        </NuxtLink>
+      </template>
+      <template v-if="entry" #sub>
         {{ dateBs(entry.business_date) }} · {{ timeBs(entry.at) }}
         <template v-if="entry.actor_name"> · {{ entry.actor_name }}</template>
         <template v-if="entry.device_label"> · {{ entry.device_label }}</template>
-      </p>
-    </header>
+      </template>
+    </UiPageHead>
 
     <UiCard v-if="error">
       <p class="a-error">{{ error }}</p>
@@ -121,27 +122,17 @@ watch(() => route.params.id, load, { immediate: true })
 </template>
 
 <style scoped>
-.a-page { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.a-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
-.a-page-head { display: flex; flex-direction: column; gap: 2px; }
 
-.a-page-head h1 {
-  font-family: var(--font-title);
-  font-weight: 700;
-  font-size: 28px;
-  letter-spacing: -0.015em;
-  margin: 0;
-  line-height: 1.1;
-}
 
-.a-page-sub { margin: 0; color: var(--muted); font-size: 14px; }
 
 .a-back {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--text-micro);
   font-weight: 600;
   text-decoration: none;
   min-height: 24px;

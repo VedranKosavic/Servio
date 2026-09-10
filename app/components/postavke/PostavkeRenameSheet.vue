@@ -50,6 +50,6 @@ watch(() => [props.open, props.device?.id], () => {
   border-radius: 8px;
   background: var(--danger-soft);
   color: var(--danger);
-  font-size: 13px;
+  font-size: var(--text-micro);
 }
 </style>

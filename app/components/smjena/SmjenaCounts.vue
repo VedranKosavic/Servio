@@ -74,20 +74,20 @@ const emit = defineEmits<{ confirm: [countId: string] }>()
 .s-count:last-child { border-bottom: 0; }
 
 .s-count-text { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.s-count-text small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.s-count-text small { color: var(--muted); font-size: var(--text-caption); font-variant-numeric: tabular-nums; }
 
-.s-count-var { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+.s-count-var { display: flex; align-items: center; gap: 6px; font-size: var(--text-label); }
 
 .s-count-link {
   color: var(--accent-ink);
-  font-size: 13px;
+  font-size: var(--text-micro);
   font-weight: 600;
   text-decoration: none;
 }
 
 .s-count-link:hover { text-decoration: underline; }
 
-.s-quiet { color: var(--muted); font-size: 14px; margin: 0; }
+.s-quiet { color: var(--muted); font-size: var(--text-label); margin: 0; }
 
 @media (max-width: 1023px) {
   .s-count-text { flex-basis: 100%; }

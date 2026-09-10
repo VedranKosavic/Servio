@@ -102,7 +102,7 @@ const COLUMNS: UiColumn[] = [
 .a-mov { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .a-mov-when { white-space: nowrap; color: var(--ink-2); }
 .a-mov-ref { min-width: 160px; }
-.a-mov-ref small { display: block; font-size: 12px; color: var(--muted); }
+.a-mov-ref small { display: block; font-size: var(--text-caption); color: var(--muted); }
 .a-mov-more { display: flex; justify-content: center; }
-.a-mov-empty { margin: 0; color: var(--muted); font-size: 14px; }
+.a-mov-empty { margin: 0; color: var(--muted); font-size: var(--text-label); }
 </style>

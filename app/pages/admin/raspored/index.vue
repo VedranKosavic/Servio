@@ -46,10 +46,7 @@ const today = computed(() => businessDate(
 
 <template>
   <div class="a-page">
-    <header class="a-page-head">
-      <h1>Raspored</h1>
-      <p class="a-page-sub">Sedmica, zamjene i sati</p>
-    </header>
+    <UiPageHead eyebrow="Ljudi" title="Raspored" sub="Sedmica, zamjene i sati" />
 
     <UiSeg v-model="tab" :options="TABS" label="Dio rasporeda" />
 
@@ -64,23 +61,13 @@ const today = computed(() => businessDate(
 </template>
 
 <style scoped>
-.a-page { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.a-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
-.a-page-head h1 {
-  font-family: var(--font-title);
-  font-weight: 700;
-  font-size: 28px;
-  letter-spacing: -0.015em;
-  margin: 0;
-  line-height: 1.1;
-}
 
-.a-page-sub { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
 
 /* A wide table scrolls inside its own box; the page body never does. */
 .a-page :deep(.a-table-wrap) { contain: paint; }
 
 @media (max-width: 1023px) {
-  .a-page-head h1 { font-size: 24px; }
 }
 </style>

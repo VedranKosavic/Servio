@@ -196,10 +196,10 @@ const COLUMNS: UiColumn[] = [
 
 <style scoped>
 .a-page { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-.a-error { margin: 0; color: var(--danger); font-size: 14px; }
-.a-muted { margin: 0; color: var(--muted); font-size: 13px; }
+.a-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
+.a-muted { margin: 0; color: var(--muted); font-size: var(--text-micro); }
 .a-nowrap { white-space: nowrap; }
-.a-est { display: block; font-size: 12px; color: var(--muted); }
+.a-est { display: block; font-size: var(--text-caption); color: var(--muted); }
 
 .a-fields { display: grid; grid-template-columns: 2fr 1fr 1fr 2fr; gap: 12px; }
 .a-foot { display: flex; justify-content: flex-end; }

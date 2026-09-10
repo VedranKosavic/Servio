@@ -27,6 +27,19 @@ const adjustmentsSub = computed(() =>
   `${formatAmount(props.live.storna.fen)} / ${formatKm(props.live.gratis.fen)}`)
 
 /**
+ * The unit used to be the whole second line ("86,00" with "KM" under it), which
+ * read as two facts where there is one. The unit now sits beside the number and
+ * the line under it says something the number does not.
+ */
+const prometSub = computed(() => props.live.shift
+  ? 'naplaćeno u ovoj smjeni'
+  : 'smjena još nije otvorena')
+
+const cashSub = computed(() => props.live.expected_cash_fen < 0
+  ? 'iz kase je izašlo više nego što je ušlo'
+  : 'koliko bi trebalo biti u kasi')
+
+/**
  * A drawer that owes money is red and says so.
  *
  * `expected_cash_fen` goes negative when more has been paid out of the till
@@ -50,19 +63,25 @@ const unsentTone = computed<'plain' | 'warn'>(() =>
     <!-- `signedAmount` and not `formatAmount`: the real minus sign (U+2212) is
          as wide as a digit, so a column of tabular figures keeps its alignment
          where an ASCII hyphen would break it. -->
-    <UiTile label="Promet danas" :value="signedAmount(live.promet_danas_fen)" sub="KM" />
+    <UiTile
+      label="Promet danas"
+      :value="signedAmount(live.promet_danas_fen)"
+      unit="KM"
+      :sub="prometSub"
+    />
 
     <UiTile label="Otvoreno" :value="live.open.tables" :sub="openSub" />
 
     <UiTile
       label="Gotovina očekivano"
       :value="signedAmount(live.expected_cash_fen)"
-      sub="KM"
+      unit="KM"
+      :sub="cashSub"
       :tone="cashTone"
     />
 
     <UiTile
-      label="Storna / gratis"
+      label="Storna i gratis"
       :value="`${live.storna.count} / ${live.gratis.count}`"
       :sub="adjustmentsSub"
     />
@@ -87,8 +106,8 @@ const unsentTone = computed<'plain' | 'warn'>(() =>
   display: grid;
   gap: 12px;
   grid-template-columns:
-    minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1.25fr)
-    minmax(0, 1fr) minmax(0, 2.2fr) minmax(0, 1fr);
+    minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.2fr)
+    minmax(0, 1fr) minmax(0, 2.1fr) minmax(0, 1.05fr);
 }
 
 @media (max-width: 1023px) {

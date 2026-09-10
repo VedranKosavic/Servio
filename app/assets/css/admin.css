@@ -71,6 +71,89 @@
   --field-bg: #ffffff;
   --offline-ink: #e3a29f;
 
+  /**
+   * Elevation on paper.
+   *
+   * `main.css` sizes `--shadow-pop` and `--shadow-sheet` for a dark room, where
+   * a shadow has to be nearly black to register at all. Dropped straight onto
+   * paper the same values read as soot, so the light theme restates them — the
+   * ink colour at a low alpha, which is what a shadow on a warm-white page
+   * actually is.
+   *
+   * `--shadow-card` is the new one and it is deliberately almost invisible: one
+   * hairline of contact shadow under a card, so the card sits *on* the page
+   * instead of being a rectangle drawn on it. A rule alone is what makes a light
+   * dashboard look like a spreadsheet; a heavy shadow is what makes it look like
+   * 2014. This is the amount between the two.
+   */
+  --shadow-card: 0 1px 2px rgb(26 35 39 / 0.05), 0 1px 1px rgb(26 35 39 / 0.03);
+  --shadow-raise: 0 4px 14px -6px rgb(26 35 39 / 0.16), 0 1px 2px rgb(26 35 39 / 0.05);
+  --shadow-pop: 0 18px 44px -20px rgb(26 35 39 / 0.30), 0 2px 6px rgb(26 35 39 / 0.06);
+  --shadow-sheet: 0 -18px 48px -24px rgb(26 35 39 / 0.28);
+
+  /**
+   * The dark rail's own small ladder, extended.
+   *
+   * `--nav-on` is the ground under the current page's row. The rail used to fill
+   * that row solid copper, which put the loudest colour in the theme on screen
+   * at all times and left nothing louder for the primary action; now the row is
+   * a raised well with a copper spine and copper ink, and the fill is kept for
+   * the one button a screen is about.
+   */
+  --nav-line: #313b3e;
+  --nav-on: #32393b;
+  --nav-on-ink: #f0b58e;
+
+  /**
+   * DENSITY — the one thing about the light theme that is not a colour.
+   *
+   * `docs/DESIGN.md` §1: the dark screens are read at arm's length in a dark
+   * room and set 17 px; the dashboard is read at a desk, in daylight, in
+   * quantity, and sets 15 px. Density is a *value*, so it swaps here with
+   * everything else rather than being written out by hand in thirty
+   * components — which is exactly how fifteen files ended up each declaring
+   * their own `font-size: 28px` page title.
+   *
+   * Seven steps, 12 → 28, because a dense table needs more rungs at the bottom
+   * of the ladder than the phone does. Line height and tracking travel with the
+   * step, as they do in `main.css`.
+   *
+   *   caption 12  a table header, an eyebrow, a timestamp
+   *   micro   13  a second line under a row, an inline meta
+   *   label   14  a table cell, a field label, a small button
+   *   body    15  a row, a sentence, a button, an input
+   *   section 16  a card heading
+   *   title   24  the page title
+   *   metric  28  the number a tile is about
+   */
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.3;
+  --text-caption--letter-spacing: 0.08em;
+
+  --text-micro: 0.8125rem;
+  --text-micro--line-height: 1.35;
+  --text-micro--letter-spacing: 0em;
+
+  --text-label: 0.875rem;
+  --text-label--line-height: 1.4;
+  --text-label--letter-spacing: 0em;
+
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.45;
+  --text-body--letter-spacing: 0em;
+
+  --text-section: 1rem;
+  --text-section--line-height: 1.35;
+  --text-section--letter-spacing: -0.005em;
+
+  --text-title: 1.5rem;
+  --text-title--line-height: 1.14;
+  --text-title--letter-spacing: -0.022em;
+
+  --text-metric: 1.75rem;
+  --text-metric--line-height: 1.05;
+  --text-metric--letter-spacing: -0.02em;
+
   /* Bricolage Grotesque is the wordmark and the page titles, and nothing else.
      It is loaded app-wide in `nuxt.config.ts`; `--font-display` in `main.css`
      is the same stack under the name the rest of the app uses. */

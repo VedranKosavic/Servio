@@ -121,6 +121,6 @@ async function save() {
 </template>
 
 <style scoped>
-.a-muted { margin: 0; color: var(--muted); font-size: 13px; }
-.a-error { margin: 0; color: var(--danger); font-size: 14px; }
+.a-muted { margin: 0; color: var(--muted); font-size: var(--text-micro); }
+.a-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
 </style>

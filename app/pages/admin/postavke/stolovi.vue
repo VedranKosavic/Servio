@@ -225,6 +225,6 @@ async function create(body: CreateTableBody) {
 
 .off td { opacity: 0.6; }
 .on td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
-.p-grp { display: block; font-size: 12px; color: var(--muted); }
-.p-legend { margin: 0; font-size: 13px; color: var(--muted); }
+.p-grp { display: block; font-size: var(--text-caption); color: var(--muted); }
+.p-legend { margin: 0; font-size: var(--text-micro); color: var(--muted); }
 </style>

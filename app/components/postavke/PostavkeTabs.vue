@@ -40,37 +40,52 @@ const isOn = (to: string) => route.path === to
 </template>
 
 <style scoped>
+/**
+ * The tab strip, shared shape.
+ *
+ * *Roba* used to draw its six tabs as a segmented well and *Meni i postavke* drew
+ * its eight as copper pills — two different ideas of "the same page, a different
+ * part" in one product, which is exactly what makes an app feel assembled rather
+ * than designed. Both are now an underlined bar: the row reads as one strip, the
+ * copper rule under the current tab is the only colour on it, and the strip
+ * scrolls sideways on a phone while the page body never does.
+ */
 .p-tabs {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   overflow-x: auto;
   min-width: 0;
-  padding-bottom: 2px;
+  border-bottom: 1px solid var(--line);
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
 
+.p-tabs::-webkit-scrollbar { display: none; }
+
 .p-tab {
-  height: 32px;
+  height: 40px;
   padding: 0 12px;
-  border-radius: 16px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink-2);
-  font-size: 13px;
-  font-weight: 600;
+  color: var(--muted);
+  font-size: var(--text-label);
+  font-weight: 500;
   display: inline-flex;
   align-items: center;
   white-space: nowrap;
   text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color var(--dur-fast) var(--ease-standard);
 }
 
+.p-tab:hover { color: var(--ink); }
+
 .p-tab.on {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--on-accent);
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
 }
 
 @media (max-width: 1023px) {
-  .p-tab { height: 44px; padding: 0 16px; font-size: 15px; }
+  .p-tab { height: 46px; padding: 0 14px; font-size: var(--text-body); }
 }
 </style>

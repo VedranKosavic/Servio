@@ -43,7 +43,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
   background: var(--field-bg);
   padding: 0 8px;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--text-label);
   color: var(--ink);
   max-width: 100%;
 }
@@ -52,6 +52,6 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 .p-select:disabled { opacity: 0.5; }
 
 @media (max-width: 1023px) {
-  .p-select { height: 44px; font-size: 16px; }
+  .p-select { height: 44px; font-size: var(--text-section); }
 }
 </style>

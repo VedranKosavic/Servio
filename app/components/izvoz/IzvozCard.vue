@@ -42,7 +42,7 @@ defineProps<{
 
 <style scoped>
 .i-sub { margin: 0; color: var(--ink-2); }
-.i-hint { margin: 0; color: var(--muted); font-size: 13px; }
+.i-hint { margin: 0; color: var(--muted); font-size: var(--text-micro); }
 .i-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
 
 .i-foot {
@@ -55,7 +55,7 @@ defineProps<{
 
 .i-file {
   font-family: ui-monospace, "SFMono-Regular", "Menlo", monospace;
-  font-size: 13px;
+  font-size: var(--text-micro);
   color: var(--muted);
   flex-grow: 1;
   min-width: 0;
@@ -70,7 +70,7 @@ defineProps<{
   justify-content: center;
   padding: 0 14px;
   font-weight: 600;
-  font-size: 14px;
+  font-size: var(--text-label);
   background: var(--accent);
   color: var(--on-accent);
   text-decoration: none;
@@ -80,6 +80,6 @@ defineProps<{
 .i-dl.off { background: var(--surface-2); color: var(--muted); cursor: default; }
 
 @media (max-width: 1023px) {
-  .i-dl { height: 44px; font-size: 15px; padding: 0 18px; }
+  .i-dl { height: 44px; font-size: var(--text-body); padding: 0 18px; }
 }
 </style>

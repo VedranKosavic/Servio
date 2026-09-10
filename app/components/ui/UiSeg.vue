@@ -38,26 +38,35 @@ function pick(value: string) {
   display: inline-flex;
   gap: 2px;
   background: var(--surface-2);
-  border-radius: 10px;
+  border-radius: var(--radius-field);
   padding: 3px;
 }
 
 .a-seg-item {
-  height: 30px;
-  padding: 0 12px;
-  border-radius: 8px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 7px;
   border: 0;
   background: transparent;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-label);
   font-weight: 600;
   color: var(--ink-2);
   cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-standard);
 }
 
-.a-seg-item.on { background: var(--surface); color: var(--ink); }
+.a-seg-item:hover { color: var(--ink); }
+
+/* The chosen one is lifted out of the well onto the card's own material, which
+   is the same "a step up the ladder" depth every other state change uses. */
+.a-seg-item.on {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-card);
+}
 
 @media (max-width: 1023px) {
-  .a-seg-item { height: 38px; font-size: 15px; padding: 0 16px; }
+  .a-seg-item { height: 40px; font-size: var(--text-body); padding: 0 16px; }
 }
 </style>

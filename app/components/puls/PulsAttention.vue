@@ -41,8 +41,13 @@ function pendingFor(item: AttentionItem, busy?: string | null): AttentionAction 
 </script>
 
 <template>
-  <UiCard title="Zahtijeva pažnju" :count="items.length">
-    <p v-if="error" class="a-att-error">{{ error }}</p>
+  <UiCard title="Zahtijeva pažnju">
+    <template #title>
+      Zahtijeva pažnju
+      <span v-if="items.length" class="a-att-n">{{ items.length }}</span>
+    </template>
+
+    <p v-if="error" class="a-att-error" role="alert">{{ error }}</p>
 
     <div v-if="items.length" class="a-att-list">
       <UiAttentionRow
@@ -55,7 +60,12 @@ function pendingFor(item: AttentionItem, busy?: string | null): AttentionAction 
       />
     </div>
 
-    <p v-else class="a-att-empty">Ništa ne čeka odluku.</p>
+    <!-- An empty to-do list is good news and should look like it, not like a
+         card that failed to load. -->
+    <div v-else class="a-att-done">
+      <span class="a-att-done-mark" aria-hidden="true"><UiIcon name="check" :size="18" /></span>
+      <span>Ništa ne čeka odluku</span>
+    </div>
 
     <PulsFlags :flags="flags" />
   </UiCard>
@@ -64,11 +74,52 @@ function pendingFor(item: AttentionItem, busy?: string | null): AttentionAction 
 <style scoped>
 .a-att-list { display: flex; flex-direction: column; }
 
-.a-att-empty { margin: 0; color: var(--muted); font-size: 14px; }
+/* The count is the size of the queue, so it is a copper marker rather than the
+   grey number every other card head carries — it is the reason to look here. */
+.a-att-n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: var(--radius-chip);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: var(--text-caption);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  align-self: center;
+}
+
+.a-att-done {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0 10px;
+  color: var(--ink-2);
+  font-size: var(--text-body);
+}
+
+.a-att-done-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-chip);
+  background: var(--good-soft);
+  color: var(--good);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
 
 .a-att-error {
   margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-field);
+  background: var(--danger-soft);
   color: var(--danger);
-  font-size: 14px;
+  font-size: var(--text-label);
+  font-weight: 500;
 }
 </style>

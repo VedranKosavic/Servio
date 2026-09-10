@@ -175,7 +175,7 @@ function save() {
 </template>
 
 <style scoped>
-.p-note { margin: 0; color: var(--muted); font-size: 13px; }
+.p-note { margin: 0; color: var(--muted); font-size: var(--text-micro); }
 
 .p-error {
   margin: 0;
@@ -183,7 +183,7 @@ function save() {
   border-radius: 8px;
   background: var(--danger-soft);
   color: var(--danger);
-  font-size: 13px;
+  font-size: var(--text-micro);
 }
 
 .p-lines { display: flex; flex-direction: column; gap: 8px; }
@@ -197,14 +197,14 @@ function save() {
 }
 
 .p-lines-head span {
-  font-size: 12px;
+  font-size: var(--text-caption);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
   font-weight: 600;
 }
 
-.p-empty { margin: 0; color: var(--muted); font-size: 14px; }
+.p-empty { margin: 0; color: var(--muted); font-size: var(--text-label); }
 
 /* Visible to a screen reader, invisible on screen — the icon buttons' names. */
 .p-sr {

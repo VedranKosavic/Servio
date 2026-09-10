@@ -109,7 +109,7 @@ const chips = computed(() => {
   width: 52px;
   flex-shrink: 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--text-micro);
   /* Tabular figures: 18:03 and 22:41 have to line up down the column. */
   font-variant-numeric: tabular-nums;
   padding-top: 6px;
@@ -148,7 +148,7 @@ const chips = computed(() => {
 .d-linked {
   margin: 0;
   color: var(--ink-2);
-  font-size: 13px;
+  font-size: var(--text-micro);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -162,7 +162,7 @@ const chips = computed(() => {
   border-radius: 14px;
   border: 1px solid var(--line);
   background: var(--surface);
-  font-size: 13px;
+  font-size: var(--text-micro);
   color: var(--ink);
   display: inline-flex;
   align-items: center;
@@ -175,6 +175,6 @@ const chips = computed(() => {
 @media (max-width: 1023px) {
   .d-entry { gap: 10px; padding: 14px 0; }
   .d-tm { width: 44px; }
-  .d-chip { height: 44px; padding: 0 14px; font-size: 14px; }
+  .d-chip { height: 44px; padding: 0 14px; font-size: var(--text-label); }
 }
 </style>

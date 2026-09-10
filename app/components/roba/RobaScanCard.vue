@@ -123,9 +123,9 @@ async function onDiscard(reason: string) {
 </template>
 
 <style scoped>
-.a-muted { margin: 0; color: var(--muted); font-size: 13px; }
-.a-error { margin: 0; color: var(--danger); font-size: 14px; }
-.a-ok { margin: 0; color: var(--good); font-size: 14px; }
+.a-muted { margin: 0; color: var(--muted); font-size: var(--text-micro); }
+.a-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
+.a-ok { margin: 0; color: var(--good); font-size: var(--text-label); }
 
 .a-off {
   margin: 0;
@@ -133,7 +133,7 @@ async function onDiscard(reason: string) {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--bg);
-  font-size: 15px;
+  font-size: var(--text-body);
   font-weight: 600;
 }
 
@@ -145,7 +145,7 @@ async function onDiscard(reason: string) {
 .a-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
 .a-wait { display: flex; flex-direction: column; gap: 10px; max-width: 420px; }
-.a-wait-text { margin: 0; font-size: 16px; font-weight: 600; }
+.a-wait-text { margin: 0; font-size: var(--text-section); font-weight: 600; }
 
 @media (max-width: 1023px) {
   .a-acts > .a-btn { flex-grow: 1; }
