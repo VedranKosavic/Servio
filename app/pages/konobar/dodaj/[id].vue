@@ -461,7 +461,7 @@ async function confirm() {
           Ništa ne odgovara traženom.
         </p>
 
-        <p class="text-center text-label text-muted">
+        <p class="text-center text-caption tracking-normal text-muted">
           Dodir = +1 · dugi dodir = napomena
         </p>
       </div>

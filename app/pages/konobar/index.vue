@@ -610,7 +610,7 @@ function openLoose() {
 
         <!-- A sentence, not two arrows. This is the only place in the app that
              used "→" as vocabulary, and the app speaks Bosnian everywhere else. -->
-        <p class="text-center text-label text-muted">
+        <p class="text-center text-caption tracking-normal text-muted">
           Dodirni sto za narudžbu, zadrži za žar.
         </p>
       </div>
