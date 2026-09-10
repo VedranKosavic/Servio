@@ -21,15 +21,11 @@ const me = useMe()
 const route = useRoute()
 const changes = useAdminChanges()
 
+// Both faces are loaded app-wide in `nuxt.config.ts` now (docs/DESIGN.md §1),
+// so this only flips the theme and the browser chrome.
 useHead({
   htmlAttrs: { 'data-theme': 'light' },
-  link: [{
-    // Bricolage Grotesque, for the wordmark and page titles only. IBM Plex Sans
-    // is already loaded app-wide in `nuxt.config.ts`.
-    rel: 'stylesheet',
-    href: 'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&display=swap',
-  }],
-  meta: [{ name: 'theme-color', content: '#1f2a2e' }],
+  meta: [{ name: 'theme-color', content: '#1b2427' }],
 })
 
 /**

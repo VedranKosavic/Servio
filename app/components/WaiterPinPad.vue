@@ -11,19 +11,32 @@
  * times and is in. A confirm button would be a fifth tap that says nothing the
  * fourth one did not already say.
  *
- * The keys are 64 px and laid out like a phone dialler, because that is the
- * arrangement every thumb in the café already knows.
+ * **The layout is a thumb's layout** (docs/DESIGN.md §3). The keys are 64 px
+ * tall in a 300 px block, so the whole pad sits inside the arc a thumb sweeps
+ * when the phone is held in one hand — which is also why the pad is pinned to
+ * the bottom of the composition rather than centred in it, and why *Nazad* is
+ * in the far corner where a mis-tap costs the least.
+ *
+ * The lockout is its own element, not an error message: a locked pad with no
+ * clock on it is indistinguishable from a broken one, so the seconds tick down
+ * in tabular figures inside a warn-toned strip while the keys go quiet.
  */
 const props = withDefaults(defineProps<{
   name: string
   initials: string
+  /** Rendered quietly under the name: *konobar*, *šanker*, *vlasnik*. */
+  role?: string | null
   /** 4 for staff, 6 for an admin. */
   pinLen: 4 | 6
   busy?: boolean
-  /** The sentence from the server: wrong PIN, locked, not your phone. */
+  /** The sentence from the server: wrong PIN, not your phone, no network. */
   error?: string | null
-  /** While the lockout is counting down, the pad refuses taps. */
-  locked?: boolean
+  /**
+   * Seconds left on the server's lockout. Above zero the pad refuses taps and
+   * shows the countdown; the parent owns the timer because the lockout is
+   * counted against `(device, user)` and has to survive this component.
+   */
+  lockedFor?: number
   /**
    * A quiet line under the name, for something the pad must say before the
    * digits are typed rather than after — *"Posuđuješ tuđi telefon"* is the one
@@ -31,7 +44,7 @@ const props = withDefaults(defineProps<{
    * from signing in, and finding that out afterwards is finding it out too late.
    */
   note?: string | null
-}>(), { busy: false, error: null, locked: false, note: null })
+}>(), { role: null, busy: false, error: null, lockedFor: 0, note: null })
 
 const emit = defineEmits<{
   submit: [pin: string]
@@ -40,12 +53,13 @@ const emit = defineEmits<{
 
 const digits = ref('')
 const dots = computed(() => Array.from({ length: props.pinLen }, (_, i) => i < digits.value.length))
-const disabled = computed(() => props.busy || props.locked)
+const locked = computed(() => props.lockedFor > 0)
+const disabled = computed(() => props.busy || locked.value)
 
 // A rejected PIN clears the pad. Leaving four filled dots behind would make the
 // next tap look like a fifth digit rather than a fresh start.
-watch(() => props.error, (message) => {
-  if (message) digits.value = ''
+watch(() => [props.error, props.lockedFor] as const, ([message, seconds]) => {
+  if (message || (seconds ?? 0) > 0) digits.value = ''
 })
 
 function tap(digit: string) {
@@ -65,81 +79,171 @@ const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
 </script>
 
 <template>
-  <div class="flex flex-col items-center gap-5">
-    <div class="flex flex-col items-center gap-2">
-      <span class="flex size-14 items-center justify-center rounded-full bg-accent text-lg font-bold text-accent-ink">
-        {{ initials }}
-      </span>
-      <h2 class="text-2xl font-semibold">
-        {{ name }}
-      </h2>
-      <p class="text-[15px] text-text-2">
-        Unesi PIN
-      </p>
-      <p v-if="note" class="max-w-[280px] text-center text-[15px] text-warn">
-        {{ note }}
-      </p>
+  <div class="pad">
+    <div class="pad-who">
+      <span class="avatar avatar-lg avatar-accent">{{ initials }}</span>
+      <h2 class="page-title pad-name">{{ name }}</h2>
+      <p v-if="role" class="eyebrow">{{ role }}</p>
     </div>
 
     <!-- The dots: how many digits are in, never which ones. -->
-    <div class="flex items-center gap-3.5" aria-label="Uneseni PIN">
+    <div class="pad-dots" aria-label="Uneseni PIN">
       <span
         v-for="(filled, index) in dots"
         :key="index"
-        class="size-3.5 rounded-full border-2"
-        :class="filled ? 'border-accent bg-accent' : 'border-line bg-transparent'"
+        class="pad-dot"
+        :class="{ on: filled }"
       />
     </div>
 
-    <p
-      v-if="error"
-      class="min-h-6 w-full rounded-xl bg-danger-soft px-3 py-2 text-center text-[15px] text-danger"
-      role="alert"
-    >
+    <p v-if="note" class="note note-warn pad-msg">
+      {{ note }}
+    </p>
+
+    <p v-if="locked" class="note note-warn pad-msg" role="alert">
+      PIN je zaključan. Pokušaj ponovo za <span class="num pad-count">{{ lockedFor }}</span> s.
+    </p>
+    <p v-else-if="error" class="note note-danger pad-msg" role="alert">
       {{ error }}
     </p>
 
-    <div class="grid w-full max-w-[300px] grid-cols-3 gap-3">
+    <div class="pad-keys">
       <button
         v-for="key in KEYS"
         :key="key"
         type="button"
-        class="num h-16 rounded-2xl bg-surface-2 text-2xl font-semibold text-text disabled:opacity-40"
+        class="pad-key num"
         :disabled="disabled"
         @click="tap(key)"
-      >
-        {{ key }}
-      </button>
+      >{{ key }}</button>
 
       <button
         type="button"
-        class="h-16 rounded-2xl text-[15px] font-semibold text-text-2 disabled:opacity-40"
+        class="pad-key pad-key-quiet"
         :disabled="busy"
         @click="emit('cancel')"
-      >
-        Nazad
-      </button>
+      >Nazad</button>
 
       <button
         type="button"
-        class="num h-16 rounded-2xl bg-surface-2 text-2xl font-semibold text-text disabled:opacity-40"
+        class="pad-key num"
         :disabled="disabled"
         @click="tap('0')"
-      >
-        0
-      </button>
+      >0</button>
 
       <button
         type="button"
-        class="flex h-16 items-center justify-center rounded-2xl text-text-2 disabled:opacity-40"
+        class="pad-key pad-key-quiet"
         :disabled="disabled"
         aria-label="Obriši"
         @click="back"
       >
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M20 6H9l-5 6 5 6h11a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1zM16 10l-4 4M12 10l4 4" />
-        </svg>
+        <svg
+          width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
+        ><path d="M20 6H9l-5 6 5 6h11a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1zM16 10l-4 4M12 10l4 4" /></svg>
       </button>
     </div>
   </div>
 </template>
+
+<style scoped>
+.pad {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.pad-who {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.pad-name { margin: 0; }
+
+/* ---- the dots ---------------------------------------------------------- */
+
+.pad-dots {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 14px;
+}
+
+.pad-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: var(--surface-2);
+  transition:
+    background var(--dur-tap) var(--ease-out-soft),
+    border-color var(--dur-tap) var(--ease-out-soft),
+    transform var(--dur-tap) var(--ease-out-soft);
+}
+
+.pad-dot.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  transform: scale(1.15);
+}
+
+.pad-msg {
+  width: 100%;
+  max-width: 320px;
+  margin: 0;
+  text-align: center;
+}
+
+.pad-count { font-weight: 700; }
+
+/* ---- the keys ---------------------------------------------------------- */
+
+.pad-keys {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  width: 100%;
+  max-width: 300px;
+}
+
+.pad-key {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 64px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--line-soft);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 26px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--dur-tap) var(--ease-standard),
+    transform var(--dur-tap) var(--ease-standard);
+}
+
+.pad-key:active:not(:disabled) {
+  background: var(--surface-3);
+  transform: scale(0.95);
+}
+
+/* *Nazad* and *Obriši* are not digits and must not look like digits: no
+   material behind them, so the nine keys read as one block. */
+.pad-key-quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ink-2);
+  font-size: var(--text-label);
+  font-weight: 600;
+}
+
+.pad-key-quiet:active:not(:disabled) { background: var(--surface-2); }
+
+.pad-key:disabled { opacity: 0.4; cursor: default; }
+</style>

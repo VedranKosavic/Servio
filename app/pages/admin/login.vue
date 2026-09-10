@@ -23,11 +23,8 @@ const me = useMe()
 useHead({
   title: 'Prijava',
   htmlAttrs: { 'data-theme': 'light' },
-  meta: [{ name: 'theme-color', content: '#1f2a2e' }],
-  link: [{
-    rel: 'stylesheet',
-    href: 'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&display=swap',
-  }],
+  // Both faces are loaded app-wide in `nuxt.config.ts` (docs/DESIGN.md §1).
+  meta: [{ name: 'theme-color', content: '#1b2427' }],
 })
 
 const email = ref('')

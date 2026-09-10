@@ -190,12 +190,26 @@ export default defineNuxtConfig({
       link: [
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
         { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
-        // IBM Plex Sans for everything. `main.css` names real system fallbacks,
-        // so a phone that cannot reach Google Fonts renders the same layout in
-        // the same sizes rather than a broken one.
+        /**
+         * The pairing (docs/DESIGN.md §1), loaded once for the whole app.
+         *
+         * **Bricolage Grotesque** — the wordmark, page titles and big numbers.
+         * `opsz` is an optical-size axis: the face tightens its spacing and
+         * thins its joins as it grows, so a 40 px wordmark is drawn for 40 px
+         * rather than being a blown-up UI font.
+         *
+         * **IBM Plex Sans** — everything read rather than glanced at, and every
+         * digit in the app: it has true tabular figures, which is the one thing
+         * a product made almost entirely of money and quantities cannot do
+         * without.
+         *
+         * `main.css` names real system fallbacks for both, so a phone that
+         * cannot reach Google Fonts renders the same layout in the same sizes
+         * rather than a broken one.
+         */
         {
           rel: 'stylesheet',
-          href: 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap',
+          href: 'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap',
         },
       ],
     },

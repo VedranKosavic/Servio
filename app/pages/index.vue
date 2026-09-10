@@ -1,13 +1,13 @@
 <script setup lang="ts">
 /**
- * The start screen — and, since WP9, a real lock screen; since WP4, also the
- * *re*-lock (S10 *Promijeni korisnika*).
+ * The lock screen — the first thing anybody sees, and the proof of the design
+ * system (docs/DESIGN.md).
  *
- * Korak 1 asked "ko si?" and believed the answer. Nothing on this screen is
- * trusted: the phone proves it is an enrolled device (the `sank_d` cookie), a
- * person proves he is himself (a PIN through the metered verifier), and the
- * server hands back a session cookie the browser cannot read. Every screen after
- * this one asks `GET /api/me` rather than reading localStorage.
+ * Nothing on this screen is trusted: the phone proves it is an enrolled device
+ * (the `sank_d` cookie), a person proves he is himself (a PIN through the
+ * metered verifier), and the server hands back a session cookie the browser
+ * cannot read. Every screen after this one asks `GET /api/me` rather than
+ * reading localStorage.
  *
  * The views, in the order a phone meets them:
  *
@@ -18,6 +18,13 @@
  *              **here** as faces, everybody else one tap away
  *   `pin`      the pad, which submits on the last digit
  *   `signed`   somebody is already logged in: one tap back into the shift
+ *
+ * **The composition.** One centred column, 420 px wide at most, holding the
+ * wordmark, one panel and one quiet foot line — so the screen is the same
+ * composition on a 390 px phone (where the panel is the width of the screen)
+ * and on a 1440 px laptop (where it is a card floating on the copper wash).
+ * Nothing stretches, and there is no gap in the middle for the eye to fall
+ * into. Every target on it clears 48 px.
  *
  * **Two things WP4 adds, and the difference between them matters.**
  *
@@ -35,9 +42,9 @@
  * for the whole of it.
  *
  * The lockout copy comes out of the error body and nowhere else: five wrong PINs
- * are 60 s, ten are 15 minutes, and the sentence says which — a waiter staring
- * at "pogrešan PIN" with no idea whether to keep trying is how a phone ends up
- * face-down on the bar.
+ * are 60 s, ten are 15 minutes, and the pad counts the seconds down on screen —
+ * a waiter staring at "pogrešan PIN" with no idea whether to keep trying is how
+ * a phone ends up face-down on the bar.
  */
 import type { LoginUser } from '#shared/types'
 import { ApiSideError } from '~/composables/useApi'
@@ -104,9 +111,6 @@ function startLock(seconds: number) {
 onBeforeUnmount(() => {
   if (lockTimer) clearInterval(lockTimer)
 })
-
-const lockText = computed(() =>
-  lockedFor.value > 0 ? `PIN je zaključan. Pokušaj ponovo za ${lockedFor.value} s.` : null)
 
 // -- boot -------------------------------------------------------------------
 
@@ -209,6 +213,9 @@ const split = computed(() => lastFaces(people.value))
 const faces = computed(() => split.value.faces)
 const rest = computed(() => split.value.rest)
 
+/** The list under *Ostali profili*, or the whole venue when there are no faces. */
+const listed = computed(() => (faces.value.length === 0 ? people.value : rest.value))
+
 /**
  * On a `personal` phone the rest of the list is not "everybody else", it is
  * *Drugi konobar* — the colleague whose battery died, who will be asked to
@@ -219,6 +226,11 @@ const restLabel = computed(() => (
     ? 'Drugi konobar'
     : `Ostali profili (${rest.value.length})`
 ))
+
+/** The copper avatar is reserved for the person this device is signed in as. */
+function isMe(person: LoginUser): boolean {
+  return me.user.value?.id === person.id
+}
 
 // -- enrol ------------------------------------------------------------------
 
@@ -315,8 +327,9 @@ async function submitPin(pin: string) {
   } catch (err) {
     const e = err as ApiSideError
     if (e.code === 'LOCKED') {
+      // The pad draws its own countdown from `lockedFor`, so the server's
+      // sentence would be the same thing said twice.
       startLock(Number(e.data.retry_after_s ?? 60))
-      message.value = apiErrorText(err)
     } else if (e.code === 'NOT_YOUR_DEVICE') {
       // A colleague's personal phone. The 403 is not a refusal, it is a
       // question: say out loud that you are borrowing it and the session is 2 h
@@ -345,9 +358,6 @@ async function submitPin(pin: string) {
  * `/admin/login` calls `navigateTo('/admin')` after the same
  * `refreshAfterLogin()`, so an owner who signs in with a PIN on a phone and an
  * owner who signs in with a password on a laptop land on the same screen.
- *
- * Until this commit an admin was parked on a card saying the dashboard was not
- * built yet. It has been built since Phase 2; the card was a dead end.
  */
 async function afterLogin() {
   await navigateTo(me.home.value)
@@ -378,167 +388,496 @@ const ROLE_LABEL: Record<string, string> = {
 </script>
 
 <template>
-  <main class="mx-auto flex w-full max-w-[480px] flex-1 flex-col justify-center gap-7 py-8">
-    <div class="text-center">
-      <h1 class="text-5xl font-extrabold tracking-tight">
-        {{ APP_NAME }}
-      </h1>
-      <p v-if="me.venue.value" class="mt-1 text-[15px] text-text-2">
-        {{ me.venue.value.name }}
-      </p>
-    </div>
+  <main class="lock">
+    <!-- The copper wash. Full-bleed, behind everything, out of the a11y tree. -->
+    <div class="lock-glow" aria-hidden="true" />
 
-    <ClientOnly>
-      <!-- Asking the server who this is -->
-      <p v-if="view === 'boot'" class="text-center text-text-2">
-        Učitavanje…
-      </p>
+    <div class="lock-inner">
+      <!-- The brand block: mark, wordmark, venue. Three sizes, one axis. -->
+      <header class="brand">
+        <svg
+          class="brand-mark" viewBox="0 0 32 32" width="40" height="40"
+          aria-hidden="true" focusable="false"
+        >
+          <rect
+            x="0.75" y="0.75" width="30.5" height="30.5" rx="9.5"
+            fill="var(--accent-soft)" stroke="var(--accent-line)" stroke-width="1.5"
+          />
+          <path
+            d="M21 11.6a5 5 0 0 0-4.9-2.9c-2.6 0-4.3 1.3-4.3 3.3 0 4.3 9.4 2.5 9.4 6.9 0 2.2-1.9 3.6-4.7 3.6A5.4 5.4 0 0 1 11 19"
+            fill="none" stroke="var(--accent)" stroke-width="2.1" stroke-linecap="round"
+          />
+        </svg>
 
-      <!-- Already logged in: one tap back into the shift -->
-      <div v-else-if="view === 'signed' && me.user.value" class="flex flex-col gap-3">
-        <button type="button" class="btn btn-accent h-16 text-xl" @click="afterLogin">
-          Nastavi kao {{ me.user.value.name }} · {{ ROLE_LABEL[me.user.value.role] }}
-        </button>
-        <button type="button" class="btn btn-ghost" :disabled="busy" @click="changeUser">
-          Promijeni korisnika
-        </button>
-      </div>
+        <h1 class="wordmark brand-name">{{ APP_NAME }}</h1>
 
-      <!-- This phone is not enrolled -->
-      <div v-else-if="view === 'enrol'" class="flex flex-col gap-4">
-        <div class="text-center">
-          <h2 class="text-2xl font-semibold">
-            Unesi kod uređaja
-          </h2>
-          <p class="mt-1 text-[15px] text-text-2">
-            Vlasnik ti daje šestoslovni kod. Unosi se jednom, po telefonu.
+        <!--
+          The venue's own name is the third line, in copper — it is the only
+          thing on this screen that belongs to the café rather than to the
+          product. It is only known once this browser has a session
+          (`GET /api/auth/users` deliberately carries nothing but the names), so
+          before the first sign-in the line says what the app is instead of
+          leaving a hole where the hierarchy should be.
+        -->
+        <ClientOnly>
+          <p class="eyebrow brand-line" :class="{ venue: me.venue.value }">
+            {{ me.venue.value?.name ?? APP_DESCRIPTION }}
           </p>
-        </div>
+          <template #fallback>
+            <p class="eyebrow brand-line">{{ APP_DESCRIPTION }}</p>
+          </template>
+        </ClientOnly>
+      </header>
 
-        <input
-          v-model="enrolCode"
-          type="text"
-          inputmode="text"
-          autocapitalize="characters"
-          autocomplete="off"
-          spellcheck="false"
-          maxlength="6"
-          placeholder="A1B2C3"
-          class="num card-2 h-16 w-full px-4 text-center text-3xl font-bold uppercase tracking-[0.3em] outline-none placeholder:text-muted placeholder:tracking-[0.3em]"
-        >
+      <ClientOnly>
+        <!-- Asking the server who this is -->
+        <section v-if="view === 'boot'" class="stage stage-quiet">
+          <p class="stage-sub">Učitavanje…</p>
+        </section>
 
-        <input
-          v-model="enrolLabel"
-          type="text"
-          maxlength="40"
-          placeholder="Naziv uređaja (npr. Tablet na šanku)"
-          class="card-2 h-12 w-full px-3.5 text-base outline-none placeholder:text-muted"
-        >
+        <!-- Already logged in: one tap back into the shift -->
+        <section v-else-if="view === 'signed' && me.user.value" class="stage">
+          <div class="signed-who">
+            <span class="avatar avatar-lg avatar-accent">{{ me.user.value.initials }}</span>
+            <div class="signed-lines">
+              <p class="section-title signed-name">{{ me.user.value.name }}</p>
+              <p class="eyebrow">{{ ROLE_LABEL[me.user.value.role] }}</p>
+            </div>
+          </div>
 
-        <p v-if="message" class="rounded-xl bg-danger-soft px-3 py-2 text-center text-[15px] text-danger">
-          {{ message }}
-        </p>
+          <div class="stack">
+            <button type="button" class="btn btn-primary btn-lg" @click="afterLogin">
+              Nastavi kao {{ me.user.value.name }}
+            </button>
+            <button type="button" class="btn btn-ghost" :disabled="busy" @click="changeUser">
+              Promijeni korisnika
+            </button>
+          </div>
+        </section>
 
-        <button
-          type="button"
-          class="btn btn-accent h-14 text-lg"
-          :disabled="!codeReady || busy"
-          @click="submitCode"
-        >
-          {{ busy ? 'Prijavljujem uređaj…' : 'Prijavi uređaj' }}
-        </button>
-      </div>
+        <!-- This phone is not enrolled -->
+        <section v-else-if="view === 'enrol'" class="stage">
+          <div class="stage-head">
+            <h2 class="section-title">Unesi kod uređaja</h2>
+            <p class="stage-sub">Vlasnik ti daje šestoslovni kod. Unosi se jednom, po telefonu.</p>
+          </div>
 
-      <!-- The PIN pad -->
-      <WaiterPinPad
-        v-else-if="view === 'pin' && chosen"
-        :name="chosen.name"
-        :initials="chosen.initials"
-        :pin-len="chosen.pin_len"
-        :busy="busy"
-        :error="lockText ?? message"
-        :locked="lockedFor > 0"
-        :note="borrowing ? 'Posuđuješ tuđi telefon — prijava traje 2 sata.' : null"
-        @submit="submitPin"
-        @cancel="backToPeople"
-      />
+          <div class="stack">
+            <div class="field">
+              <label class="eyebrow" for="enrol-code">Kod</label>
+              <input
+                id="enrol-code"
+                v-model="enrolCode"
+                class="input input-num code"
+                type="text"
+                inputmode="text"
+                autocapitalize="characters"
+                autocomplete="off"
+                spellcheck="false"
+                maxlength="6"
+                placeholder="A1B2C3"
+              >
+            </div>
 
-      <!-- Pick a name -->
-      <div v-else class="flex flex-col gap-3">
-        <div class="text-center">
-          <h2 class="text-2xl font-semibold">
-            Prijava
-          </h2>
-          <p class="mt-1 text-[15px] text-text-2">
-            Odaberi svoj profil
+            <div class="field">
+              <label class="eyebrow" for="enrol-label">Naziv uređaja</label>
+              <input
+                id="enrol-label"
+                v-model="enrolLabel"
+                class="input"
+                type="text"
+                maxlength="40"
+                placeholder="npr. Tablet na šanku"
+              >
+            </div>
+          </div>
+
+          <p v-if="message" class="note note-danger">{{ message }}</p>
+
+          <button
+            type="button"
+            class="btn btn-primary btn-lg"
+            :disabled="!codeReady || busy"
+            @click="submitCode"
+          >
+            {{ busy ? 'Prijavljujem uređaj…' : 'Prijavi uređaj' }}
+          </button>
+        </section>
+
+        <!-- The PIN pad -->
+        <section v-else-if="view === 'pin' && chosen" class="stage">
+          <WaiterPinPad
+            :name="chosen.name"
+            :initials="chosen.initials"
+            :role="ROLE_LABEL[chosen.role]"
+            :pin-len="chosen.pin_len"
+            :busy="busy"
+            :error="message"
+            :locked-for="lockedFor"
+            :note="borrowing ? 'Posuđuješ tuđi telefon — prijava traje 2 sata.' : null"
+            @submit="submitPin"
+            @cancel="backToPeople"
+          />
+        </section>
+
+        <!-- Pick a name -->
+        <section v-else class="stage">
+          <div class="stage-head">
+            <h2 class="section-title">Prijava</h2>
+            <p class="stage-sub">Odaberi svoj profil</p>
+          </div>
+
+          <p v-if="relocked" class="note">
+            Telefon se zaključao sam. Unesi PIN da nastaviš.
           </p>
-        </div>
 
-        <p v-if="relocked" class="text-center text-[15px] text-text-2">
-          Telefon se zaključao sam. Unesi PIN da nastaviš.
-        </p>
+          <p v-if="message" class="note note-danger">{{ message }}</p>
 
-        <p v-if="message" class="rounded-xl bg-danger-soft px-3 py-2 text-center text-[15px] text-danger">
-          {{ message }}
-        </p>
+          <!-- The last three who signed in on this phone, as faces. -->
+          <div v-if="faces.length" class="faces">
+            <button
+              v-for="person in faces"
+              :key="person.id"
+              type="button"
+              class="face"
+              @click="pick(person)"
+            >
+              <span class="avatar avatar-lg" :class="{ 'avatar-accent': isMe(person) }">
+                {{ person.initials }}
+              </span>
+              <span class="face-name">{{ person.name }}</span>
+              <span class="face-role">{{ ROLE_LABEL[person.role] }}</span>
+            </button>
+          </div>
 
-        <!-- The last three who signed in on this phone, as faces. -->
-        <!-- One, two or three of them share the row evenly. -->
-        <div v-if="faces.length" class="flex gap-2">
+          <!-- …and everybody else, one tap away. Not a grey slab: a row with a
+               chevron, which is what the rest of the app uses for "there is
+               more behind this". -->
           <button
-            v-for="person in faces"
-            :key="person.id"
+            v-if="rest.length && !showAll"
             type="button"
-            class="card-2 flex min-h-28 basis-0 grow flex-col items-center justify-center gap-2 px-2 py-3"
-            @click="pick(person)"
+            class="more"
+            @click="showAll = true"
           >
-            <span class="flex size-14 items-center justify-center rounded-full bg-accent text-lg font-bold text-accent-ink">
-              {{ person.initials }}
-            </span>
-            <span class="truncate text-[17px] font-semibold">{{ person.name }}</span>
+            <span>{{ restLabel }}</span>
+            <svg
+              class="more-chev" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
+              fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+              stroke-linejoin="round"
+            ><path d="M9 6l6 6-6 6" /></svg>
           </button>
-        </div>
 
-        <!-- …and everybody else, one tap away. -->
-        <button
-          v-if="rest.length && !showAll"
-          type="button"
-          class="btn btn-ghost h-14"
-          @click="showAll = true"
-        >
-          {{ restLabel }}
-        </button>
+          <div v-if="showAll || faces.length === 0" class="stack">
+            <button
+              v-for="person in listed"
+              :key="person.id"
+              type="button"
+              class="person"
+              @click="pick(person)"
+            >
+              <span class="avatar" :class="{ 'avatar-accent': isMe(person) }">
+                {{ person.initials }}
+              </span>
+              <span class="person-name">{{ person.name }}</span>
+              <!-- The same quiet uppercase the face tiles use, not a chip: a
+                   chip on a `--surface-2` row is a chip nobody can see, and the
+                   role is a fact to be found rather than a status to be read. -->
+              <span class="face-role">{{ ROLE_LABEL[person.role] }}</span>
+            </button>
+          </div>
 
-        <template v-if="showAll || faces.length === 0">
-          <button
-            v-for="person in (faces.length === 0 ? people : rest)"
-            :key="person.id"
-            type="button"
-            class="btn h-16 justify-start gap-3 px-4 text-xl"
-            @click="pick(person)"
-          >
-            <span class="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface text-base font-bold">
-              {{ person.initials }}
-            </span>
-            <span class="grow text-left">{{ person.name }}</span>
-            <span class="chip shrink-0">{{ ROLE_LABEL[person.role] }}</span>
+          <p v-if="!busy && people.length === 0" class="empty">
+            Nema nikoga s postavljenim PIN-om.
+            <span>Vlasnik ih postavlja u kontrolnoj ploči.</span>
+          </p>
+
+          <!-- The panel's foot row. Same shape as *Ostali profili* above it, so
+               the bottom of the panel is a rule and an action rather than a
+               button floating in space. -->
+          <button type="button" class="more quiet" :disabled="busy" @click="loadPeople">
+            <span>Osvježi listu</span>
+            <svg
+              class="more-chev" viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"
+              fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+              stroke-linejoin="round"
+            ><path d="M20 11.5A8 8 0 1 0 18 17M20 6v5.5h-5.5" /></svg>
           </button>
+        </section>
+
+        <template #fallback>
+          <section class="stage stage-quiet">
+            <p class="stage-sub">Učitavanje…</p>
+          </section>
         </template>
+      </ClientOnly>
 
-        <p v-if="!busy && people.length === 0" class="card px-4 py-8 text-center text-text-2">
-          Nema nikoga s postavljenim PIN-om. Vlasnik ih postavlja u kontrolnoj tabli.
-        </p>
-
-        <button type="button" class="btn btn-ghost" :disabled="busy" @click="loadPeople">
-          Osvježi listu
-        </button>
-      </div>
-
-      <template #fallback>
-        <p class="text-center text-text-2">
-          Učitavanje…
-        </p>
-      </template>
-    </ClientOnly>
+    </div>
   </main>
 </template>
+
+<style scoped>
+/* ---- the composition --------------------------------------------------- */
+
+.lock {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 24px 0 32px;
+}
+
+.lock-glow {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  /**
+   * One light source, from above.
+   *
+   * Sized in **pixels, not percentages**: a percentage-sized gradient becomes a
+   * 1400 px smudge across a laptop and a tight blob on a phone, which is the
+   * difference between a lit room and a rendering artefact. Three stops so the
+   * falloff has no visible edge, and the whole thing stays far below any
+   * threshold that could affect legibility.
+   */
+  background: radial-gradient(
+    760px 420px at 50% 0%,
+    color-mix(in oklab, var(--accent) 15%, transparent) 0%,
+    color-mix(in oklab, var(--accent) 6%, transparent) 38%,
+    transparent 78%
+  );
+}
+
+.lock-inner {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 24px;
+}
+
+/* ---- the brand block --------------------------------------------------- */
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-mark { display: block; }
+
+.brand-name {
+  margin: 0;
+  color: var(--ink);
+}
+
+.brand-line {
+  margin: 0;
+  color: var(--muted);
+}
+
+/* The venue is the local identity, and it is the one line on this screen set in
+   the accent — copper is otherwise reserved for the primary action. */
+.brand-line.venue { color: var(--accent-text); }
+
+/* ---- the panel --------------------------------------------------------- */
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  /* A 1 px highlight along the top edge and a shadow under the whole panel:
+     the one place in the app that genuinely floats, so the one place a shadow
+     is earned. */
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.045),
+    var(--shadow-pop);
+}
+
+/* Boot and hydration: the panel keeps its shape so nothing jumps when the
+   real content arrives. */
+.stage-quiet {
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+}
+
+.stage-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stage-head h2 { margin: 0; }
+
+.stage-sub {
+  margin: 0;
+  font-size: var(--text-label);
+  color: var(--muted);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.note { margin: 0; }
+
+/* ---- faces ------------------------------------------------------------- */
+
+.faces {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+/* One, two or three of them share the row evenly. */
+.faces:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
+.faces:has(> :nth-child(2):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.face {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 132px;
+  padding: 14px 6px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--line-soft);
+  background: var(--surface-2);
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-standard),
+    transform var(--dur-tap) var(--ease-standard);
+}
+
+.face:active { background: var(--surface-3); transform: scale(0.97); }
+
+.face-name {
+  max-width: 100%;
+  font-size: var(--text-label);
+  font-weight: 600;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The role is there to be found, not read: it never competes with the name. */
+.face-role {
+  flex-shrink: 0;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* ---- everybody else ---------------------------------------------------- */
+
+.more {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 4px;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  background: transparent;
+  color: var(--ink-2);
+  font-size: var(--text-label);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Two foot rows in a row are one block, not two: the stage's 16 px gap is
+   cancelled between them so the rules read as a small list. */
+.more + .more { margin-top: -16px; }
+
+.more > span:first-child { flex-grow: 1; text-align: left; }
+.more-chev { flex-shrink: 0; color: var(--muted); }
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 8px 12px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--line-soft);
+  background: var(--surface-2);
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-standard),
+    transform var(--dur-tap) var(--ease-standard);
+}
+
+.person:active { background: var(--surface-3); transform: scale(0.98); }
+
+.person-name {
+  flex-grow: 1;
+  min-width: 0;
+  text-align: left;
+  font-size: var(--text-body);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- already signed in ------------------------------------------------- */
+
+.signed-who {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.signed-lines { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.signed-name { margin: 0; }
+.signed-lines p:last-child { margin: 0; }
+
+/* ---- enrol ------------------------------------------------------------- */
+
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label { margin: 0; }
+
+.code {
+  text-transform: uppercase;
+  letter-spacing: 0.28em;
+  /* The tracking is applied to the right of every character, the last one
+     included, so without this the value reads a third of a space off-centre. */
+  text-indent: 0.28em;
+}
+
+.code::placeholder { letter-spacing: 0.28em; text-transform: uppercase; }
+
+/* ---- the quiet foot ---------------------------------------------------- */
+
+.quiet { color: var(--muted); }
+.quiet:disabled { opacity: 0.5; cursor: default; }
+
+.empty span { display: block; }
+
+/* On a laptop the same composition simply breathes: more air above the
+   wordmark and inside the panel, nothing stretched. */
+@media (min-width: 640px) {
+  .lock { padding: 40px 0 48px; }
+  .lock-inner { gap: 28px; }
+  .stage { padding: 28px 24px; gap: 18px; }
+}
+</style>

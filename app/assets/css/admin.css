@@ -6,48 +6,79 @@
  * rule that touched both would be one careless edit away from turning the
  * waiter's floor plan white in a dark room.
  *
+ * This file is *only* a value swap. Every name in it is declared in `main.css`
+ * first, and every shared component class (`.card`, `.btn`, `.chip`, `.avatar`,
+ * …) is written against those names — so the primitives are structurally the
+ * same object in both themes and differ only in material. See `docs/DESIGN.md`.
+ *
  * It lives in its own file rather than inside `layouts/admin.vue` for one
- * practical reason: `/admin/login` renders with `layout: false` — a login screen has
- * no nav — so it cannot rely on the layout's stylesheet being loaded. Both
+ * practical reason: `/admin/login` renders with `layout: false` — a login screen
+ * has no nav — so it cannot rely on the layout's stylesheet being loaded. Both
  * import this one file, and it is still the only place in the app where these
  * names are defined.
+ *
+ * The light theme's job is **dense tables read at a desk in daylight**, so the
+ * contrast between paper, card and rule is tighter than the dark theme's and
+ * the ink is nearly black. Copper stays the accent and stays reserved for the
+ * primary action and the current row.
  */
 [data-theme='light'] {
+  /* Warm paper, and a card that is brighter than the page it sits on. */
   --bg: #f2f0eb;
-  --surface: #fbfaf7;
-  --surface-2: #e9e6df;
-  --line: #d9d4ca;
-  --ink: #1f2a2e;
-  --ink-2: #4a585d;
-  --muted: #6f7c80;
-  --accent: #b5623a;
-  --accent-soft: #f1dccf;
-  --accent-ink: #8f4a28;
-  --nav: #1f2a2e;
-  --nav-ink: #e8e4dc;
-  --nav-muted: #8d9599;
-  --good: #3d8f7a;
-  --good-soft: #dcefe8;
-  --warn: #b07d1e;
-  --warn-soft: #f6e9c9;
-  --danger: #c8433f;
-  --danger-soft: #f4dcda;
+  --bg-2: #e7e4dd;
+  --surface: #fffdf9;
+  --surface-2: #eae7e0;
+  --surface-3: #f6f4ef;
 
-  /* The few surfaces the mockup names that are not one of the tokens above.
-     They live here so that no other file under `/admin` writes a hex value. */
-  --nav-item: #b9b3a8;
-  --nav-well: #2c3437;
+  /* Two rules: one you read as an edge, one that only separates table rows. */
+  --line: #d7d1c6;
+  --line-soft: #e6e1d8;
+
+  /* Nearly-black ink on paper. `--ink` is 14:1 on `--surface`, which is what a
+     column of four-digit amounts at 13 px needs. */
+  --ink: #1a2327;
+  --ink-2: #46545a;
+  --text: #1a2327;
+  --text-2: #46545a;
+  --muted: #6c797e;
+
+  /* Copper, deepened until white on it clears 4.5:1. `--accent-text` is the
+     same copper as *ink on paper*, which the fill colour is too light for. */
+  --accent: #ad5730;
+  --accent-text: #8a4525;
+  --accent-ink: #8a4525;
+  --accent-soft: #f3e0d4;
+  --accent-line: #e0c3af;
   --on-accent: #ffffff;
-  --field-bg: #ffffff;
-  --scrim: rgba(31, 42, 46, 0.45);
-  --offline-ink: #e29a97;
 
-  /* Bricolage Grotesque is the wordmark and the page titles, and nothing else. */
-  --font-title: "Bricolage Grotesque", "IBM Plex Sans", sans-serif;
+  --good: #2f8a72;
+  --good-soft: #dceee7;
+  --warn: #a5720f;
+  --warn-soft: #f7ead0;
+  --danger: #c03b37;
+  --danger-soft: #f6dcda;
+
+  --scrim: rgb(26 35 39 / 0.42);
+
+  /* The dark nav rail beside the light page. Its own small ladder, because it
+     is the one piece of dark material in this theme. */
+  --nav: #1b2427;
+  --nav-ink: #ece8e0;
+  --nav-muted: #949c9f;
+  --nav-item: #bfb9ae;
+  --nav-well: #283134;
+
+  --field-bg: #ffffff;
+  --offline-ink: #e3a29f;
+
+  /* Bricolage Grotesque is the wordmark and the page titles, and nothing else.
+     It is loaded app-wide in `nuxt.config.ts`; `--font-display` in `main.css`
+     is the same stack under the name the rest of the app uses. */
+  --font-title: var(--font-display);
 }
 
 /**
- * The waiter app paints `html` and `body` dark and sets an 18 px body — read at
+ * The waiter app paints `html` and `body` dark and sets a 17 px body — read at
  * arm's length in a dark room. The dashboard is read at a desk: light, 15 px.
  * The attribute is put on `<html>` by `useHead` in the layout and the login
  * page, and taken off again when either unmounts, so `/konobar` is never touched.
