@@ -168,6 +168,28 @@ describe('closing the night', () => {
     )
   })
 
+  /**
+   * The *Bez stola* half of the same guard (PHASE3 §1.11). It joined `tables`
+   * with an INNER join, so a table-less tab had no row to join to and simply
+   * left the query — and the night could be closed with money still on an open
+   * tab at the bar.
+   */
+  it('refuses while a table-less tab is still open, and names it', () => {
+    const shiftId = nightReadyToClose()
+    const round = f.lock('Amar', 'Sto 7', [{ product: 'Kafa' }])
+    f.db.update(schema.tabs).set({ tableId: null })
+      .where(eq(schema.tabs.id, round.tabId)).run()
+
+    try {
+      closeShift(f.db, f.venueId, f.adminActor(), shiftId, { cash_counted_fen: 13_000, pin })
+      throw new Error('expected OPEN_TABS, but nothing was thrown')
+    } catch (err) {
+      const e = err as { code?: string, data?: { tabs?: { table_name: string }[] } }
+      expect(e.code).toBe('OPEN_TABS')
+      expect(e.data?.tabs?.map(t => t.table_name)).toEqual(['Bez stola'])
+    }
+  })
+
   it('refuses without the opening count, and lets an admin override it', () => {
     const shiftId = f.openShift({ members: ['Amar'] })
     expect(hasSubmittedCount(f.db, f.venueId, shiftId, 'open')).toBe(false)

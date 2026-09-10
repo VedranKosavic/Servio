@@ -5,7 +5,7 @@
  * bowl". A round appears here the moment a waiter locks it and leaves when the
  * bartender taps it done.
  */
-import { and, asc, desc, eq, inArray, isNotNull, isNull } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { conflict, notFound } from '../utils/errors'
 import { nowIso } from '../utils/ids'
@@ -95,12 +95,16 @@ function loadOrders(db: Queryable, venueId: string, opts: LoadOptions): PrepOrde
     preparedAt: schema.orders.preparedAt,
     preparedBy: schema.orders.preparedBy,
     note: schema.orders.note,
-    tableName: schema.tables.name,
+    // A table-less tab (*Bez stola*, PHASE3 §1.11) has no row in `tables`, so
+    // the join is a LEFT one and the missing name falls back to PLAN §12's word.
+    // With an inner join the bartender never saw the ticket and never made the
+    // drink.
+    tableName: sql<string>`coalesce(${schema.tables.name}, 'Bez stola')`,
     waiterName: waiter.name,
   })
     .from(schema.orders)
     .innerJoin(schema.tabs, eq(schema.tabs.id, schema.orders.tabId))
-    .innerJoin(schema.tables, eq(schema.tables.id, schema.tabs.tableId))
+    .leftJoin(schema.tables, eq(schema.tables.id, schema.tabs.tableId))
     .innerJoin(waiter, eq(waiter.id, schema.orders.lockedBy))
     .where(and(...where))
     // Open tickets: oldest first, the queue the bar actually works through.

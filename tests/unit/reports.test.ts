@@ -67,6 +67,9 @@ function lock(who: string, table: string, lines: ReturnType<typeof line>[]) {
 // Nargila
 // ===========================================================================
 
+/** The empty Al Fakher jar, as `server/database/seed.ts` sets it. */
+const TOBACCO_TARE_G = 40
+
 describe('the nargila report', () => {
   /**
    * The owner's month: 15 kg of tobacco in, 4 kg counted at the end, 500 bowls
@@ -102,14 +105,16 @@ describe('the nargila report', () => {
       line('Nova lula', 5, ['Al Fakher · Jabuka']),
     ])
 
-    // The closing count: 4 000 g left across the six tins.
+    // The closing count: 4 000 g left across the six tins. `weighed_g` is what
+    // the scale reads — the tin **and** what is in it — so each line carries the
+    // seed's 40 g jar on top, and `submitCount` subtracts it (PHASE3 §1.3).
     const left = [700, 700, 700, 700, 600, 600]
     const count = submitCount(f.db, f.venueId, f.actor('Emir'), {
       kind: 'full',
       phase: 'adhoc',
       lines: TOBACCO.map((name, i) => ({
         stock_item_id: f.stockItemId(name),
-        weighed_g: left[i],
+        weighed_g: left[i]! + TOBACCO_TARE_G,
         note: 'izvagano na kraju mjeseca',
       })),
     })
@@ -268,8 +273,8 @@ describe('the owner stock read', () => {
   it('values the shelf and counts what needs attention', () => {
     const report = ownerStock(f.db, f.venueId)
 
-    expect(report.items).toHaveLength(19)
-    expect(report.totals.items).toBe(19)
+    expect(report.items).toHaveLength(20)
+    expect(report.totals.items).toBe(20)
     expect(report.totals.bez_cijene).toBe(0)
 
     const cola = report.items.find(i => i.name === 'Coca-Cola 0,25 l')!

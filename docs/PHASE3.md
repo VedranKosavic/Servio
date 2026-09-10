@@ -234,23 +234,34 @@ Two things, in this order: the unit suite stays green and grows, and one scripte
 - A **dedicated port**: 3112.
 - **Never** `data/sank.db` and **never** port 3002 — that is the owner's live dev server and it holds real evenings.
 
+The run is against a **production build**, not `npm run dev`: the service worker and the manifest do not exist under dev (see the `devOptions` note in `nuxt.config.ts`), so check 8 cannot be walked there at all.
+
 ```
 rm -f data/verify.db*
-DB_PATH=data/verify.db npm run db:seed
-DB_PATH=data/verify.db npm run dev -- --port 3112      # terminal 1
-npx playwright test tests/e2e/phase3.spec.ts           # terminal 2
+DB_PATH=data/verify.db PIN_PEPPER=dev npm run db:seed
+npm run build
+DB_PATH=data/verify.db PIN_PEPPER=dev COOKIE_SECURE=0 SANK_DEV_ENROL=1 \
+  PORT=3112 node .output/server/index.mjs                # terminal 1
+npx playwright test                                      # terminal 2
 ```
 
-`playwright.config.ts` (new, with `@playwright/test` as a devDependency) pins `baseURL: 'http://localhost:3112'`, one Chromium project at 390 × 844 with `isMobile: true`, and **two browser contexts**: *Amar* (waiter) and *Emir* (bartender). Each context enrols its own device through `POST /api/admin/enrol-codes` + `POST /api/devices/enrol` and logs in with its PIN (Amar 1111, Emir 123456) — **not** `POST /api/dev/enrol`, which reuses one shared device row and rotates its token, so the second context's enrol would invalidate the first's cookie (learned in Phase 2). The admin cookie for the setup calls comes from `haris@lounge.ba / lounge`, which also sends `PATCH /api/admin/settings { payment_methods: ['cash', 'card'] }`.
+The command takes **no path**: the suite is the five `tests/e2e/wp*.spec.ts` files between them, and `playwright.config.ts` runs them serially with one worker. There is no `phase3.spec.ts`.
+
+`playwright.config.ts` pins `baseURL: 'http://localhost:3112'` and one Chromium project at 390 × 844 with `isMobile: true`. Two rules govern how a file logs in, and both are about the same limiter:
+
+- **Two contexts where two people are involved**: *Amar* (waiter) and *Emir* (bartender). Each enrols its own device through `POST /api/admin/enrol-codes` + `POST /api/devices/enrol` — **not** `POST /api/dev/enrol`, which reuses one shared device row and rotates its token, so the second context's enrol would invalidate the first's cookie (learned in Phase 2).
+- **A device is enrolled once per role per file**, in `test.beforeAll`, and every test then opens a fresh page on that same context. `authLimiter` (`server/middleware/tenant.ts`, `AUTH_DOORS`) allows ten calls a minute keyed by the device cookie **or, before enrolment, by the IP**, and `DEV_MULTIPLIER` is 1 in a built server because `import.meta.dev` compiles to `false` there regardless of `NODE_ENV`. A file that enrolled per test therefore 429'd partway through its own run. What is reset between tests is the phone's state — IndexedDB and localStorage — and never its cookies.
+
+The admin cookie for the setup calls comes from `haris@lounge.ba / lounge`, which also sends `PATCH /api/admin/settings { payment_methods: ['cash', 'card'] }`.
 
 ### 5.2 The nine checks
 
 1. **Offline, exactly once.** With `context.setOffline(true)` on Amar's phone: two rounds on Sto 5 (four lines, one of them a nargila with two aromas) and a cash payment on Sto 7. The chip reads *Čeka slanje (3)*; a reload keeps all three; `setOffline(false)` empties the queue within one flush. Then, through the API: exactly one `tabs` row per table, one `orders` row per round, one `payments` row, and re-running the same three bodies changes no count.
-2. **A void by PIN.** Amar long-presses a line locked twenty minutes ago → *Zatraži storno* → `guest_changed_mind` → the sheet shows *"Vraća robu na stanje: da"* → Emir's PIN on Amar's phone → the line is struck, the tab total drops by the line, and `GET /api/adjustments/pending` is empty. A second void requested without a PIN shows the amber *"ostaje u tvom pazaru"* line and appears on `/s/cekanje` with *Odobri*.
+2. **A void by PIN.** Amar taps a locked line → *Zatraži storno* → `guest_changed_mind` → the sheet shows *"Vraća robu na stanje: da"* → Emir's PIN on Amar's phone → the line is struck, the tab total drops by the line, and `GET /api/adjustments/pending` is empty. Walked from Amar's **page**, not his `request`: the two sheets shipped disabled once and every storno in the file was a POST, so nothing noticed. A second void requested without a PIN shows the amber *"ostaje u tvom pazaru"* line and appears on `/s/cekanje` with *Odobri*.
 3. **A comp inside the allowance.** A long-press on a draft coffee → *Na račun kuće* → *Osoblje* shows *"Osoblje: 0/2 (do 3 KM)"*, locks at 0 KM, and the second one shows 1/2. The third is refused in Bosnian.
-4. **A spot count at close with one wrong bottle.** Emir opens *Brzi popis* from `/s`, counts the spot list with one item one short, submits (theoretical never visible before *Predaj*), Amar taps *Potvrđujem stanje*, and `/a` shows the count with its manjak and a working *Primijeni*.
+4. **A spot count at close with one wrong bottle.** Emir opens *Brzi popis* from `/s`, counts the fourteen spot items (`is_spot` in `server/database/seed.ts` — the screen reads *Stavke za popis 0 / 14*) with one item one short, submits (theoretical never visible before *Predaj*), Amar taps *Potvrđujem stanje*, and `/a` shows the count with its manjak and a working *Primijeni*.
 5. **The pending-outbox gate.** With Amar offline and one entry queued, Emir's count is refused with the sentence naming Amar's phone, and goes through after Amar reconnects.
-6. **An otpis.** Emir writes off a broken 12 KM bottle: the PIN sheet appears, the entry saves approved, and the item's on-hand drops by one.
+6. **An otpis.** Emir writes off a broken bottle of syrup — *Sirup (Monin 0,7 l)*, the seed's dearest item at 12,00 KM a bottle and the only one that crosses `waste_pin_threshold_fen` on its own: the PIN sheet appears, the entry saves approved, and the item's on-hand drops by one.
 7. **Moja smjena, before and after.** Before settling, Amar's S11 shows ture, stolovi and category counts and **no KM**, and the raw `GET /api/me/shift` body contains no `*_fen` key but `max_fen`. He settles blind through S9; the reveal names expected, declared, the difference and the tolerance word; S11 then shows the same night in KM, and the note he types on last night's row survives a reload.
 8. **The PWA.** `GET /manifest.webmanifest` is served with the right `start_url` and both icons; `navigator.serviceWorker.controller` is non-null after one reload; `/api/tables/state` is never answered from the cache (the SW's rule is NetworkOnly) while `/api/bootstrap` answers within 3 s or falls back; deploying a new build shows *Nova verzija — osvježi* on S1 and **not** while a draft is open.
 9. **Across everything.** No English word on any `/k` or `/s` screen; no emoji; every amount tabular; no horizontal scroll at 390 px; the console clean; `npm run typecheck`, `npm run test` and `npm run build` green.

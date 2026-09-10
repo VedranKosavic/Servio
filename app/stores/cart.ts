@@ -47,6 +47,13 @@ export interface CartLine {
   flavour_ids?: string[]
   /** A note from the chips or the free-text sheet (WP3 writes it). */
   note?: string
+  /**
+   * *Na račun kuće*, decided before the round was locked (F7). The server
+   * re-decides it: only `staff_drink` under the cap and an admin's `owner_guest`
+   * lock at zero, and anything else locks at full price and waits for somebody
+   * to approve it. The phone only carries the reason.
+   */
+  comp_reason?: string
 }
 
 export interface CartDraft {
@@ -252,10 +259,17 @@ export const useCartStore = defineStore('cart', () => {
     return fresh
   }
 
-  function add(tableId: string | null, productId: string, flavourIds?: string[], note?: string): void {
+  function add(
+    tableId: string | null, productId: string, flavourIds?: string[], note?: string,
+    compReason?: string,
+  ): void {
     const draft = ensureDraft(tableId)
     const key = lineKey(productId, flavourIds)
-    const existing = draft.lines.find(line => line.key === key && line.note === note)
+    // A comped kafa and a paid kafa are two lines, the same way a noted one is:
+    // merging them would charge for a drink the house said it was giving away.
+    const existing = draft.lines.find(line => (
+      line.key === key && line.note === note && line.comp_reason === compReason
+    ))
     if (existing) {
       existing.qty += 1
     } else {
@@ -268,6 +282,7 @@ export const useCartStore = defineStore('cart', () => {
         qty: 1,
         ...(flavourIds && flavourIds.length > 0 ? { flavour_ids: [...flavourIds] } : {}),
         ...(note ? { note } : {}),
+        ...(compReason ? { comp_reason: compReason } : {}),
       })
     }
     drafts.value = { ...drafts.value, [keyFor(tableId)]: draft }
@@ -296,6 +311,20 @@ export const useCartStore = defineStore('cart', () => {
       drafts.value = { ...drafts.value, [keyFor(tableId)]: draft }
       void persist()
     }
+  }
+
+  /**
+   * *Na račun kuće* on a line that is already on the draft (F7). The reason
+   * rides on the line and the lock decides what it costs — nothing is sent from
+   * here, which is why the common case ("this coffee is on the house") is free.
+   */
+  function setComp(tableId: string | null, lineId: string, reason: string): void {
+    const draft = draftFor(tableId)
+    const line = draft?.lines.find(l => l.id === lineId)
+    if (!draft || !line) return
+    line.comp_reason = reason
+    drafts.value = { ...drafts.value, [keyFor(tableId)]: draft }
+    void persist()
   }
 
   /**
@@ -333,6 +362,7 @@ export const useCartStore = defineStore('cart', () => {
     qtyOfProduct,
     ensureDraft,
     add,
+    setComp,
     removeOne,
     clear,
   }

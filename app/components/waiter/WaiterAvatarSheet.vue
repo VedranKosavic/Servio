@@ -38,7 +38,8 @@ function onItem(item: (typeof WAITER_MENU)[number]) {
   }
   if (!item.ready || !item.to) return
   emit('close')
-  void navigateTo(item.to)
+  // Some rows are the same screen at two routes — see `toBartender`.
+  void navigateTo(role.value === 'bartender' && item.toBartender ? item.toBartender : item.to)
 }
 
 function disabledFor(item: (typeof WAITER_MENU)[number]): boolean {

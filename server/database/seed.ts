@@ -238,10 +238,22 @@ export function seed(db: Db, opts: SeedOptions = {}): void {
       packQty?: number
       isSpot?: boolean
       weigh?: boolean
+      /**
+       * The empty jar or tin, in grams. A weighed item is counted on the scale
+       * with its container on it, and the count screen subtracts this and says
+       * so ("minus tara 40 g"). Without it the whole §1.3 feature is invisible.
+       */
+      tareG?: number
+      /**
+       * How much drift is normal before a line needs a note. Grams of tobacco
+       * and coffee move a little every night; a bottle does not, so a bottle
+       * stays at 0 — one short really is one short.
+       */
+      toleranceQty?: number
     }
     const stock: SeedStock[] = [
-      { name: 'Kafa (mljevena)', kind: 'potrosni', unit: 'g', opening: 2400, costMfen: 1_800, category: 'Kafa', isSpot: true, weigh: true },
-      { name: 'Šećer', kind: 'potrosni', unit: 'g', opening: 4200, costMfen: 200, category: 'Ostalo', isSpot: true, weigh: true },
+      { name: 'Kafa (mljevena)', kind: 'potrosni', unit: 'g', opening: 2400, costMfen: 1_800, category: 'Kafa', isSpot: true, weigh: true, tareG: 120, toleranceQty: 20 },
+      { name: 'Šećer', kind: 'potrosni', unit: 'g', opening: 4200, costMfen: 200, category: 'Ostalo', isSpot: true, weigh: true, tareG: 90, toleranceQty: 30 },
       { name: 'Mlijeko', kind: 'potrosni', unit: 'ml', opening: 5000, costMfen: 200, category: 'Ostalo' },
       { name: 'Nes', kind: 'potrosni', unit: 'kom', opening: 40, costMfen: 40_000, category: 'Kafa' },
       { name: 'Čaj (vrećice)', kind: 'potrosni', unit: 'kom', opening: 90, costMfen: 15_000, category: 'Čaj' },
@@ -251,16 +263,19 @@ export function seed(db: Db, opts: SeedOptions = {}): void {
       { name: 'Sok od narandže', kind: 'pice', unit: 'kom', opening: 24, costMfen: 100_000, category: 'Bezalkoholna' },
       { name: 'Voda 0,5 l', kind: 'pice', unit: 'kom', opening: 72, costMfen: 45_000, category: 'Bezalkoholna' },
       { name: 'Red Bull', kind: 'pice', unit: 'kom', opening: 28, costMfen: 200_000, category: 'Energetska', isSpot: true },
+      // The dearest thing on the shelf, and the reason `waste_pin_threshold_fen`
+      // has a branch at all: one broken bottle is 12,00 KM and asks for a PIN.
+      { name: 'Sirup (Monin 0,7 l)', kind: 'potrosni', unit: 'kom', opening: 6, costMfen: 1_200_000, category: 'Bezalkoholna', isSpot: true },
       { name: 'Limun', kind: 'potrosni', unit: 'kom', opening: 20, costMfen: 50_000, category: 'Ostalo' },
       // Tobacco: one stock item per aroma, weighed in grams. All on the spot
       // list — an open tin is the easiest thing in the café to lose track of.
-      { name: 'Al Fakher · Jabuka', kind: 'duhan', unit: 'g', opening: 643, costMfen: 12_000, category: 'Nargila', isSpot: true, weigh: true },
-      { name: 'Al Fakher · Menta', kind: 'duhan', unit: 'g', opening: 500, costMfen: 12_000, category: 'Nargila', isSpot: true, weigh: true },
-      { name: 'Al Fakher · Grožđe', kind: 'duhan', unit: 'g', opening: 400, costMfen: 12_000, category: 'Nargila', isSpot: true, weigh: true },
-      { name: 'Al Fakher · Limun-menta', kind: 'duhan', unit: 'g', opening: 300, costMfen: 12_000, category: 'Nargila', isSpot: true, weigh: true },
-      { name: 'Al Fakher · Lubenica', kind: 'duhan', unit: 'g', opening: 250, costMfen: 12_000, category: 'Nargila', isSpot: true, weigh: true },
-      { name: 'Al Fakher · Borovnica', kind: 'duhan', unit: 'g', opening: 150, costMfen: 12_000, category: 'Nargila', isSpot: true, weigh: true },
-      { name: 'Ugalj (kocke)', kind: 'zar', unit: 'kom', opening: 103, costMfen: 25_000, category: 'Nargila', isSpot: true },
+      { name: 'Al Fakher · Jabuka', kind: 'duhan', unit: 'g', opening: 643, costMfen: 12_000, category: 'Nargila', isSpot: true, weigh: true, tareG: 40, toleranceQty: 5 },
+      { name: 'Al Fakher · Menta', kind: 'duhan', unit: 'g', opening: 500, costMfen: 12_000, category: 'Nargila', isSpot: true, weigh: true, tareG: 40, toleranceQty: 5 },
+      { name: 'Al Fakher · Grožđe', kind: 'duhan', unit: 'g', opening: 400, costMfen: 12_000, category: 'Nargila', isSpot: true, weigh: true, tareG: 40, toleranceQty: 5 },
+      { name: 'Al Fakher · Limun-menta', kind: 'duhan', unit: 'g', opening: 300, costMfen: 12_000, category: 'Nargila', isSpot: true, weigh: true, tareG: 40, toleranceQty: 5 },
+      { name: 'Al Fakher · Lubenica', kind: 'duhan', unit: 'g', opening: 250, costMfen: 12_000, category: 'Nargila', isSpot: true, weigh: true, tareG: 40, toleranceQty: 5 },
+      { name: 'Al Fakher · Borovnica', kind: 'duhan', unit: 'g', opening: 150, costMfen: 12_000, category: 'Nargila', isSpot: true, weigh: true, tareG: 40, toleranceQty: 5 },
+      { name: 'Ugalj (kocke)', kind: 'zar', unit: 'kom', opening: 103, costMfen: 25_000, category: 'Nargila', isSpot: true, toleranceQty: 1 },
     ]
 
     for (const item of stock) {
@@ -279,8 +294,8 @@ export function seed(db: Db, opts: SeedOptions = {}): void {
         avgCostMfen: item.costMfen,
         lastCostMfen: item.costMfen,
         countMethod: item.weigh ? 'weigh' : 'count',
-        tareG: null,
-        toleranceQty: 0,
+        tareG: item.tareG ?? null,
+        toleranceQty: item.toleranceQty ?? 0,
         parQty: null,
         isSpot: item.isSpot ? 1 : 0,
         available: 1,

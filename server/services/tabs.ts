@@ -385,9 +385,13 @@ export function getTab(q: Queryable, venueId: string, tabId: string, _actor: Act
 /** The unpaid tabs waiting for the owner's *Otpis* or *Naplatiti*. */
 export function pendingFor(q: Queryable, venueId: string, _now: string): AttentionItem[] {
   const names = userNames(q, venueId)
-  const rows = q.select({ tab: schema.tabs, tableName: schema.tables.name })
+  // LEFT: an unpaid tab opened at the bar must reach the owner's list too.
+  const rows = q.select({
+    tab: schema.tabs,
+    tableName: sql<string>`coalesce(${schema.tables.name}, 'Bez stola')`,
+  })
     .from(schema.tabs)
-    .innerJoin(schema.tables, eq(schema.tables.id, schema.tabs.tableId))
+    .leftJoin(schema.tables, eq(schema.tables.id, schema.tabs.tableId))
     .where(and(
       eq(schema.tabs.venueId, venueId),
       eq(schema.tabs.status, 'unpaid'),

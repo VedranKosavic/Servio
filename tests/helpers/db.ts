@@ -26,6 +26,7 @@ import { expect } from 'vitest'
 import type Database from 'better-sqlite3'
 import { openDatabase, type Db } from '../../server/database/client'
 import * as schema from '../../server/database/schema'
+import { businessDate } from '../../shared/dates'
 import { seed } from '../../server/database/seed'
 import type { Actor, Role } from '#shared/types'
 
@@ -150,7 +151,12 @@ export function makeFixture(): Fixture {
     db.insert(schema.shifts).values({
       id: shiftId,
       venueId,
-      businessDate: opts.businessDate ?? at.slice(0, 10),
+      // The **business** date, not the UTC calendar one. `at.slice(0, 10)` was
+      // the same string for most of the day and a different one between 00:00
+      // and 04:00 UTC — the small hours in Sarajevo, when the night still
+      // belongs to the previous day — so the suite quietly failed whenever it
+      // was run at 3 a.m. `businessDate` is the definition every service uses.
+      businessDate: opts.businessDate ?? businessDate(at),
       openedAt: at,
       openedBy: userId(opts.members?.[0] ?? 'Amar'),
       autoOpened: 0,

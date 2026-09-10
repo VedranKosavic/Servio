@@ -14,10 +14,10 @@
  * because a fixed-price catch-all with no note is a number nobody can explain
  * the next morning.
  *
- * *Na račun kuće* is listed and disabled. The comp sheet belongs to WP1 (PHASE3
- * §3, WP1); listing the row now and greying it out is the house pattern — a
- * menu that grows an item every week teaches nobody where anything is, and a
- * disabled row that says *stiže uskoro* is honest.
+ * *Na račun kuće* hands off to WP1's `app/components/adjust/AdjCompSheet.vue`,
+ * which owns the F7 rule — the *Osoblje: 1/2 (do 3 KM)* counter, the cap and the
+ * Bosnian refusal past it. This sheet only says that the house is paying; the
+ * page above swaps the sheets.
  */
 const props = withDefaults(defineProps<{
   /** What the note is for — the product's name, or the line's. */
@@ -30,7 +30,12 @@ const props = withDefaults(defineProps<{
   freeTextFirst?: boolean
 }>(), { initial: null, freeTextFirst: false })
 
-const emit = defineEmits<{ close: [], save: [note: string | null] }>()
+const emit = defineEmits<{
+  close: []
+  save: [note: string | null]
+  /** Hand over to `AdjCompSheet` (F7). */
+  comp: []
+}>()
 
 const text = ref(props.initial ?? '')
 const field = ref<HTMLInputElement | null>(null)
@@ -93,10 +98,8 @@ function saveText() {
         Sačuvaj napomenu
       </button>
 
-      <!-- WP1 replaces this row with its comp sheet (PHASE3 §3, WP1). -->
-      <button type="button" class="btn h-12 justify-between" disabled>
-        <span>Na račun kuće</span>
-        <span class="chip">stiže uskoro</span>
+      <button type="button" class="btn h-12 justify-between" @click="emit('comp')">
+        Na račun kuće
       </button>
 
       <button type="button" class="btn btn-ghost h-12" @click="emit('close')">

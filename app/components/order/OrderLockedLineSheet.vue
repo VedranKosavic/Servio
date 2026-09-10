@@ -7,11 +7,11 @@
  * do nothing — it says why, in one sentence, and points at the only way back,
  * which is a storno somebody signs for.
  *
- * The *Zatraži storno* button belongs to WP1 (PHASE3 §3): the reason chips, the
- * restock line, the bartender's PIN and the amber "ostaje u tvom pazaru" copy
- * are its sheet, `app/components/adjust/AdjVoidSheet.vue`. Until it lands, the
- * row is listed and disabled with *stiže uskoro* — the house pattern for a
- * screen another package owns — and this component is where WP1 swaps it in.
+ * *Zatraži storno* hands off to WP1's own sheet,
+ * `app/components/adjust/AdjVoidSheet.vue`, which is where the reason chips, the
+ * restock line, the self-void countdown, the bartender's PIN and the amber
+ * "ostaje u tvom pazaru" copy live. This sheet only decides *that* a storno is
+ * being asked for; the page above owns which sheet is open.
  */
 import { formatKm } from '#shared/money'
 import type { TabLine } from '#shared/types'
@@ -22,7 +22,11 @@ defineProps<{
   round: string
 }>()
 
-defineEmits<{ close: [] }>()
+defineEmits<{
+  close: []
+  /** Hand over to `AdjVoidSheet` — the page swaps the sheets. */
+  storno: []
+}>()
 </script>
 
 <template>
@@ -52,10 +56,12 @@ defineEmits<{ close: [] }>()
         se vidi.
       </p>
 
-      <!-- WP1 replaces this with AdjVoidSheet (PHASE3 §3, WP1). -->
-      <button type="button" class="btn h-14 justify-between text-lg" disabled>
-        <span>Zatraži storno</span>
-        <span class="chip">stiže uskoro</span>
+      <button
+        type="button"
+        class="btn h-14 justify-between text-lg"
+        @click="$emit('storno')"
+      >
+        Zatraži storno
       </button>
 
       <button type="button" class="btn btn-ghost h-12" @click="$emit('close')">

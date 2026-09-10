@@ -18,6 +18,14 @@ export interface WaiterMenuItem {
   /** Bosnian, from PLAN §12's glossary, verbatim. */
   label: string
   to?: string
+  /**
+   * Where the same row goes for a bartender, when that is a different screen.
+   *
+   * `/s/popis` exists precisely so his back arrow returns to the ticket queue
+   * and not to a floor plan he does not use; without this the row handed him
+   * the waiter's copy and stranded him on `/k`.
+   */
+  toBartender?: string
   /** A row that does something instead of navigating. */
   action?: 'logout' | 'wakelock'
   /** Which roles see this row at all. */
@@ -34,7 +42,7 @@ export const WAITER_MENU: WaiterMenuItem[] = [
   // Already on disk since Korak 1.
   { id: 'settle', label: 'Završi smjenu', to: '/k/smjena', roles: ['waiter', 'bartender'], ready: true },
   // WP2
-  { id: 'count', label: 'Brzi popis', to: '/k/popis', roles: ['waiter', 'bartender'], ready: true },
+  { id: 'count', label: 'Brzi popis', to: '/k/popis', toBartender: '/s/popis', roles: ['waiter', 'bartender'], ready: true },
   { id: 'waste', label: 'Otpis', to: '/k/otpis', roles: ['waiter', 'bartender'], ready: true },
   // WP4
   { id: 'rules', label: 'Pravila', to: '/k/pravila', roles: ['waiter', 'bartender'], ready: true },

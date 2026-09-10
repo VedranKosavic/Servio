@@ -101,7 +101,9 @@ function loadLines(q: Queryable, venueId: string, shiftId: string): LedgerLine[]
     lateSync: schema.orders.lateSync,
     shiftSeq: schema.orders.shiftSeq,
     postSettle: schema.orders.postSettle,
-    tableName: schema.tables.name,
+    // LEFT, because a *Bez stola* tab has no table row and its lines are still
+    // this waiter's promet (PHASE3 §1.11).
+    tableName: sql<string>`coalesce(${schema.tables.name}, 'Bez stola')`,
     nameSnapshot: schema.orderLines.nameSnapshot,
     note: schema.orderLines.note,
     flavoursJson: schema.orderLines.flavoursJson,
@@ -123,7 +125,7 @@ function loadLines(q: Queryable, venueId: string, shiftId: string): LedgerLine[]
     .from(schema.orderLines)
     .innerJoin(schema.orders, eq(schema.orders.id, schema.orderLines.orderId))
     .innerJoin(schema.tabs, eq(schema.tabs.id, schema.orders.tabId))
-    .innerJoin(schema.tables, eq(schema.tables.id, schema.tabs.tableId))
+    .leftJoin(schema.tables, eq(schema.tables.id, schema.tabs.tableId))
     .innerJoin(schema.products, eq(schema.products.id, schema.orderLines.productId))
     .leftJoin(schema.lineAdjustments, live)
     .where(and(eq(schema.orders.venueId, venueId), eq(schema.orders.shiftId, shiftId)))

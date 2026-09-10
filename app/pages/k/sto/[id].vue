@@ -25,14 +25,22 @@
  */
 import { formatKm } from '#shared/money'
 import type {
-  PaymentMethod, Product, TabDetail, TabLine, TableState, User, VenueTable,
+  PaymentMethod, Product, TabDetail, TabLine, TabOrder, TableState, User, VenueTable,
 } from '#shared/types'
 import { stavke } from '~/components/order/OrderText'
+import type { AdjustmentOutcome, CompReason } from '~/composables/useAdjustments'
+// Explicit, not auto-imported. Nuxt names a component after its folder plus its
+// file, so `adjust/AdjVoidSheet.vue` would be `<AdjustAdjVoidSheet>` — and an
+// unresolved tag renders nothing at all in a production build, silently.
+import AdjCompSheet from '~/components/adjust/AdjCompSheet.vue'
+import AdjLineState from '~/components/adjust/AdjLineState.vue'
+import AdjVoidSheet from '~/components/adjust/AdjVoidSheet.vue'
 
 const route = useRoute()
 const api = useApi()
 const me = useMe()
 const cart = useCartStore()
+const { queuedFor } = useAdjustments()
 const { outbox, enqueue } = useOutbox()
 const { lockToast, state: syncState } = useSync()
 
@@ -242,6 +250,8 @@ async function lockDraft() {
           qty: line.qty,
           ...(line.flavour_ids?.length ? { flavour_ids: line.flavour_ids } : {}),
           ...(line.note ? { note: line.note } : {}),
+          // *Na račun kuće*, decided on the phone. The server re-decides it.
+          ...(line.comp_reason ? { comp_reason: line.comp_reason } : {}),
         })),
       },
     })
@@ -530,9 +540,109 @@ async function addZar(parentLineId: string) {
   }
 }
 
-// -- A locked line ----------------------------------------------------------
+// -- A locked line, and the storno it can be asked for ----------------------
 
-const lockedLine = ref<{ line: TabLine, round: string } | null>(null)
+/** The long-press sheet: the line, and the round it belongs to. */
+const lockedLine = ref<{ line: TabLine, order: TabOrder, label: string } | null>(null)
+
+/** *Zatraži storno* on that sheet swaps it for WP1's own (F6). */
+const stornoFor = ref<{ line: TabLine, order: TabOrder } | null>(null)
+
+function askStorno() {
+  const open = lockedLine.value
+  lockedLine.value = null
+  if (open) stornoFor.value = { line: open.line, order: open.order }
+}
+
+async function stornoDone(outcome: AdjustmentOutcome) {
+  stornoFor.value = null
+  toast.value = outcome.message
+  await refreshState()
+  await loadDetail()
+}
+
+/**
+ * What a struck (or waiting) line should say. `queued` is the one state the
+ * server cannot know about: the request is still in this phone's outbox.
+ * A rejected storno leaves the line `ok`, so it is money again and draws
+ * normally — which is what `AdjLineState` would say anyway.
+ */
+function adjState(line: TabLine): 'applied' | 'pending' | 'queued' | null {
+  if (queuedFor(line.id)) return 'queued'
+  if (line.status === 'storno_na_cekanju') return 'pending'
+  if (line.status === 'storno' || line.status === 'gratis') return 'applied'
+  return null
+}
+
+function adjKind(line: TabLine): 'void' | 'comp' {
+  return line.status === 'gratis' || line.comp_reason ? 'comp' : 'void'
+}
+
+// -- Na račun kuće on a draft line (F7) -------------------------------------
+
+const noteFor = ref<{ product: Product, lineId: string } | null>(null)
+const compFor = ref<{ product: Product, lineId: string } | null>(null)
+const staffUsed = ref<number | null>(null)
+
+/** The ⋯ on a draft line in the *Potvrdi* sheet. */
+function noteLine(lineId: string) {
+  const line = lines.value.find(l => l.id === lineId)
+  const product = products.value.find(p => p.id === line?.product_id)
+  if (line && product) noteFor.value = { product, lineId }
+}
+
+function saveNote(note: string | null) {
+  const open = noteFor.value
+  noteFor.value = null
+  if (!open) return
+  // The cart merges by product **and** note, so re-noting is take-off-put-back.
+  const line = lines.value.find(l => l.id === open.lineId)
+  if (!line) return
+  const qty = line.qty
+  for (let i = 0; i < qty; i++) cart.removeOne(tableId.value, line.product_id)
+  for (let i = 0; i < qty; i++) {
+    cart.add(tableId.value, line.product_id, line.flavour_ids, note ?? undefined)
+  }
+}
+
+/**
+ * Tonight's staff drinks, from `GET /api/me/shift`'s `counts.gratis` (§1.5).
+ * Best effort: `null` renders the published cap without the score.
+ */
+async function loadStaffUsed(): Promise<void> {
+  try {
+    staffUsed.value = (await api.getMyShift()).counts.gratis.used
+  } catch {
+    // No signal. The rule is still on screen; only tonight's count is missing.
+  }
+}
+
+function openComp() {
+  const open = noteFor.value
+  noteFor.value = null
+  if (!open) return
+  compFor.value = open
+  void loadStaffUsed()
+}
+
+const compLine = computed(() => {
+  const open = compFor.value
+  if (!open) return null
+  const line = lines.value.find(l => l.id === open.lineId)
+  const qty = line?.qty ?? 1
+  return {
+    id: open.lineId,
+    name: open.product.name,
+    qty,
+    amount_fen: (priceById.value.get(open.product.id) ?? open.product.price_fen) * qty,
+  }
+})
+
+function applyComp(reason: CompReason) {
+  const open = compFor.value
+  compFor.value = null
+  if (open) cart.setComp(tableId.value, open.lineId, reason)
+}
 
 // -- Kasno sinhronizovano ---------------------------------------------------
 
@@ -688,29 +798,36 @@ function lateWasNotPaid(row: TableState) {
 
           <ul v-if="openRounds.has(round.id)" class="flex flex-col gap-1 border-t border-line px-3 py-2">
             <li v-for="row in round.lines" :key="row.id" class="flex flex-col gap-1.5 py-1">
+              <!-- Struck, waiting, or still on this phone: colour, icon and a
+                   sentence, never colour alone (PHASE3 §4). -->
+              <AdjLineState
+                v-if="adjState(row)"
+                :name="row.name_snapshot"
+                :qty="row.qty"
+                :amount-fen="row.charged_fen"
+                :kind="adjKind(row)"
+                :state="adjState(row)!"
+                :note="row.note"
+              />
               <button
+                v-else
                 type="button"
                 class="flex items-baseline gap-2 text-left"
-                @click="lockedLine = { line: row, round: roundLabel(index, round.at, round.locked_by_name) }"
+                @click="lockedLine = {
+                  line: row,
+                  order: round,
+                  label: roundLabel(index, round.at, round.locked_by_name),
+                }"
               >
-                <span
-                  class="min-w-0 grow text-[17px]"
-                  :class="row.status === 'storno' ? 'text-text-2 line-through' : ''"
-                >
+                <span class="min-w-0 grow text-[17px]">
                   <span class="num font-semibold">{{ row.qty }}×</span> {{ row.name_snapshot }}
                 </span>
-                <span
-                  class="num shrink-0 text-[17px] font-semibold"
-                  :class="row.status === 'storno' ? 'text-text-2 line-through' : ''"
-                >{{ formatKm(row.charged_fen) }}</span>
+                <span class="num shrink-0 text-[17px] font-semibold">{{ formatKm(row.charged_fen) }}</span>
               </button>
 
               <div class="flex flex-wrap items-center gap-1.5">
                 <span v-for="flavour in row.flavour_names" :key="flavour" class="chip">{{ flavour }}</span>
-                <span v-if="row.note" class="chip chip-warn">{{ row.note }}</span>
-                <span v-if="row.status === 'storno_na_cekanju'" class="chip chip-warn">storno na čekanju</span>
-                <span v-else-if="row.status === 'storno'" class="chip chip-danger">storno</span>
-                <span v-else-if="row.status === 'gratis'" class="chip chip-good">kuća časti</span>
+                <span v-if="row.note && !adjState(row)" class="chip chip-warn">{{ row.note }}</span>
 
                 <!-- The button twin of the long press on the floor plan (F4). -->
                 <template v-if="isBowl(row)">
@@ -767,7 +884,19 @@ function lateWasNotPaid(row: TableState) {
                   · {{ line.flavour_ids.map(id => flavourNameById.get(id) ?? '—').join(' + ') }}
                 </small>
                 <small v-if="line.note" class="text-warn">· {{ line.note }}</small>
+                <small v-if="line.comp_reason" class="text-good">· kuća časti</small>
               </span>
+              <!-- The ⋯ twin of the long press: napomena, and *Na račun kuće*. -->
+              <button
+                type="button"
+                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-text-2"
+                :aria-label="`Napomena · ${nameById.get(line.product_id) ?? 'stavka'}`"
+                @click="noteLine(line.id)"
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                  <path d="M5 12h.01M12 12h.01M19 12h.01" />
+                </svg>
+              </button>
               <button
                 type="button"
                 class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-xl font-bold"
@@ -870,7 +999,7 @@ function lateWasNotPaid(row: TableState) {
       @confirm="lockDraft"
       @add="addOne"
       @remove="removeOne"
-      @note="navigateTo(`/k/dodaj/${routeId}`)"
+      @note="noteLine"
     />
 
     <WaiterPaySheet
@@ -903,8 +1032,50 @@ function lateWasNotPaid(row: TableState) {
     <OrderLockedLineSheet
       v-if="lockedLine"
       :line="lockedLine.line"
-      :round="lockedLine.round"
+      :round="lockedLine.label"
       @close="lockedLine = null"
+      @storno="askStorno"
+    />
+
+    <!-- F6: the reason chips, the restock line, the countdown and the PIN -->
+    <AdjVoidSheet
+      v-if="stornoFor"
+      :line="{
+        id: stornoFor.line.id,
+        name: stornoFor.line.name_snapshot,
+        qty: stornoFor.line.qty,
+        amount_fen: stornoFor.line.charged_fen,
+      }"
+      :table-name="tableName"
+      :locked-at="stornoFor.order.at"
+      :mine="stornoFor.order.locked_by === me.user.value?.id"
+      :tab-paid="detail?.tab.status === 'paid'"
+      :tab-client-id="tabClientIdHere"
+      @close="stornoFor = null"
+      @done="stornoDone"
+    />
+
+    <!-- The ⋯ on a draft line: napomena… -->
+    <OrderNoteSheet
+      v-if="noteFor"
+      :title="noteFor.product.name"
+      :chips="boot?.categories.find(c => c.id === noteFor!.product.category_id)?.note_chips ?? []"
+      :initial="lines.find(l => l.id === noteFor!.lineId)?.note ?? null"
+      @close="noteFor = null"
+      @save="saveNote"
+      @comp="openComp"
+    />
+
+    <!-- …and F7, the house paying for it. Nothing is sent from here. -->
+    <AdjCompSheet
+      v-if="compFor && compLine"
+      mode="draft"
+      :line="compLine"
+      :table-name="tableName"
+      :staff-drink-allowed="compFor.product.staff_drink_allowed"
+      :staff-used="staffUsed"
+      @close="compFor = null"
+      @draft="applyComp"
     />
 
     <OrderGuestView

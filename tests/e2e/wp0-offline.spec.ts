@@ -18,6 +18,15 @@
  *   4. Red never blocks adding or locking (PLAN §10, invariant 5).
  *   5. The manifest and the worker are served, and the worker takes control.
  *
+ * **One device per file, enrolled once.** `authLimiter` allows ten calls a
+ * minute at the auth doors, keyed by the device cookie or — before enrolment —
+ * by the IP, and `DEV_MULTIPLIER` is 1 in a production build because
+ * `import.meta.dev` compiles to `false` there. A file that enrolled per test
+ * therefore walked into its own `429 RATE_LIMITED` partway through the run. So
+ * the context is built in `beforeAll` and shared; what is reset between tests is
+ * the *phone's* state — IndexedDB and localStorage — and never the cookies,
+ * because the device cookie is the thing that must not be re-issued.
+ *
  * Run it against a **production build on port 3112**, never the owner's 3002:
  *
  *   rm -f data/verify.db*
@@ -124,6 +133,53 @@ async function tapProduct(page: Page, name: string) {
 
 const chip = (page: Page, text: RegExp | string) => page.locator('.chip').filter({ hasText: text })
 
+/** `loginAsAmar` without the service-worker handshake, for a context that blocks it. */
+async function loginAsAmarNoWorker(context: BrowserContext): Promise<void> {
+  expect((await context.request.post('/api/dev/enrol', { data: {} })).ok()).toBe(true)
+  const users = await (await context.request.get('/api/auth/users')).json() as
+    { id: string, name: string }[]
+  const amar = users.find(u => u.name === 'Amar')!
+  expect((await context.request.post('/api/auth/pin', {
+    data: { user_id: amar.id, pin: AMAR_PIN },
+  })).ok()).toBe(true)
+}
+
+/**
+ * A phone that has forgotten last test's night but is still the same enrolled
+ * device. Drafts and the outbox live in IndexedDB, the small conveniences in
+ * localStorage; the cookies stay exactly where they are.
+ */
+async function freshPage(): Promise<Page> {
+  // Only one page at a time. Two pages of the same context share IndexedDB, and
+  // a page left open from the previous test keeps writing its own outbox into
+  // the store this one is about to read — which showed up as a *Potvrdi* stuck
+  // on *Šaljem…* forever.
+  for (const open of context.pages()) await open.close()
+
+  const page = await context.newPage()
+  await page.goto('/k')
+  // `idb-keyval` keeps everything in one store, so emptying it is enough — and
+  // it is safer than `deleteDatabase`, which blocks while any connection is
+  // open and then leaves the next write hanging.
+  await page.evaluate(async () => {
+    localStorage.clear()
+    await new Promise<void>((done) => {
+      const request = indexedDB.open('keyval-store')
+      request.onerror = () => done()
+      request.onsuccess = () => {
+        const db = request.result
+        if (!db.objectStoreNames.contains('keyval')) { db.close(); done(); return }
+        const tx = db.transaction('keyval', 'readwrite')
+        tx.objectStore('keyval').clear()
+        tx.oncomplete = tx.onerror = () => { db.close(); done() }
+      }
+    })
+  })
+  await page.reload()
+  await expect(page.getByText('Stolovi')).toBeVisible({ timeout: 20_000 })
+  return page
+}
+
 /** Lock the round that is on the draft, and wait for the toast. */
 async function lockRound(page: Page) {
   // *Zaključi* → the sheet with every line and the total → *Potvrdi*
@@ -133,9 +189,24 @@ async function lockRound(page: Page) {
   await expect(page.getByText(/Sačuvano · čeka slanje/)).toBeVisible()
 }
 
+let context: BrowserContext
+let tables: Map<string, string>
+
+test.describe.configure({ mode: 'serial' })
+
 test.describe('WP0 — the offline outbox', () => {
-  test('two rounds and a payment queued offline land exactly once', async ({ page, context }) => {
-    const tables = await loginAsAmar(context, page)
+  test.beforeAll(async ({ browser }) => {
+    context = await browser.newContext()
+    const page = await context.newPage()
+    tables = await loginAsAmar(context, page)
+    await page.close()
+  })
+
+  test.afterAll(async () => {
+    await context?.close()
+  })
+  test('two rounds and a payment queued offline land exactly once', async () => {
+    const page = await freshPage()
     const tableA = 'Sto 5'
     const tableB = 'Sto 7'
 
@@ -194,8 +265,8 @@ test.describe('WP0 — the offline outbox', () => {
     expect(b.tab_id).toBeNull()
   })
 
-  test('the heartbeat reports the queue, and stops once it is empty', async ({ page, context }) => {
-    await loginAsAmar(context, page)
+  test('the heartbeat reports the queue, and stops once it is empty', async () => {
+    const page = await freshPage()
     await context.setOffline(true)
 
     await openTable(page, 'Sto 9')
@@ -226,8 +297,8 @@ test.describe('WP0 — the offline outbox', () => {
     }, { timeout: 30_000 }).toBe(0)
   })
 
-  test('red says the network is gone and blocks nothing', async ({ page, context }) => {
-    await loginAsAmar(context, page)
+  test('red says the network is gone and blocks nothing', async () => {
+    const page = await freshPage()
     await context.setOffline(true)
 
     await expect(chip(page, /Nema veze/)).toBeVisible({ timeout: 30_000 })
@@ -244,8 +315,8 @@ test.describe('WP0 — the offline outbox', () => {
     await context.setOffline(false)
   })
 
-  test('a refused round blocks its own table and nobody else, and Odbaci clears it', async ({ page, context }) => {
-    const tables = await loginAsAmar(context, page)
+  test('a refused round blocks its own table and nobody else, and Odbaci clears it', async () => {
+    const page = await freshPage()
     const bad = 'Sto 3'
     const good = 'Sto 4'
 
@@ -301,9 +372,11 @@ test.describe('WP0 — the offline outbox', () => {
     await card.getByRole('button', { name: 'Odbaci' }).click()
     await expect(chip(page, 'Sinhronizovano')).toBeVisible({ timeout: 20_000 })
     await expect(page.locator('.card').filter({ hasText: 'Popravi' })).toHaveCount(0)
+
+    await context.unroute('**/api/orders')
   })
 
-  test('the manifest and the worker are real', async ({ page, context }) => {
+  test('the manifest and the worker are real', async () => {
     const manifest = await context.request.get('/manifest.webmanifest')
     expect(manifest.status()).toBe(200)
     const body = await manifest.json()
@@ -318,8 +391,8 @@ test.describe('WP0 — the offline outbox', () => {
       expect((await context.request.get(icon.src)).status()).toBe(200)
     }
 
-    // `loginAsAmar` already asserts the worker takes control after one reload.
-    await loginAsAmar(context, page)
+    // `loginAsAmar` in `beforeAll` already asserted the worker takes control.
+    const page = await freshPage()
 
     // The install guide is reachable and says the sentence that matters.
     await page.goto('/k/instalacija', { waitUntil: 'networkidle' })
@@ -330,5 +403,45 @@ test.describe('WP0 — the offline outbox', () => {
     const overflow = await page.evaluate(() =>
       document.documentElement.scrollWidth - document.documentElement.clientWidth)
     expect(overflow).toBeLessThanOrEqual(0)
+  })
+
+  /**
+   * The one gap the worker cannot close: the **first** bootstrap.
+   *
+   * `/api/bootstrap` is NetworkFirst with a cache behind it, but the worker
+   * takes control on the *second* load, so the very first read goes past it
+   * uncached. `useAsyncData` runs once and never retries, so a phone that opened
+   * with no signal used to render *Učitavanje…* for the rest of the shift — no
+   * error, no retry, and the floor plan never drew a circle.
+   *
+   * Its own context with the worker blocked, which is exactly that first load.
+   */
+  test('a bootstrap that never arrives says so, and Pokušaj ponovo fixes it', async ({ browser }) => {
+    const bare = await browser.newContext({ serviceWorkers: 'block' })
+    try {
+      await loginAsAmarNoWorker(bare)
+      const page = await bare.newPage()
+
+      let blocked = true
+      await bare.route('**/api/bootstrap', async (route) => {
+        if (blocked) await route.abort()
+        else await route.continue()
+      })
+
+      await page.goto('/k')
+      // Honest, not hopeful: the sentence, and the way back (PHASE3 §4).
+      await expect(page.getByText('Nema veze — meni nije učitan.')).toBeVisible({ timeout: 20_000 })
+      const retry = page.getByRole('button', { name: 'Pokušaj ponovo' })
+      await expect(retry).toBeVisible()
+
+      blocked = false
+      await retry.click()
+      // 27 circles, on the same screen, with no reload.
+      await expect(page.getByRole('button', { name: /^1(\s|$)/ }).first())
+        .toBeVisible({ timeout: 20_000 })
+      await expect(page.getByText('Nema veze — meni nije učitan.')).toHaveCount(0)
+    } finally {
+      await bare.close()
+    }
   })
 })

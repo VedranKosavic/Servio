@@ -413,6 +413,39 @@ describe('a whole night', () => {
   })
 })
 
+/**
+ * *Bez stola* in the numbers (PHASE3 §1.11).
+ *
+ * `shiftLines` joined `tables` with an INNER join, so a tab with no table
+ * dropped out of every summary built on it: the waiter's own promet, the
+ * owner's *Puls*, the category counts. The money was on the tab and nowhere in
+ * the night's arithmetic.
+ */
+describe('a table-less tab', () => {
+  /** A locked round whose tab was never on a table — the guests at the bar. */
+  function lockLoose(name: string, product: string): void {
+    const round = f.lock(name, 'Sto 1', [{ product }])
+    f.db.update(schema.tabs).set({ tableId: null })
+      .where(eq(schema.tabs.id, round.tabId)).run()
+  }
+
+  it('counts in summarizeUser and reads Bez stola', () => {
+    const shiftId = f.openShift({ members: ['Amar'] })
+    f.lock('Amar', 'Sto 2', [{ product: 'Kafa' }])
+    lockLoose('Amar', 'Kafa')
+
+    const mine = summarizeUser(f.db, f.venueId, shiftId, f.userId('Amar'), f.clock.now())
+    expect(mine.rounds).toBe(2)
+    expect(mine.tabs).toBe(2)
+    expect(mine.promet_fen).toBe(300)
+
+    const summary = summarise(shiftId)
+    expect(summary.promet_fen).toBe(300)
+    const drill = shiftLines(f.db, f.venueId, shiftId, { kat: 'sve' })
+    expect(drill.rows.map(r => r.table_name).sort()).toEqual(['Bez stola', 'Sto 2'])
+  })
+})
+
 // ===========================================================================
 // WP4 — *Moja smjena*
 // ===========================================================================

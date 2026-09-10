@@ -16,6 +16,11 @@
  *      off** and refuses the wrong one — while a colleague's PIN still needs
  *      the network, because nothing on the phone can create a session.
  *
+ * **One device per file, enrolled once** (§5.1): `authLimiter` allows ten auth
+ * calls a minute per IP on a production build, so the enrolment and the first
+ * login happen in `beforeAll` and every test opens a fresh page on the same
+ * context.
+ *
  * Run it against a production build on a port that is not 3002:
  *
  *   rm -f data/verify-wp4.db*
@@ -29,6 +34,13 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 
 const AMAR_PIN = '1111'
 const EMIR_PIN = '123456'
+/**
+ * **Tarik's night, not Amar's.** The five spec files run in one command against
+ * one database (§5.1) and Amar is the waiter every other file drives, so his
+ * expected cash by the time this file runs is four files' worth of takings and a
+ * blind settlement against it could never read *Tačno*. Tarik works only here.
+ */
+const TARIK_PIN = '4444'
 
 interface Boot {
   tables: { id: string, name: string }[]
@@ -36,19 +48,47 @@ interface Boot {
   flavours: { id: string, name: string }[]
 }
 
-async function enrolAndLogin(context: BrowserContext, pin = AMAR_PIN, who = 'Amar') {
-  expect((await context.request.post('/api/dev/enrol', { data: {} })).ok()).toBe(true)
-  const users = await (await context.request.get('/api/auth/users')).json() as
-    { id: string, name: string, last_login_at: string | null }[]
-  const person = users.find(u => u.name === who)!
+interface LoginUser { id: string, name: string, last_login_at: string | null }
+
+/**
+ * The device's own view of who may sign in, read **once**.
+ *
+ * `GET /api/auth/users` is an auth door like the PIN itself: ten a minute,
+ * keyed by this device. Re-reading it before every login is how a file that
+ * signs three people in walks into its own 429 (§5.1). The ids never change.
+ */
+let loginUsers: LoginUser[] | null = null
+
+async function knownUsers(context: BrowserContext, fresh = false): Promise<LoginUser[]> {
+  if (fresh || !loginUsers) {
+    loginUsers = await (await context.request.get('/api/auth/users')).json() as LoginUser[]
+  }
+  return loginUsers
+}
+
+/**
+ * The PIN door, for a browser that already holds a device cookie.
+ *
+ * Split from the enrolment on purpose: the enrolment is the only call in the
+ * file that is rate-limited **by IP** (before a device cookie exists the bucket
+ * is `ip:…`, after it `d:…`), so it happens once, in `beforeAll`, and a login
+ * that comes later costs the device's own bucket and nothing shared.
+ */
+async function loginPin(context: BrowserContext, who = 'Amar', pin = AMAR_PIN) {
+  const person = (await knownUsers(context)).find(u => u.name === who)!
   expect((await context.request.post('/api/auth/pin', {
     data: { user_id: person.id, pin },
   })).ok()).toBe(true)
   return person
 }
 
-/** A night on Amar's phone, written through the real routes. */
-async function amarsNight(context: BrowserContext) {
+async function enrolAndLogin(context: BrowserContext, pin = AMAR_PIN, who = 'Amar') {
+  expect((await context.request.post('/api/dev/enrol', { data: {} })).ok()).toBe(true)
+  return await loginPin(context, who, pin)
+}
+
+/** A night on this phone, written through the real routes. */
+async function aNight(context: BrowserContext) {
   const boot = await (await context.request.get('/api/bootstrap')).json() as Boot
   const table = (name: string) => boot.tables.find(t => t.name === name)!.id
   const product = (name: string) => boot.products.find(p => p.name === name)!.id
@@ -93,10 +133,26 @@ async function amarsNight(context: BrowserContext) {
   return rounds.reduce((sum, r) => sum + r.total, 0)
 }
 
+let context: BrowserContext
+
+test.describe.configure({ mode: 'serial' })
+
 test.describe('WP4 — Moja smjena', () => {
-  test('counts before the envelope, money after it, and a note that survives', async ({ page, context }) => {
-    await enrolAndLogin(context)
-    const takings = await amarsNight(context)
+  test.beforeAll(async ({ browser }) => {
+    context = await browser.newContext()
+    await enrolAndLogin(context, TARIK_PIN, 'Tarik')
+  })
+
+  test.afterAll(async () => {
+    await context?.close()
+  })
+
+  test('counts before the envelope, money after it, and a note that survives', async () => {
+    // One page at a time: two pages of one context share IndexedDB, and a page
+    // left open keeps polling and writing behind the next test's back.
+    for (const open of context.pages()) await open.close()
+    const page = await context.newPage()
+    const takings = await aNight(context)
 
     // -- 1. the raw body carries no money but the published ceiling ---------
     const raw = await (await context.request.get('/api/me/shift')).text()
@@ -190,30 +246,35 @@ test.describe('WP4 — Moja smjena', () => {
     await expect(page.getByText('ovaj telefon')).toBeVisible()
   })
 
-  test('the lock screen offers this device’s faces and unlocks offline', async ({ page, context }) => {
+  test('the lock screen offers this device’s faces and unlocks offline', async ({ browser }) => {
+    // The re-lock is walked rather than waited out, but the whole flow — two
+    // logins, a settings patch, an idle window and an offline unlock — is more
+    // than the file's default minute.
+    test.setTimeout(120_000)
+    for (const open of context.pages()) await open.close()
+    const page = await context.newPage()
     // A two-second idle window, so the re-lock can be walked rather than waited
     // out. It is a venue setting for exactly this reason: the café's own tablet
     // runs at five minutes.
-    expect((await context.request.post('/api/auth/admin/login', {
+    //
+    // The owner logs in from a **context of his own**: signing him in on the
+    // phone would end the waiter's session and spend one of that device's ten
+    // auth calls a minute, which is the budget this whole test lives inside.
+    const admin = await browser.newContext()
+    expect((await admin.request.post('/api/auth/admin/login', {
       data: { email: 'haris@lounge.ba', password: 'lounge' },
     })).ok()).toBe(true)
-    expect((await context.request.patch('/api/admin/settings', {
+    expect((await admin.request.patch('/api/admin/settings', {
       data: { shared_device_idle_s: 2 },
     })).ok()).toBe(true)
-    await context.request.post('/api/auth/logout', { data: {} })
+    await admin.close()
 
-    await enrolAndLogin(context)
-    // A second person on the same device, so there is something to rank.
-    const users = await (await context.request.get('/api/auth/users')).json() as
-      { id: string, name: string }[]
-    const emir = users.find(u => u.name === 'Emir')!
-    expect((await context.request.post('/api/auth/pin', {
-      data: { user_id: emir.id, pin: EMIR_PIN },
-    })).ok()).toBe(true)
+    // Two people on the same device, so the lock screen has something to rank.
+    await loginPin(context, 'Amar', AMAR_PIN)
+    await loginPin(context, 'Emir', EMIR_PIN)
 
     // Signed in here, so ranked here; Dino never has.
-    const ranked = await (await context.request.get('/api/auth/users')).json() as
-      { name: string, last_login_at: string | null }[]
+    const ranked = await knownUsers(context, true)
     expect(ranked.find(u => u.name === 'Amar')?.last_login_at).toBeTruthy()
     expect(ranked.find(u => u.name === 'Dino')?.last_login_at).toBeNull()
 

@@ -91,6 +91,18 @@ export function useChanges(handlers: ChangeHandlers, options: ChangesOptions = {
 
   // One request at a time: a slow network must not queue up five polls.
   let inFlight = false
+  // The same, for the session re-read below.
+  let healing = false
+
+  async function healMe(): Promise<void> {
+    if (healing) return
+    healing = true
+    try {
+      await meState.load()
+    } finally {
+      healing = false
+    }
+  }
 
   function apply(result: ChangesResult) {
     if (result.tables_state) handlers.tables?.(result.tables_state)
@@ -135,6 +147,19 @@ export function useChanges(handlers: ChangeHandlers, options: ChangesOptions = {
       ok.value = true
       pollOk.value = true
       lastOkAt.value = Date.now()
+
+      // **The one place a failed session read heals.** `useMe().load()` runs
+      // once, at boot; a phone that opened with no signal therefore keeps
+      // `me.value === null` for ever, and the floor plan then draws the
+      // waiter's own tables as a colleague's because `:my-user-id` is null
+      // (PLAN §10 invariant 9, backwards). The poll is the only timer in the
+      // app, so this is where the retry belongs — every dark screen runs it.
+      //
+      // It is safe here and nowhere else: the line above is an *authenticated*
+      // read that just succeeded, so this phone's cookies work and `/api/me`
+      // will answer. A screen with no session never reaches this line — its
+      // poll 401s and lands in the catch.
+      if (!meState.isReady.value) void healMe()
     } catch (err) {
       // A revoked device or an expired session ends the screen; anything else
       // just turns the chip red and leaves what is on screen alone. Showing

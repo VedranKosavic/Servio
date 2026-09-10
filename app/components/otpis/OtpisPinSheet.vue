@@ -11,12 +11,19 @@
  * The PIN never travels except over a live connection: if the phone is offline
  * the sheet is not offered at all (see `otpis.vue`), because a queued entry
  * waits on disk and a PIN has no business sitting there.
+ *
+ * The list is `useAdjustments().approvers` — the venue's `approver_roles`, never
+ * yourself, and never the owner on a phone that is not his, because
+ * `ADMIN_PIN_FOREIGN_DEVICE` refuses that and a button that always fails is
+ * worse than no button. Those rows carry `pin_len`, so the pad accepts four
+ * digits for a waiter and six for Emir instead of posting a short PIN and
+ * burning an `auth_attempts` row on the lockout ladder.
  */
 import { formatKm } from '#shared/money'
-import type { User } from '#shared/types'
+import type { MeUser } from '#shared/types'
 
 const props = defineProps<{
-  approvers: User[]
+  approvers: MeUser[]
   itemName: string
   costFen: number
   busy?: boolean
@@ -32,11 +39,25 @@ const emit = defineEmits<{
 const approverId = ref<string | null>(props.approvers[0]?.id ?? null)
 const pin = ref('')
 
+/** The list arrives after the sheet opens on a cold start; take the first. */
+watch(() => props.approvers, (list) => {
+  if (!approverId.value || !list.some(u => u.id === approverId.value)) {
+    approverId.value = list[0]?.id ?? null
+  }
+}, { immediate: true })
+
+/** How many digits this particular person's PIN has. */
+const pinLen = computed(() =>
+  props.approvers.find(u => u.id === approverId.value)?.pin_len ?? 4)
+
+// A person swapped mid-typing is a different PIN length; start his over.
+watch(approverId, () => { pin.value = '' })
+
 const canSend = computed(() =>
-  !!approverId.value && pin.value.length >= 4 && !props.busy)
+  !!approverId.value && pin.value.length >= pinLen.value && !props.busy)
 
 function press(digit: string) {
-  if (pin.value.length >= 6) return
+  if (pin.value.length >= pinLen.value) return
   pin.value += digit
 }
 
@@ -104,6 +125,11 @@ function submit() {
         {{ digit }}
       </button>
     </div>
+
+    <p v-if="approvers.length === 0" class="rounded-xl bg-surface-2 px-3 py-2 text-[15px] text-text-2">
+      Niko od odobravatelja nije dostupan na ovom telefonu. Otpis se upisuje i
+      čeka potvrdu.
+    </p>
 
     <p v-if="error" class="text-[15px] text-danger">
       {{ error }}

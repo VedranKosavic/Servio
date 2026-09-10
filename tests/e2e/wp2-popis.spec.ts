@@ -20,7 +20,10 @@
  *   4. A phone with an unsent round blocks the count by name, and the count
  *      goes through the moment it flushes.
  *   5. *Dopuni smjenu* hands a waiter change out of the drawer.
- *   6. An otpis of a 12 KM bottle asks for a PIN and one of 3 KM does not.
+ *   6. An otpis of a 12 KM bottle asks for a PIN and a 2 KM one does not — and
+ *      the sheet offers **Emir**, the bartender, on Amar's phone: not Amar
+ *      himself, and not the owner, whose PIN on a phone that is not his is
+ *      refused with `ADMIN_PIN_FOREIGN_DEVICE`.
  *
  * Run it against a production build on port 3112, never the owner's 3002:
  *
@@ -29,14 +32,28 @@
  *   npm run build
  *   DB_PATH=data/verify.db PIN_PEPPER=dev COOKIE_SECURE=0 SANK_DEV_ENROL=1 \
  *     PORT=3112 node .output/server/index.mjs
- *   npx playwright test tests/e2e/wp2-popis.spec.ts
+ *   npx playwright test
+ *
+ * **Two devices, enrolled once** (§5.1). `POST /api/devices/enrol` is an auth
+ * door and, before a device cookie exists, its rate-limit bucket is the **IP** —
+ * ten a minute for the whole laptop, `DEV_MULTIPLIER` being 1 in a production
+ * build. Five enrolments in one file is how this suite 429'd; two contexts,
+ * built in `beforeAll`, is how it does not.
  */
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 
 const PINS: Record<string, string> = { Amar: '1111', Emir: '123456' }
 
 interface User { id: string, name: string, role: string }
-interface StockRow { id: string, name: string, is_spot: boolean, base_unit: string }
+interface StockRow {
+  id: string
+  name: string
+  is_spot: boolean
+  base_unit: string
+  /** §1.3: what the count screen needs to know before it can subtract a jar. */
+  count_method: 'count' | 'weigh'
+  tare_g: number | null
+}
 
 /**
  * Every enrol code this run needs, minted in **one** admin session.
@@ -46,38 +63,32 @@ interface StockRow { id: string, name: string, is_spot: boolean, base_unit: stri
  * green suite turns into three 429s. One login, three codes, and each context
  * then spends its own.
  */
-const LABELS = [
-  'Šank tablet', 'Amarov telefon',
-  'Šank tablet 2', 'Amarov telefon 2',
-  'Šank tablet 3',
-] as const
+const BAR_LABEL = 'Šank tablet'
+const FLOOR_LABEL = 'Amarov telefon'
 
-const codes = new Map<string, string>()
-
-test.beforeAll(async ({ browser }) => {
-  const admin = await browser.newContext()
-  const login = await admin.request.post('/api/auth/admin/login', {
-    data: { email: 'haris@lounge.ba', password: 'lounge' },
-  })
-  expect(login.ok(), await login.text()).toBe(true)
-
-  for (const label of LABELS) {
-    const minted = await admin.request.post('/api/admin/enrol-codes', {
-      data: { mode: 'shared', label },
-    })
-    expect(minted.ok(), await minted.text()).toBe(true)
-    codes.set(label, ((await minted.json()) as { code: string }).code)
-  }
-  await admin.close()
-})
+/** The bar tablet (Emir) and the floor phone (Amar). Enrolled once, both. */
+let bar: BrowserContext
+let floor: BrowserContext
+let emir: User
 
 /** Enrol this browser as its own phone and PIN into it as `name`. */
-async function loginAs(context: BrowserContext, name: string, label: string): Promise<User> {
-  const enrol = await context.request.post('/api/devices/enrol', {
-    data: { code: codes.get(label), label },
+async function enrolAndLogin(
+  admin: BrowserContext, context: BrowserContext, name: string, label: string,
+): Promise<User> {
+  const minted = await admin.request.post('/api/admin/enrol-codes', {
+    data: { mode: 'shared', label },
   })
+  expect(minted.ok(), await minted.text()).toBe(true)
+  const { code } = await minted.json() as { code: string }
+
+  const enrol = await context.request.post('/api/devices/enrol', { data: { code, label } })
   expect(enrol.ok(), await enrol.text()).toBe(true)
 
+  return await loginAs(context, name)
+}
+
+/** The PIN door, on a browser that already holds a device cookie. */
+async function loginAs(context: BrowserContext, name: string): Promise<User> {
   const users = await (await context.request.get('/api/auth/users')).json() as User[]
   const user = users.find(u => u.name === name)!
   expect(user).toBeTruthy()
@@ -88,6 +99,25 @@ async function loginAs(context: BrowserContext, name: string, label: string): Pr
   expect(pin.ok(), await pin.text()).toBe(true)
   return user
 }
+
+test.beforeAll(async ({ browser }) => {
+  const admin = await browser.newContext()
+  const login = await admin.request.post('/api/auth/admin/login', {
+    data: { email: 'haris@lounge.ba', password: 'lounge' },
+  })
+  expect(login.ok(), await login.text()).toBe(true)
+
+  bar = await browser.newContext()
+  floor = await browser.newContext()
+  emir = await enrolAndLogin(admin, bar, 'Emir', BAR_LABEL)
+  await enrolAndLogin(admin, floor, 'Amar', FLOOR_LABEL)
+  await admin.close()
+})
+
+test.afterAll(async () => {
+  await bar?.close()
+  await floor?.close()
+})
 
 async function spotItems(context: BrowserContext): Promise<StockRow[]> {
   const stock = await (await context.request.get('/api/stock')).json() as { items: StockRow[] }
@@ -100,20 +130,19 @@ async function spotItems(context: BrowserContext): Promise<StockRow[]> {
  */
 async function fillCount(page: Page, items: StockRow[], onHand: Map<string, number>, short?: string) {
   for (const item of items) {
-    const value = (onHand.get(item.id) ?? 0) - (item.name === short ? 1 : 0)
+    // A weighed item is put on the scale **in its jar**, so what is typed is the
+    // gross weight and the screen subtracts the tare (§1.3, "minus tara 40 g").
+    const tare = item.count_method === 'weigh' ? item.tare_g ?? 0 : 0
+    const value = (onHand.get(item.id) ?? 0) + tare - (item.name === short ? 1 : 0)
     await page.locator(`#popis-${item.id}-input`).fill(String(value))
   }
 }
 
-test.describe('WP2 — Brzi popis, Potvrđujem stanje, Otpis', () => {
-  test('a spot count with one bottle short, witnessed by a colleague', async ({ browser }) => {
-    const bar = await browser.newContext()
-    const floor = await browser.newContext()
-    const barPage = await bar.newPage()
-    const floorPage = await floor.newPage()
+test.describe.configure({ mode: 'serial' })
 
-    const emir = await loginAs(bar, 'Emir', 'Šank tablet')
-    await loginAs(floor, 'Amar', 'Amarov telefon')
+test.describe('WP2 — Brzi popis, Potvrđujem stanje, Otpis', () => {
+  test('a spot count with one bottle short, witnessed by a colleague', async () => {
+    const barPage = await bar.newPage()
 
     const items = await spotItems(bar)
     const stock = await (await bar.request.get('/api/stock')).json() as
@@ -123,11 +152,13 @@ test.describe('WP2 — Brzi popis, Potvrđujem stanje, Otpis', () => {
     await barPage.goto('/s/popis')
     await expect(barPage.getByRole('heading', { name: 'Stavke za popis' })).toBeVisible()
 
-    // The expected quantity is not on this screen. Coca-Cola's 79 bottles are in
-    // the same payload the rows came from and must appear nowhere.
+    // The expected quantity is not on this screen. Whatever Coca-Cola's on-hand
+    // is — it came down in the same payload the rows came from — it must appear
+    // nowhere. Read from the API rather than hard-coded: the four files before
+    // this one have been selling out of the same shelf.
     const cola = items.find(i => i.name === 'Coca-Cola 0,25 l')!
-    expect(onHand.get(cola.id)).toBe(79)
-    await expect(barPage.getByText('79', { exact: true })).toHaveCount(0)
+    const colaOnHand = String(onHand.get(cola.id))
+    await expect(barPage.getByText(colaOnHand, { exact: true })).toHaveCount(0)
 
     await fillCount(barPage, items, onHand, 'Coca-Cola 0,25 l')
 
@@ -159,23 +190,16 @@ test.describe('WP2 — Brzi popis, Potvrđujem stanje, Otpis', () => {
     const after = await witness.json() as { witnessed_by_name: string }
     expect(after.witnessed_by_name).toBe('Amar')
 
-    await bar.close()
-    await floor.close()
+    await barPage.close()
   })
 
-  test('a phone still holding a round blocks the count, by name', async ({ browser }) => {
-    const bar = await browser.newContext()
-    const floor = await browser.newContext()
+  test('a phone still holding a round blocks the count, by name', async () => {
     const barPage = await bar.newPage()
-    const floorPage = await floor.newPage()
-
-    await loginAs(bar, 'Emir', 'Šank tablet 2')
-    await loginAs(floor, 'Amar', 'Amarov telefon 2')
 
     // Amar locks a round, then his phone reports two things it has not sent.
     const boot = await (await floor.request.get('/api/bootstrap')).json() as
       { tables: { id: string, name: string }[], products: { id: string, name: string }[] }
-    const table = boot.tables.find(t => t.name === 'Sto 5')!
+    const table = boot.tables.find(t => t.name === 'Sto 25')!
     const kafa = boot.products.find(p => p.name === 'Kafa')!
     const order = await floor.request.post('/api/orders', {
       data: {
@@ -208,7 +232,7 @@ test.describe('WP2 — Brzi popis, Potvrđujem stanje, Otpis', () => {
     await barPage.getByRole('button', { name: 'Predaj popis' }).click()
 
     await expect(barPage.getByText('Popis još ne može')).toBeVisible()
-    await expect(barPage.getByText(/Amarov telefon 2 · javio se prije .*2 neposlane/).first())
+    await expect(barPage.getByText(new RegExp(`${FLOOR_LABEL} · javio se prije .*2 neposlane`)).first())
       .toBeVisible()
 
     // Amar's phone flushes; the same tap now goes through.
@@ -218,14 +242,19 @@ test.describe('WP2 — Brzi popis, Potvrđujem stanje, Otpis', () => {
     await barPage.getByRole('button', { name: 'Pokušaj ponovo' }).click()
     await expect(barPage.getByRole('heading', { name: 'Popis predan' })).toBeVisible()
 
-    await bar.close()
-    await floor.close()
+    await barPage.close()
   })
 
-  test('a 12 KM bottle asks for a PIN, a 3 KM one does not', async ({ browser }) => {
-    const bar = await browser.newContext()
-    const page = await bar.newPage()
-    await loginAs(bar, 'Emir', 'Šank tablet 3')
+  /**
+   * Check 6, and the approver list with it.
+   *
+   * It runs on **Amar's** phone, which is the only place the list is worth
+   * asserting: the sheet must offer Emir, must not offer Amar himself, and must
+   * not offer the owner — `ADMIN_PIN_FOREIGN_DEVICE` refuses Haris on a phone
+   * that is not his, and a button that always fails is worse than no button.
+   */
+  test('a 12 KM bottle asks for a PIN, a 2 KM one does not', async () => {
+    const page = await floor.newPage()
 
     await page.goto('/k/otpis')
     await expect(page.getByRole('heading', { name: 'Šta se otpisuje' })).toBeVisible()
@@ -237,21 +266,26 @@ test.describe('WP2 — Brzi popis, Potvrđujem stanje, Otpis', () => {
     await page.getByRole('button', { name: 'Sačuvaj' }).click()
     await expect(page.getByText(/Otpisano · Red Bull/)).toBeVisible()
 
-    // Six of them is 12 KM, and that one wants a witness.
-    await page.getByRole('button', { name: /^Red Bull/ }).click()
-    await page.getByRole('button', { name: 'Više' }).click({ clickCount: 5 })
+    // One bottle of syrup is 12,00 KM, and that one wants a witness.
+    await page.getByRole('button', { name: /^Sirup/ }).click()
     await page.getByRole('button', { name: 'razbijeno' }).click()
     await expect(page.getByText('Ovaj otpis traži odobrenje')).toBeVisible()
     await page.getByRole('button', { name: 'Sačuvaj', exact: true }).click()
 
-    await expect(page.getByRole('dialog', { name: 'Odobrenje otpisa' })).toBeVisible()
-    await page.getByRole('button', { name: 'Emir', exact: true }).click()
+    const sheet = page.getByRole('dialog', { name: 'Odobrenje otpisa' })
+    await expect(sheet).toBeVisible()
+    await expect(sheet.getByRole('button', { name: 'Emir', exact: true })).toBeVisible()
+    // Never yourself, and never the owner on somebody else's phone.
+    await expect(sheet.getByRole('button', { name: 'Amar', exact: true })).toHaveCount(0)
+    await expect(sheet.getByRole('button', { name: 'Haris', exact: true })).toHaveCount(0)
+
+    await sheet.getByRole('button', { name: 'Emir', exact: true }).click()
     for (const digit of '123456') await page.getByRole('button', { name: digit, exact: true }).click()
     await page.getByRole('button', { name: 'Odobri i sačuvaj' }).click()
 
-    await expect(page.getByText(/Otpisano · Red Bull/)).toBeVisible()
+    await expect(page.getByText(/Otpisano · Sirup/)).toBeVisible()
     await expect(page.getByText('čeka odobrenje')).toHaveCount(0)
 
-    await bar.close()
+    await page.close()
   })
 })

@@ -18,6 +18,17 @@
  * tappable; *Premjesti sto* moves the guests; and no screen scrolls sideways at
  * 390 px.
  *
+ * **One device per file, enrolled once** (§5.1). `authLimiter` allows ten auth
+ * calls a minute per IP on a production build — `DEV_MULTIPLIER` is 1 there,
+ * because `import.meta.dev` compiles to `false` — so a file that enrolled per
+ * test 429'd partway through the run. The context is built in `beforeAll`; what
+ * is reset between tests is the phone's own state, never its cookies.
+ *
+ * **Its tables are 6, 8, 10 and 12–15**, none of which another spec file opens:
+ * the five files run in one command against one database (§5.1), and this one
+ * taps circles on the floor plan, so a table somebody else left open would open
+ * on S2 and cost the tap budget a tap it does not have.
+ *
  * Run it against a production build on **its own port and its own database**,
  * never the owner's 3002 and never `data/sank.db`:
  *
@@ -118,13 +129,63 @@ async function noSideScroll(page: Page) {
   expect(overflow).toBeLessThanOrEqual(1)
 }
 
+/**
+ * A phone that has forgotten the last test's drafts but is still the same
+ * enrolled device: IndexedDB and localStorage go, the cookies stay.
+ */
+async function freshPage(): Promise<Page> {
+  // Only one page at a time. Two pages of the same context share IndexedDB, and
+  // a page left open from the previous test keeps writing its own outbox into
+  // the store this one is about to read — which showed up as a *Potvrdi* stuck
+  // on *Šaljem…* forever.
+  for (const open of context.pages()) await open.close()
+
+  const page = await context.newPage()
+  await page.goto('/k')
+  // `idb-keyval` keeps everything in one store, so emptying it is enough — and
+  // it is safer than `deleteDatabase`, which blocks while any connection is
+  // open and then leaves the next write hanging.
+  await page.evaluate(async () => {
+    localStorage.clear()
+    await new Promise<void>((done) => {
+      const request = indexedDB.open('keyval-store')
+      request.onerror = () => done()
+      request.onsuccess = () => {
+        const db = request.result
+        if (!db.objectStoreNames.contains('keyval')) { db.close(); done(); return }
+        const tx = db.transaction('keyval', 'readwrite')
+        tx.objectStore('keyval').clear()
+        tx.oncomplete = tx.onerror = () => { db.close(); done() }
+      }
+    })
+  })
+  await page.reload()
+  await expect(page.getByText('Stolovi')).toBeVisible({ timeout: 20_000 })
+  return page
+}
+
+let context: BrowserContext
+let tables: Map<string, string>
+
+test.describe.configure({ mode: 'serial' })
+
 test.describe('WP3 — the order screens', () => {
-  test('two coffees are five taps, and the lock asks Potvrdi', async ({ page, context }) => {
-    await loginAsAmar(context, page)
+  test.beforeAll(async ({ browser }) => {
+    context = await browser.newContext()
+    const page = await context.newPage()
+    tables = await loginAsAmar(context, page)
+    await page.close()
+  })
+
+  test.afterAll(async () => {
+    await context?.close()
+  })
+  test('two coffees are five taps, and the lock asks Potvrdi', async () => {
+    const page = await freshPage()
     const thumb = new Thumb(page)
 
     // 1: the table. An empty one opens straight on the menu.
-    await thumb.tapTable('Sto 5')
+    await thumb.tapTable('Sto 15')
     await expect(page.getByRole('button', { name: /^Zaključi/ })).toBeVisible()
     await noSideScroll(page)
 
@@ -147,8 +208,8 @@ test.describe('WP3 — the order screens', () => {
     await noSideScroll(page)
   })
 
-  test('nargila with two aromas plus a čaj with a chip is ten taps', async ({ page, context }) => {
-    await loginAsAmar(context, page)
+  test('nargila with two aromas plus a čaj with a chip is ten taps', async () => {
+    const page = await freshPage()
     const thumb = new Thumb(page)
 
     await thumb.tapTable('Sto 6')
@@ -185,8 +246,8 @@ test.describe('WP3 — the order screens', () => {
     await expect(page.locator('.chip').filter({ hasText: 'Al Fakher · Jabuka' })).toBeVisible()
   })
 
-  test('Žar on a live bowl is two taps and locks with no sheet', async ({ page, context }) => {
-    const tables = await loginAsAmar(context, page)
+  test('Žar on a live bowl is two taps and locks with no sheet', async () => {
+    const page = await freshPage()
     const thumb = new Thumb(page)
 
     // A bowl on Sto 8 first.
@@ -230,9 +291,9 @@ test.describe('WP3 — the order screens', () => {
     }, { timeout: 20_000 }).toBe(1)
   })
 
-  test('the search folds diacritics and matches on aliases', async ({ page, context }) => {
-    await loginAsAmar(context, page)
-    await page.getByRole('button', { name: /^9(\s|$)/ }).first().click()
+  test('the search folds diacritics and matches on aliases', async () => {
+    const page = await freshPage()
+    await page.getByRole('button', { name: /^16(\s|$)/ }).first().click()
 
     const field = page.getByPlaceholder('Traži')
     await field.fill('caj')
@@ -250,8 +311,8 @@ test.describe('WP3 — the order screens', () => {
     await noSideScroll(page)
   })
 
-  test('Bez stola opens a tab on no table, and the plan keeps its 27 circles', async ({ page, context }) => {
-    await loginAsAmar(context, page)
+  test('Bez stola opens a tab on no table, and the plan keeps its 27 circles', async () => {
+    const page = await freshPage()
 
     await page.getByRole('button', { name: '+ Bez stola' }).click()
     await expect(page.getByText('Bez stola · Šank')).toBeVisible()
@@ -280,8 +341,8 @@ test.describe('WP3 — the order screens', () => {
     await noSideScroll(page)
   })
 
-  test('cash exact is three taps from the floor plan', async ({ page, context }) => {
-    await loginAsAmar(context, page)
+  test('cash exact is three taps from the floor plan', async () => {
+    const page = await freshPage()
 
     // A round to pay for.
     await page.getByRole('button', { name: /^10(\s|$)/ }).first().click()
@@ -303,8 +364,8 @@ test.describe('WP3 — the order screens', () => {
     await expect(page.getByText(/Naplaćeno/)).toBeVisible({ timeout: 15_000 })
   })
 
-  test('Pokaži narudžbu is the guest view: a watermark and nothing to tap', async ({ page, context }) => {
-    await loginAsAmar(context, page)
+  test('Pokaži narudžbu is the guest view: a watermark and nothing to tap', async () => {
+    const page = await freshPage()
 
     await page.getByRole('button', { name: /^11(\s|$)/ }).first().click()
     await page.getByRole('button')
@@ -330,8 +391,8 @@ test.describe('WP3 — the order screens', () => {
     await noSideScroll(page)
   })
 
-  test('Premjesti sto moves the guests and frees the old table', async ({ page, context }) => {
-    const tables = await loginAsAmar(context, page)
+  test('Premjesti sto moves the guests and frees the old table', async () => {
+    const page = await freshPage()
 
     await page.getByRole('button', { name: /^12(\s|$)/ }).first().click()
     await page.getByRole('button')
@@ -359,8 +420,8 @@ test.describe('WP3 — the order screens', () => {
     }, { timeout: 20_000 }).toBe('true:true')
   })
 
-  test('a draft older than fifteen minutes pulses, and Odbaci clears it', async ({ page, context }) => {
-    const tables = await loginAsAmar(context, page)
+  test('a draft older than fifteen minutes pulses, and Odbaci clears it', async () => {
+    const page = await freshPage()
 
     await page.getByRole('button', { name: /^14(\s|$)/ }).first().click()
     await page.getByRole('button')

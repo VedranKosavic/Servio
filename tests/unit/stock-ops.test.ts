@@ -381,7 +381,7 @@ describe('POST /api/stock/opening', () => {
     // The live venue's rows, as they really are before this screen runs.
     f.db.update(schema.stockItems).set({ avgCostMfen: 0, lastCostMfen: 0 }).run()
     const items = f.db.select().from(schema.stockItems).all()
-    expect(items).toHaveLength(19)
+    expect(items).toHaveLength(20)
 
     const result = setOpeningStock(f.db, f.venueId, f.adminActor(), {
       note: 'prvo čitanje',
@@ -392,7 +392,7 @@ describe('POST /api/stock/opening', () => {
       })),
     })
 
-    expect(result).toHaveLength(19)
+    expect(result).toHaveLength(20)
     expect(result.every(i => i.avg_cost_mfen === 12_345)).toBe(true)
     expect(result.every(i => !i.estimated_cost)).toBe(true)
     expect(entries('opening_set')).toHaveLength(1)

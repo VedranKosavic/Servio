@@ -22,8 +22,15 @@
 import { formatKm } from '#shared/money'
 import type { Product } from '#shared/types'
 import { matchesQuery, stavke } from '~/components/order/OrderText'
+import type { CompReason } from '~/composables/useAdjustments'
+// Explicit, not auto-imported: Nuxt would name `adjust/AdjCompSheet.vue`
+// `<AdjustAdjCompSheet>`, and an unresolved tag renders nothing at all in a
+// production build — silently. The same reason `/s/cekanje` imports
+// `AdjPendingCard` by name.
+import AdjCompSheet from '~/components/adjust/AdjCompSheet.vue'
 
 const route = useRoute()
+const api = useApi()
 const me = useMe()
 const cart = useCartStore()
 const { outbox, enqueue } = useOutbox()
@@ -137,6 +144,8 @@ onBeforeUnmount(() => wakeLock.hold(false))
 const shishaProduct = ref<Product | null>(null)
 /** The product whose long press is open, and the line being re-noted, if any. */
 const noteFor = ref<{ product: Product, lineId: string | null } | null>(null)
+/** The same pair, once *Na račun kuće* has been chosen on it (F7). */
+const compFor = ref<{ product: Product, lineId: string | null } | null>(null)
 
 function chipsFor(product: Product): string[] {
   return categoryById.value.get(product.category_id)?.note_chips ?? []
@@ -189,6 +198,64 @@ function saveNote(note: string | null) {
   for (let i = 0; i < qty; i++) {
     cart.add(tableId.value, line.product_id, line.flavour_ids, note ?? undefined)
   }
+}
+
+// -- Na račun kuće ----------------------------------------------------------
+
+/**
+ * How many staff drinks this person has already had tonight, from
+ * `GET /api/me/shift`'s `counts.gratis` (PHASE3 §1.5). Read once, when the sheet
+ * is first opened, and never blocking: `null` makes the sheet render the
+ * published cap without tonight's score, which is still worth more than nothing.
+ */
+const staffUsed = ref<number | null>(null)
+
+async function loadStaffUsed(): Promise<void> {
+  try {
+    staffUsed.value = (await api.getMyShift()).counts.gratis.used
+  } catch {
+    // No signal. The rule is still on screen; only the score is missing.
+  }
+}
+
+/** *Na račun kuće* on the note sheet: swap one sheet for the other. */
+function openComp() {
+  const open = noteFor.value
+  noteFor.value = null
+  if (!open) return
+  compFor.value = open
+  void loadStaffUsed()
+}
+
+/** What the sheet is deciding about — a line on the draft, or the tile's product. */
+const compLine = computed(() => {
+  const open = compFor.value
+  if (!open) return null
+  const line = open.lineId ? lineFor(open.lineId) : null
+  const qty = line?.qty ?? 1
+  return {
+    id: line?.id ?? open.product.id,
+    name: open.product.name,
+    qty,
+    amount_fen: (priceById.value.get(open.product.id) ?? open.product.price_fen) * qty,
+  }
+})
+
+/**
+ * The reason rides on the draft line and the lock decides what it costs — a
+ * gratis chosen before the round is sent costs no request at all (F7).
+ */
+function applyComp(reason: CompReason) {
+  const open = compFor.value
+  compFor.value = null
+  if (!open) return
+
+  if (open.lineId === null) {
+    cart.add(tableId.value, open.product.id, undefined, undefined, reason)
+    remember(open.product.id)
+    return
+  }
+  cart.setComp(tableId.value, open.lineId, reason)
 }
 
 // -- Zaključi ---------------------------------------------------------------
@@ -268,6 +335,8 @@ async function confirm() {
           qty: line.qty,
           ...(line.flavour_ids?.length ? { flavour_ids: line.flavour_ids } : {}),
           ...(line.note ? { note: line.note } : {}),
+          // *Na račun kuće*, decided on the phone. The server re-decides it.
+          ...(line.comp_reason ? { comp_reason: line.comp_reason } : {}),
         })),
       },
     })
@@ -432,6 +501,19 @@ async function confirm() {
       :free-text-first="noteFor.product.system_key === 'ostalo'"
       @close="noteFor = null"
       @save="saveNote"
+      @comp="openComp"
+    />
+
+    <!-- F7: the house pays. Nothing is sent — the reason rides on the line. -->
+    <AdjCompSheet
+      v-if="compFor && compLine"
+      mode="draft"
+      :line="compLine"
+      :table-name="tableName"
+      :staff-drink-allowed="compFor.product.staff_drink_allowed"
+      :staff-used="staffUsed"
+      @close="compFor = null"
+      @draft="applyComp"
     />
 
     <!-- S5: every line, the total, and one Potvrdi -->

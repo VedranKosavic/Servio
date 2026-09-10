@@ -40,7 +40,7 @@ const states = ref<TableState[]>([])
 const looseTabs = ref<TableState[]>([])
 const shift = ref<ShiftBrief | null>(null)
 
-const { data: boot, refresh: refreshBoot } = useBootstrapData()
+const { data: boot, pending: bootPending, refresh: refreshBoot } = useBootstrapData()
 
 // The session is a cookie the server reads, so this check is a request, not a
 // localStorage lookup — and it therefore belongs in `onMounted` rather than in
@@ -54,6 +54,11 @@ const { refresh: refreshState } = useChanges({
     states.value = state.tables
     looseTabs.value = state.loose_tabs
     shift.value = state.shift
+    // The catalogue's own recovery. `useAsyncData` runs once and never retries,
+    // so a first client fetch that failed with no cached copy behind it would
+    // leave the floor plan empty for the rest of the shift. The poll has just
+    // reached the server, so the menu is one request away.
+    if (!boot.value && !bootPending.value) void refreshBoot()
   },
   menu: () => refreshBoot(),
   me: () => me.load(),
@@ -566,9 +571,19 @@ function openLoose() {
           @select="openTable"
           @long="openZar"
         />
-        <p v-else class="py-10 text-center text-text-2">
+        <p v-else-if="bootPending" class="py-10 text-center text-text-2">
           Učitavanje…
         </p>
+        <!-- Honesty (PHASE3 §4): a screen that could not load says so and
+             offers the way back, rather than showing *Učitavanje…* for ever. -->
+        <div v-else class="flex flex-col items-center gap-3 py-10 text-center">
+          <p class="text-text-2">
+            Nema veze — meni nije učitan.
+          </p>
+          <button type="button" class="btn h-12 px-5" @click="refreshBoot()">
+            Pokušaj ponovo
+          </button>
+        </div>
 
         <!-- pb-20: the floating *+ Bez stola* button sits over this corner. -->
         <p class="pb-20 text-center text-sm text-text-2">

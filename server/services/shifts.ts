@@ -314,9 +314,16 @@ export function closeShift(
   return db.transaction((tx) => {
     const shift = requireOpenShift(tx, venueId, shiftId)
 
-    const openTabs = tx.select({ id: schema.tabs.id, table: schema.tables.name })
+    // The guard reads `tabs` alone and names the table with a LEFT join, because
+    // an inner one silently dropped every *Bez stola* tab (PHASE3 §1.11) — and a
+    // night that closes with money still on an open tab is the one thing this
+    // check exists to stop.
+    const openTabs = tx.select({
+      id: schema.tabs.id,
+      table: sql<string>`coalesce(${schema.tables.name}, 'Bez stola')`,
+    })
       .from(schema.tabs)
-      .innerJoin(schema.tables, eq(schema.tables.id, schema.tabs.tableId))
+      .leftJoin(schema.tables, eq(schema.tables.id, schema.tabs.tableId))
       .where(and(
         eq(schema.tabs.venueId, venueId),
         eq(schema.tabs.shiftId, shiftId),

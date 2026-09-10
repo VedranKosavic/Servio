@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { and, eq } from 'drizzle-orm'
 import { randomUUID } from 'node:crypto'
 import { createOrder } from '../../server/services/orders'
+import { getPrep } from '../../server/services/prep'
 import { createPayment } from '../../server/services/payments'
 import { expectedCash } from '../../server/services/cash'
 import { tabMoney } from '../../server/services/tabs'
@@ -658,6 +659,23 @@ describe('createOrder — bez stola', () => {
       tab_client_id: onTable.tab_client_id,
       lines: [line('Kafa')],
     }), 'TAB_TABLE_MISMATCH')
+  })
+
+  /**
+   * The bug this guards: `loadOrders` joined `tables` with an INNER join, so a
+   * table-less tab had no row to join to and its ticket vanished from
+   * *Priprema* — the bartender never saw the order and never made the drink.
+   */
+  it('puts a table-less round on the bartender queue as Bez stola', () => {
+    createOrder(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(),
+      table_id: null,
+      lines: [line('Kafa')],
+    })
+
+    const prep = getPrep(f.db, f.venueId)
+    expect(prep.open).toHaveLength(1)
+    expect(prep.open[0]!.table_name).toBe('Bez stola')
   })
 
   it('a replay of a table-less round writes nothing twice', () => {

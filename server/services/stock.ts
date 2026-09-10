@@ -242,11 +242,15 @@ const MOVEMENT_LABEL: Record<string, string> = {
 
 function tableByLine(q: Queryable, venueId: string): Map<string, string> {
   return new Map<string, string>(
-    q.select({ lineId: schema.orderLines.id, tableName: schema.tables.name })
+    q.select({
+      lineId: schema.orderLines.id,
+      // LEFT below: a *Bez stola* line still deserves a label on the ledger.
+      tableName: sql<string>`coalesce(${schema.tables.name}, 'Bez stola')`,
+    })
       .from(schema.orderLines)
       .innerJoin(schema.orders, eq(schema.orders.id, schema.orderLines.orderId))
       .innerJoin(schema.tabs, eq(schema.tabs.id, schema.orders.tabId))
-      .innerJoin(schema.tables, eq(schema.tables.id, schema.tabs.tableId))
+      .leftJoin(schema.tables, eq(schema.tables.id, schema.tabs.tableId))
       .where(eq(schema.orderLines.venueId, venueId))
       .all()
       .map(r => [r.lineId, r.tableName]),

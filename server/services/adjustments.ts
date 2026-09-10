@@ -727,9 +727,10 @@ function adjustmentView(
   const names = userNames(q, venueId)
   const line = q.select({ name: schema.orderLines.nameSnapshot }).from(schema.orderLines)
     .where(eq(schema.orderLines.id, row.orderLineId)).get()
-  const table = q.select({ name: schema.tables.name })
+  // LEFT: a storno on a *Bez stola* tab reads *Bez stola* on the queue, not —.
+  const table = q.select({ name: sql<string>`coalesce(${schema.tables.name}, 'Bez stola')` })
     .from(schema.tabs)
-    .innerJoin(schema.tables, eq(schema.tables.id, schema.tabs.tableId))
+    .leftJoin(schema.tables, eq(schema.tables.id, schema.tabs.tableId))
     .where(eq(schema.tabs.id, row.tabId))
     .get()
 

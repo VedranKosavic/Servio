@@ -1,6 +1,12 @@
 /**
  * WP1's done-when, walked on a 390 px phone (docs/PHASE3.md §3 and §5.2 check 2).
  *
+ * **Its tables are the bašta ones, 18 upward**, and that is not cosmetic: the
+ * five spec files run in one command against one database (§5.1), so a table
+ * another file leaves open would change what this one finds on it. Nothing here
+ * taps the floor plan — every screen is reached by id — so the zone costs
+ * nothing.
+ *
  * Two contexts, two devices, because that is the shape of the thing being
  * tested: Amar asks from the floor and Emir answers from behind the bar. Each
  * enrols its **own** device through `POST /api/admin/enrol-codes` +
@@ -27,6 +33,12 @@
  *   5. The screen holds at 390 px with no horizontal scroll, in Bosnian, with no
  *      emoji, and a decision with the network off fails honestly instead of
  *      queueing.
+ *   6. **From Amar's own phone**, not his `request`: a locked line opens the
+ *      sheet, *Zatraži storno* asks for a reason, the reason says what it does
+ *      to the shelf, and Emir's PIN typed on Amar's handset strikes the line.
+ *   7. And the other half of *Na račun kuće*: the long press on a tile offers it,
+ *      the counter reads the published rule, and a drink over the cap is refused
+ *      in Bosnian rather than silently locked at zero.
  *
  * Run it against a **production build on port 3112**, never the owner's 3002:
  *
@@ -136,6 +148,31 @@ async function openQueue(page: Page) {
 
 const stornoCard = (page: Page) => page.locator('article').filter({ hasText: 'Storno · Amar' })
 
+/** Amar's phone, on the floor plan, as a waiter actually holds it. */
+async function amarsPhone(): Promise<Page> {
+  const page = await amarCtx.newPage()
+  await page.goto('/k')
+  await expect(page.getByText('Stolovi')).toBeVisible({ timeout: 20_000 })
+  return page
+}
+
+/** A long press, the only gesture in the app that is not a tap. */
+async function longPress(page: Page, target: ReturnType<Page['getByRole']>) {
+  const box = (await target.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.waitForTimeout(600)
+  await page.mouse.up()
+}
+
+/** The tile for a product, by the name printed on it. */
+function tile(page: Page, name: string) {
+  return page.getByRole('button')
+    .filter({ has: page.getByText(name, { exact: true }) })
+    .filter({ hasText: 'KM' })
+    .first()
+}
+
 test.describe.configure({ mode: 'serial' })
 
 test.describe('WP1 — storno, gratis and the approval queue', () => {
@@ -159,7 +196,7 @@ test.describe('WP1 — storno, gratis and the approval queue', () => {
   })
 
   test('the bartender sees the whole card and decides it in one tap', async () => {
-    const round = await lockRound(amarCtx.request, 'Sto 6')
+    const round = await lockRound(amarCtx.request, 'Sto 18')
     await markPrepared(round.orderId)
     await requestVoid(amarCtx.request, round.lineId, { reason: 'not_served' })
 
@@ -168,7 +205,7 @@ test.describe('WP1 — storno, gratis and the approval queue', () => {
 
     const card = stornoCard(page)
     await expect(card).toBeVisible({ timeout: 20_000 })
-    await expect(card).toContainText('Sto 6')
+    await expect(card).toContainText('Sto 18')
     await expect(card).toContainText('Kafa')
     await expect(card).toContainText('Nije posluženo')
     await expect(card).toContainText('vraća na stanje')
@@ -187,7 +224,7 @@ test.describe('WP1 — storno, gratis and the approval queue', () => {
   })
 
   test('a rejection leaves the money on the tab', async () => {
-    const round = await lockRound(amarCtx.request, 'Sto 7')
+    const round = await lockRound(amarCtx.request, 'Sto 19')
     await markPrepared(round.orderId)
     await requestVoid(amarCtx.request, round.lineId)
 
@@ -219,7 +256,7 @@ test.describe('WP1 — storno, gratis and the approval queue', () => {
 
     const page = await emirCtx.newPage()
     try {
-      const round = await lockRound(amarCtx.request, 'Sto 8')
+      const round = await lockRound(amarCtx.request, 'Sto 20')
       await markPrepared(round.orderId)
       await new Promise(resolve => setTimeout(resolve, 2500))
       await requestVoid(amarCtx.request, round.lineId)
@@ -244,7 +281,7 @@ test.describe('WP1 — storno, gratis and the approval queue', () => {
   })
 
   test('a void asked for 20 s after the lock is applied even when it lands ten minutes late', async () => {
-    const table = boot.tables.find(t => t.name === 'Sto 9')!
+    const table = boot.tables.find(t => t.name === 'Sto 21')!
     const kafa = boot.products.find(p => p.name === 'Kafa')!
 
     // The round happened ten minutes ago in the world; the storno twenty
@@ -273,7 +310,7 @@ test.describe('WP1 — storno, gratis and the approval queue', () => {
   })
 
   test('the queue holds at 390 px, in Bosnian, and a decision offline fails honestly', async () => {
-    const round = await lockRound(amarCtx.request, 'Sto 10')
+    const round = await lockRound(amarCtx.request, 'Sto 22')
     await markPrepared(round.orderId)
     await requestVoid(amarCtx.request, round.lineId, {
       reason: 'other', note: 'gost je otisao ranije',
@@ -304,5 +341,133 @@ test.describe('WP1 — storno, gratis and the approval queue', () => {
       .json() as { id: string }[]
     expect(stillPending.length).toBeGreaterThanOrEqual(1)
     await page.close()
+  })
+
+  /**
+   * §5.2 check 2, walked on the **requester's** phone rather than through his
+   * `request`. Everything above proves the bartender's half; this proves there
+   * is a button at all — the two sheets shipped disabled once, and no test
+   * noticed because every storno in this file was a POST.
+   */
+  test('Zatraži storno on Amar’s phone: a reason, the shelf, and Emir’s PIN', async () => {
+    // One second of self-void window, so this is a *request* and the PIN sheet
+    // is the path — not a line that strikes itself before Emir is offered.
+    const before = await (await admin.get('/api/admin/settings')).json() as
+      { void_self_window_s: number }
+    expect((await admin.patch('/api/admin/settings', {
+      data: { void_self_window_s: 1 },
+    })).ok()).toBe(true)
+
+    const page = await amarsPhone()
+    try {
+      const table = boot.tables.find(t => t.name === 'Sto 23')!
+      const round = await lockRound(amarCtx.request, 'Sto 23')
+      await new Promise(resolve => setTimeout(resolve, 1500))
+
+      await page.goto(`/k/sto/${table.id}`)
+      // The rounds are collapsed to their headers; open the one we just locked.
+      await page.getByRole('button', { name: /^Tura 1/ }).click()
+      await page.getByRole('button', { name: /Kafa/ }).first().click()
+
+      await expect(page.getByText('Zaključene stavke se ne mijenjaju')).toBeVisible()
+      await page.getByRole('button', { name: 'Zatraži storno' }).click()
+
+      // The reason, and what it does to the shelf — before anything is sent.
+      await expect(page.getByRole('dialog', { name: 'Zatraži storno' })).toBeVisible()
+      await page.getByRole('button', { name: 'Gost se predomislio', exact: true }).click()
+      const shelf = page.locator('p').filter({ hasText: 'Vraća robu na stanje:' })
+      await expect(shelf).toBeVisible()
+      await expect(shelf).toContainText('da')
+      await expect(page.getByText(/ostaje u tvom pazaru/)).toBeVisible()
+
+      // And the PIN, typed by the šanker on the requester's own handset.
+      await page.getByRole('button', { name: 'Zatraži storno' }).click()
+      await expect(page.getByRole('heading', { name: 'Odobri PIN-om' })).toBeVisible()
+      await page.getByRole('button', { name: /Emir/ }).first().click()
+      for (const digit of PINS.Emir!) {
+        await page.getByRole('button', { name: digit, exact: true }).click()
+      }
+
+      await expect.poll(async () => {
+        const tab = await (await amarCtx.request.get(`/api/tabs/${round.tabId}`)).json() as
+          { money: { total_fen: number } }
+        return tab.money.total_fen
+      }, { timeout: 20_000 }).toBe(0)
+
+      // Scoped to this line: an earlier test in this file deliberately leaves a
+      // storno waiting, and asserting an empty queue would be asserting that.
+      const pending = await (await admin.get('/api/adjustments/pending')).json() as
+        { order_line_id: string }[]
+      expect(pending.filter(row => row.order_line_id === round.lineId)).toHaveLength(0)
+    } finally {
+      await admin.patch('/api/admin/settings', {
+        data: { void_self_window_s: before.void_self_window_s },
+      })
+      await page.close()
+    }
+  })
+
+  /**
+   * §5.2 check 3: *Na račun kuće* exists, and the published rule is on screen
+   * before it refuses rather than only inside the refusal (PLAN F7).
+   *
+   * `formatKm` joins an amount to KM with a non-breaking space, which is why
+   * every money regex below matches `[\s\u00a0]` and not a plain space.
+   */
+  test('Na račun kuće on a draft line: the counter, then the refusal', async () => {
+    const page = await amarsPhone()
+    try {
+      const table = boot.tables.find(t => t.name === 'Sto 24')!
+
+      /** Long-press a tile and open the comp sheet on it. */
+      async function openComp(product: string) {
+        await page.goto(`/k/dodaj/${table.id}`)
+        await expect(page.getByText('Dodir = +1 · dugi dodir = napomena')).toBeVisible()
+        await longPress(page, tile(page, product))
+        await expect(page.getByRole('dialog', { name: 'Napomena' })).toBeVisible()
+        await page.getByRole('button', { name: 'Na račun kuće' }).click()
+        await expect(page.getByRole('dialog', { name: 'Na račun kuće' })).toBeVisible()
+      }
+
+      /** *Osoblje* → *Kuća časti* → lock the round it is on. */
+      async function giveItAway() {
+        await page.getByRole('button', { name: 'Osoblje', exact: true }).click()
+        await expect(page.getByText(/U okviru dozvole/)).toBeVisible()
+        await page.getByRole('button', { name: 'Kuća časti' }).click()
+        await page.getByRole('button', { name: 'Pregled' }).click()
+        await expect(page.getByRole('dialog', { name: 'Zaključi turu' })).toBeVisible()
+        await page.getByRole('button', { name: 'Potvrdi' }).click()
+        await expect(page.getByRole('button', { name: /^Naplati/ })).toBeVisible({ timeout: 20_000 })
+      }
+
+      // Nothing has been given away yet: the rule, with tonight's score in it.
+      await openComp('Kafa')
+      await expect(page.getByText(/Osoblje: 0\/2 \(do 3,00[\s\u00a0]KM\)/)).toBeVisible()
+      await giveItAway()
+
+      // …and now the score has moved. The second one is still inside the rule.
+      await openComp('Kafa')
+      await expect(page.getByText(/Osoblje: 1\/2 \(do 3,00[\s\u00a0]KM\)/))
+        .toBeVisible({ timeout: 20_000 })
+      await giveItAway()
+
+      // The third is not refused — it is *explained*, and it goes to somebody
+      // who can say yes. Nothing on this screen ever says no on its own.
+      await openComp('Kafa')
+      await expect(page.getByText(/Osoblje: 2\/2 \(do 3,00[\s\u00a0]KM\)/))
+        .toBeVisible({ timeout: 20_000 })
+      await page.getByRole('button', { name: 'Osoblje', exact: true }).click()
+      await expect(page.getByText(/Iskoristio si 2 od 2 za ovu smjenu — ide na odobrenje/))
+        .toBeVisible()
+      await expect(page.getByText(/ostaje u tvom pazaru/)).toBeVisible()
+
+      // And a drink that was never on the staff list says so in its own words.
+      await openComp('Nargila')
+      await page.getByRole('button', { name: 'Osoblje', exact: true }).click()
+      await expect(page.getByText(/Ovo piće nije na listi za osoblje — ide na odobrenje/))
+        .toBeVisible()
+    } finally {
+      await page.close()
+    }
   })
 })

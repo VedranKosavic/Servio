@@ -21,12 +21,11 @@
  */
 import { useTimeoutFn } from '@vueuse/core'
 import { formatKm } from '#shared/money'
-import type { LogWasteBody, StockItem, User, WasteReason } from '#shared/types'
+import type { LogWasteBody, StockItem, WasteReason } from '#shared/types'
 
 useHead({ title: 'Otpis' })
 
 const me = useMe()
-const { data: boot } = useBootstrapData()
 const { enqueue } = useOutbox()
 const { state: syncState } = useSync()
 
@@ -38,6 +37,9 @@ useChanges({
 
 onMounted(async () => {
   await me.requireSession()
+  // The approver list is `GET /api/auth/users` — the lock screen's own read,
+  // device-scoped and carrying `pin_len`. Fetched once, not on the poll.
+  await loadApprovers()
 })
 
 const REASONS: { key: WasteReason, label: string, waiter: boolean }[] = [
@@ -59,8 +61,16 @@ const qty = computed(() => parseDecimalInput(qtyRaw.value))
 const isApprover = computed(() =>
   me.user.value?.role === 'admin' || me.user.value?.role === 'bartender')
 
-const approvers = computed<User[]>(() =>
-  (boot.value?.users ?? []).filter(u => u.role === 'bartender' || u.role === 'admin'))
+/**
+ * Who may be asked for a PIN here — the shared list, not a filter of our own.
+ *
+ * `useAdjustments().approvers` applies all three of the server's rules: the
+ * venue's `approver_roles`, never the person holding the phone, and never the
+ * owner unless this is his own bound device (`ADMIN_PIN_FOREIGN_DEVICE` refuses
+ * that one). It also carries `pin_len`, so the pad knows how many digits to
+ * expect.
+ */
+const { approvers, loadApprovers } = useAdjustments()
 
 function allowed(entry: (typeof REASONS)[number]): boolean {
   return entry.waiter || isApprover.value
@@ -157,7 +167,9 @@ function step(delta: number) {
 
 <template>
   <div class="flex flex-1 flex-col">
-    <WaiterHeader title="Otpis" back-to="/k">
+    <!-- The bartender writes off from behind the bar, so his arrow goes back
+         to the ticket queue rather than to a floor plan he does not use. -->
+    <WaiterHeader title="Otpis" :back-to="me.home.value">
       <template #right>
         <WaiterSyncChip />
       </template>

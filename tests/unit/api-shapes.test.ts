@@ -305,7 +305,7 @@ describe('GET /api/prep', () => {
 describe('GET /api/stock and POST /api/stock/deliveries', () => {
   it('reports on hand and what last moved it', () => {
     const stock = getStock(f.db, f.venueId)
-    expect(stock).toHaveLength(19)
+    expect(stock).toHaveLength(20)
 
     const kafa = stock.find(i => i.name === 'Kafa (mljevena)')!
     expect(kafa.on_hand).toBe(2400)
