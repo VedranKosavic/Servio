@@ -30,22 +30,22 @@ function hoursText(hours: number): string {
 
 <template>
   <section class="card flex flex-col gap-3 p-4">
-    <h2 class="text-xl font-bold">
+    <h2 class="section-title">
       Večeras
     </h2>
 
     <div class="grid grid-cols-3 gap-2">
-      <div class="card-2 flex flex-col items-center gap-0.5 px-2 py-3">
-        <span class="num text-2xl font-bold">{{ counts.rounds }}</span>
-        <span class="text-sm text-text-2">ture</span>
+      <div class="card-2 flex flex-col items-center justify-center gap-1.5 px-2 py-4">
+        <span class="metric num">{{ counts.rounds }}</span>
+        <span class="eyebrow">ture</span>
       </div>
-      <div class="card-2 flex flex-col items-center gap-0.5 px-2 py-3">
-        <span class="num text-2xl font-bold">{{ counts.tabs }}</span>
-        <span class="text-sm text-text-2">stolovi</span>
+      <div class="card-2 flex flex-col items-center justify-center gap-1.5 px-2 py-4">
+        <span class="metric num">{{ counts.tabs }}</span>
+        <span class="eyebrow">stolovi</span>
       </div>
-      <div class="card-2 flex flex-col items-center gap-0.5 px-2 py-3">
-        <span class="num text-2xl font-bold">{{ counts.bowls }}</span>
-        <span class="text-sm text-text-2">lule</span>
+      <div class="card-2 flex flex-col items-center justify-center gap-1.5 px-2 py-4">
+        <span class="metric num">{{ counts.bowls }}</span>
+        <span class="eyebrow">lule</span>
       </div>
     </div>
 
@@ -55,17 +55,17 @@ function hoursText(hours: number): string {
         v-for="category in counts.by_category"
         :key="category.category_id"
         :to="`/konobar/moja-smjena/stavke?kat=${category.category_id}`"
-        class="chip min-h-12 gap-2 px-3.5 text-base"
+        class="pill h-12"
       >
         <span>{{ category.name }}</span>
         <span class="num font-bold text-text">{{ category.count }}</span>
       </NuxtLink>
     </div>
-    <p v-else class="text-[15px] text-text-2">
+    <p v-else class="text-label text-text-2">
       Još nijedna tura večeras.
     </p>
 
-    <div class="flex flex-col gap-1.5 border-t border-line pt-3 text-[17px]">
+    <div class="flex flex-col gap-1.5 border-t border-line-soft pt-3 text-body">
       <NuxtLink
         to="/konobar/moja-smjena/stavke?kat=storno"
         class="flex min-h-12 items-center justify-between gap-3"
@@ -82,7 +82,7 @@ function hoursText(hours: number): string {
       <div class="flex min-h-12 items-center justify-between gap-3">
         <span class="text-text-2">Osoblje</span>
         <span class="flex items-center gap-2">
-          <span class="text-[15px] text-text-2">do {{ formatKm(counts.gratis.max_fen) }}</span>
+          <span class="text-label text-text-2">do {{ formatKm(counts.gratis.max_fen) }}</span>
           <span
             class="num font-semibold"
             :class="counts.gratis.used >= counts.gratis.cap ? 'text-warn' : ''"
@@ -110,7 +110,7 @@ function hoursText(hours: number): string {
       </div>
     </div>
 
-    <p class="text-[15px] text-text-2">
+    <p class="text-label text-text-2">
       Pazar vidiš tek kad ga predaš — prebrojiš pa upišeš, i tek onda ti {{ APP_NAME }}
       kaže koliko je očekivao.
     </p>

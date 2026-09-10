@@ -66,39 +66,43 @@ function open(kind: ChannelKind) {
       </template>
     </WaiterHeader>
 
-    <main class="flex flex-1 flex-col gap-2 py-3">
-      <button
-        v-for="channel in chat.channels"
-        :key="channel.id"
-        type="button"
-        class="card flex min-h-16 flex-col gap-1 px-4 py-3 text-left active:bg-surface-2"
-        @click="open(channel.kind)"
-      >
-        <div class="flex items-center gap-2">
-          <span class="grow text-lg font-semibold">{{ channel.name }}</span>
-          <span v-if="channel.preview_at" class="num shrink-0 text-sm text-muted">
-            {{ localTime(channel.preview_at) }}
+    <main class="flex flex-1 flex-col py-4">
+      <!-- Two or three channels are a list, not a stack of cards: one edge, a
+           rule between them, and the unread count as the only colour. -->
+      <div v-if="chat.channels.length" class="card px-4">
+        <button
+          v-for="channel in chat.channels"
+          :key="channel.id"
+          type="button"
+          class="row w-full flex-col items-stretch gap-1 py-3"
+          @click="open(channel.kind)"
+        >
+          <span class="flex items-center gap-2">
+            <span class="section-title grow truncate">{{ channel.name }}</span>
+            <span v-if="channel.preview_at" class="num shrink-0 text-caption tracking-normal text-muted">
+              {{ localTime(channel.preview_at) }}
+            </span>
+            <span
+              v-if="channel.unread > 0"
+              class="num min-w-6 shrink-0 rounded-chip bg-accent px-1.5 text-center text-label font-bold text-accent-ink"
+            >
+              {{ badge(channel.unread) }}
+            </span>
           </span>
-          <span
-            v-if="channel.unread > 0"
-            class="num min-w-6 shrink-0 rounded-full bg-accent px-1.5 text-center text-sm font-bold text-accent-ink"
-          >
-            {{ badge(channel.unread) }}
+
+          <span class="truncate text-label text-text-2">
+            {{ channel.preview ?? 'Još nema poruka' }}
           </span>
-        </div>
 
-        <span class="truncate text-text-2">
-          {{ channel.preview ?? 'Još nema poruka' }}
-        </span>
+          <!-- The one note that belongs on a list rather than inside a thread. -->
+          <span v-if="channel.pinned_text" class="flex items-center gap-2 pt-1">
+            <span class="chip chip-warn shrink-0">Za naručiti</span>
+            <span class="truncate text-label text-text-2">{{ channel.pinned_text.split('\n')[0] }}</span>
+          </span>
+        </button>
+      </div>
 
-        <!-- The one note that belongs on a list rather than inside a thread. -->
-        <span v-if="channel.pinned_text" class="flex items-center gap-2">
-          <span class="chip chip-warn shrink-0">Za naručiti</span>
-          <span class="truncate text-text-2">{{ channel.pinned_text.split('\n')[0] }}</span>
-        </span>
-      </button>
-
-      <p v-if="chat.loaded && chat.channels.length === 0" class="card px-4 py-8 text-center text-text-2">
+      <p v-else-if="chat.loaded" class="empty">
         Nema kanala.
       </p>
     </main>

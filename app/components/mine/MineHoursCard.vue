@@ -25,22 +25,22 @@ function hoursText(hours: number): string {
 
 <template>
   <section class="card flex flex-col gap-2 p-4">
-    <h2 class="text-xl font-bold">
+    <h2 class="section-title">
       Moji sati
     </h2>
 
     <div class="grid grid-cols-2 gap-2">
-      <div class="card-2 flex flex-col items-center gap-0.5 px-2 py-3">
-        <span class="num text-2xl font-bold">{{ hoursText(total) }}</span>
-        <span class="text-sm text-text-2">ukupno</span>
+      <div class="card-2 flex flex-col items-center justify-center gap-1.5 px-2 py-4">
+        <span class="metric num">{{ hoursText(total) }}</span>
+        <span class="eyebrow">ukupno</span>
       </div>
-      <div class="card-2 flex flex-col items-center gap-0.5 px-2 py-3">
-        <span class="num text-2xl font-bold">{{ nights }}</span>
-        <span class="text-sm text-text-2">{{ nights === 1 ? 'noć' : 'noći' }}</span>
+      <div class="card-2 flex flex-col items-center justify-center gap-1.5 px-2 py-4">
+        <span class="metric num">{{ nights }}</span>
+        <span class="eyebrow">{{ nights === 1 ? 'noć' : 'noći' }}</span>
       </div>
     </div>
 
-    <p class="text-[15px] text-text-2">
+    <p class="text-label text-text-2">
       Odrađeni sati, od prve zaključane ture do kraja smjene. Raspored stiže
       kasnije — dok ga nema, ovdje piše samo ono što se stvarno desilo.
     </p>

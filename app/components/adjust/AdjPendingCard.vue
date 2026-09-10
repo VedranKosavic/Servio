@@ -18,7 +18,7 @@
  * the queue would offer a button that had quietly become a 403 — and the server
  * would be the one to say so, after the tap.
  *
- * *Odobri* is `btn-accent` and *Odbij* is a ghost, deliberately: approving is the
+ * *Odobri* is `btn-primary` and *Odbij* is a ghost, deliberately: approving is the
  * common, low-harm answer, and a rejection leaves a waiter's money on his own
  * envelope, so it should take the more deliberate tap.
  */
@@ -62,7 +62,7 @@ const decidable = computed(() => props.row.can_decide && !expired.value)
       <span class="num shrink-0 text-2xl font-bold">{{ formatKm(row.amount_fen) }}</span>
     </div>
 
-    <p class="text-[17px]">
+    <p class="text-body">
       <span class="text-text-2">{{ row.table_name }} ·</span>
       {{ row.qty }}× {{ row.line_name }}
     </p>
@@ -73,17 +73,17 @@ const decidable = computed(() => props.row.can_decide && !expired.value)
         {{ row.restock ? 'vraća na stanje' : 'ne vraća na stanje' }}
       </span>
       <span v-if="row.was_paid" class="chip chip-danger">nakon naplate</span>
-      <span class="num text-sm text-text-2">{{ waiting }}</span>
+      <span class="num text-label text-text-2">{{ waiting }}</span>
     </div>
 
-    <p v-if="row.note" class="rounded-xl bg-surface-2 px-3 py-2 text-[15px] text-text-2">
+    <p v-if="row.note" class="note">
       „{{ row.note }}“
     </p>
 
     <div v-if="decidable" class="flex gap-2">
       <button
         type="button"
-        class="btn btn-accent h-14 flex-1 text-lg"
+        class="btn btn-primary h-14 flex-1 text-lg"
         :disabled="busy"
         @click="emit('decide', row.id, 'applied')"
       >
@@ -102,7 +102,7 @@ const decidable = computed(() => props.row.can_decide && !expired.value)
       </button>
     </div>
 
-    <p v-else class="rounded-xl bg-warn-soft px-3 py-2 text-[15px] text-warn">
+    <p v-else class="note note-warn">
       Ide vlasniku — isteklo je vrijeme za šankera.
     </p>
   </article>

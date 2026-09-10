@@ -35,12 +35,12 @@ async function refreshNow() {
 </script>
 
 <template>
-  <div v-if="show" class="card flex items-center gap-3 border-accent p-3">
-    <div class="grow text-[15px]">
+  <div v-if="show" class="card flex items-center gap-3 border-accent-line p-4">
+    <div class="grow text-label">
       <span class="font-semibold">Nova verzija</span>
       <span class="text-text-2"> — osvježi da je preuzmeš.</span>
     </div>
-    <button type="button" class="btn btn-accent shrink-0" :disabled="busy" @click="refreshNow">
+    <button type="button" class="btn btn-primary shrink-0" :disabled="busy" @click="refreshNow">
       Osvježi
     </button>
   </div>

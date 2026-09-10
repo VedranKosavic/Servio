@@ -84,11 +84,11 @@ const totalFen = computed(() => rows.value.reduce((sum, r) => sum + r.lineFen, 0
 
       <div class="flex items-center gap-2">
         <span class="chip bg-line text-text">{{ tableName }}</span>
-        <span class="grow text-lg font-bold">Nova tura</span>
-        <span class="num text-sm text-text-2">{{ stavke(count) }}</span>
+        <span class="section-title grow">Nova tura</span>
+        <span class="num text-label text-text-2">{{ stavke(count) }}</span>
       </div>
 
-      <p v-if="error" class="rounded-xl bg-danger-soft px-3 py-2 text-[15px] text-danger" role="alert">
+      <p v-if="error" class="note note-danger" role="alert">
         {{ error }}
       </p>
 
@@ -97,8 +97,8 @@ const totalFen = computed(() => rows.value.reduce((sum, r) => sum + r.lineFen, 0
              steppers and an amount on one line squeeze the name to "Narg…". -->
         <li v-for="row in rows" :key="row.id" class="card-2 flex flex-col gap-2 p-2.5">
           <div class="flex items-baseline gap-2">
-            <span class="min-w-0 grow text-[17px] font-semibold">{{ row.name }}</span>
-            <span class="num shrink-0 text-[17px] font-semibold">{{ formatKm(row.lineFen) }}</span>
+            <span class="min-w-0 grow text-body font-semibold">{{ row.name }}</span>
+            <span class="num shrink-0 text-body font-semibold">{{ formatKm(row.lineFen) }}</span>
           </div>
 
           <div v-if="row.flavours.length || row.note" class="flex flex-wrap gap-1.5">
@@ -109,7 +109,7 @@ const totalFen = computed(() => rows.value.reduce((sum, r) => sum + r.lineFen, 0
           <div class="flex items-center gap-2">
             <button
               type="button"
-              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-surface"
+              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-surface"
               :aria-label="`Napomena · ${row.name}`"
               @click="emit('note', row.id)"
             >
@@ -122,16 +122,16 @@ const totalFen = computed(() => rows.value.reduce((sum, r) => sum + r.lineFen, 0
 
             <button
               type="button"
-              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-surface text-xl font-bold"
+              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-surface text-xl font-bold"
               :aria-label="`Skini jedan · ${row.name}`"
               @click="emit('remove', row.id)"
             >
               −
             </button>
-            <span class="num w-8 shrink-0 text-center text-lg font-bold">{{ row.qty }}</span>
+            <span class="num w-8 shrink-0 text-center text-body font-bold">{{ row.qty }}</span>
             <button
               type="button"
-              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-surface text-xl font-bold"
+              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-surface text-xl font-bold"
               :aria-label="`Dodaj jedan · ${row.name}`"
               @click="emit('add', row.id)"
             >
@@ -142,22 +142,22 @@ const totalFen = computed(() => rows.value.reduce((sum, r) => sum + r.lineFen, 0
       </ul>
 
       <div class="flex items-baseline gap-2 border-t border-line pt-3">
-        <span class="grow text-lg font-semibold">Ukupno</span>
+        <span class="section-title grow">Ukupno</span>
         <span class="num text-2xl font-bold">{{ formatKm(totalFen) }}</span>
       </div>
 
       <button
         type="button"
-        class="btn btn-accent h-14 text-lg"
+        class="btn btn-primary btn-lg"
         :disabled="busy || count === 0"
         @click="emit('confirm')"
       >
         {{ busy ? 'Šaljem…' : 'Potvrdi' }}
       </button>
-      <button type="button" class="btn btn-ghost h-12" :disabled="busy" @click="emit('close')">
+      <button type="button" class="btn btn-ghost" :disabled="busy" @click="emit('close')">
         Nazad
       </button>
-      <p class="text-center text-sm text-text-2">
+      <p class="text-center text-label text-text-2">
         Zaključena tura se ne mijenja — greška se ispravlja stornom.
       </p>
     </div>

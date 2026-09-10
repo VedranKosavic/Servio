@@ -76,10 +76,10 @@ function submit() {
     aria-label="Odobrenje otpisa"
   >
     <div>
-      <h2 class="text-xl font-bold">
+      <h2 class="section-title">
         Otpis traži odobrenje
       </h2>
-      <p class="num text-[15px] text-text-2">
+      <p class="num text-label text-text-2">
         {{ itemName }} · {{ formatKm(costFen) }}
       </p>
     </div>
@@ -89,7 +89,7 @@ function submit() {
         v-for="person in approvers"
         :key="person.id"
         type="button"
-        class="min-h-12 rounded-full border px-4 text-base font-semibold"
+        class="min-h-12 rounded-full border px-4 text-body font-semibold"
         :class="approverId === person.id
           ? 'border-accent bg-accent text-accent-ink'
           : 'border-line bg-surface-2 text-text-2'"
@@ -99,13 +99,13 @@ function submit() {
       </button>
     </div>
 
-    <div class="flex min-h-13 items-center gap-2 rounded-xl border border-line bg-surface-2 px-3">
+    <div class="flex min-h-13 items-center gap-2 rounded-control border border-line bg-surface-2 px-3">
       <span class="num grow text-2xl font-bold tracking-[0.4em]">
         {{ '•'.repeat(pin.length) }}
       </span>
       <button
         type="button"
-        class="text-sm text-text-2"
+        class="text-label text-text-2"
         aria-label="Obriši"
         @click="pin = pin.slice(0, -1)"
       >
@@ -126,23 +126,23 @@ function submit() {
       </button>
     </div>
 
-    <p v-if="approvers.length === 0" class="rounded-xl bg-surface-2 px-3 py-2 text-[15px] text-text-2">
+    <p v-if="approvers.length === 0" class="note">
       Niko od odobravatelja nije dostupan na ovom telefonu. Otpis se upisuje i
       čeka potvrdu.
     </p>
 
-    <p v-if="error" class="text-[15px] text-danger">
+    <p v-if="error" class="text-label text-danger">
       {{ error }}
     </p>
 
-    <button type="button" class="btn btn-accent min-h-14 text-lg" :disabled="!canSend" @click="submit">
+    <button type="button" class="btn btn-primary btn-lg" :disabled="!canSend" @click="submit">
       Odobri i sačuvaj
     </button>
 
     <button type="button" class="btn btn-ghost min-h-13" :disabled="busy" @click="emit('skip')">
       Sačuvaj bez odobrenja
     </button>
-    <p class="text-center text-sm text-muted">
+    <p class="text-center text-caption tracking-normal text-muted">
       Bez odobrenja otpis se svejedno upisuje — vlasnik ga vidi kao "čeka
       potvrdu".
     </p>

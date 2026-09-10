@@ -190,45 +190,45 @@ function step(delta: number) {
       <template v-else>
         <div class="card flex items-center justify-between gap-3 p-4">
           <div>
-            <div class="text-xl font-bold">
+            <div class="section-title">
               {{ selected.name }}
             </div>
-            <div class="num text-[15px] text-text-2">
+            <div class="num text-label text-text-2">
               {{ formatKm(estimateFen) }}
               <template v-if="selected.estimated"> · procijenjeno</template>
             </div>
           </div>
-          <button type="button" class="btn btn-ghost min-h-12" @click="selected = null">
+          <button type="button" class="btn btn-ghost" @click="selected = null">
             Promijeni
           </button>
         </div>
 
         <section class="flex flex-col gap-2">
-          <h2 class="text-lg font-semibold">
+          <h2 class="section-title">
             Koliko
           </h2>
           <div class="flex items-stretch gap-2">
-            <button type="button" class="btn min-h-14 w-16 text-2xl" aria-label="Manje" @click="step(-1)">
-              −
+            <button type="button" class="btn btn-secondary min-h-15 w-15 shrink-0" aria-label="Manje" @click="step(-1)">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12" /></svg>
             </button>
-            <div class="flex grow items-center gap-2 rounded-xl border border-line bg-surface-2 px-3">
+            <span class="input input-num flex grow items-center gap-2 px-3">
               <input
                 v-model="qtyRaw"
-                class="num min-h-14 w-full bg-transparent text-2xl font-bold outline-none"
+                class="num w-full bg-transparent text-center text-title font-semibold outline-none"
                 inputmode="decimal"
                 autocomplete="off"
                 aria-label="Količina"
               >
-              <span class="shrink-0 text-base text-text-2">{{ selected.base_unit }}</span>
-            </div>
-            <button type="button" class="btn min-h-14 w-16 text-2xl" aria-label="Više" @click="step(1)">
-              +
+              <span class="shrink-0 text-label font-normal text-text-2">{{ selected.base_unit }}</span>
+            </span>
+            <button type="button" class="btn btn-secondary min-h-15 w-15 shrink-0" aria-label="Više" @click="step(1)">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 6v12M6 12h12" /></svg>
             </button>
           </div>
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="text-lg font-semibold">
+          <h2 class="section-title">
             Razlog
           </h2>
           <div class="flex flex-wrap gap-2">
@@ -236,52 +236,45 @@ function step(delta: number) {
               v-for="entry in REASONS"
               :key="entry.key"
               type="button"
-              class="min-h-12 rounded-full border px-4 text-base font-semibold"
-              :class="reason === entry.key
-                ? 'border-accent bg-accent text-accent-ink'
-                : allowed(entry)
-                  ? 'border-line bg-surface-2 text-text-2'
-                  : 'border-line bg-surface-2 text-muted'"
+              class="pill h-12"
+              :class="reason === entry.key ? 'pill-on' : ''"
               :disabled="!allowed(entry)"
               @click="reason = entry.key"
             >
               {{ entry.label }}
             </button>
           </div>
-          <p v-if="!isApprover" class="text-sm text-text-2">
+          <p v-if="!isApprover" class="text-label text-text-2">
             Isteklo, degustaciju i ostalo upisuje šanker.
           </p>
         </section>
 
         <input
           v-model="note"
-          class="min-h-13 rounded-xl border border-line bg-surface-2 px-3 text-base outline-none"
+          class="input"
           placeholder="Napomena (nije obavezna)"
           maxlength="200"
           aria-label="Napomena"
         >
 
-        <p v-if="needsApproval" class="card border-warn px-4 py-3 text-[15px] text-warn">
+        <p v-if="needsApproval" class="note note-warn">
           Ovaj otpis traži odobrenje šankera ili vlasnika.
         </p>
 
-        <p v-if="saveError" class="card border-danger px-4 py-3 text-[15px] text-danger">
+        <p v-if="saveError" class="note note-danger" role="alert">
           {{ saveError }}
         </p>
       </template>
 
-      <p class="pb-24 text-center text-sm text-muted">
+      <p class="pb-24 text-center text-caption tracking-normal text-muted">
         Otpis odmah skida robu sa stanja. Odobrenje je potvrda, ne dozvola.
       </p>
     </main>
 
-    <div
-      v-if="selected"
-      class="sticky bottom-0 -mx-4 border-t border-line bg-bg px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3"
-    >
+    <div v-if="selected" class="action-bar -mx-4 border-t border-line px-4">
       <button
         type="button"
-        class="btn btn-accent min-h-14 w-full text-lg"
+        class="btn btn-primary btn-lg w-full"
         :disabled="!canSave"
         @click="onSave"
       >
@@ -301,11 +294,7 @@ function step(delta: number) {
       @close="pinOpen = false"
     />
 
-    <div
-      v-if="toast"
-      class="fixed inset-x-0 bottom-24 z-50 mx-auto w-fit rounded-full bg-good-soft px-4 py-2 text-center font-semibold text-good"
-      @click="toast = null"
-    >
+    <div v-if="toast" class="toast" role="status" @click="toast = null">
       {{ toast }}
     </div>
   </div>

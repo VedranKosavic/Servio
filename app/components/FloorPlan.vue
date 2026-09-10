@@ -22,6 +22,13 @@
  * Add a table to the database with the right col/row and it appears here; this
  * file never learns how many tables the café has.
  *
+ * **The material.** The plan is an inset well — the room is a space the tiles
+ * sit *in*, not a list of cards — and the surface ladder does the rest: a free
+ * table is one step above the well, a colleague's one step above that, and
+ * mine is the only copper on the screen. The legend is the foot of the same
+ * well, behind a hairline, so it reads as a caption on the plan rather than as
+ * a fifth row of controls.
+ *
  * **What WP9 changed.** The tile used to guess whose table it was by comparing
  * `opened_by_name` to the name in localStorage. It now reads `assigned_to`
  * against the session's user id, which is a different question and the right
@@ -96,7 +103,8 @@ function toCell(table: VenueTable): Cell {
   }
 
   if (state.assigned_to && state.assigned_to === props.myUserId) {
-    // The amount without " KM": at 10 px the currency is noise, not information.
+    // The amount without " KM": the currency on every tile is noise, and the
+    // tile now has the width to set the number itself at a readable size.
     return { ...common, sub: formatAmount(state.remaining_fen), variant: 'mine' }
   }
 
@@ -124,14 +132,14 @@ const columns = computed(() => {
 </script>
 
 <template>
-  <div class="flex flex-1 flex-col gap-3 rounded-2xl border border-line bg-bg px-2 py-4">
+  <div class="well flex flex-1 flex-col gap-4 rounded-panel px-3 py-4">
     <div class="flex flex-1 overflow-x-auto">
       <!-- Both zones: one stack per column, shorter stacks centred (items-center). -->
       <div class="flex flex-1 items-center justify-between gap-2">
         <div
           v-for="column in columns"
           :key="column.col"
-          class="flex flex-col items-center gap-3.5"
+          class="flex flex-col items-center gap-3"
         >
           <FloorTable
             v-for="cell in column.cells"
@@ -148,9 +156,9 @@ const columns = computed(() => {
           <div
             v-for="group in column.groups"
             :key="group.name"
-            class="flex flex-col items-center gap-2 rounded-xl border-[1.5px] border-dashed border-muted px-3 pb-3 pt-2"
+            class="flex flex-col items-center gap-2 rounded-card border border-dashed border-line px-3 pb-3 pt-2"
           >
-            <span class="text-xs font-bold tracking-[0.1em] text-text-2">{{ group.name.toUpperCase() }}</span>
+            <span class="eyebrow">{{ group.name }}</span>
             <div class="flex gap-3">
               <FloorTable
                 v-for="cell in group.cells"
@@ -170,12 +178,33 @@ const columns = computed(() => {
       </div>
     </div>
 
-    <div class="flex flex-wrap items-center justify-center gap-x-3.5 gap-y-1 text-[13px] text-text-2">
-      <span class="flex items-center gap-1.5"><i class="inline-block size-3 rounded-full bg-accent" />moj sto</span>
-      <span class="flex items-center gap-1.5"><i class="inline-block size-3 rounded-full bg-line" />kolegin</span>
-      <span class="flex items-center gap-1.5"><i class="inline-block size-3 rounded-full border border-muted" />slobodan</span>
-      <span class="flex items-center gap-1.5"><i class="inline-block size-3 rounded-full border border-dashed border-accent" />nacrt</span>
-      <span class="flex items-center gap-1.5"><i class="inline-block size-3 rounded-full border-2 border-warn" />čeka</span>
-    </div>
+    <!-- The caption on the plan: colour never carries a meaning on its own, so
+         every marker is drawn beside the word it stands for. -->
+    <ul class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 border-t border-line-soft pt-3 text-caption tracking-normal text-muted">
+      <li class="flex items-center gap-1.5"><i class="key key-mine" />moj sto</li>
+      <li class="flex items-center gap-1.5"><i class="key key-other" />kolegin</li>
+      <li class="flex items-center gap-1.5"><i class="key key-free" />slobodan</li>
+      <li class="flex items-center gap-1.5"><i class="key key-draft" />nacrt</li>
+      <li class="flex items-center gap-1.5"><i class="key key-wait" />čeka</li>
+    </ul>
   </div>
 </template>
+
+<style scoped>
+/* The legend markers are the tiles in miniature — same fills, same borders, so
+   the key and the plan cannot drift apart. */
+.key {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  border: 1.5px solid var(--line-soft);
+  background: var(--surface);
+}
+
+.key-mine { background: var(--accent); border-color: transparent; }
+.key-other { background: var(--surface-2); border-color: var(--line); }
+.key-draft { background: transparent; border-color: var(--accent-line); border-style: dashed; }
+.key-wait { background: transparent; border-color: var(--warn); }
+</style>

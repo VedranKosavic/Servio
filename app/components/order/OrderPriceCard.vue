@@ -33,9 +33,9 @@ const diff = computed(() => props.serverFen - props.draftFen)
   <div class="card flex flex-col gap-2 border-warn p-3" role="status">
     <div class="flex items-center gap-2">
       <span class="chip chip-warn">Cijena promijenjena</span>
-      <span class="text-sm text-text-2">{{ tableName }}</span>
+      <span class="text-label text-text-2">{{ tableName }}</span>
     </div>
-    <p class="text-[15px]">
+    <p class="text-label">
       Na ekranu je pisalo <span class="num">{{ formatKm(draftFen) }}</span>, naplaćeno je
       <span class="num font-semibold">{{ formatKm(serverFen) }}</span>
       <template v-if="diff !== 0">
@@ -43,7 +43,7 @@ const diff = computed(() => props.serverFen - props.draftFen)
       </template>.
       Cijena je promijenjena u međuvremenu; meni je osvježen.
     </p>
-    <button type="button" class="btn h-12" @click="$emit('close')">
+    <button type="button" class="btn btn-secondary" @click="$emit('close')">
       U redu
     </button>
   </div>

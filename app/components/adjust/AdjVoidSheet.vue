@@ -171,11 +171,11 @@ async function confirm() {
         </h2>
         <span class="num shrink-0 text-2xl font-bold">{{ formatKm(line.amount_fen) }}</span>
       </div>
-      <p class="-mt-2 text-[15px] text-text-2">
+      <p class="-mt-2 text-label text-text-2">
         {{ tableName }} · zaključene stavke se ne mijenjaju — možeš zatražiti storno.
       </p>
 
-      <p v-if="error" class="rounded-xl bg-danger-soft px-3 py-2 text-[15px] text-danger" role="alert">
+      <p v-if="error" class="note note-danger" role="alert">
         {{ error }}
       </p>
 
@@ -186,10 +186,10 @@ async function confirm() {
             v-for="chip in VOID_REASONS"
             :key="chip.id"
             type="button"
-            class="flex min-h-12 items-center rounded-3xl border px-4 text-[17px] font-semibold"
+            class="pill h-12"
             :class="reason === chip.id
-              ? 'border-accent bg-accent text-accent-ink'
-              : 'border-line bg-surface-2 text-text'"
+              ? 'pill-on'
+              : ''"
             @click="reason = chip.id"
           >
             {{ chip.label }}
@@ -197,18 +197,18 @@ async function confirm() {
         </div>
 
         <label v-if="noteRequired" class="flex flex-col gap-1.5">
-          <span class="text-sm text-text-2">Napiši šta se desilo (najmanje {{ NOTE_MIN_LENGTH }} znakova)</span>
+          <span class="text-label text-text-2">Napiši šta se desilo (najmanje {{ NOTE_MIN_LENGTH }} znakova)</span>
           <textarea
             v-model="note"
             rows="2"
             maxlength="200"
-            class="card-2 min-h-12 w-full resize-none px-3.5 py-2.5 text-[17px] outline-none placeholder:text-muted"
+            class="card-2 min-h-12 w-full resize-none px-3.5 py-2.5 text-body outline-none placeholder:text-muted"
             placeholder="Kratko, svojim riječima"
           />
         </label>
 
         <!-- What it does to the shelf, before anything is sent -->
-        <p v-if="chosen" class="rounded-xl bg-surface-2 px-3 py-2 text-[15px]">
+        <p v-if="chosen" class="note">
           Vraća robu na stanje:
           <span :class="restocks ? 'font-semibold text-good' : 'font-semibold text-text-2'">
             {{ restocks ? 'da' : 'ne' }}
@@ -216,26 +216,26 @@ async function confirm() {
         </p>
 
         <!-- What will happen to it -->
-        <p v-if="selfVoid" class="rounded-xl bg-good-soft px-3 py-2 text-[15px] text-good">
+        <p v-if="selfVoid" class="note note-good">
           Tvoja stavka, u roku — storno se odmah primjenjuje.
           <span class="num">Još {{ mmss(selfLeftS) }}.</span>
         </p>
-        <p v-else-if="!canAskPin" class="rounded-xl bg-warn-soft px-3 py-2 text-[15px] text-warn">
+        <p v-else-if="!canAskPin" class="note note-warn">
           Nema veze — ide na čekanje, {{ approverName }} potvrđuje sa svog telefona.
         </p>
-        <p v-else class="rounded-xl bg-warn-soft px-3 py-2 text-[15px] text-warn">
+        <p v-else class="note note-warn">
           Ide na odobrenje. {{ formatKm(line.amount_fen) }} ostaje u tvom pazaru dok se ne odobri.
         </p>
 
         <button
           type="button"
-          class="btn btn-accent h-14 text-lg"
+          class="btn btn-primary btn-lg"
           :disabled="!ready"
           @click="confirm"
         >
           {{ busy ? 'Šaljem…' : 'Zatraži storno' }}
         </button>
-        <button type="button" class="btn btn-ghost h-12" :disabled="busy" @click="emit('close')">
+        <button type="button" class="btn btn-ghost" :disabled="busy" @click="emit('close')">
           Otkaži
         </button>
       </template>

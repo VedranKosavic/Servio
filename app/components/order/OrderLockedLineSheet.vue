@@ -41,30 +41,30 @@ defineEmits<{
       <span class="mx-auto h-1 w-10 shrink-0 rounded-full bg-line" />
 
       <div class="flex items-baseline gap-2">
-        <span class="grow text-lg font-bold">
+        <span class="section-title grow">
           <span class="num">{{ line.qty }}×</span> {{ line.name_snapshot }}
         </span>
-        <span class="num text-lg font-semibold">{{ formatKm(line.charged_fen) }}</span>
+        <span class="num text-body font-semibold">{{ formatKm(line.charged_fen) }}</span>
       </div>
-      <p class="text-sm text-text-2">
+      <p class="text-label text-text-2">
         {{ round }}
         <template v-if="line.flavour_names.length">· {{ line.flavour_names.join(' + ') }}</template>
       </p>
 
-      <p class="rounded-xl bg-surface-2 px-3 py-2 text-[15px]">
+      <p class="note">
         Zaključene stavke se ne mijenjaju. Greška se ispravlja stornom, i storno
         se vidi.
       </p>
 
       <button
         type="button"
-        class="btn h-14 justify-between text-lg"
+        class="btn btn-secondary btn-lg justify-between"
         @click="$emit('storno')"
       >
         Zatraži storno
       </button>
 
-      <button type="button" class="btn btn-ghost h-12" @click="$emit('close')">
+      <button type="button" class="btn btn-ghost" @click="$emit('close')">
         Zatvori
       </button>
     </div>

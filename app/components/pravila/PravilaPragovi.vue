@@ -78,10 +78,10 @@ const rules = computed(() => {
       class="flex flex-col gap-1 border-t border-line py-3 first:border-t-0 first:pt-0"
     >
       <div class="flex items-baseline justify-between gap-3">
-        <span class="text-[17px] font-semibold">{{ rule.title }}</span>
-        <span class="num shrink-0 font-bold text-accent">{{ rule.value }}</span>
+        <span class="text-body font-semibold">{{ rule.title }}</span>
+        <span class="num shrink-0 font-bold text-accent-text">{{ rule.value }}</span>
       </div>
-      <p class="text-[15px] text-text-2">
+      <p class="text-label text-text-2">
         {{ rule.detail }}
       </p>
     </div>

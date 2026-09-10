@@ -56,10 +56,10 @@ const canAdd = computed(() => selected.value.length > 0)
       <div class="mx-auto h-1 w-10 rounded-sm bg-line" />
 
       <div class="flex items-center gap-3">
-        <span class="grow text-lg font-bold">{{ props.product.name }}</span>
+        <span class="section-title grow">{{ props.product.name }}</span>
         <span class="chip num">Mix {{ selected.length }}/{{ MAX }}</span>
       </div>
-      <p class="text-sm text-text-2">
+      <p class="text-label text-text-2">
         Izaberi 1–3 arome.
       </p>
 
@@ -68,11 +68,11 @@ const canAdd = computed(() => selected.value.length > 0)
           v-for="flavour in props.flavours"
           :key="flavour.id"
           type="button"
-          class="flex min-h-12 items-center gap-2 rounded-3xl border-[1.5px] px-4 text-base font-semibold"
+          class="pill h-12"
           :class="[
             selected.includes(flavour.id)
-              ? 'border-accent bg-accent text-accent-ink'
-              : 'border-line bg-surface-2 text-text',
+              ? 'pill-on'
+              : '',
             flavour.on_hand <= 0 ? 'opacity-45' : '',
           ]"
           :disabled="flavour.on_hand <= 0"
@@ -88,10 +88,10 @@ const canAdd = computed(() => selected.value.length > 0)
           v-for="chip in props.noteChips"
           :key="chip"
           type="button"
-          class="flex min-h-12 items-center rounded-3xl border-[1.5px] px-4 text-base font-semibold"
+          class="pill h-12"
           :class="note === chip
-            ? 'border-accent bg-accent text-accent-ink'
-            : 'border-line bg-surface-2 text-text-2'"
+            ? 'pill-on'
+            : ''"
           @click="pickNote(chip)"
         >
           {{ chip }}
@@ -100,7 +100,7 @@ const canAdd = computed(() => selected.value.length > 0)
 
       <button
         type="button"
-        class="btn btn-accent h-14 text-lg"
+        class="btn btn-primary btn-lg"
         :disabled="!canAdd"
         @click="emit('confirm', [...selected], note)"
       >

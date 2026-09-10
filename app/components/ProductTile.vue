@@ -17,7 +17,7 @@
  *
  * PLAN §10 invariant 7 requires a button twin for every gesture, and this one
  * has it off-tile: the same sheet opens from the ⋯ on each line of *Pregled ·
- * Zaključi*. That is deliberate — a third control on a 96 px tile would cost
+ * Zaključi*. That is deliberate — a third control on a 100 px tile would cost
  * more taps than the gesture saves.
  */
 import { formatKm } from '#shared/money'
@@ -84,7 +84,8 @@ const label = computed(() => props.shortName ?? props.name)
   <div class="relative">
     <button
       type="button"
-      class="card flex min-h-24 w-full select-none flex-col justify-between gap-2 p-2.5 text-left"
+      class="tile-btn"
+      :class="{ 'has-qty': qty > 0 }"
       @pointerdown="onPointerDown"
       @pointermove="onPointerMove"
       @pointerup="clear"
@@ -94,29 +95,123 @@ const label = computed(() => props.shortName ?? props.name)
       @click="onClick"
     >
       <span class="flex w-full items-start justify-between gap-1">
-        <span class="text-base font-semibold leading-tight">{{ label }}</span>
-        <span v-if="shisha" class="shrink-0 text-accent">
+        <span class="tile-name">{{ label }}</span>
+        <span v-if="shisha" class="shrink-0 text-accent-text" aria-hidden="true">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 3c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 1-3-1-5 1-9z" />
           </svg>
         </span>
       </span>
-      <span class="num text-sm text-text-2">{{ formatKm(priceFen) }}</span>
+      <span class="num tile-price">{{ formatKm(priceFen) }}</span>
     </button>
 
-    <span
-      v-if="qty > 0"
-      class="num absolute -right-2 -top-2 flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-bg bg-accent px-1.5 text-sm font-bold text-accent-ink"
-    >{{ qty }}</span>
+    <span v-if="qty > 0" class="num tile-qty">{{ qty }}</span>
 
     <button
       v-if="qty > 0"
       type="button"
-      class="absolute bottom-0 right-0 flex h-12 w-12 items-center justify-center rounded-br-[14px] rounded-tl-xl bg-surface-2 text-xl font-bold text-text"
+      class="tile-minus"
       :aria-label="`Skini jedan · ${name}`"
       @click.stop="emit('remove')"
     >
-      −
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+        <path d="M6 12h12" />
+      </svg>
     </button>
   </div>
 </template>
+
+<style scoped>
+/**
+ * The tile is a card, not a button-shaped thing: material, an edge, and the two
+ * facts a waiter reads out loud — the name at body size and the price under it
+ * in tabular figures.
+ */
+.tile-btn {
+  display: flex;
+  width: 100%;
+  min-height: 100px;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px;
+  text-align: left;
+  user-select: none;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-standard),
+    transform var(--dur-tap) var(--ease-standard);
+}
+
+.tile-btn:active { transform: scale(0.97); background: var(--surface-2); }
+
+.tile-name {
+  font-size: var(--text-body);
+  line-height: 1.2;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.tile-price {
+  font-size: var(--text-label);
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+/* A three-across tile is 111 px wide on a 390 px phone, which is not enough for
+   a price *and* a 48 px control on the same line — so the control hangs off the
+   corner (below) and the price only has to clear its overhang. */
+.tile-btn.has-qty .tile-price {
+  padding-right: 26px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* How many are on the round. The one copper thing on the tile. */
+.tile-qty {
+  position: absolute;
+  top: -8px;
+  right: -6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 7px;
+  border-radius: var(--radius-chip);
+  border: 2px solid var(--bg);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: var(--text-label);
+  font-weight: 700;
+}
+
+/**
+ * "−" is its own 48 px target sitting *on* the tile rather than inside it: a
+ * button inside a button is invalid HTML, so the tile is a button and the minus
+ * is a sibling placed over its corner. It only exists once something is on the
+ * tile.
+ */
+.tile-minus {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  display: flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-chip);
+  border: 2px solid var(--bg);
+  background: var(--surface-3);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-standard);
+}
+
+.tile-minus:active { background: var(--line); }
+</style>

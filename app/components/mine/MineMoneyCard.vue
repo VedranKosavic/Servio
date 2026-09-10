@@ -59,15 +59,15 @@ function diffLabel(fen: number): string {
 <template>
   <section class="card flex flex-col gap-3 p-4">
     <div class="flex items-baseline justify-between gap-3">
-      <h2 class="text-xl font-bold">
+      <h2 class="section-title">
         Pazar je predan
       </h2>
-      <span v-if="verdict" class="text-[15px] font-semibold" :class="verdict.tone">
+      <span v-if="verdict" class="text-label font-semibold" :class="verdict.tone">
         {{ verdict.word }}
       </span>
     </div>
 
-    <div class="flex flex-col gap-1.5 text-[17px]">
+    <div class="flex flex-col gap-1.5 text-body">
       <div class="flex justify-between gap-3">
         <span class="text-text-2">Promet</span>
         <span class="num font-semibold">{{ formatKm(summary.promet_fen) }}</span>
@@ -80,7 +80,7 @@ function diffLabel(fen: number): string {
         <span class="text-text-2">Kartica</span>
         <span class="num">{{ formatKm(summary.card_fen) }}</span>
       </div>
-      <div v-if="settlement" class="flex justify-between gap-3 border-t border-line pt-1.5">
+      <div v-if="settlement" class="flex justify-between gap-3 border-t border-line-soft pt-2">
         <span class="text-text-2">Predao</span>
         <span class="num font-semibold">{{ formatKm(settlement.declared_fen) }}</span>
       </div>
@@ -90,17 +90,17 @@ function diffLabel(fen: number): string {
       </div>
     </div>
 
-    <p v-if="verdict" class="text-[15px]" :class="verdict.tone">
+    <p v-if="verdict" class="text-label" :class="verdict.tone">
       {{ verdict.detail }}
     </p>
 
     <!-- Per category, as money now: the same chips, the same drill-down. -->
-    <div v-if="summary.by_category.length" class="flex flex-col gap-1 border-t border-line pt-3">
+    <div v-if="summary.by_category.length" class="flex flex-col gap-1 border-t border-line-soft pt-3">
       <NuxtLink
         v-for="category in summary.by_category"
         :key="category.category_id"
         :to="`/konobar/moja-smjena/stavke?kat=${category.category_id}`"
-        class="flex min-h-12 items-center justify-between gap-3 text-[17px]"
+        class="flex min-h-12 items-center justify-between gap-3 text-body"
       >
         <span class="text-text-2">{{ category.name ?? categoryNames.get(category.category_id) ?? '—' }}</span>
         <span class="flex items-center gap-3">
@@ -110,7 +110,7 @@ function diffLabel(fen: number): string {
       </NuxtLink>
     </div>
 
-    <div class="flex flex-col gap-1 border-t border-line pt-3 text-[15px] text-text-2">
+    <div class="flex flex-col gap-1 border-t border-line-soft pt-3 text-label text-text-2">
       <div v-if="summary.storno.count" class="flex justify-between gap-3">
         <span>Storna</span>
         <span class="num">{{ summary.storno.count }} · {{ formatKm(summary.storno.fen) }}</span>
@@ -129,10 +129,10 @@ function diffLabel(fen: number): string {
       </div>
     </div>
 
-    <p v-if="settlement && !settlement.accepted_by_name" class="text-[15px] text-text-2">
+    <p v-if="settlement && !settlement.accepted_by_name" class="text-label text-text-2">
       Predao si sam; vlasnik potvrđuje kasnije.
     </p>
-    <p v-else-if="settlement" class="text-[15px] text-text-2">
+    <p v-else-if="settlement" class="text-label text-text-2">
       Primio: {{ settlement.accepted_by_name }}
     </p>
   </section>

@@ -59,16 +59,16 @@ const sentence = computed(() => {
   <div class="flex flex-col gap-1 py-1.5">
     <div class="flex items-baseline gap-2">
       <span
-        class="num shrink-0 text-[15px]"
+        class="num shrink-0 text-label"
         :class="struck ? 'text-muted' : 'text-text-2'"
       >{{ qty }}×</span>
 
       <span
-        class="min-w-0 flex-1 truncate text-[17px]"
+        class="min-w-0 flex-1 truncate text-body"
         :class="struck ? 'text-muted line-through' : 'text-text'"
       >{{ name }}</span>
 
-      <span class="num shrink-0 text-[17px]" :class="struck ? 'text-muted' : 'text-text'">
+      <span class="num shrink-0 text-body" :class="struck ? 'text-muted' : 'text-text'">
         {{ formatKm(amountFen) }}
       </span>
     </div>
@@ -84,10 +84,10 @@ const sentence = computed(() => {
         </svg>
         {{ chip.text }}
       </span>
-      <span v-if="note" class="text-sm text-text-2">{{ note }}</span>
+      <span v-if="note" class="text-label text-text-2">{{ note }}</span>
     </div>
 
-    <p v-if="sentence" class="text-[15px]" :class="state === 'rejected' ? 'text-danger' : 'text-warn'">
+    <p v-if="sentence" class="text-label" :class="state === 'rejected' ? 'text-danger' : 'text-warn'">
       {{ sentence }}
     </p>
   </div>

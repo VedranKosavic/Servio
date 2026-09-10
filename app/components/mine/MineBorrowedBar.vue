@@ -20,7 +20,7 @@ const me = useMe()
   <ClientOnly>
     <div
       v-if="me.borrowed.value"
-      class="-mx-4 flex items-center gap-2 border-b border-line bg-warn-soft px-4 py-1.5 text-[15px] text-warn"
+      class="-mx-4 flex items-center gap-2 border-b border-line bg-warn-soft px-4 py-1.5 text-label text-warn"
       role="status"
     >
       <svg

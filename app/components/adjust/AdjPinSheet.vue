@@ -69,16 +69,16 @@ const ROLE_WORD: Record<string, string> = {
     >
       <span class="mx-auto h-1 w-10 shrink-0 rounded-full bg-line" />
 
-      <h2 class="text-xl font-bold">
+      <h2 class="section-title">
         Odobri PIN-om
       </h2>
-      <p class="-mt-1 text-[15px] text-text-2">
+      <p class="-mt-1 text-label text-text-2">
         {{ what }}
       </p>
 
       <!-- Who -->
       <template v-if="!picked">
-        <p class="text-[15px] text-text-2">
+        <p class="text-label text-text-2">
           Neka šanker unese svoj PIN na ovom telefonu. Bez PIN-a zahtjev ide na čekanje.
         </p>
 
@@ -86,7 +86,7 @@ const ROLE_WORD: Record<string, string> = {
           v-for="user in approvers"
           :key="user.id"
           type="button"
-          class="btn h-14 justify-start gap-3 text-lg"
+          class="btn btn-secondary btn-lg justify-start gap-3"
           @click="picked = user"
         >
           <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-sm font-bold">
@@ -98,7 +98,7 @@ const ROLE_WORD: Record<string, string> = {
           </span>
         </button>
 
-        <p v-if="approvers.length === 0" class="rounded-xl bg-surface-2 px-3 py-2 text-[15px] text-text-2">
+        <p v-if="approvers.length === 0" class="note">
           Niko od odobravatelja nije dostupan na ovom telefonu. Zahtjev ide na čekanje.
         </p>
       </template>
@@ -117,10 +117,10 @@ const ROLE_WORD: Record<string, string> = {
       </template>
 
       <div class="mt-1 flex flex-col gap-2 border-t border-line pt-3">
-        <button type="button" class="btn btn-ghost h-12" :disabled="busy" @click="emit('skip')">
+        <button type="button" class="btn btn-ghost" :disabled="busy" @click="emit('skip')">
           Bez PIN-a — pošalji na čekanje
         </button>
-        <button type="button" class="btn btn-ghost h-12" :disabled="busy" @click="emit('close')">
+        <button type="button" class="btn btn-ghost" :disabled="busy" @click="emit('close')">
           Otkaži
         </button>
       </div>

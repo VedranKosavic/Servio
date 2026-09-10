@@ -68,20 +68,20 @@ function noteFor(item: (typeof WAITER_MENU)[number]): string | null {
     aria-label="Korisnik"
   >
     <div class="flex items-center gap-3 border-b border-line px-4 py-3">
-      <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-base font-bold text-accent-ink">
+      <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-body font-bold text-accent-ink">
         {{ me.user.value?.initials ?? '?' }}
       </span>
       <div class="grow">
-        <div class="text-lg font-semibold">
+        <div class="section-title">
           {{ me.user.value?.name ?? '' }}
         </div>
-        <div class="text-sm text-text-2">
+        <div class="text-label text-text-2">
           {{ me.device.value?.label ?? '' }}
         </div>
       </div>
       <button
         type="button"
-        class="-mr-2 flex h-12 w-12 items-center justify-center rounded-xl text-text-2"
+        class="-mr-2 flex h-12 w-12 items-center justify-center rounded-control text-text-2"
         aria-label="Zatvori"
         @click="emit('close')"
       >
@@ -96,13 +96,13 @@ function noteFor(item: (typeof WAITER_MENU)[number]): string | null {
         v-for="item in items"
         :key="item.id"
         type="button"
-        class="flex min-h-13 items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[17px]"
+        class="flex min-h-13 items-center gap-3 rounded-control px-3 py-2.5 text-left text-body"
         :class="disabledFor(item) ? 'text-muted' : 'text-text active:bg-surface-2'"
         :disabled="disabledFor(item)"
         @click="onItem(item)"
       >
         <span class="grow">{{ item.label }}</span>
-        <span v-if="noteFor(item)" class="shrink-0 text-sm text-text-2">
+        <span v-if="noteFor(item)" class="shrink-0 text-label text-text-2">
           {{ noteFor(item) }}
         </span>
         <span

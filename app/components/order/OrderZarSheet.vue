@@ -49,35 +49,35 @@ const single = computed(() => (props.bowls.length === 1 ? props.bowls[0]! : null
 
       <div class="flex items-center gap-2">
         <span class="chip bg-line text-text">{{ tableName }}</span>
-        <span class="grow text-lg font-bold">Dodatni žar</span>
+        <span class="section-title grow">Dodatni žar</span>
       </div>
 
       <p v-if="loading" class="py-6 text-center text-text-2">
         Učitavanje…
       </p>
 
-      <p v-else-if="error" class="rounded-xl bg-danger-soft px-3 py-2 text-[15px] text-danger" role="alert">
+      <p v-else-if="error" class="note note-danger" role="alert">
         {{ error }}
       </p>
 
-      <p v-else-if="!zarName" class="rounded-xl bg-warn-soft px-3 py-2 text-[15px] text-warn">
+      <p v-else-if="!zarName" class="note note-warn">
         Nema proizvoda za žar u meniju — javi vlasniku.
       </p>
 
-      <p v-else-if="bowls.length === 0" class="py-4 text-center text-[15px] text-text-2">
+      <p v-else-if="bowls.length === 0" class="py-4 text-center text-label text-text-2">
         Na ovom stolu nema upaljene nargile.
       </p>
 
       <!-- One bowl: one tap, and the sheet says which bowl it is topping up. -->
       <template v-else-if="single">
-        <p class="text-[15px] text-text-2">
+        <p class="text-label text-text-2">
           {{ single.name_snapshot }}
           <span v-if="single.flavour_names.length">· {{ single.flavour_names.join(' + ') }}</span>
           · {{ single.round }}
         </p>
         <button
           type="button"
-          class="btn btn-accent h-14 text-lg"
+          class="btn btn-primary btn-lg"
           :disabled="busy"
           @click="emit('zar', single.id)"
         >
@@ -87,14 +87,14 @@ const single = computed(() => (props.bowls.length === 1 ? props.bowls[0]! : null
 
       <!-- Two bowls: the app must not guess which one went out. -->
       <template v-else>
-        <p class="text-[15px] text-text-2">
+        <p class="text-label text-text-2">
           Koja nargila?
         </p>
         <button
           v-for="bowl in bowls"
           :key="bowl.id"
           type="button"
-          class="btn h-14 justify-between text-lg"
+          class="btn btn-secondary btn-lg justify-between"
           :disabled="busy"
           @click="emit('zar', bowl.id)"
         >
@@ -105,7 +105,7 @@ const single = computed(() => (props.bowls.length === 1 ? props.bowls[0]! : null
         </button>
       </template>
 
-      <button type="button" class="btn btn-ghost h-12" :disabled="busy" @click="emit('close')">
+      <button type="button" class="btn btn-ghost" :disabled="busy" @click="emit('close')">
         Otkaži
       </button>
     </div>

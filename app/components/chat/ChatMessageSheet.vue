@@ -68,7 +68,7 @@ const targets = computed<ChannelKind[]>(() => {
 const canPin = computed(() => !props.message.deleted_at && !!props.message.body)
 const canReply = computed(() => !props.message.deleted_at && props.message.kind !== 'system')
 
-const ROW = 'flex min-h-13 items-center rounded-xl px-3 py-2.5 text-left text-[17px] active:bg-surface-2'
+const ROW = 'flex min-h-13 items-center rounded-control px-3 py-2.5 text-left text-body active:bg-surface-2'
 </script>
 
 <template>

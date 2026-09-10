@@ -29,36 +29,36 @@ const deleteWindow = computed(() => value('chat_delete_own_s') || '15 minuta')
 
 <template>
   <section class="card flex flex-col gap-2 p-4">
-    <h2 class="text-xl font-bold">
+    <h2 class="section-title">
       Šta znači „označeno za razgovor“
     </h2>
-    <p class="text-[15px] text-text-2">
+    <p class="text-label text-text-2">
       Kad nešto pređe prag odozgo, {{ APP_NAME }} to označi i vlasnik pogleda. To nije
       optužba i ne ide nikome osim vlasniku: nema poruka, nema obavještenja,
       nema liste najboljih ni najgorih. Manjak od pet maraka u petak uveče je
       stavka za razgovor, ne presuda.
     </p>
-    <p class="text-[15px] text-text-2">
+    <p class="text-label text-text-2">
       Žuto znači razgovor. Crveno tek poslije tri označene smjene u 30 dana — i
       svaka oznaka dobije ishod: razgovarano · OK, opomena ili greška
       aplikacije. Ishod „OK“ ispada iz brojanja i vidiš ga na svom redu.
     </p>
-    <p class="text-[15px] text-text-2">
+    <p class="text-label text-text-2">
       Svoje brojeve vidiš prvi i vidiš sve — tuđe ne vidiš nikad.
     </p>
   </section>
 
   <section class="card flex flex-col gap-2 p-4">
-    <h2 class="text-xl font-bold">
+    <h2 class="section-title">
       Šta aplikacija bilježi
     </h2>
-    <p class="text-[15px] text-text-2">
+    <p class="text-label text-text-2">
       Zapisuju se ture, naplate, storna, gratis, otpisi, popisi, prijave i
       predaje pazara — svaka sa tvojim imenom, uređajem i vremenom. Ne bilježi
       se lokacija, ne čitaju se kontakti, i kamera se otvara samo kad ti
       pritisneš <span class="text-text">Slikaj</span>.
     </p>
-    <ul class="list-disc space-y-1 pl-5 text-[15px] text-text-2">
+    <ul class="list-disc space-y-1 pl-5 text-label text-text-2">
       <li>Svoje brojeve vidiš ti; kolegine ne vidi niko osim vlasnika.</li>
       <li>Slika se ponovo snima pri slanju, pa se GPS i podaci o telefonu iz nje gube.</li>
       <li>Tekst u razgovoru se briše nakon 12 mjeseci, slike nakon {{ photoDays }}.</li>
@@ -72,10 +72,10 @@ const deleteWindow = computed(() => value('chat_delete_own_s') || '15 minuta')
   </section>
 
   <section class="card flex flex-col gap-2 p-4">
-    <h2 class="text-xl font-bold">
+    <h2 class="section-title">
       Kanal Konobari, pošteno
     </h2>
-    <p class="text-[15px] text-text-2">
+    <p class="text-label text-text-2">
       Vlasnik u aplikaciji ne vidi kanal Konobari i ne može ga otvoriti. Poruke
       su ipak zapisane u bazi na serveru, kao i sve ostalo; bazu mogu otvoriti
       vlasnik i Vedran. Kanal nije tajan — samo nije na vlasnikovom ekranu. Ne
@@ -86,20 +86,20 @@ const deleteWindow = computed(() => value('chat_delete_own_s') || '15 minuta')
       pročitao aplikacija pamti samo da bi brojala nepročitane poruke — niko to
       ne vidi na ekranu.
     </p>
-    <p class="text-[15px] text-text-2">
+    <p class="text-label text-text-2">
       Vlasnikovo obećanje da bazu neće otvarati je pravilo koje piše ovdje, a ne
       kod u aplikaciji. Piše zato što je istina, a ne zato što je lijepo.
     </p>
-    <p class="text-[15px] text-text-2">
+    <p class="text-label text-text-2">
       Slike u razgovoru ostaju na serveru lokala i ne idu nigdje van njega.
     </p>
   </section>
 
   <section class="card flex flex-col gap-2 p-4">
-    <h2 class="text-xl font-bold">
+    <h2 class="section-title">
       Razgovor i slike
     </h2>
-    <ul class="list-disc space-y-1 pl-5 text-[15px] text-text-2">
+    <ul class="list-disc space-y-1 pl-5 text-label text-text-2">
       <li>Slike samo šanka, robe i prostora — gosti nikad.</li>
       <li>Šta napišeš u Konobarima kolega može proslijediti.</li>
       <li>Sliku u Konobarima može ukloniti svako; tekst samo autor.</li>
@@ -109,15 +109,15 @@ const deleteWindow = computed(() => value('chat_delete_own_s') || '15 minuta')
   </section>
 
   <section class="card flex flex-col gap-2 p-4">
-    <h2 class="text-xl font-bold">
+    <h2 class="section-title">
       Šta se zapisuje
     </h2>
-    <p class="text-[15px] text-text-2">
+    <p class="text-label text-text-2">
       Svaka tura, naplata, storno i otpis zapisuju se s tvojim imenom i
       vremenom, i ne brišu se — ispravka je novi zapis pored starog, nikad
       umjesto njega.
     </p>
-    <p class="text-[15px] text-text-2">
+    <p class="text-label text-text-2">
       Sve to stoji u jednoj bazi na serveru lokala. Vlasnik ima pristup toj
       datoteci i tehnički može vidjeti sve što je u njoj. To piše ovdje zato što
       je istina, a ne zato što je lijepo — aplikacija koja bi to prećutala ne bi

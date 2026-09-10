@@ -34,22 +34,22 @@ defineEmits<{ paid: [], unpaid: [] }>()
   <div class="card flex flex-col gap-2 border-danger p-3" role="alert">
     <div class="flex items-center gap-2">
       <span class="chip chip-danger">Kasno sinhronizovano</span>
-      <span class="text-sm text-text-2">{{ tableName }}</span>
+      <span class="text-label text-text-2">{{ tableName }}</span>
     </div>
-    <p class="text-[15px]">
+    <p class="text-label">
       Tura je stigla nakon što je sto već bio naplaćen —
       <span class="num font-semibold">{{ formatKm(amountFen) }}</span>.
       Jesi li ovo naplatio?
     </p>
     <div class="flex flex-col gap-2">
-      <button type="button" class="btn btn-accent h-12" :disabled="busy" @click="$emit('paid')">
+      <button type="button" class="btn btn-primary h-12" :disabled="busy" @click="$emit('paid')">
         Naplaćeno gotovina
       </button>
-      <button type="button" class="btn h-12" :disabled="busy" @click="$emit('unpaid')">
+      <button type="button" class="btn btn-secondary" :disabled="busy" @click="$emit('unpaid')">
         Nije naplaćeno
       </button>
     </div>
-    <p class="text-sm text-text-2">
+    <p class="text-label text-text-2">
       Dok ne odgovoriš, iznos stoji na tvom pazaru.
     </p>
   </div>

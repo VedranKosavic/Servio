@@ -90,7 +90,7 @@ function onFile(event: Event) {
 
       <button
         type="button"
-        class="btn btn-accent h-14 shrink-0 px-4 text-base"
+        class="btn btn-primary h-14 shrink-0 px-4 text-body"
         :disabled="!canSend"
         @click="emit('send')"
       >

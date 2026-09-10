@@ -146,7 +146,7 @@ async function saveNote(shiftId: string, body: string) {
           <NuxtLink
             v-if="shift?.shift && !settled"
             to="/konobar/smjena"
-            class="btn btn-accent h-14 text-lg"
+            class="btn btn-primary btn-lg"
           >
             Završi smjenu
           </NuxtLink>
@@ -157,10 +157,10 @@ async function saveNote(shiftId: string, body: string) {
 
           <!-- The last thirty nights -->
           <section class="card flex flex-col gap-1 p-4">
-            <h2 class="text-xl font-bold">
+            <h2 class="section-title">
               Prošle noći
             </h2>
-            <p v-if="noteError" class="rounded-xl bg-danger-soft px-3 py-2 text-[15px] text-danger" role="alert">
+            <p v-if="noteError" class="note note-danger" role="alert">
               {{ noteError }}
             </p>
             <div v-if="nights.length" class="flex flex-col">

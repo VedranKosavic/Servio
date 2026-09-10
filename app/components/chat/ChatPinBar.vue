@@ -32,7 +32,7 @@ const lines = computed(() => (props.text ?? '').split('\n').filter(line => line.
     >
       <span class="chip chip-warn shrink-0">Za naručiti</span>
       <span class="grow truncate text-text">{{ lines[0] }}</span>
-      <span v-if="lines.length > 1" class="shrink-0 text-sm text-text-2">
+      <span v-if="lines.length > 1" class="shrink-0 text-label text-text-2">
         {{ open ? 'manje' : `+${lines.length - 1}` }}
       </span>
     </button>
@@ -46,7 +46,7 @@ const lines = computed(() => (props.text ?? '').split('\n').filter(line => line.
     <button
       v-if="canClear"
       type="button"
-      class="btn btn-ghost min-h-12 self-start px-3 text-base"
+      class="btn btn-ghost min-h-12 self-start px-3 text-body"
       :disabled="busy"
       @click="emit('clear')"
     >
