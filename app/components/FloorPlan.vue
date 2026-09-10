@@ -3,13 +3,17 @@
  * The room, from above — drawn from the `tables` rows, never hard-coded.
  *
  * Each table carries a `col` and a `row`, which are its place on the zone's
- * schematic rather than a position in a list. So the two zones read those two
- * numbers in opposite directions:
+ * schematic rather than a position in a list, and both zones read them the same
+ * way: one vertical stack per `col`, ordered by `row`, the stacks spread across
+ * the width in `col` order.
  *
- *   unutra  one vertical stack per `col` (the three runs of tables along the
- *           walls), ordered by `row`
- *   bašta   one horizontal line per `row` (the rows of tables on the terrace),
- *           ordered by `col`
+ *   unutra  the three runs of tables along the walls (6 · 4 · 5)
+ *   bašta   the owner's 2026-09-10 sketch: a left column of seven and a right
+ *           column of three
+ *
+ * A stack shorter than the tallest one is centred against it — `items-center`
+ * on the row of stacks — so bašta's three sit level with the middle of the
+ * seven, which is what the sketch shows.
  *
  * Tables with a `grp` (today only the VIP pair) are drawn in their own dashed
  * box under the column they belong to, because their coordinates are relative
@@ -101,7 +105,7 @@ function toCell(table: VenueTable): Cell {
 
 const zoneTables = computed(() => props.tables.filter(t => t.zone === props.zone))
 
-/** Unutra: the vertical stacks, plus whatever boxed groups hang off each one. */
+/** The vertical stacks, plus whatever boxed groups hang off each one. */
 const columns = computed(() => {
   const cols = [...new Set(zoneTables.value.map(t => t.col))].sort((a, b) => a - b)
   return cols.map((col) => {
@@ -117,23 +121,13 @@ const columns = computed(() => {
     }
   })
 })
-
-/** Bašta: the horizontal lines. Seven in a row means smaller circles. */
-const rows = computed(() => {
-  const rowNumbers = [...new Set(zoneTables.value.map(t => t.row))].sort((a, b) => a - b)
-  return rowNumbers.map((row) => {
-    const inRow = zoneTables.value.filter(t => t.row === row).sort((a, b) => a.col - b.col)
-    return { row, small: inRow.length >= 7, cells: inRow.map(toCell) }
-  })
-})
 </script>
 
 <template>
-  <!-- px-2: the long bašta row is seven 46 px circles wide and needs the width. -->
   <div class="flex flex-1 flex-col gap-3 rounded-2xl border border-line bg-bg px-2 py-4">
     <div class="flex flex-1 overflow-x-auto">
-      <!-- Unutra: columns down the walls -->
-      <div v-if="zone === 'unutra'" class="flex flex-1 items-center justify-between gap-2">
+      <!-- Both zones: one stack per column, shorter stacks centred (items-center). -->
+      <div class="flex flex-1 items-center justify-between gap-2">
         <div
           v-for="column in columns"
           :key="column.col"
@@ -172,30 +166,6 @@ const rows = computed(() => {
               />
             </div>
           </div>
-        </div>
-      </div>
-
-      <!-- Bašta: lines across the terrace -->
-      <div v-else class="flex flex-1 flex-col items-center justify-evenly gap-8 py-3">
-        <div
-          v-for="line in rows"
-          :key="line.row"
-          class="mx-auto flex w-max items-center"
-          :class="line.small ? 'gap-0.5' : 'gap-6'"
-        >
-          <FloorTable
-            v-for="cell in line.cells"
-            :key="cell.id"
-            :label="cell.label"
-            :sub="cell.sub"
-            :variant="cell.variant"
-            :attention="cell.attention"
-            :late="cell.late"
-            :draft="cell.draft"
-            :small="line.small"
-            @select="$emit('select', cell.id)"
-            @long="$emit('long', cell.id)"
-          />
         </div>
       </div>
     </div>

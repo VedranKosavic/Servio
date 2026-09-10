@@ -18,8 +18,8 @@
  *                offline). A small amber dot: the money is right, the clock is
  *                not.
  *
- * The circle is 56 px — a thumb — and shrinks to 46 px only in the long bašta
- * row, where seven of them share the width of a phone.
+ * The circle is 56 px everywhere — a thumb. Both zones are drawn as columns, so
+ * no line of tables has to squeeze itself into the width of a phone.
  */
 withDefaults(defineProps<{
   /** The number alone: "Sto 7" is stripped to "7" before it gets here. */
@@ -33,8 +33,7 @@ withDefaults(defineProps<{
   late?: boolean
   /** A round on this table is still on the phone — dashed, "nacrt" or "čeka". */
   draft?: boolean
-  small?: boolean
-}>(), { sub: null, attention: false, late: false, draft: false, small: false })
+}>(), { sub: null, attention: false, late: false, draft: false })
 
 const emit = defineEmits<{ select: [], long: [] }>()
 
@@ -88,9 +87,8 @@ function onClick() {
 <template>
   <button
     type="button"
-    class="relative flex shrink-0 select-none flex-col items-center justify-center rounded-full border-2 font-bold leading-none"
+    class="relative flex size-14 shrink-0 select-none flex-col items-center justify-center rounded-full border-2 text-base font-bold leading-none"
     :class="[
-      small ? 'h-[46px] w-[46px] text-sm' : 'h-14 w-14 text-base',
       variant === 'mine' ? 'border-accent bg-accent text-accent-ink' : '',
       variant === 'other' ? 'border-line bg-line text-text' : '',
       variant === 'free' ? 'border-line bg-surface text-text' : '',

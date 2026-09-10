@@ -166,10 +166,10 @@ export function seed(db: Db, opts: SeedOptions = {}): void {
     for (let row = 1; row <= 5; row++) floor.push({ name: `Sto ${n++}`, zone: 'unutra', col: 3, row })
     // The VIP box, off column 3.
     for (let row = 1; row <= 2; row++) floor.push({ name: `Sto ${n++}`, zone: 'unutra', col: 3, row, grp: 'vip' })
-    // Bašta, first row: three tables along the front.
-    for (let col = 1; col <= 3; col++) floor.push({ name: `Sto ${n++}`, zone: 'basta', col, row: 1 })
-    // Second row: seven.
-    for (let col = 1; col <= 7; col++) floor.push({ name: `Sto ${n++}`, zone: 'basta', col, row: 2 })
+    // Bašta, left column: seven tables down the long side of the terrace.
+    for (let row = 1; row <= 7; row++) floor.push({ name: `Sto ${n++}`, zone: 'basta', col: 1, row })
+    // Right column: three, drawn centred against the left column.
+    for (let row = 1; row <= 3; row++) floor.push({ name: `Sto ${n++}`, zone: 'basta', col: 2, row })
 
     floor.forEach((table, i) => {
       tx.insert(schema.tables).values({

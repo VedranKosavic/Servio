@@ -65,7 +65,18 @@ describe('GET /api/bootstrap', () => {
     // The floor plan the owner actually has.
     const vip = boot.tables.filter(t => t.grp === 'vip')
     expect(vip.map(t => t.name)).toEqual(['Sto 16', 'Sto 17'])
-    expect(boot.tables.filter(t => t.zone === 'basta')).toHaveLength(10)
+    // Bašta is two columns since the sketch of 2026-09-10: seven down the left,
+    // three down the right, drawn level with the middle of the long one.
+    const basta = boot.tables.filter(t => t.zone === 'basta')
+    expect(basta).toHaveLength(10)
+    const bastaColumn = (col: number) => basta
+      .filter(t => t.col === col)
+      .sort((a, b) => a.row - b.row)
+      .map(t => `${t.name} r${t.row}`)
+    expect(bastaColumn(1)).toEqual([
+      'Sto 18 r1', 'Sto 19 r2', 'Sto 20 r3', 'Sto 21 r4', 'Sto 22 r5', 'Sto 23 r6', 'Sto 24 r7',
+    ])
+    expect(bastaColumn(2)).toEqual(['Sto 25 r1', 'Sto 26 r2', 'Sto 27 r3'])
 
     // Aromas arrive with their grams, so an empty tin can be shown as empty.
     expect(boot.flavours).toHaveLength(6)
