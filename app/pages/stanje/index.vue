@@ -83,6 +83,15 @@ const lastSale = computed<{ table: string, at: string, items: StockItem[] } | nu
   return { table: label.split(' · ')[0] || label, at, items: sameRound }
 })
 
+/**
+ * The avatar sheet, on the third tab too.
+ *
+ * *Narudžbe* and *Na čekanju* have always had it; this one did not, so a šanker
+ * standing at the shelf had to walk back a tab to reach *Razgovor*, *Brzi popis*
+ * or *Odjavi se*. Every tab now opens the same sheet.
+ */
+const menuOpen = ref(false)
+
 // -- Prijem robe ------------------------------------------------------------
 const sheetOpen = ref(false)
 const posting = ref(false)
@@ -132,6 +141,14 @@ async function postDelivery(delivery: {
       </h1>
       <WaiterSyncChip />
       <button
+        type="button"
+        class="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface-2 text-sm font-bold"
+        aria-label="Korisnik"
+        @click="menuOpen = true"
+      >
+        {{ me.user.value?.initials ?? '?' }}
+      </button>
+      <button
         v-if="canReceive"
         type="button"
         class="btn btn-accent px-3 text-base"
@@ -174,6 +191,8 @@ async function postDelivery(delivery: {
     </main>
 
     <SankerNav active="stanje" />
+
+    <WaiterAvatarSheet v-if="menuOpen" @close="menuOpen = false" />
 
     <StockDeliverySheet
       v-if="sheetOpen"
