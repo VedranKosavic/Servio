@@ -1,7 +1,7 @@
 /**
  * WP3's done-when — *Prijem sa slike* on `/admin/roba/prijem` (PHASE4 §3, check 6).
  *
- * Haris is an **admin session**: `haris@lounge.ba / lounge` at `/admin/login`, no
+ * Haris is an **admin session**: `haris@lounge.ba / 1111` at `/admin/login`, no
  * device and no PIN. Amar gets an enrolled phone, because one of the five checks
  * is that a waiter cannot upload a delivery photo at all.
  *

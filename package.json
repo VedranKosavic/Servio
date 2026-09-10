@@ -6,6 +6,7 @@
   "imports": {
     "#shared/*": "./shared/*.ts"
   },
+  "//scripts": "`db:seed` and `db:dev-pins` are the two scripts that hash PINs, and neither runs inside Nuxt — so neither gets Nuxt's automatic .env loading. Without `--env-file-if-exists=.env` they hash with no PIN_PEPPER and write a database no server can verify a PIN against. `--env-file-if-exists` rather than `--env-file` because a fresh clone has no .env yet, and the shell still wins: `DB_PATH=data/verify.db npm run db:seed` seeds data/verify.db even when .env names another file.",
   "scripts": {
     "dev": "nuxt dev",
     "build": "nuxt build",
@@ -16,8 +17,8 @@
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "tsx server/database/seed-cli.ts",
-    "db:dev-pins": "node --env-file=.env --import tsx server/database/dev-pins.ts"
+    "db:seed": "node --env-file-if-exists=.env --import tsx server/database/seed-cli.ts",
+    "db:dev-pins": "node --env-file-if-exists=.env --import tsx server/database/dev-pins.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",

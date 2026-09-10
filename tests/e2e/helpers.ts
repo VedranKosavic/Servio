@@ -4,7 +4,7 @@
  * Not a spec: Playwright only collects `*.spec.ts`, so this file is imported,
  * never run.
  */
-import { expect, type APIRequestContext } from '@playwright/test'
+import { expect, type APIRequestContext, type Browser, type BrowserContext } from '@playwright/test'
 
 /**
  * Forget the auth rate-limit window.
@@ -27,6 +27,55 @@ import { expect, type APIRequestContext } from '@playwright/test'
 export async function resetLimits(request: APIRequestContext): Promise<void> {
   const res = await request.post('/api/dev/reset-limits')
   expect([200, 404], await res.text()).toContain(res.status())
+}
+
+/**
+ * The owner's laptop entrance, and the only place a spec should learn it.
+ * Mirrors `DEV_ADMIN_EMAIL` / `DEV_ADMIN_PASSWORD` in `server/database/seed.ts`.
+ */
+export const ADMIN_LOGIN = { email: 'haris@lounge.ba', password: '1111' } as const
+
+/**
+ * A **second, genuinely separate device** — because `POST /api/dev/enrol` is not
+ * one.
+ *
+ * The dev door finds-or-creates the venue's single `label='dev'` row and mints a
+ * fresh token on it (`server/services/devices.ts`), so every context in a run is
+ * the *same* device wearing a new cookie. `browser.newContext()` gives a new
+ * cookie jar and nothing else. That was a documented trade (open decision 7)
+ * while the login lockout was keyed on `(device, user)` and a device was mostly
+ * a cookie — but the pad names nobody, so the door now counts failures on
+ * `(device, ip)` and the device row is the *only* key there is. Five wrong taps
+ * on one context therefore lock every other context in the file, and a spec that
+ * opens a fresh context expecting a fresh door gets 423 with the same locked row
+ * handed straight back. (For the same reason the dev door rotates the token, a
+ * second `POST /api/dev/enrol` silently revokes the first context's cookie
+ * halfway through a file.)
+ *
+ * So a spec that needs a second device mints one the way the café does: the
+ * admin logs in on a laptop, reads out a six-character code, and the phone
+ * spends it. Three calls, and this is them. The returned context holds its own
+ * `sank_d` and no session — `pinLogin` it like any other phone.
+ *
+ * It costs two auth calls against `authLimiter`'s ten a minute per IP, so call
+ * it from `beforeAll` beside the other enrolments and not per test.
+ */
+export async function enrolSecondDevice(browser: Browser, label: string): Promise<BrowserContext> {
+  const laptop = await browser.newContext()
+  const login = await laptop.request.post('/api/auth/admin/login', { data: ADMIN_LOGIN })
+  expect(login.ok(), await login.text()).toBe(true)
+
+  const minted = await laptop.request.post('/api/admin/enrol-codes', {
+    data: { mode: 'shared', label },
+  })
+  expect(minted.ok(), await minted.text()).toBe(true)
+  const { code } = await minted.json() as { code: string }
+  await laptop.close()
+
+  const phone = await browser.newContext()
+  const joined = await phone.request.post('/api/devices/enrol', { data: { code, label } })
+  expect(joined.ok(), await joined.text()).toBe(true)
+  return phone
 }
 
 /**

@@ -9,6 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { GLOBAL_UNIQUE_INDEXES, TRIGGER_NAMES, VENUELESS_TABLES } from '#shared/constants'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
+import { verifySecret } from '../../server/utils/password'
 
 let f: Fixture
 
@@ -197,7 +198,10 @@ describe('the seed', () => {
   it('stores PINs as scrypt hashes and never in the clear', () => {
     const amar = f.db.select().from(schema.users).all().find(u => u.name === 'Amar')!
     expect(amar.pinHash).toMatch(/^scrypt\$\d+\$\d+\$\d+\$[0-9a-f]+\$[0-9a-f]+$/)
-    expect(amar.pinHash).not.toContain('2222')
+    // Verifiable, not readable — and asserted that way round rather than as
+    // `not.toContain('2222')`, which is a substring test against 92 random hex
+    // characters and goes red on its own about once in seventy runs.
+    expect(verifySecret('2222', amar.id, amar.pinHash!)).toBe(true)
 
     // Only the admin has a way into `/admin` on a laptop.
     const haris = f.db.select().from(schema.users).all().find(u => u.name === 'Haris')!

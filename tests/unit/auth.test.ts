@@ -86,6 +86,39 @@ describe('hashing', () => {
     expect(verifySecret('1111', 'user-a', 'nonsense')).toBe(false)
     expect(verifySecret('1111', 'user-a', 'scrypt$16384$8$1$zz$zz')).toBe(false)
   })
+
+  /**
+   * A missing pepper is not "no pepper", it is a *different* pepper — and it
+   * used to be silent. `npm run db:seed` runs outside Nuxt, so nothing loaded
+   * `.env` for it; `peppered()` read `?? ''` and wrote a database whose every
+   * PIN was refused by a server holding the real one, with no symptom but a pad
+   * that turned everybody away until the device locked. It now throws, at both
+   * doors, and `--env-file-if-exists=.env` in `package.json` is the other half.
+   *
+   * The `VITEST` escape is what makes `vitest.config.ts` the one place the
+   * fixture pepper is set, so this test has to step outside it to see the guard.
+   * A refusal to verify is deliberately *not* a false: false means "wrong PIN"
+   * on every screen, and a server that cannot verify anybody is not that.
+   */
+  it('refuses to hash or verify at all when PIN_PEPPER is missing', () => {
+    const pepper = process.env.PIN_PEPPER
+    const vitest = process.env.VITEST
+    delete process.env.PIN_PEPPER
+    delete process.env.VITEST
+
+    try {
+      expect(() => hashSecret('1111', 'user-a')).toThrow(/PIN_PEPPER/)
+      expect(() => verifySecret('1111', 'user-a', 'scrypt$1024$8$1$aa$bb')).toThrow(/PIN_PEPPER/)
+    } finally {
+      if (pepper === undefined) delete process.env.PIN_PEPPER
+      else process.env.PIN_PEPPER = pepper
+      if (vitest === undefined) delete process.env.VITEST
+      else process.env.VITEST = vitest
+    }
+
+    // And the escape hatch really is the only reason the rest of this file runs.
+    expect(verifySecret('1111', 'user-a', hashSecret('1111', 'user-a'))).toBe(true)
+  })
 })
 
 // ===========================================================================

@@ -25,6 +25,7 @@ import { formatKm } from '../../shared/money'
 import { maxSeq } from '../../server/services/changes'
 import { requireRole } from '../../server/utils/auth'
 import { resetPin } from '../../server/services/auth'
+import { verifySecret } from '../../server/utils/password'
 import {
   createCategory, createProduct, createStockItem, createTable, createUser,
   getVenueSettings, listCategories, listProducts, listStockItems, listTables, listUsers,
@@ -376,8 +377,14 @@ describe('users', () => {
 
     const row = f.db.select().from(schema.users).where(eq(schema.users.id, created.id)).get()!
     expect(row.pinHash).toMatch(/^scrypt\$/)
-    expect(row.pinHash).not.toContain('4321')
     expect(row.pinPepperV).toBe(1)
+    // What the stored string has to be is *a hash of this PIN* — verifiable and
+    // not readable. The line here used to be `not.toContain('4321')` over 92
+    // random hex characters, which is a ~1.4 % chance of a red suite per run and
+    // did cost one: `…f4ad3c66`**`8643219`**`f8b781…` contains 4321 and proves
+    // nothing about storage. The `/^scrypt\$/` above already says the PIN is not
+    // in the clear.
+    expect(verifySecret('4321', created.id, row.pinHash!)).toBe(true)
 
     // Two different PINs must not produce related hashes — the salt is the id.
     const second = createUser(f.db, f.venueId, admin(), {

@@ -247,11 +247,11 @@ Note the user changed to `sank` — the file has to belong to the user the app
 runs as.
 
 > **`NODE_ENV=production` is the important half of that command.** Without it,
-> the seed installs the development PINs — Amar 1111, Lejla 2222, and an admin
-> password of `lounge`. With it, the six people are created with **no PIN at
-> all** and the script prints `postavi PIN-ove u /admin`: nobody can log in until
-> the owner sets each PIN himself, on the real server. That is the only way a
-> default PIN never reaches a café.
+> the seed installs the development PINs — Haris 1111, Amar 2222, Emir 3333, and
+> an admin password of `1111`. With it, the three people are created with **no
+> PIN at all** and the script prints `postavi PIN-ove u /admin`: nobody can log in
+> until the owner sets each PIN himself, on the real server. That is the only way
+> a default PIN never reaches a café.
 >
 > It also means the pepper mismatch between your Mac and the server does not
 > matter here — nothing was hashed on the Mac. Every PIN this database ever

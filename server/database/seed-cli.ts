@@ -20,7 +20,7 @@ if (!isEmpty(db)) {
 } else {
   // Dev secrets — the PINs and the admin password of `docs/BACKEND.md` §5.6 —
   // are an explicit decision, never an environment guess. On a production
-  // install the six people arrive with no PIN and cannot log in until the owner
+  // install the seeded people arrive with no PIN and cannot log in until the owner
   // sets them in `/admin`, which is the only way a default PIN never reaches a
   // café.
   const devSecrets = process.env.NODE_ENV !== 'production'

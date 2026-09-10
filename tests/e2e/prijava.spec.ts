@@ -16,6 +16,10 @@
  *   5. He can switch from one to the other **without signing out**: the mode is
  *      a choice on his session, not a property of his account.
  *   6. Unknown digits are refused without naming anybody.
+ *   7. **The door that closes is the phone's, not the person's.** Five wrong
+ *      taps shut one device — even against a correct PIN — and leave every
+ *      other device open, because the pad names nobody and the counter has no
+ *      account to key on.
  *
  * **This file is the acceptance test for the new screen** (`app/pages/index.vue`
  * and the chooser). The API half of it — every assertion that goes through
@@ -37,7 +41,7 @@
  */
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 import { APP_NAME } from '../../shared/brand'
-import { ackRules, pinLogin, resetLimits, PINS, type Person } from './helpers'
+import { ackRules, enrolSecondDevice, pinLogin, resetLimits, PINS, type Person } from './helpers'
 
 let context: BrowserContext
 
@@ -206,5 +210,41 @@ test.describe('Prijava — the PIN pad', () => {
     expect(after.session.id).toBe(before.session.id)
 
     await page.close()
+  })
+
+  /**
+   * The counter behind the pad, end to end.
+   *
+   * With no name in front of the digits there is no account to count failures
+   * against, so the login door keys its lockout on `(device, ip)`. That trade
+   * is worth one browser test, because it cuts both ways in a café: five wrong
+   * guesses shut the phone for everybody standing at it, and they shut nothing
+   * else. `enrolSecondDevice` is what makes the second half provable —
+   * `browser.newContext()` alone would not, because `POST /api/dev/enrol` hands
+   * back the venue's single `label='dev'` row and the lock with it.
+   */
+  test('the lockout is the phone\'s door, not the person\'s', async ({ browser }) => {
+    const spare = await enrolSecondDevice(browser, 'Rezervni telefon')
+
+    try {
+      // Four refusals that still count down, then the fifth, which does not.
+      for (let i = 1; i <= 4; i++) {
+        const wrong = await spare.request.post('/api/auth/pin', { data: { pin: '9999' } })
+        expect(wrong.status(), `attempt ${i}`).toBe(401)
+      }
+      const fifth = await spare.request.post('/api/auth/pin', { data: { pin: '9999' } })
+      expect(fifth.status()).toBe(423)
+
+      // Being right is not a way out: the lock is consulted before the compare,
+      // so Emir's own PIN on this phone is refused with the same 423.
+      const emir = await spare.request.post('/api/auth/pin', { data: { pin: PINS.Emir } })
+      expect(emir.status()).toBe(423)
+
+      // And the phone the rest of this file has been typing on never noticed.
+      const amar = await pinLogin(context.request, 'Amar')
+      expect(amar.user.name).toBe('Amar')
+    } finally {
+      await spare.close()
+    }
   })
 })

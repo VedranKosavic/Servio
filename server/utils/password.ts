@@ -42,10 +42,26 @@ const KEY_LEN = 32
 /**
  * The peppered input. `userId` is in it as well, so the same PIN belonging to
  * two people cannot produce the same hash even if their salts ever collided.
+ *
+ * **A missing pepper is an error, not an empty string.** It used to be
+ * `?? ''`, which is not "no pepper" — it is a *different* pepper, and nothing
+ * said so: `npm run db:seed` with the variable forgotten wrote hashes that no
+ * server with `PIN_PEPPER=dev` can verify, so every PIN in the new database was
+ * silently wrong and the only symptom was a login screen refusing everybody.
+ * CLAUDE.md calls this the one variable the app cannot run without; this is
+ * where that claim is enforced. Under vitest the fixture pepper comes from
+ * `vitest.config.ts`, and the guard is skipped so a stray `env: {}` in a future
+ * config fails as a test rather than as a crash inside scrypt.
  */
 function peppered(plain: string, userId: string): string {
-  const pepper = process.env.PIN_PEPPER ?? ''
-  return createHmac('sha256', pepper).update(`${userId}:${plain}`).digest('hex')
+  const pepper = process.env.PIN_PEPPER
+  if (!pepper && !process.env.VITEST) {
+    throw new Error(
+      'PIN_PEPPER is not set — every PIN hashed now would fail to verify later. '
+      + 'Copy .env.example to .env, or pass PIN_PEPPER= on the command line.',
+    )
+  }
+  return createHmac('sha256', pepper ?? '').update(`${userId}:${plain}`).digest('hex')
 }
 
 /** `scrypt$16384$8$1$<salt hex>$<hash hex>` */
@@ -75,11 +91,14 @@ export function verifySecret(plain: string, userId: string, stored: string): boo
     return false
   }
 
+  // Outside the `try`, deliberately: the catch below is there so a corrupt
+  // stored string is a refused login rather than a crash, and a missing pepper
+  // is neither corrupt nor a refusal — it is a server that cannot verify
+  // anybody. Swallowed here it would read as "wrong PIN" on every screen.
+  const input = peppered(plain, userId)
+
   try {
-    const actual = scryptSync(
-      peppered(plain, userId), salt, expected.length,
-      { N, r, p, maxmem: 256 * 1024 * 1024 },
-    )
+    const actual = scryptSync(input, salt, expected.length, { N, r, p, maxmem: 256 * 1024 * 1024 })
     return timingSafeEqual(actual, expected)
   } catch {
     return false
