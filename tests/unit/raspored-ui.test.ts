@@ -282,11 +282,12 @@ describe('the house rules hold on the roster screens', () => {
   it('flips the two nav rows this package owns and nothing else', () => {
     const waiterMenu = readFileSync('app/utils/waiterMenu.ts', 'utf8')
     expect(waiterMenu).toMatch(/id: 'roster'[^\n]*ready: true/)
-    // WP1's row is not this package's to flip.
-    expect(waiterMenu).toMatch(/id: 'chat'[^\n]*ready: false/)
+    // WP1's row was not this package's to flip; it is `true` on `main` because
+    // Razgovor merged first, and both rows are live from here on.
+    expect(waiterMenu).toMatch(/id: 'chat'[^\n]*ready: true/)
 
     const adminNav = readFileSync('app/utils/adminNav.ts', 'utf8')
     expect(adminNav).toMatch(/id: 'raspored'[^\n]*ready: true/)
-    expect(adminNav).toMatch(/id: 'razgovor'[^\n]*ready: false/)
+    expect(adminNav).toMatch(/id: 'razgovor'[^\n]*ready: true/)
   })
 })
