@@ -45,7 +45,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // Phase 4 — WP1 flips `ready`, and that is the only line it touches here.
   { id: 'razgovor', to: '/a/razgovor', label: 'Razgovor', icon: 'chat', sub: 'Svi i Admini', ready: true },
   // Phase 4 — WP2 flips `ready`.
-  { id: 'raspored', to: '/a/raspored', label: 'Raspored', icon: 'calendar', sub: 'Sedmica, zamjene i sati', ready: false, soon: 'stiže uskoro' },
+  { id: 'raspored', to: '/a/raspored', label: 'Raspored', icon: 'calendar', sub: 'Sedmica, zamjene i sati', ready: true },
   { id: 'postavke', to: '/a/postavke', label: 'Meni i postavke', icon: 'users', sub: 'Cijene, normativi, stolovi, osoblje, uređaji', ready: true },
   { id: 'dnevnik', to: '/a/dnevnik', label: 'Dnevnik', icon: 'list', sub: 'Ko je šta uradio, po danima', ready: true },
   { id: 'izvoz', to: '/a/izvoz', label: 'Izvoz', icon: 'calendar', sub: 'CSV fajlovi za period', ready: true },

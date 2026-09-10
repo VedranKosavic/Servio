@@ -15,6 +15,8 @@ const tabs = [
   { to: '/a/postavke/stolovi', label: 'Stolovi' },
   { to: '/a/postavke/osoblje', label: 'Osoblje' },
   { to: '/a/postavke/uredaji', label: 'Uređaji' },
+  // Phase 4, WP2. Reachability: without a chip here the page has no way in.
+  { to: '/a/postavke/sabloni', label: 'Šabloni' },
   { to: '/a/postavke', label: 'Podešavanja' },
 ]
 
