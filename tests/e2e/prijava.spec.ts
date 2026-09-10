@@ -1,17 +1,26 @@
 /**
- * The lock screen: the wordmark, the copy, and the one landing rule.
+ * The login screen: a PIN pad and nothing else, and the landing rule behind it.
  *
  * What is proved here:
  *
- *   1. The screen carries the wordmark from `shared/brand.ts` and asks
- *      *Prijava · Odaberi svoj profil* — never *Ko si?*.
- *   2. **An owner who PINs in on a phone lands on `/admin`.** Until this file
- *      existed he was parked on a card saying the dashboard was not built yet;
- *      it has been built since Phase 2. The destination is the role's, through
- *      `homeFor()`, and `/admin/login` sends the same owner to the same screen.
- *   3. He can still cross over to `/konobar` from the dashboard, because the
- *      owner also serves tables — `/konobar` asks for a session, not a role.
- *   4. A waiter on the same door still lands on `/konobar`.
+ *   1. The first screen carries the wordmark and a pad. It offers **no list of
+ *      names and no role buttons** — the digits are the whole login, and a
+ *      screen that drew the staff list would hand a stranger holding an
+ *      enrolled phone the one thing the pad refuses to ask.
+ *   2. **The PIN identifies the person.** The same pad, two different numbers,
+ *      two different people — and nobody says who they are first.
+ *   3. An owner lands on `/admin`, and can still cross to `/konobar`, because
+ *      he also serves tables.
+ *   4. A `radnik` gets the second step — *Na čemu si večeras?* — and lands on
+ *      whichever screen he picks.
+ *   5. He can switch from one to the other **without signing out**: the mode is
+ *      a choice on his session, not a property of his account.
+ *   6. Unknown digits are refused without naming anybody.
+ *
+ * **This file is the acceptance test for the new screen** (`app/pages/index.vue`
+ * and the chooser). The API half of it — every assertion that goes through
+ * `context.request` — passes against the server as it stands; the half that
+ * drives the DOM is the contract the screen has to meet.
  *
  * **One device, enrolled once** (§5.1): `authLimiter` allows ten auth calls a
  * minute per device on a production build, so the enrolment happens in
@@ -20,76 +29,54 @@
  * Run it against a production build on a port that is not 3002:
  *
  *   rm -f data/verify.db*
- *   DB_PATH=data/verify.db PIN_PEPPER=dev npm run db:seed
- *   npm run build
+ *   DB_PATH=data/verify.db PIN_PEPPER=dev SANK_SEED_CAST=full npm run db:seed
+ *   DB_PATH=data/verify.db npm run build
  *   DB_PATH=data/verify.db PIN_PEPPER=dev COOKIE_SECURE=0 SANK_DEV_ENROL=1 \
  *     PORT=3112 node .output/server/index.mjs
  *   npx playwright test tests/e2e/prijava.spec.ts
  */
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 import { APP_NAME } from '../../shared/brand'
-import { ackRules, resetLimits } from './helpers'
-
-const HARIS_PIN = '123456'
-const LEJLA_PIN = '2222'
+import { ackRules, pinLogin, resetLimits, PINS, type Person } from './helpers'
 
 let context: BrowserContext
 
-interface LoginUser { id: string, name: string }
-
-/** Read once: `GET /api/auth/users` is an auth door like the PIN itself. */
-let loginUsers: LoginUser[] | null = null
-
-async function knownUsers(): Promise<LoginUser[]> {
-  loginUsers ??= await (await context.request.get('/api/auth/users')).json() as LoginUser[]
-  return loginUsers
-}
-
 /**
- * Open the list of people, whatever state the device was left in.
+ * Get the browser to the pad, whatever state the device was left in.
  *
- * The whole screen is inside `<ClientOnly>`, so nothing exists until the page
- * has hydrated and `/api/me` has answered — and when somebody is still signed
- * in on this device it offers *Nastavi kao …* rather than the list. Waiting for
- * one of the shapes it can take is what makes the branch below meaningful.
+ * The screen is inside `<ClientOnly>`, so nothing exists until the page has
+ * hydrated and `/api/me` has answered — and when somebody is still signed in on
+ * this device it offers *Nastavi kao …* rather than the pad. Waiting for one of
+ * the two shapes it can take is what makes the branch below meaningful.
  */
-async function openPeopleList(page: Page) {
+async function openPad(page: Page) {
   await page.goto('/')
 
-  const rest = page.getByRole('button', { name: /Ostali profili/ })
   const relock = page.getByRole('button', { name: /Promijeni korisnika/ })
-  const anyFace = page.getByRole('heading', { name: 'Prijava' })
+  const pad = page.getByRole('button', { name: '1', exact: true })
 
-  await expect(relock.or(rest).or(anyFace).first()).toBeVisible()
+  await expect(relock.or(pad).first()).toBeVisible()
   if (await relock.count() > 0) {
     await relock.click()
-    await expect(anyFace).toBeVisible()
+    await expect(pad).toBeVisible()
   }
 }
 
 /**
- * Sign in **through the screen**, which is the whole point of this file: the
- * API door would land nobody anywhere, and the redirect is what is on trial.
+ * Sign in **through the screen**, which is the whole point of this file: the API
+ * door would land nobody anywhere, and the redirect is what is on trial.
+ *
+ * Note what is missing compared with the old version of this helper: there is
+ * no face to tap first.
  */
-async function pinInOnScreen(page: Page, who: string, pin: string) {
-  await openPeopleList(page)
-
-  // The screen offers three faces — the last three to sign in on this device —
-  // and everybody else behind *Ostali profili*. Which three they are depends on
-  // what the rest of the suite did to this database first, so open the list
-  // when the name is not already on the front.
-  const face = page.getByRole('button', { name: new RegExp(who) }).first()
-  if (await face.count() === 0) {
-    await page.getByRole('button', { name: /Ostali profili/ }).click()
-  }
-
-  await face.click()
-  for (const digit of pin) {
+async function padIn(page: Page, digits: string) {
+  await openPad(page)
+  for (const digit of digits) {
     await page.getByRole('button', { name: digit, exact: true }).click()
   }
 }
 
-test.describe('Prijava — the lock screen', () => {
+test.describe('Prijava — the PIN pad', () => {
   test.beforeAll(async ({ browser }) => {
     context = await browser.newContext()
     await resetLimits(context.request)
@@ -97,27 +84,19 @@ test.describe('Prijava — the lock screen', () => {
     // six-character code. It is the only call here limited by IP rather than by
     // the device cookie, so it happens once.
     expect((await context.request.post('/api/dev/enrol', { data: {} })).ok()).toBe(true)
-    const users = await knownUsers()
 
     // The *Pravila* gate (S12) stands in front of every `/konobar` screen from
     // the moment `phase4-pravila` publishes a version — which it does before
     // this file, because Playwright runs the directory alphabetically. The ack
     // is per person and outlives the session, so acknowledging once here for
-    // each of the two people this file signs in keeps the landing assertions
-    // about the landing rule rather than about the gate.
-    for (const [who, pin] of [['Haris', HARIS_PIN], ['Lejla', LEJLA_PIN]] as const) {
-      const person = users.find(u => u.name === who)!
-      expect((await context.request.post('/api/auth/pin', {
-        data: { user_id: person.id, pin },
-      })).ok()).toBe(true)
+    // each person this file signs in keeps the landing assertions about the
+    // landing rule rather than about the gate.
+    for (const who of ['Haris', 'Lejla', 'Amar'] as Person[]) {
+      await pinLogin(context.request, who)
       await ackRules(context.request)
     }
   })
 
-  // Eight auth calls across this file, against a leash of ten a minute per
-  // device. The dev door forgets the window between tests so the file never
-  // races its own budget; on a server without that door it 404s and this is a
-  // no-op (see `resetLimits`).
   test.beforeEach(async () => {
     await resetLimits(context.request)
   })
@@ -126,30 +105,61 @@ test.describe('Prijava — the lock screen', () => {
     await context.close()
   })
 
-  test('the wordmark and the copy', async () => {
+  test('is a pad, and offers nobody', async () => {
     const page = await context.newPage()
-    await openPeopleList(page)
+    await openPad(page)
 
     await expect(page.getByRole('heading', { level: 1, name: APP_NAME })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Prijava' })).toBeVisible()
-    await expect(page.getByText('Odaberi svoj profil')).toBeVisible()
+    for (const digit of '0123456789') {
+      await expect(page.getByRole('button', { name: digit, exact: true })).toBeVisible()
+    }
 
-    // The old question, and the placeholder the owner used to land on.
-    await expect(page.getByText('Ko si?')).toHaveCount(0)
-    await expect(page.getByText('još nije spremna')).toHaveCount(0)
+    // The list of faces is gone, and so is the question it used to ask. This is
+    // the assertion the owner's change is really about: a stranger holding this
+    // phone learns no name from it.
+    await expect(page.getByText('Odaberi svoj profil')).toHaveCount(0)
+    await expect(page.getByText('Ostali profili')).toHaveCount(0)
+    for (const name of ['Haris', 'Amar', 'Emir', 'Lejla']) {
+      await expect(page.getByText(name, { exact: true })).toHaveCount(0)
+    }
+    // No role buttons either: `Konobar`/`Šanker` belong to the *second* step,
+    // behind a PIN, and never in front of one.
+    await expect(page.getByRole('button', { name: 'Konobar' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Šanker' })).toHaveCount(0)
+
     await page.close()
+  })
+
+  /** The API half: one door, two numbers, two people, and no name in either body. */
+  test('the digits alone say who is typing', async () => {
+    const amar = await pinLogin(context.request, 'Amar')
+    expect(amar.user.role).toBe('radnik')
+    // A fresh session has not chosen a screen: that is the chooser.
+    expect(amar.session.mode).toBeNull()
+
+    const haris = await pinLogin(context.request, 'Haris')
+    expect(haris.user.role).toBe('admin')
+    // An admin never has a mode — his landing is `/admin`.
+    expect(haris.session.mode).toBeNull()
+
+    // Digits that belong to nobody are refused, and the refusal names nobody.
+    const nobody = await context.request.post('/api/auth/pin', { data: { pin: '9999' } })
+    expect(nobody.status()).toBe(401)
+    const body = await nobody.text()
+    expect(body).not.toMatch(/Haris|Amar|Emir|Lejla/)
   })
 
   test('an owner lands on the dashboard, and can cross to the tables', async () => {
     const page = await context.newPage()
-    await pinInOnScreen(page, 'Haris', HARIS_PIN)
+    await padIn(page, PINS.Haris)
 
-    // The fix: the role decides, and the admin's role says `/admin`.
+    // No chooser for him: the owner's landing is the dashboard, full stop.
     await expect(page).toHaveURL(/\/admin$/)
     await expect(page.getByRole('heading', { name: 'Puls' })).toBeVisible()
 
     // The dashboard is responsive; on a 390 px phone the nav is the bottom tabs
-    // and the cross-link lives on *Više*.
+    // and the cross-link lives on *Više*. He also serves tables, so `/konobar`
+    // stays open to him — it asks for a session, not for a mode.
     await page.getByRole('link', { name: 'Više' }).click()
     await page.getByRole('link', { name: /Konobarski ekran/ }).click()
     await expect(page).toHaveURL(/\/konobar$/)
@@ -157,11 +167,45 @@ test.describe('Prijava — the lock screen', () => {
     await page.close()
   })
 
-  test('a waiter lands on the tables', async () => {
+  test('a radnik is asked which screen he is on tonight, and lands there', async () => {
     const page = await context.newPage()
-    await pinInOnScreen(page, 'Lejla', LEJLA_PIN)
+    await padIn(page, PINS.Lejla)
 
+    // The second step. Both choices stay open to every worker — the screen is
+    // not a property of the account any more.
+    await expect(page.getByText('Na čemu si večeras?')).toBeVisible()
+    await page.getByRole('button', { name: 'Šanker' }).click()
+    await expect(page).toHaveURL(/\/sanker$/)
+
+    await page.close()
+  })
+
+  /**
+   * The half that would be impossible if the screen were still an account
+   * property: moving from the bar to the floor at midnight, without signing out
+   * and without an admin touching anything.
+   */
+  test('and can switch to the other one without signing out', async () => {
+    const page = await context.newPage()
+    await padIn(page, PINS.Amar)
+
+    await expect(page.getByText('Na čemu si večeras?')).toBeVisible()
+    await page.getByRole('button', { name: 'Konobar' }).click()
     await expect(page).toHaveURL(/\/konobar$/)
+
+    // Same session, other screen. `GET /api/me` is the proof: the mode moved and
+    // the session id did not.
+    const before = await (await page.request.get('/api/me')).json() as
+      { session: { id: string, mode: string | null } }
+    expect(before.session.mode).toBe('konobar')
+
+    const switched = await page.request.post('/api/auth/mode', { data: { mode: 'sanker' } })
+    expect(switched.ok(), await switched.text()).toBe(true)
+
+    const after = await (await page.request.get('/api/me')).json() as
+      { session: { id: string, mode: string | null } }
+    expect(after.session.mode).toBe('sanker')
+    expect(after.session.id).toBe(before.session.id)
 
     await page.close()
   })

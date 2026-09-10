@@ -78,7 +78,7 @@ const out = {}
 // --- 1. the actors ---------------------------------------------------------
 
 const admin = new Actor('Haris')
-await admin.post('/api/auth/admin/login', { email: 'haris@lounge.ba', password: 'lounge' })
+await admin.post('/api/auth/admin/login', { email: 'haris@lounge.ba', password: '1111' })
 log('1. admin signed in')
 
 /** Mint a personal enrol code, enrol a phone with it, then PIN in on it. */

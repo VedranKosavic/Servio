@@ -29,7 +29,7 @@ export interface WaiterMenuItem {
   /** A row that does something instead of navigating. */
   action?: 'logout' | 'wakelock'
   /** Which roles see this row at all. */
-  roles: ('waiter' | 'bartender' | 'admin')[]
+  roles: ('radnik' | 'admin')[]
   /** Is the screen behind it built? A false renders the row greyed out. */
   ready: boolean
   /** What the greyed-out row says. */
@@ -38,25 +38,25 @@ export interface WaiterMenuItem {
 
 export const WAITER_MENU: WaiterMenuItem[] = [
   // WP4
-  { id: 'my-shift', label: 'Moja smjena', to: '/konobar/moja-smjena', roles: ['waiter', 'bartender'], ready: true },
+  { id: 'my-shift', label: 'Moja smjena', to: '/konobar/moja-smjena', roles: ['radnik'], ready: true },
   // Already on disk since Korak 1.
-  { id: 'settle', label: 'Završi smjenu', to: '/konobar/smjena', roles: ['waiter', 'bartender'], ready: true },
+  { id: 'settle', label: 'Završi smjenu', to: '/konobar/smjena', roles: ['radnik'], ready: true },
   // WP2
-  { id: 'count', label: 'Brzi popis', to: '/konobar/popis', toBartender: '/sanker/popis', roles: ['waiter', 'bartender'], ready: true },
-  { id: 'waste', label: 'Otpis', to: '/konobar/otpis', roles: ['waiter', 'bartender'], ready: true },
+  { id: 'count', label: 'Brzi popis', to: '/konobar/popis', toBartender: '/sanker/popis', roles: ['radnik'], ready: true },
+  { id: 'waste', label: 'Otpis', to: '/konobar/otpis', roles: ['radnik'], ready: true },
   // WP4
-  { id: 'rules', label: 'Pravila', to: '/konobar/pravila', roles: ['waiter', 'bartender'], ready: true },
+  { id: 'rules', label: 'Pravila', to: '/konobar/pravila', roles: ['radnik'], ready: true },
   // WP0 — this package.
-  { id: 'install', label: 'Instalacija', to: '/konobar/instalacija', roles: ['waiter', 'bartender'], ready: true },
-  { id: 'wakelock', label: 'Drži ekran upaljen', action: 'wakelock', roles: ['waiter', 'bartender'], ready: true },
+  { id: 'install', label: 'Instalacija', to: '/konobar/instalacija', roles: ['radnik'], ready: true },
+  { id: 'wakelock', label: 'Drži ekran upaljen', action: 'wakelock', roles: ['radnik'], ready: true },
   // Phase 4. The routes are written on day one and the rows stay disabled until
   // their screens land — WP1 flips `chat`, WP2 flips `roster`, one line each,
   // and nothing else in this file moves.
-  { id: 'chat', label: 'Razgovor', to: '/konobar/razgovor', toBartender: '/sanker/razgovor', roles: ['waiter', 'bartender'], ready: true },
-  { id: 'roster', label: 'Raspored', to: '/konobar/raspored', toBartender: '/sanker/raspored', roles: ['waiter', 'bartender'], ready: true },
+  { id: 'chat', label: 'Razgovor', to: '/konobar/razgovor', toBartender: '/sanker/razgovor', roles: ['radnik'], ready: true },
+  { id: 'roster', label: 'Raspored', to: '/konobar/raspored', toBartender: '/sanker/raspored', roles: ['radnik'], ready: true },
   // The owner also serves tables, so he can be here — and this is his way back.
   // `/admin` is the only row he does not share with the waiters; the light
   // dashboard's own nav carries the mirror of it, *Konobarski ekran*.
   { id: 'dashboard', label: 'Kontrolna ploča', to: '/admin', roles: ['admin'], ready: true },
-  { id: 'logout', label: 'Odjavi se', action: 'logout', roles: ['waiter', 'bartender', 'admin'], ready: true },
+  { id: 'logout', label: 'Odjavi se', action: 'logout', roles: ['radnik', 'admin'], ready: true },
 ]

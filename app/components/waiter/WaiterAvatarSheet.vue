@@ -20,7 +20,7 @@ const me = useMe()
 const { blocked, blockedText } = useSync()
 const wakeLock = useWakeLock()
 
-const role = computed(() => me.user.value?.role ?? 'waiter')
+const role = computed(() => me.user.value?.role ?? 'radnik')
 const items = computed(() => WAITER_MENU.filter(item => item.roles.includes(role.value)))
 
 async function onLogout() {
@@ -41,7 +41,10 @@ function onItem(item: (typeof WAITER_MENU)[number]) {
   if (!item.ready || !item.to) return
   emit('close')
   // Some rows are the same screen at two routes — see `toBartender`.
-  void navigateTo(role.value === 'bartender' && item.toBartender ? item.toBartender : item.to)
+  // The šanker variant of a screen follows the *session's* mode now, not the
+  // person's role: both screens are open to every worker and he may switch
+  // between them without signing out.
+  void navigateTo(me.mode.value === 'sanker' && item.toBartender ? item.toBartender : item.to)
 }
 
 function disabledFor(item: (typeof WAITER_MENU)[number]): boolean {

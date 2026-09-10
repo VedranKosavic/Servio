@@ -15,7 +15,7 @@ import { makeFixture, schema, type Fixture } from '../helpers/db'
 import { hashSecret, verifySecret } from '../../server/utils/password'
 import {
   adminLogin, authorizeRequest, getMe, listLoginUsers, lockoutState, loginWithPin,
-  logout, resetPin, verifyMetered, verifyPinMetered,
+  logout, resetPin, setSessionMode, verifyMetered, verifyPinMetered,
 } from '../../server/services/auth'
 import {
   devEnrol, enrolDevice, mintEnrolCode, requireEnrolledDevice, revokeDevice, unlockDevice,
@@ -23,6 +23,8 @@ import {
 import { maxSeq } from '../../server/services/changes'
 import { resetLimiters } from '../../server/utils/rate-limit'
 import { DEVICE_LOCK_FAILS } from '#shared/constants'
+import { landingFor } from '#shared/landing'
+import { ROUTE_ROLES, routeKey } from '#shared/routeRoles'
 
 const IP = '10.0.0.7'
 
@@ -90,7 +92,7 @@ describe('hashing', () => {
 
 describe('admin login', () => {
   it('accepts the seeded owner and answers with no secret in the body', () => {
-    const { result } = adminLogin(f.db, { email: 'haris@lounge.ba', password: 'lounge' }, { ip: IP })
+    const { result } = adminLogin(f.db, { email: 'haris@lounge.ba', password: '1111' }, { ip: IP })
 
     expect(result.user.name).toBe('Haris')
     expect(result.user.role).toBe('admin')
@@ -105,7 +107,7 @@ describe('admin login', () => {
    * prevent. `AdminLoginResult` is gone.
    */
   it('answers a full MeContext, with no device and the venue settings', () => {
-    const { result } = adminLogin(f.db, { email: 'haris@lounge.ba', password: 'lounge' }, { ip: IP })
+    const { result } = adminLogin(f.db, { email: 'haris@lounge.ba', password: '1111' }, { ip: IP })
 
     expect(result.session.kind).toBe('admin')
     expect(result.session.borrowed).toBe(false)
@@ -133,11 +135,11 @@ describe('admin login', () => {
     expect(attempts(f, { kind: 'password', ok: false })).toHaveLength(2)
   })
 
-  it('a waiter with no password cannot get an admin session', () => {
+  it('a radnik with no password cannot get an admin session', () => {
     f.db.update(schema.users).set({ email: 'amar@lounge.ba' })
       .where(eq(schema.users.id, f.userId('Amar'))).run()
 
-    expect(catchError(() => adminLogin(f.db, { email: 'amar@lounge.ba', password: 'lounge' }, { ip: IP })).code)
+    expect(catchError(() => adminLogin(f.db, { email: 'amar@lounge.ba', password: '1111' }, { ip: IP })).code)
       .toBe('INVALID_CREDENTIALS')
   })
 
@@ -146,7 +148,7 @@ describe('admin login', () => {
       catchError(() => adminLogin(f.db, { email: 'haris@lounge.ba', password: 'x' }, { ip: IP }))
     }
 
-    const locked = catchError(() => adminLogin(f.db, { email: 'haris@lounge.ba', password: 'lounge' }, { ip: IP }))
+    const locked = catchError(() => adminLogin(f.db, { email: 'haris@lounge.ba', password: '1111' }, { ip: IP }))
     expect(locked.status).toBe(423)
     expect(locked.code).toBe('LOCKED')
     expect(locked.data?.retry_after_s).toBeGreaterThan(0)
@@ -215,7 +217,7 @@ describe('PIN login', () => {
   it('works on the shared tablet for anybody on the staff', () => {
     const device = enrol(f, 'shared')
     const { result } = loginWithPin(f.db, deviceRow(f, device.deviceId), {
-      user_id: f.userId('Amar'), pin: '1111',
+      pin: f.pin('Amar'),
     }, { ip: IP })
 
     expect(result.user.name).toBe('Amar')
@@ -224,21 +226,83 @@ describe('PIN login', () => {
     expect(attempts(f, { kind: 'pin', ok: true })).toHaveLength(1)
   })
 
+  /**
+   * The whole idea in one assertion: the body names nobody, and the same pad on
+   * the same tablet answers with a different person for different digits.
+   */
+  it('the PIN identifies the person — different digits, different account', () => {
+    const device = enrol(f, 'shared')
+    const pad = (pin: string) =>
+      loginWithPin(f.db, deviceRow(f, device.deviceId), { pin }, { ip: IP }).result.user
+
+    expect(pad(f.pin('Amar')).name).toBe('Amar')
+    expect(pad(f.pin('Emir')).name).toBe('Emir')
+    expect(pad(f.pin('Lejla')).role).toBe('radnik')
+  })
+
+  it('refuses digits that belong to nobody, and names nobody in the refusal', () => {
+    const device = enrol(f, 'shared')
+    const err = catchError(() => loginWithPin(f.db, deviceRow(f, device.deviceId), {
+      pin: '9999',
+    }, { ip: IP }))
+
+    expect(err.status).toBe(401)
+    expect(err.code).toBe('INVALID_PIN')
+    // A 401 that leaked a name would hand a stranger the staff list the pad
+    // deliberately stopped drawing.
+    expect(JSON.stringify(err)).not.toMatch(/Amar|Emir|Haris/)
+  })
+
+  /**
+   * A worker may fold the choice into the first call, or post `/api/auth/mode`
+   * a moment later — both write the same column, and a reload reads it back.
+   */
+  it('stores the screen mode from the PIN body, and null when it is not sent', () => {
+    const device = enrol(f, 'shared')
+
+    const withMode = loginWithPin(f.db, deviceRow(f, device.deviceId), {
+      pin: f.pin('Amar'), mode: 'sanker',
+    }, { ip: IP })
+    expect(withMode.result.session.mode).toBe('sanker')
+    expect(f.db.select().from(schema.sessions)
+      .where(eq(schema.sessions.id, withMode.result.session.id)).get()!.mode).toBe('sanker')
+
+    const without = loginWithPin(f.db, deviceRow(f, device.deviceId), {
+      pin: f.pin('Emir'),
+    }, { ip: IP })
+    // `null` is the chooser: *Na čemu si večeras?* stands in front of him.
+    expect(without.result.session.mode).toBeNull()
+  })
+
+  it('gives an admin no mode, whatever the body asks for', () => {
+    const his = enrol(f, 'personal', 'Haris')
+    const { result } = loginWithPin(f.db, deviceRow(f, his.deviceId), {
+      pin: f.pin('Haris'), mode: 'konobar',
+    }, { ip: IP })
+
+    expect(result.user.role).toBe('admin')
+    // His landing is `/admin`; `/konobar` stays reachable by hand, because the
+    // owner also serves tables, but nothing sends him there.
+    expect(result.session.mode).toBeNull()
+  })
+
+  /**
+   * `borrowed` survived the loss of `user_id`; the tap that used to declare it
+   * did not. The pad no longer asks who is typing, so there is nothing for a
+   * colleague to answer `NOT_YOUR_DEVICE` with — and nothing needs answering,
+   * because the server knows whose phone this is the moment the PIN resolves.
+   */
   it('gives the owner of a personal phone a full session and a colleague a borrowed one', () => {
     const device = enrol(f, 'personal', 'Amar')
 
     const own = loginWithPin(f.db, deviceRow(f, device.deviceId), {
-      user_id: f.userId('Amar'), pin: '1111',
+      pin: f.pin('Amar'),
     }, { ip: IP })
     expect(own.result.session.borrowed).toBe(false)
-
-    // A colleague has to say so out loud.
-    expect(catchError(() => loginWithPin(f.db, deviceRow(f, device.deviceId), {
-      user_id: f.userId('Lejla'), pin: '2222',
-    }, { ip: IP })).code).toBe('NOT_YOUR_DEVICE')
+    expect(own.maxAgeS).toBe(14 * 3600)
 
     const borrowed = loginWithPin(f.db, deviceRow(f, device.deviceId), {
-      user_id: f.userId('Lejla'), pin: '2222', borrow: true,
+      pin: f.pin('Lejla'),
     }, { ip: IP })
     expect(borrowed.result.session.borrowed).toBe(true)
     // Two hours, not fourteen.
@@ -248,52 +312,73 @@ describe('PIN login', () => {
   it('refuses an admin PIN on a phone that is not his', () => {
     const shared = enrol(f, 'shared')
     expect(catchError(() => loginWithPin(f.db, deviceRow(f, shared.deviceId), {
-      user_id: f.userId('Haris'), pin: '123456',
+      pin: f.pin('Haris'),
     }, { ip: IP })).code).toBe('ADMIN_DEVICE_ONLY')
 
     const his = enrol(f, 'personal', 'Haris')
     expect(loginWithPin(f.db, deviceRow(f, his.deviceId), {
-      user_id: f.userId('Haris'), pin: '123456',
+      pin: f.pin('Haris'),
     }, { ip: IP }).result.user.role).toBe('admin')
   })
 
   it('exempts the dev device from the admin PIN rule', () => {
     const { result } = devEnrol(f.db, f.venueId)
     expect(loginWithPin(f.db, deviceRow(f, result.device.id), {
-      user_id: f.userId('Haris'), pin: '123456',
+      pin: f.pin('Haris'),
     }, { ip: IP }).result.user.role).toBe('admin')
   })
 
-  it('refuses a deactivated person and one with no PIN', () => {
+  /**
+   * `USER_NOT_ACTIVE` and `NO_PIN` were the two answers the pad gave back when
+   * the body named a person. It names nobody now, so neither of them can be
+   * asked for: a deactivated account and one with no digits set are simply not
+   * among the candidates, and what comes back is the stranger's `INVALID_PIN`.
+   * Telling somebody holding an enrolled phone *which* of the two he had found
+   * would answer a question the pad refused to ask.
+   */
+  it('leaves a deactivated person and one with no PIN out of the candidates', () => {
     const device = enrol(f, 'shared')
+    const dinoPin = f.pin('Dino')
+    const tarikPin = f.pin('Tarik')
     f.db.update(schema.users).set({ active: 0 }).where(eq(schema.users.id, f.userId('Dino'))).run()
     f.db.update(schema.users).set({ pinHash: null }).where(eq(schema.users.id, f.userId('Tarik'))).run()
 
     expect(catchError(() => loginWithPin(f.db, deviceRow(f, device.deviceId), {
-      user_id: f.userId('Dino'), pin: '3333',
-    }, { ip: IP })).code).toBe('USER_NOT_ACTIVE')
+      pin: dinoPin,
+    }, { ip: IP })).code).toBe('INVALID_PIN')
 
     expect(catchError(() => loginWithPin(f.db, deviceRow(f, device.deviceId), {
-      user_id: f.userId('Tarik'), pin: '4444',
-    }, { ip: IP })).code).toBe('NO_PIN')
+      pin: tarikPin,
+    }, { ip: IP })).code).toBe('INVALID_PIN')
   })
 
+  /**
+   * The evidence row, and the one column that moved. There is no account to
+   * file a failure under at this door — the digits have been compared against
+   * every candidate and matched none — so `user_id` is NULL and the IP joins the
+   * device as the key. The success rows carry NULL too, deliberately: a success
+   * filed under Amar would not clear failures filed under nobody.
+   */
   it('leaves a committed attempt row after a wrong PIN — the first door', () => {
     const device = enrol(f, 'shared')
     expect(catchError(() => loginWithPin(f.db, deviceRow(f, device.deviceId), {
-      user_id: f.userId('Amar'), pin: '9999',
+      pin: '9999',
     }, { ip: IP })).code).toBe('INVALID_PIN')
 
     const row = attempts(f, { kind: 'pin', ok: false })
     expect(row).toHaveLength(1)
     expect(row[0]!.deviceId).toBe(device.deviceId)
-    expect(row[0]!.userId).toBe(f.userId('Amar'))
+    expect(row[0]!.userId).toBeNull()
+    expect(row[0]!.ip).toBe(IP)
+
+    loginWithPin(f.db, deviceRow(f, device.deviceId), { pin: f.pin('Amar') }, { ip: IP })
+    expect(attempts(f, { kind: 'pin', ok: true })[0]!.userId).toBeNull()
   })
 
   it('counts down `fails_left`', () => {
     const device = enrol(f, 'shared')
     const wrong = () => catchError(() => loginWithPin(f.db, deviceRow(f, device.deviceId), {
-      user_id: f.userId('Amar'), pin: '9999',
+      pin: '9999',
     }, { ip: IP, now: f.clock.now() }))
 
     expect(wrong().data?.fails_left).toBe(4)
@@ -303,14 +388,30 @@ describe('PIN login', () => {
 
 // ===========================================================================
 
+/**
+ * The counter that makes four digits safe — and the key it now turns on.
+ *
+ * The login door used to count against `(device, user)`, because the body named
+ * the user. It names nobody now, so there is nothing to count against until the
+ * digits have already been compared against every account — and the bucket is
+ * `(device, ip)` instead. The thresholds are untouched (5 / 10 / 15) and so is
+ * everything they trigger.
+ *
+ * Note which way that trade runs. One bucket per phone is **tighter** than one
+ * bucket per phone per person: a stranger with an enrolled tablet used to get
+ * five guesses at Amar and five more at Emir, and now gets five in total. What
+ * it costs is a colleague standing at the same tablet on the same Wi-Fi, who is
+ * locked out by somebody else's fumbling — which is the honest price of a pad
+ * that cannot tell the two of them apart until the digits are right.
+ */
 describe('lockout', () => {
-  /** Five wrong PINs for Amar on this device, at the fixture's clock. */
-  function fail(device: string, times: number, name = 'Amar') {
+  /** Wrong digits at the pad, `times` over, at the fixture's clock. */
+  function fail(device: string, times: number, ip = IP) {
     const errors = []
     for (let i = 0; i < times; i++) {
       errors.push(catchError(() => loginWithPin(f.db, deviceRow(f, device), {
-        user_id: f.userId(name), pin: '9999',
-      }, { ip: IP, now: f.clock.now() })))
+        pin: '9999',
+      }, { ip, now: f.clock.now() })))
       f.clock.advance(1)
     }
     return errors
@@ -327,13 +428,13 @@ describe('lockout', () => {
     // The right PIN, inside the lock. The lockout is consulted *before* the
     // compare, so being right is not a way out.
     const refused = catchError(() => loginWithPin(f.db, deviceRow(f, device.deviceId), {
-      user_id: f.userId('Amar'), pin: '1111',
+      pin: f.pin('Amar'),
     }, { ip: IP, now: f.clock.now() }))
     expect(refused.status).toBe(423)
 
     f.clock.advance(61)
     expect(loginWithPin(f.db, deviceRow(f, device.deviceId), {
-      user_id: f.userId('Amar'), pin: '1111',
+      pin: f.pin('Amar'),
     }, { ip: IP, now: f.clock.now() }).result.user.name).toBe('Amar')
   })
 
@@ -355,7 +456,7 @@ describe('lockout', () => {
     const errors = []
     for (let i = 0; i < 10; i++) {
       errors.push(catchError(() => loginWithPin(f.db, deviceRow(f, device.deviceId), {
-        user_id: f.userId('Amar'), pin: '9999',
+        pin: '9999',
       }, { ip: IP, now: f.clock.now() })))
       // Past the 60 s step-up, and well inside the 900 s counting window, so all
       // ten failures are still on the record when the tenth lands.
@@ -384,22 +485,36 @@ describe('lockout', () => {
     expect(catchError(() => requireEnrolledDevice(f.db, device.token)).code).toBe('DEVICE_REVOKED')
   })
 
-  it('is per (device, user): Lejla is unaffected by Amar being locked out', () => {
+  /**
+   * The half of the old key that survived, and the half that replaced the other.
+   * Two guesses at the pad are the same subject whoever they were aimed at —
+   * there is no "aimed at" any more — so the whole tablet is shut after five;
+   * and the phone next to it, on its own address, is untouched.
+   */
+  it('is per (device, ip): the same tablet is shut for everybody, another address is not', () => {
     const device = enrol(f, 'shared')
     fail(device.deviceId, 5)
 
+    // Lejla's own digits are correct and still refused: the door is shut, and it
+    // was shut by somebody whose name nobody knows.
+    expect(catchError(() => loginWithPin(f.db, deviceRow(f, device.deviceId), {
+      pin: f.pin('Lejla'),
+    }, { ip: IP, now: f.clock.now() })).status).toBe(423)
+
+    // The address is the other half of the key, so a second phone on the café's
+    // other uplink is not carrying this tablet's failures.
     expect(loginWithPin(f.db, deviceRow(f, device.deviceId), {
-      user_id: f.userId('Lejla'), pin: '2222',
-    }, { ip: IP, now: f.clock.now() }).result.user.name).toBe('Lejla')
+      pin: f.pin('Lejla'),
+    }, { ip: '10.0.0.9', now: f.clock.now() }).result.user.name).toBe('Lejla')
   })
 
-  it('is per device: the same person on a second tablet is not locked', () => {
+  it('is per device: the same address on a second tablet is not locked', () => {
     const one = enrol(f, 'shared')
     const two = enrol(f, 'shared')
     fail(one.deviceId, 5)
 
     expect(loginWithPin(f.db, deviceRow(f, two.deviceId), {
-      user_id: f.userId('Amar'), pin: '1111',
+      pin: f.pin('Amar'),
     }, { ip: IP, now: f.clock.now() }).result.user.name).toBe('Amar')
   })
 
@@ -408,12 +523,13 @@ describe('lockout', () => {
     fail(device.deviceId, 4)
 
     loginWithPin(f.db, deviceRow(f, device.deviceId), {
-      user_id: f.userId('Amar'), pin: '1111',
+      pin: f.pin('Amar'),
     }, { ip: IP, now: f.clock.now() })
     f.clock.advance(1)
 
+    // The subject is the one the door actually counts on: no user, an address.
     const state = lockoutState(f.db, f.venueId, 'pin', {
-      deviceId: device.deviceId, userId: f.userId('Amar'), ip: IP,
+      deviceId: device.deviceId, userId: null, ip: IP,
     }, f.clock.now())
     expect(state.fails).toBe(0)
     expect(state.locked).toBe(false)
@@ -423,28 +539,89 @@ describe('lockout', () => {
 // ===========================================================================
 
 describe('getting back in', () => {
-  it('resetPin unlocks the device this person locked, and writes the reset row', () => {
-    const device = enrol(f, 'shared')
-    for (let i = 0; i < 15; i++) {
-      catchError(() => loginWithPin(f.db, deviceRow(f, device.deviceId), {
-        user_id: f.userId('Emir'), pin: '999999',
+  /**
+   * The half of the old promise that survives: a reset still unlocks the phone
+   * this person is *bound* to, and still writes the row every counter of his
+   * measures from. The half that could not survive is the tablet shut by
+   * anonymous guessing at the pad — see the two tests below.
+   */
+  it('resetPin unlocks this person\'s own phone, and writes the reset row', () => {
+    const his = enrol(f, 'personal', 'Emir')
+    for (let i = 0; i < DEVICE_LOCK_FAILS; i++) {
+      catchError(() => loginWithPin(f.db, deviceRow(f, his.deviceId), {
+        pin: '9999',
       }, { ip: IP, now: f.clock.now() }))
       f.clock.advance(901)
     }
-    expect(deviceRow(f, device.deviceId).lockedAt).not.toBeNull()
+    expect(deviceRow(f, his.deviceId).lockedAt).not.toBeNull()
 
     const before = attempts(f).length
     resetPin(f.db, f.venueId, f.adminActor(), f.userId('Emir'), '654321', f.clock.now())
 
-    expect(deviceRow(f, device.deviceId).lockedAt).toBeNull()
-    expect(attempts(f, { kind: 'reset' })).toHaveLength(1)
-    // The evidence is not deleted, only superseded.
-    expect(attempts(f).length).toBe(before + 1)
+    expect(deviceRow(f, his.deviceId).lockedAt).toBeNull()
+    // Two clears: the person's, and the device-shaped one for the phone this
+    // reset actually reopened. The evidence is not deleted, only superseded.
+    expect(attempts(f, { kind: 'reset' })).toHaveLength(2)
+    expect(attempts(f).length).toBe(before + 2)
 
     f.clock.advance(1)
-    expect(loginWithPin(f.db, deviceRow(f, device.deviceId), {
-      user_id: f.userId('Emir'), pin: '654321',
+    expect(loginWithPin(f.db, deviceRow(f, his.deviceId), {
+      pin: '654321',
     }, { ip: IP, now: f.clock.now() }).result.user.name).toBe('Emir')
+  })
+
+  /**
+   * A shared tablet shut by a stranger belongs to nobody, so nobody's reset
+   * reopens it. This is not an oversight to fix later: the fifteen failures
+   * behind that lock were filed against `user_id NULL` precisely because the pad
+   * refuses to ask who is typing, and a reset that reached them would have to
+   * guess whose they were.
+   */
+  it('does not reopen a shared tablet the pad shut — that is the device\'s own key', () => {
+    const tablet = enrol(f, 'shared')
+    for (let i = 0; i < DEVICE_LOCK_FAILS; i++) {
+      catchError(() => loginWithPin(f.db, deviceRow(f, tablet.deviceId), {
+        pin: '9999',
+      }, { ip: IP, now: f.clock.now() }))
+      f.clock.advance(901)
+    }
+
+    resetPin(f.db, f.venueId, f.adminActor(), f.userId('Emir'), '654321', f.clock.now())
+    expect(deviceRow(f, tablet.deviceId).lockedAt).not.toBeNull()
+  })
+
+  /**
+   * …and the key that does work has to clear the counter, not just the flag.
+   * Before this, `unlockDevice` reopened a tablet whose unwindowed fifteen were
+   * still standing, so the first fat-fingered PIN after the unlock read the same
+   * fifteen and shut it again — an unlock that lasted one tap.
+   */
+  it('unlockDevice reopens it for good: the counter goes with the flag', () => {
+    const tablet = enrol(f, 'shared')
+    for (let i = 0; i < DEVICE_LOCK_FAILS; i++) {
+      catchError(() => loginWithPin(f.db, deviceRow(f, tablet.deviceId), {
+        pin: '9999',
+      }, { ip: IP, now: f.clock.now() }))
+      f.clock.advance(901)
+    }
+
+    const before = attempts(f, { ok: false }).length
+    unlockDevice(f.db, f.venueId, f.adminActor(), tablet.deviceId, f.clock.now())
+    f.clock.advance(1)
+
+    // One more wrong PIN must cost one step, not the whole tablet again.
+    catchError(() => loginWithPin(f.db, deviceRow(f, tablet.deviceId), {
+      pin: '9999',
+    }, { ip: IP, now: f.clock.now() }))
+    f.clock.advance(1)
+    expect(deviceRow(f, tablet.deviceId).lockedAt).toBeNull()
+
+    // And the record of that night is intact — a clear supersedes, never deletes.
+    expect(attempts(f, { ok: false }).length).toBe(before + 1)
+
+    expect(loginWithPin(f.db, deviceRow(f, tablet.deviceId), {
+      pin: f.pin('Amar'),
+    }, { ip: IP, now: f.clock.now() }).result.user.name).toBe('Amar')
   })
 
   it('resetPin refuses a PIN that is not 4 or 6 digits', () => {
@@ -462,7 +639,11 @@ describe('getting back in', () => {
     const after = unlockDevice(f.db, f.venueId, f.adminActor(), device.deviceId)
 
     expect(after.locked_at).toBeNull()
-    expect(attempts(f).length).toBe(before)
+    // One row more, and it is the clear, not a deletion: the failed attempts
+    // this tablet collected are all still on the record.
+    expect(attempts(f).length).toBe(before + 1)
+    expect(attempts(f, { kind: 'reset' })).toHaveLength(1)
+    expect(attempts(f, { ok: false })).toHaveLength(1)
     expect(catchError(() => unlockDevice(f.db, f.venueId, f.adminActor(), device.deviceId)).code)
       .toBe('DEVICE_NOT_LOCKED')
   })
@@ -474,7 +655,7 @@ describe('sessions', () => {
   function loginAmar() {
     const device = enrol(f, 'shared')
     const { result, token } = loginWithPin(f.db, deviceRow(f, device.deviceId), {
-      user_id: f.userId('Amar'), pin: '1111',
+      pin: f.pin('Amar'),
     }, { ip: IP, now: f.clock.now() })
     return { device, sessionToken: token, session: result.session }
   }
@@ -490,7 +671,7 @@ describe('sessions', () => {
     expect(verdict.ok).toBe(true)
     if (!verdict.ok) return
     expect(verdict.actor?.userId).toBe(f.userId('Amar'))
-    expect(verdict.actor?.role).toBe('waiter')
+    expect(verdict.actor?.role).toBe('radnik')
     expect(verdict.actor?.sessionKind).toBe('staff')
     expect(verdict.actor?.deviceId).toBe(device.deviceId)
   })
@@ -546,7 +727,7 @@ describe('sessions', () => {
   })
 
   it('an admin session slides once a day; a staff session never slides', () => {
-    const admin = adminLogin(f.db, { email: 'haris@lounge.ba', password: 'lounge' },
+    const admin = adminLogin(f.db, { email: 'haris@lounge.ba', password: '1111' },
       { ip: IP, now: f.clock.now() })
 
     const soon = authorizeRequest(f.db, {
@@ -589,7 +770,7 @@ describe('sessions', () => {
     expect(me.seq).toBeGreaterThan(0)
     expect(JSON.stringify(me)).not.toMatch(/_hash|password|pepper|token/)
 
-    const admin = adminLogin(f.db, { email: 'haris@lounge.ba', password: 'lounge' }, { ip: IP })
+    const admin = adminLogin(f.db, { email: 'haris@lounge.ba', password: '1111' }, { ip: IP })
     const adminVerdict = authorizeRequest(f.db, {
       path: '/api/me', method: 'GET', cookies: { s: admin.token }, ip: IP, now: f.clock.now(),
     })
@@ -597,6 +778,96 @@ describe('sessions', () => {
 
     // No device at all on an email session — that is what `kind: 'admin'` means.
     expect(getMe(f.db, f.venueId, adminVerdict.actor).device).toBeNull()
+  })
+})
+
+// ===========================================================================
+
+/**
+ * The second step behind the pad, and the rule that reads it.
+ *
+ * The screen a person works tonight stopped being a property of the account
+ * when `waiter` and `bartender` became one `radnik`. It is a `ScreenMode` on the
+ * **session**: a shift's worth of choice, not a fact about the person, so Emir
+ * can be on the šank tonight and on the floor tomorrow and a reload at 02:00
+ * still lands him where he was.
+ */
+describe('the screen mode', () => {
+  /** PIN in and hand back the actor the middleware would have built. */
+  function signIn(name: string, mode?: 'konobar' | 'sanker') {
+    const device = enrol(f, 'shared')
+    const { token } = loginWithPin(f.db, deviceRow(f, device.deviceId), {
+      pin: f.pin(name), ...(mode ? { mode } : {}),
+    }, { ip: IP, now: f.clock.now() })
+
+    const verdict = authorizeRequest(f.db, {
+      path: '/api/me', method: 'GET', cookies: { s: token, d: device.token },
+      ip: IP, now: f.clock.now(),
+    })
+    if (!verdict.ok || !verdict.actor) throw new Error('expected an actor')
+    return verdict.actor
+  }
+
+  it('is written by the chooser and read back by `GET /api/me`', () => {
+    const amar = signIn('Amar')
+    expect(getMe(f.db, f.venueId, amar).session.mode).toBeNull()
+
+    expect(setSessionMode(f.db, f.venueId, amar, 'konobar').session.mode).toBe('konobar')
+    // The reload: a fresh envelope off the same session row.
+    expect(getMe(f.db, f.venueId, amar).session.mode).toBe('konobar')
+  })
+
+  it('switches at midnight without signing out', () => {
+    const emir = signIn('Emir', 'sanker')
+    expect(getMe(f.db, f.venueId, emir).session.mode).toBe('sanker')
+
+    // Both screens stay open to every worker: moving between them is this one
+    // call and not a logout, which is the whole point of putting it here.
+    expect(setSessionMode(f.db, f.venueId, emir, 'konobar').session.mode).toBe('konobar')
+    expect(getMe(f.db, f.venueId, emir).session.mode).toBe('konobar')
+  })
+
+  it('stays null for an admin, who is answered rather than refused', () => {
+    const device = enrol(f, 'personal', 'Haris')
+    const { token } = loginWithPin(f.db, deviceRow(f, device.deviceId), {
+      pin: f.pin('Haris'),
+    }, { ip: IP, now: f.clock.now() })
+    const verdict = authorizeRequest(f.db, {
+      path: '/api/me', method: 'GET', cookies: { s: token, d: device.token },
+      ip: IP, now: f.clock.now(),
+    })
+    if (!verdict.ok || !verdict.actor) throw new Error('expected an actor')
+
+    // Not a 403: it is a tap he can only reach by accident, and his landing
+    // ignores the value either way.
+    expect(setSessionMode(f.db, f.venueId, verdict.actor, 'sanker').session.mode).toBeNull()
+  })
+
+  it('belongs to one session, not to the person', () => {
+    const first = signIn('Amar', 'sanker')
+    const second = signIn('Amar', 'konobar')
+
+    expect(getMe(f.db, f.venueId, first).session.mode).toBe('sanker')
+    expect(getMe(f.db, f.venueId, second).session.mode).toBe('konobar')
+  })
+
+  /** `shared/landing.ts` — the one rule, and the client reads the same table. */
+  it('decides where a fresh session is sent', () => {
+    expect(landingFor('admin', null)).toBe('/admin')
+    // An admin has no mode; if a row ever carried one it would still be /admin.
+    expect(landingFor('admin', 'sanker')).toBe('/admin')
+    expect(landingFor('radnik', 'konobar')).toBe('/konobar')
+    expect(landingFor('radnik', 'sanker')).toBe('/sanker')
+    // `null` is the chooser, and deliberately not a path: that screen is the
+    // client's and the server has no opinion about its address.
+    expect(landingFor('radnik', null)).toBeNull()
+  })
+
+  it('leaves the staff screens open to the owner, who also serves tables', () => {
+    for (const [method, path] of [['GET', '/api/tables/state'], ['POST', '/api/orders']] as const) {
+      const key = routeKey(method, path)
+      expect([key, ROUTE_ROLES[key]]).toEqual([key, ['admin', 'radnik']])
+    }
   })
 })
 
@@ -624,8 +895,8 @@ describe('the lock screen list', () => {
     const here_ = enrol(f, 'shared')
     const there = enrol(f, 'shared')
 
-    loginWithPin(f.db, deviceRow(f, here_.deviceId), { user_id: f.userId('Amar'), pin: '1111' }, { ip: IP })
-    loginWithPin(f.db, deviceRow(f, there.deviceId), { user_id: f.userId('Lejla'), pin: '2222' }, { ip: IP })
+    loginWithPin(f.db, deviceRow(f, here_.deviceId), { pin: f.pin('Amar') }, { ip: IP })
+    loginWithPin(f.db, deviceRow(f, there.deviceId), { pin: f.pin('Lejla') }, { ip: IP })
 
     const here = listLoginUsers(f.db, f.venueId, here_.deviceId)
     expect(here.find(u => u.name === 'Amar')?.last_login_at).toBeTruthy()
@@ -647,7 +918,7 @@ describe('an approver PIN inside another service', () => {
     // transaction, *before* it opens one. A wrong PIN throws here, so nothing
     // downstream ever runs — and the evidence is already committed.
     expect(catchError(() => verifyPinMetered(
-      f.db, f.venueId, f.userId('Emir'), device.deviceId, '000000', { ip: IP, kind: 'approve' },
+      f.db, f.venueId, f.userId('Emir'), device.deviceId, '0000', { ip: IP, kind: 'approve' },
     )).code).toBe('INVALID_PIN')
 
     expect(attempts(f, { kind: 'approve', ok: false })).toHaveLength(1)
@@ -656,22 +927,62 @@ describe('an approver PIN inside another service', () => {
 
   it('the right one returns quietly and records the success', () => {
     const device = enrol(f, 'shared')
-    verifyPinMetered(f.db, f.venueId, f.userId('Emir'), device.deviceId, '123456',
+    verifyPinMetered(f.db, f.venueId, f.userId('Emir'), device.deviceId, f.pin('Emir'),
       { ip: IP, kind: 'approve' })
     expect(attempts(f, { kind: 'approve', ok: true })).toHaveLength(1)
   })
 
-  it('shares its lockout bucket with the PIN pad — approve and pin are one subject', () => {
+  /**
+   * The one place the two doors came apart, and it is worth being explicit
+   * about rather than discovering at 01:00.
+   *
+   * `approve` still knows exactly whose PIN it is asking for — an approval names
+   * its approver — so it still counts against `(device, user)`. The pad no
+   * longer knows, so it counts against `(device, ip)`. Two different keys are
+   * two different buckets, and five failed approvals for Emir therefore do
+   * **not** shut the pad the way they did when the pad also named him.
+   *
+   * The honest cost is a second budget of five, and it is worth naming: the
+   * unwindowed 15 that shuts the device is counted per subject too, so the two
+   * doors now walk toward it separately rather than together. What keeps that
+   * from mattering is that they are not equally open — the pad is the anonymous
+   * door, reachable by anyone holding the tablet, and it is fully metered at 15
+   * on its own (see `describe('lockout')`), while an approval already needs a
+   * live session and carries `pinLimiter` on top. The next test is the other
+   * half: the approver door reaches the same device lock by itself.
+   */
+  it('no longer shares the pad\'s bucket — approve knows its user, the pad does not', () => {
     const device = enrol(f, 'shared')
     for (let i = 0; i < 5; i++) {
-      catchError(() => verifyPinMetered(f.db, f.venueId, f.userId('Emir'), device.deviceId, '000000',
+      catchError(() => verifyPinMetered(f.db, f.venueId, f.userId('Emir'), device.deviceId, '0000',
         { ip: IP, kind: 'approve', now: f.clock.now() }))
       f.clock.advance(1)
     }
 
-    expect(catchError(() => loginWithPin(f.db, deviceRow(f, device.deviceId), {
-      user_id: f.userId('Emir'), pin: '123456',
-    }, { ip: IP, now: f.clock.now() })).status).toBe(423)
+    // Emir's approver bucket is shut.
+    expect(catchError(() => verifyPinMetered(f.db, f.venueId, f.userId('Emir'), device.deviceId,
+      f.pin('Emir'), { ip: IP, kind: 'approve', now: f.clock.now() })).status).toBe(423)
+
+    // The pad's is not: nobody has typed a wrong digit at it.
+    expect(loginWithPin(f.db, deviceRow(f, device.deviceId), {
+      pin: f.pin('Emir'),
+    }, { ip: IP, now: f.clock.now() }).result.user.name).toBe('Emir')
+  })
+
+  /** …and it still shuts the tablet on its own fifteen, exactly as the pad does. */
+  it('reaches the device lock by itself, unwindowed', () => {
+    const device = enrol(f, 'shared')
+
+    // Paced past the 900 s window each time, so only the unwindowed count is
+    // still standing when the fifteenth lands.
+    for (let i = 0; i < DEVICE_LOCK_FAILS; i++) {
+      catchError(() => verifyPinMetered(f.db, f.venueId, f.userId('Emir'), device.deviceId, '0000',
+        { ip: IP, kind: 'approve', now: f.clock.now() }))
+      f.clock.advance(901)
+    }
+
+    expect(deviceRow(f, device.deviceId).lockedAt).not.toBeNull()
+    expect(catchError(() => requireEnrolledDevice(f.db, device.token)).code).toBe('DEVICE_REVOKED')
   })
 
   it('a user who does not exist still costs an attempt row rather than answering "no such person"', () => {

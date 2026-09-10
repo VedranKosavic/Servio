@@ -41,9 +41,8 @@
  * built in `beforeAll`, is how it does not.
  */
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
-import { ackRules, resetLimits } from './helpers'
+import { ackRules, resetLimits, pinLogin, type Person } from './helpers'
 
-const PINS: Record<string, string> = { Amar: '1111', Emir: '123456' }
 
 interface User { id: string, name: string, role: string }
 interface StockRow {
@@ -94,10 +93,7 @@ async function loginAs(context: BrowserContext, name: string): Promise<User> {
   const user = users.find(u => u.name === name)!
   expect(user).toBeTruthy()
 
-  const pin = await context.request.post('/api/auth/pin', {
-    data: { user_id: user.id, pin: PINS[name] },
-  })
-  expect(pin.ok(), await pin.text()).toBe(true)
+  await pinLogin(context.request, name as Person, name === 'Emir' ? 'sanker' : 'konobar')
 
   // A published Pravila version stands in front of every /konobar screen (S12), and
   // phase4-pravila publishes one before this file runs. Clear it here so the
@@ -110,7 +106,7 @@ test.beforeAll(async ({ browser }) => {
   const admin = await browser.newContext()
   await resetLimits(admin.request)
   const login = await admin.request.post('/api/auth/admin/login', {
-    data: { email: 'haris@lounge.ba', password: 'lounge' },
+    data: { email: 'haris@lounge.ba', password: '1111' },
   })
   expect(login.ok(), await login.text()).toBe(true)
 

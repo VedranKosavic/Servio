@@ -38,9 +38,8 @@
  */
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 import { APP_NAME } from '../../shared/brand'
-import { ackRules, resetLimits } from './helpers'
+import { ackRules, resetLimits, pinLogin, type Person } from './helpers'
 
-const AMAR_PIN = '1111'
 
 interface BootTable { id: string, name: string }
 
@@ -54,9 +53,8 @@ async function loginAsAmar(context: BrowserContext, page: Page): Promise<Map<str
     { id: string, name: string }[]
   const amar = users.find(u => u.name === 'Amar')!
   expect(amar).toBeTruthy()
-  expect((await context.request.post('/api/auth/pin', {
-    data: { user_id: amar.id, pin: AMAR_PIN },
-  })).ok()).toBe(true)
+  // The pad names nobody: these digits are the whole login.
+  await pinLogin(context.request, 'Amar', 'konobar')
 
   // A published Pravila version stands in front of every /konobar screen (S12), and
   // phase4-pravila publishes one before this file runs. Clear it here so the
@@ -147,9 +145,8 @@ async function loginAsAmarNoWorker(context: BrowserContext): Promise<void> {
   const users = await (await context.request.get('/api/auth/users')).json() as
     { id: string, name: string }[]
   const amar = users.find(u => u.name === 'Amar')!
-  expect((await context.request.post('/api/auth/pin', {
-    data: { user_id: amar.id, pin: AMAR_PIN },
-  })).ok()).toBe(true)
+  // The pad names nobody: these digits are the whole login.
+  await pinLogin(context.request, 'Amar', 'konobar')
   await ackRules(context.request)
 }
 

@@ -108,21 +108,25 @@ describe('changeTag', () => {
     expect(amar).not.toBe(lejla)
   })
 
-  it('a waiter presenting the admin tag gets a 200 with a staff-shaped body', () => {
+  it('a worker presenting the admin tag gets a 200 with a staff-shaped body', () => {
     lockOne()
     f.voidLine('Amar', f.lock('Amar', 'Sto 9', [{ product: 'Kafa' }]).lineIds[0]!)
+    // The queues follow `approver_roles`, not the role, so this is the venue
+    // where the owner has kept the approvals — otherwise a `radnik` gets them.
+    f.settingsWith({ approver_roles: ['admin'] })
 
     const adminTag = changeTag(f.db, f.venueId, f.adminActor())
-    const waiter = f.actor('Amar')
+    const worker = f.actor('Amar')
     const event = makeEvent(`W/"${adminTag}"`)
 
-    const body = withEtag(event, changeTag(f.db, f.venueId, waiter), () =>
-      getChanges(f.db, f.venueId, waiter, 0))
+    const body = withEtag(event, changeTag(f.db, f.venueId, worker), () =>
+      getChanges(f.db, f.venueId, worker, 0))
 
     expect(event.node.res.statusCode).not.toBe(304)
     expect(body).toBeDefined()
-    // The queues are the admin's and the bartender's; the waiter's answer has
-    // no `pending` key at all, not a zeroed one.
+    // The tag is the admin's; this answer is the floor's, and it has no
+    // `pending` key at all, not a zeroed one — which is what the tag carrying
+    // the role exists to prevent.
     expect(body?.pending).toBeUndefined()
     expect(body?.log_max_at).toBeUndefined()
   })

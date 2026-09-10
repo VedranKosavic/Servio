@@ -35,9 +35,8 @@
  *   SANK_E2E_URL=http://localhost:3113 npx playwright test tests/e2e/phase4-pravila.spec.ts
  */
 import { expect, test, type BrowserContext } from '@playwright/test'
-import { resetLimits } from './helpers'
+import { resetLimits, pinLogin, type Person } from './helpers'
 
-const AMAR_PIN = '1111'
 /**
  * The other two people this database's later spec files sign in as.
  *
@@ -81,10 +80,9 @@ async function knownUsers(context: BrowserContext): Promise<LoginUser[]> {
   return loginUsers
 }
 
-async function loginPin(context: BrowserContext, who: string, pin: string) {
+async function loginPin(context: BrowserContext, who: Person) {
   const person = (await knownUsers(context)).find(u => u.name === who)!
-  const res = await context.request.post('/api/auth/pin', { data: { user_id: person.id, pin } })
-  expect(res.ok()).toBe(true)
+  await pinLogin(context.request, who, 'konobar')
   return person
 }
 
@@ -95,11 +93,11 @@ test.describe('Phase 4 — Pravila', () => {
     phone = await browser.newContext()
     await resetLimits(phone.request)
     expect((await phone.request.post('/api/dev/enrol', { data: {} })).ok()).toBe(true)
-    await loginPin(phone, 'Amar', AMAR_PIN)
+    await loginPin(phone, 'Amar')
 
     laptop = await browser.newContext()
     const login = await laptop.request.post('/api/auth/admin/login', {
-      data: { email: 'haris@lounge.ba', password: 'lounge' },
+      data: { email: 'haris@lounge.ba', password: '1111' },
     })
     expect(login.ok()).toBe(true)
   })

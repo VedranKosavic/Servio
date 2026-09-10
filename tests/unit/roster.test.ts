@@ -499,7 +499,7 @@ describe('what a waiter is allowed to see', () => {
     ]) {
       expect([key, ROUTE_ROLES[key]]).toEqual([key, ['admin']])
     }
-    expect(ROUTE_ROLES['POST /api/roster/swaps']).toEqual(['admin', 'waiter', 'bartender'])
+    expect(ROUTE_ROLES['POST /api/roster/swaps']).toEqual(['admin', 'radnik'])
 
     const lejla = plan('Lejla')
     expectCode(() => requestSwap(f.db, f.venueId, f.actor('Amar'), {
@@ -535,7 +535,7 @@ describe('rosterHours', () => {
     const shiftId = f.openShift({ members: [], businessDate: date, at: iso(date, '12:00') })
     f.db.insert(schema.shiftMembers).values({
       id: crypto.randomUUID(), venueId: f.venueId, shiftId,
-      userId: f.userId(name), role: 'waiter',
+      userId: f.userId(name), role: 'radnik',
       joinedAt: iso(date, hhmm),
       leftAt: leftHhmm ? iso(date, leftHhmm, true) : null,
       leftAtSource: leftHhmm ? 'manual' : null,

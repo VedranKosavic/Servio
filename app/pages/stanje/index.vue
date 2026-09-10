@@ -44,7 +44,7 @@ onMounted(() => {
 const canReceive = computed(() => {
   const role = me.user.value?.role
   if (role === 'admin') return true
-  return role === 'bartender' && me.settings.value?.bartender_can_receive_goods === true
+  return role === 'radnik' && me.settings.value?.bartender_can_receive_goods === true
 })
 
 /** The four kinds, in the order the bar thinks about them. */

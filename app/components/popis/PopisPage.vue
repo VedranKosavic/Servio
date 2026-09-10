@@ -168,10 +168,10 @@ const remaining = computed(() => spot.value.length - counted.value)
 const canSubmit = computed(() => spot.value.length > 0 && remaining.value === 0 && !submitting.value)
 
 const isApprover = computed(() =>
-  me.user.value?.role === 'admin' || me.user.value?.role === 'bartender')
+  me.user.value?.role === 'admin' || me.mode.value === 'sanker')
 
 const waiters = computed<User[]>(() =>
-  (boot.value?.users ?? []).filter(u => u.role === 'waiter'))
+  (boot.value?.users ?? []).filter(u => u.role === 'radnik'))
 
 /**
  * *Dopuni smjenu* belongs to whoever holds the drawer — the šanker, or the

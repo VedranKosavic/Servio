@@ -36,4 +36,24 @@ implementation contract — schema, routes, services, invariants — is in
 [docs/PLAN.bs.md](docs/PLAN.bs.md); research appendices in [docs/research/](docs/research/); the
 review log in [docs/reviews.md](docs/reviews.md). The app itself is Bosnian-only (no i18n layer).
 
-Testing phase: with `SANK_DEV_PIN=1111` in `.env` (see `.env.example`) every seeded person logs in with PIN 1111 and the admin (`haris@lounge.ba`) with password 1111; `npm run db:dev-pins` applies the same to an existing local database.
+**The first screen is a PIN pad and nothing else** — no names, no role buttons. The PIN
+identifies the person, which is why every PIN in a venue has to be different and why the
+app refuses to set one that is already taken. A fresh `npm run db:seed` creates three
+accounts: **Haris 1111** (vlasnik — lands on `/admin`, and `haris@lounge.ba` / `1111` is
+the same door on a laptop), **Amar 2222** and **Emir 3333** (radnici). A radnik picks
+*Konobar* or *Šanker* after the PIN and can switch later without signing out; both screens
+are open to both of them.
+
+The `SANK_DEV_PIN` override that gave everybody the same PIN is gone: a shared PIN can no
+longer identify anybody, so it must not be possible to seed one. `npm run db:dev-pins`
+survives, repointed — it brings an **existing** database onto those three accounts and
+those three PINs in place, and deactivates everybody else rather than deleting them, so
+the rounds they served stay readable. That is the script to run on any dev database seeded
+before this change: one seeded with `SANK_DEV_PIN=1111` has six people behind the same
+four digits, and the pad answers *Taj PIN koristi više osoba* rather than guessing which
+of them is standing at the till.
+
+`SANK_SEED_CAST=full` (on `db:seed`) and `SANK_DEV_CAST=full` (on `db:dev-pins`) add Lejla,
+Dino and Tarik on 4444 / 5555 / 6666, which is what the unit fixtures and the Playwright
+suite need. Both are explicit flags and not `NODE_ENV` guesses, for the same reason the
+dev PINs are: a test cast that can reach a real café is a stranger's name on the pad.

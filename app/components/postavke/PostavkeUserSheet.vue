@@ -30,14 +30,13 @@ const emit = defineEmits<{
 }>()
 
 const ROLES: Array<{ value: Role, label: string }> = [
-  { value: 'waiter', label: 'Konobar' },
-  { value: 'bartender', label: 'Šanker' },
+  { value: 'radnik', label: 'Radnik' },
   { value: 'admin', label: 'Vlasnik' },
 ]
 
 const name = ref('')
 const initials = ref('')
-const role = ref<Role>('waiter')
+const role = ref<Role>('radnik')
 const email = ref('')
 const pin = ref('')
 const active = ref(true)
@@ -47,7 +46,7 @@ watch(() => [props.open, props.user?.id], () => {
   const user = props.user
   name.value = user?.name ?? ''
   initials.value = user?.initials ?? ''
-  role.value = user?.role ?? 'waiter'
+  role.value = user?.role ?? 'radnik'
   email.value = user?.email ?? ''
   pin.value = ''
   active.value = user?.active ?? true

@@ -20,7 +20,14 @@ export const AUTH_ERRORS = {
   // -- The three doors -------------------------------------------------------
   /** Wrong email, or wrong password. One sentence for both, on purpose. */
   INVALID_CREDENTIALS: 'Pogrešan email ili lozinka.',
-  INVALID_PIN: 'Pogrešan PIN. Preostalo pokušaja: {fails_left}.',
+  /**
+   * Since the PIN identifies the person there is no longer a "wrong PIN for
+   * *this* name" — the digits either belong to somebody active in this venue or
+   * they belong to nobody. One sentence covers both, which is also the only
+   * honest one: naming which half was wrong would be a name the pad never asked
+   * for.
+   */
+  INVALID_PIN: 'PIN nije prepoznat. Preostalo pokušaja: {fails_left}.',
   ENROL_CODE_INVALID: 'Kod nije ispravan ili je istekao. Traži novi od vlasnika.',
 
   // -- Lockout ---------------------------------------------------------------
@@ -46,11 +53,32 @@ export const AUTH_ERRORS = {
 
   // -- The PIN rules ---------------------------------------------------------
   ADMIN_DEVICE_ONLY: 'Vlasnik se PIN-om prijavljuje samo na svom telefonu.',
-  NOT_YOUR_DEVICE: 'Ovo je tuđi telefon. Potvrdi da ga posuđuješ.',
-  NO_PIN: 'Nemaš postavljen PIN. Traži od vlasnika da ti ga postavi.',
+  // `NO_PIN` stood here — 'Nemaš postavljen PIN…' — for the person the lock
+  // screen offered before an admin had given him any digits. The pad offers
+  // nobody now, so there is no such tap: a person with `pin_hash NULL` is simply
+  // not among the candidates the typed digits are compared against, and what he
+  // gets is the same `INVALID_PIN` as a stranger. Naming his situation would
+  // answer, to whoever is holding the phone, a question the pad refused to ask.
+  // The sentence had no thrower left, and `errors.test.ts` fails on those.
   USER_NOT_ACTIVE: 'Ovaj korisnik više nije aktivan.',
   PIN_LENGTH: 'PIN mora imati 4 ili 6 cifara.',
+  /**
+   * Two people with one PIN is a PIN that identifies neither, so the create-user
+   * and reset-PIN routes refuse it. Deactivated people do not hold a PIN
+   * against anybody — their rows stay for the history, not for the lock screen.
+   */
+  PIN_TAKEN: 'Taj PIN već koristi neko drugi. Izaberi drugi.',
+  /** Belt and braces: the pad must never guess which of two people typed. */
+  PIN_AMBIGUOUS: 'Taj PIN koristi više osoba. Javi se vlasniku.',
 
+  // `NOT_YOUR_DEVICE` stood here until the PIN started identifying the person.
+  // It was the 403 that a colleague had to answer with `borrow: true` before the
+  // pad would let him onto somebody else's phone — but the pad no longer asks
+  // *who*, so there is nothing to answer it with. The server marks the session
+  // `borrowed` itself (two hours, not fourteen) the moment the PIN resolves to
+  // somebody who is not this phone's owner. The property survived; the sentence
+  // had nothing left to say.
+  //
   // `USER_NOT_FOUND` went the same way as `PENDING_OUTBOX` above, and for the
   // same reason. It was written here ('Korisnik nije pronađen.') and in
   // `errors/money.ts` ('Ta osoba ne postoji.'); `MONEY_ERRORS` is spread after

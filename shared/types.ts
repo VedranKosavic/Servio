@@ -18,18 +18,39 @@
 // --- the four cross-package names ------------------------------------------
 
 /**
- * Three roles and no more.
+ * Two roles and no more — *Vlasnik* and *Radnik*.
  *
  * `admin` has the special permissions: the dashboard, every live read, the
- * approvals, the catalogue, users and settings, the Dnevnik. `waiter` and
- * `bartender` have **identical permissions on the floor**; the default screen
- * differs (`/konobar` vs `/sanker`) and one thing more — the bartender is a default
- * approver, which is a *setting* (`approver_roles`) and not a hard-coded rule.
+ * approvals, the catalogue, users and settings, the Dnevnik. He never appears
+ * on, and never shares, the staff screens.
+ *
+ * `radnik` is everybody else. Which screen a worker is on tonight — *Konobar*
+ * or *Šanker* — is no longer a property of the account: it is a choice he makes
+ * after the PIN, stored on the **session** as `ScreenMode` and switchable
+ * without signing out. `waiter` and `bartender` were already identical on the
+ * floor, so `0005_radnik.sql` maps both onto this one value.
+ *
+ * The one thing that was *not* identical — the bartender being a default
+ * approver — was never a role rule anyway: it is `settings.approver_roles`, and
+ * it now reads `['admin','radnik']` so the person on the šank can still close a
+ * shift. An owner who wants approvals to himself drops `radnik` from that list
+ * in *Postavke* and the services refuse a worker even where `ROUTE_ROLES` let
+ * him through.
  *
  * Korak 1's `'owner'` is gone: the migration renames the value, and the paths
  * that still say `owner` name the owner *dashboard*, not the role.
  */
-export type Role = 'admin' | 'waiter' | 'bartender'
+export type Role = 'admin' | 'radnik'
+
+/**
+ * Which staff screen a session is working tonight.
+ *
+ * `null` on a session that has not chosen yet (the chooser stands in front of
+ * it) and on an admin session, which has no mode at all — the owner's landing
+ * is `/admin`, even though he may open `/konobar` or `/sanker` by hand, because
+ * he also serves tables.
+ */
+export type ScreenMode = 'konobar' | 'sanker'
 
 /**
  * Who is making this request. Built once by `authorizeRequest` and passed to

@@ -49,19 +49,25 @@ const channelId = (kind: ChannelKind) =>
 // ---------------------------------------------------------------------------
 
 describe('canSee — four doors, three rooms', () => {
+  /**
+   * PLAN F12 (a), now two rows instead of three. The šanker and the konobar
+   * were always the same row here; since the collapse to `admin | radnik` they
+   * are the same *account*, and the screen a worker picked tonight is a
+   * `ScreenMode` on his session that this table never sees. *Konobari* stays
+   * private from the owner, which is the row that matters.
+   */
   const MATRIX: Record<Role, Record<ChannelKind, boolean>> = {
     admin: { svi: true, konobari: false, admini: true },
-    bartender: { svi: true, konobari: true, admini: false },
-    waiter: { svi: true, konobari: true, admini: false },
+    radnik: { svi: true, konobari: true, admini: false },
   }
 
-  it.each(['admin', 'waiter', 'bartender'] as Role[])('%s matches PLAN F12 (a)', (role) => {
+  it.each(['admin', 'radnik'] as Role[])('%s matches PLAN F12 (a)', (role) => {
     for (const kind of CHANNEL_KINDS) expect([role, kind, canSee(role, kind)])
       .toEqual([role, kind, MATRIX[role][kind]])
   })
 
-  it('the šanker is staff: he sees Konobari and not Admini', () => {
-    expect(visibleChannels('bartender')).toEqual(['svi', 'konobari'])
+  it('a worker is staff whichever screen he is on: Konobari yes, Admini no', () => {
+    expect(visibleChannels('radnik')).toEqual(['svi', 'konobari'])
     expect(visibleChannels('admin')).toEqual(['svi', 'admini'])
   })
 })

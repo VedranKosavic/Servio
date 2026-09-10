@@ -59,7 +59,7 @@ const qty = computed(() => parseDecimalInput(qtyRaw.value))
 
 /** Whoever the settings say approves money — the šanker, and the owner. */
 const isApprover = computed(() =>
-  me.user.value?.role === 'admin' || me.user.value?.role === 'bartender')
+  me.user.value?.role === 'admin' || me.mode.value === 'sanker')
 
 /**
  * Who may be asked for a PIN here — the shared list, not a filter of our own.

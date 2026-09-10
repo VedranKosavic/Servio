@@ -22,7 +22,7 @@ import { badRequest, conflict, notFound, SankError, unauthorized } from '../util
 import { newId, nowIso } from '../utils/ids'
 import { hashSecret, hashToken, newEnrolCode, newToken, verifySecret } from '../utils/password'
 import {
-  DEV_DEVICE_LABEL, activeUsers, revokeSessionsOfDevice,
+  DEV_DEVICE_LABEL, activeUsers, clearDeviceCounter, revokeSessionsOfDevice,
   toDeviceBrief, toMeUser, venueBrief, verifyMetered,
 } from './auth'
 import { getSettings, log } from './contracts'
@@ -329,6 +329,14 @@ export function unlockDevice(
       ref: { type: 'device', id: deviceId },
     })
   })
+
+  // …and the counter behind the lock, or this is not an unlock. The fifteen
+  // failures that shut the tablet were filed against nobody — the pad does not
+  // know who was typing — so no PIN reset can reach them, and clearing
+  // `locked_at` alone would let the next wrong digit re-read the same fifteen
+  // and shut it again. Outside the transaction above, and after it, for the
+  // reason every attempt row is: a clear that rolls back has cleared nothing.
+  clearDeviceCounter(db, venueId, deviceId, now)
 
   return listDevices(db, venueId).find(d => d.id === deviceId)!
 }

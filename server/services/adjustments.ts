@@ -387,8 +387,12 @@ export function applyAdjustment(
 // ===========================================================================
 
 /**
- * The *Na čekanju* queue. An admin and a bartender see everything pending; a
- * waiter sees only his own requests and never another waiter's money.
+ * The *Na čekanju* queue. An approver sees everything pending; anybody else
+ * sees only his own requests and never a colleague's money.
+ *
+ * With one worker role, `settings.approver_roles` — not the role — is what
+ * decides which of the two you are. An owner who takes `radnik` off that list
+ * gets a queue that shows every worker his own rows and nothing more.
  */
 export function listPending(
   q: Queryable, venueId: string, actor: Actor,
@@ -398,7 +402,7 @@ export function listPending(
     .where(and(
       eq(schema.lineAdjustments.venueId, venueId),
       eq(schema.lineAdjustments.status, 'pending'),
-      ...(actor.role === 'waiter' ? [eq(schema.lineAdjustments.requestedBy, actor.userId)] : []),
+      ...(settings.approver_roles.includes(actor.role) ? [] : [eq(schema.lineAdjustments.requestedBy, actor.userId)]),
     ))
     .orderBy(asc(schema.lineAdjustments.createdAt))
     .all()
@@ -495,7 +499,10 @@ function decideOnRequest(
 
   // 3 — an approver's PIN, typed on this phone right now.
   if (f.approver) {
-    if (f.approver.role === 'bartender'
+    // `bartender_approve_window_s` keeps its key: the setting is about the
+    // person on the šank, which is still what the Bosnian label says, even
+    // though the role behind him is now plain `radnik`.
+    if (f.approver.role === 'radnik'
       && f.secondsSinceLock > settings.bartender_approve_window_s) {
       // Not an error: it waits for the owner, with the same sheet copy.
       return pending
@@ -542,7 +549,10 @@ function requireDecider(
   actor: Actor, settings: Settings,
   adj: AdjustmentRow, lockedAt: string, at: string,
 ): void {
-  if (actor.role === 'waiter') throw forbidden('FORBIDDEN', 'a waiter decides nobody\'s money')
+  // The hard "a waiter decides nobody's money" rule went with the role that
+  // named it. `requireApprover` is now the only gate, which is what §5 always
+  // said it should be — the coarse table lets a `radnik` through the door and
+  // `settings.approver_roles` decides whether the service serves him.
   requireApprover(settings, actor)
 
   if (adj.requestedBy === actor.userId && actor.role !== 'admin') {

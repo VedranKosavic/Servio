@@ -67,7 +67,7 @@ import type {
 // schemas is the same definition — `z.infer` of the object the route validates
 // against — and it means WP9 changes no file outside `app/`.
 import type {
-  DecideAdjustmentBody, DiscardDraftBody, EnrolDeviceBody, HeartbeatBody, PinLoginBody,
+  DecideAdjustmentBody, DiscardDraftBody, EnrolDeviceBody, HeartbeatBody, PinLoginBody, SetModeBody,
   SettleBody, StaffNoteBody,
 } from '#shared/schemas'
 import type { PostMessageBody, SetPinBody, SwapBody } from '#shared/schemas'
@@ -226,9 +226,21 @@ export function useApi() {
      */
     getLoginUsers: () => request<LoginUser[]>('/api/auth/users'),
 
-    /** Four digits (six for an admin) against the device cookie. */
+    /**
+     * Four digits (or six) against the device cookie — and nothing else. The
+     * PIN identifies the person, so the body names nobody; `mode` is the
+     * optional "I am on the šank tonight" folded into the same call.
+     */
     loginWithPin: (body: PinLoginBody) =>
       request<PinLoginResult>('/api/auth/pin', { method: 'POST', body }),
+
+    /**
+     * *Na čemu si večeras?* — and the same route again at midnight when a
+     * worker moves between the bar and the floor. It answers the whole
+     * `MeContext`, so the caller hands it to `useMe().refreshAfterLogin()`.
+     */
+    setMode: (body: SetModeBody) =>
+      request<MeContext>('/api/auth/mode', { method: 'POST', body }),
 
     /** The six-character code the owner reads out across the bar. */
     enrolDevice: (body: EnrolDeviceBody) =>

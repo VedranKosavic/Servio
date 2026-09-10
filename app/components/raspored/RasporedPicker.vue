@@ -35,7 +35,7 @@ const emit = defineEmits<{ close: [], pick: [userId: string] }>()
 const initials = (person: UserAdmin) => person.initials || person.name.slice(0, 2)
 
 const roleBs = (person: UserAdmin) =>
-  (person.role === 'bartender' ? 'šanker' : person.role === 'admin' ? 'vlasnik' : 'konobar')
+  (person.role === 'admin' ? 'vlasnik' : 'radnik')
 
 const anyone = computed(() => props.people.length > 0)
 </script>

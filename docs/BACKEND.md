@@ -2,12 +2,13 @@
 
 **Status:** the single document an implementing agent follows for Korak 2. It merges the five package designs (auth, shifts/cash, payments/adjustments, stock, sync/log/admin/deploy), applies every critical and major review finding (or rejects it in §14), and is consistent with the code shipped in Korak 1 (commit `739cab7`).
 
-**Vedran's decision, which overrides every design where they differ:** there are exactly **three roles** — `admin`, `waiter`, `bartender`.
+**Vedran's decision, which overrides every design where they differ:** there are exactly **two roles** — `admin` and `radnik`. (Until `0005_radnik.sql` there were three: `waiter` and `bartender` were separate values with identical permissions, and the migration maps both onto `radnik`. The paragraphs below are the post-0005 contract; the sentences elsewhere in this document that still say "waiter" or "bartender" are describing the floor, the tables and the settings keys, which kept their names.)
 
-- `admin` — special permissions: the owner dashboard and every live read, approvals (voids, comps, unpaid write-offs, payouts, settlements), catalogue and prices, deliveries and stock corrections, users/devices/settings, the Dnevnik.
-- `waiter` and `bartender` — **identical permissions on the floor**: orders, prep tickets, own shift settlement, stock view, waste below the thresholds, counts as custodian. The default screen differs (`/konobar` for a waiter, `/sanker` for a bartender) and one thing more: **the bartender is a default approver**. `DEFAULT_SETTINGS.approver_roles = ['admin','bartender']`, so seven routes in §7 are `A B` and not `A W B` — `/shifts/:id/closing`, `/shifts/:id/close`, `/shifts/:id/float`, `/cash-movements/:id/decide`, `/adjustments/:id/decide`, `/shifts/:id/settlements/:sid/accept`, `/stock/waste/:id/approve`. That is the whole of the difference: a waiter never decides anybody's money. It is a **setting**, not a hard-coded role rule — an owner who drops `bartender` from `approver_roles` gets a bartender who is exactly a waiter, and the `A B` routes then refuse him at the service's `role ∈ settings.approver_roles` check even though `ROUTE_ROLES` let him through. `ROUTE_ROLES` is the coarse gate; the setting is the fine one.
+- `admin` (*Vlasnik*) — special permissions: the owner dashboard and every live read, approvals (voids, comps, unpaid write-offs, payouts, settlements), catalogue and prices, deliveries and stock corrections, users/devices/settings, the Dnevnik. He never appears on, and never shares, a staff screen: his landing is `/admin`. He may still open `/konobar` and `/sanker` by hand, because the owner also serves tables — that is a guard question and `ROUTE_ROLES` answers it, not the landing rule.
+- `radnik` (*Radnik*) — everybody else: orders, prep tickets, own shift settlement, stock view, waste below the thresholds, counts as custodian. **Which screen he is on tonight is not a property of his account.** It is a `ScreenMode` — `konobar | sanker` — chosen after the PIN and stored on his **session** (`sessions.mode`), so a reload at 02:00 lands him where he was and moving from the bar to the floor at midnight is one `POST /api/auth/mode`, not a logout. Both screens stay open to every worker. `shared/landing.ts` is the one place that turns role + mode into a destination, and `null` means the chooser.
+- The one thing that was ever *not* identical between the old two floor roles — the bartender being a default approver — was never a role rule. It is `settings.approver_roles`, the fine gate in front of the seven routes of §7 (`/shifts/:id/closing`, `/shifts/:id/close`, `/shifts/:id/float`, `/cash-movements/:id/decide`, `/adjustments/:id/decide`, `/shifts/:id/settlements/:sid/accept`, `/stock/waste/:id/approve`). It now ships as `['admin','radnik']`, because whoever is on the šank closes the shift and decides a storno at 01:00 and an owner asleep at home cannot — which makes that setting the only thing standing between a worker and somebody else's money. An owner who wants the approvals to himself drops `radnik` from it in *Postavke*, and the services then refuse a worker with `NOT_APPROVER` even though `ROUTE_ROLES` let him through the door. `ROUTE_ROLES` is the coarse gate; the setting is the fine one.
 - Korak 1's role value `'owner'` is renamed to `'admin'` everywhere, with `UPDATE users SET role = 'admin' WHERE role = 'owner'` inside the Korak 2 migration. There is no `manager` role and there never was one.
-- Every person has an account with a PIN. Admins additionally have email + password (that is the only way into `/admin` on a laptop).
+- Every person has an account with a PIN, and **the PIN identifies the person**: the first screen is a pad and nothing else, `POST /api/auth/pin` takes `{ pin, mode? }` and names nobody, and the server resolves the digits against the active users of the enrolled device's venue. A PIN is therefore **unique among the active users of a venue** — `requirePinFree` refuses a duplicate at create-user and reset-PIN with 409 `PIN_TAKEN`. It is a check inside the transaction rather than a unique index because the stored value is a per-row-salted scrypt hash: two hashes of the same PIN never collide, so there is nothing for an index to compare. Deactivated people do not hold a PIN against anybody, and `updateUser` drops a returning person's stale PIN rather than trust it. Admins additionally have email + password (that is the only way into `/admin` on a laptop).
 
 Route paths keep the word `owner` (`/api/owner/live`, `/api/owner/log`) because they name the *owner dashboard* screens of PLAN §11 — the **role** guarding them is `admin`. Do not rename the paths; do not accept `'owner'` as a role value anywhere.
 
@@ -89,7 +90,7 @@ export const AUTH_ERRORS = {
 
 `tests/unit/errors.test.ts` (beside `route-roles.test.ts`) greps `server/services/**` and `server/api/**` for every `SankError(`, `conflict(`, `forbidden(`, `unauthorized(`, `unprocessable(`, `locked(` literal, and asserts each code has a non-empty Bosnian sentence in `ERROR_MESSAGES` — and, the other way, that no message is orphaned. Without it a code reaches the phone as raw `TAB_TABLE_MISMATCH`.
 
-**Roles.** `type Role = 'admin' | 'waiter' | 'bartender'` in `shared/types.ts`. Authorization is **deny-by-default** through one table:
+**Roles.** `type Role = 'admin' | 'radnik'` in `shared/types.ts`, next to `type ScreenMode = 'konobar' | 'sanker'`. Authorization is **deny-by-default** through one table:
 
 ```ts
 // shared/routeRoles.ts
@@ -97,7 +98,7 @@ export type RouteRole = Role[] | 'public' | 'any'
 export const ROUTE_ROLES: Record<string, RouteRole> = {
   'POST /api/auth/pin': 'public',
   'GET  /api/tables/state': 'any',
-  'POST /api/adjustments/:id/decide': ['admin', 'bartender'],
+  'POST /api/adjustments/:id/decide': ['admin', 'radnik'],
   'POST /api/shifts/:id/force-close': ['admin'],
   // …one line per route in §7
 }
@@ -160,7 +161,7 @@ One migration, `server/database/migrations/0001_korak2.sql`, generated from `ser
 | `log_seen_at` | `TEXT` | Dnevnik badge |
 | `created_at` | `TEXT NOT NULL DEFAULT ''` | backfilled by `UPDATE users SET created_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE created_at = ''` |
 
-`role` keeps its column and gains the migration statement `UPDATE users SET role = 'admin' WHERE role = 'owner';`. The Drizzle enum becomes `['admin','waiter','bartender']`. Index: `users_email_uq` = `CREATE UNIQUE INDEX users_email_uq ON users(email) WHERE email IS NOT NULL`.
+`role` keeps its column and gains the migration statement `UPDATE users SET role = 'admin' WHERE role = 'owner';`. The Drizzle enum became `['admin','waiter','bartender']` in Korak 2 and `['admin','radnik']` in `0005_radnik.sql`, which remaps both floor values and `shift_members.role` with them. Index: `users_email_uq` = `CREATE UNIQUE INDEX users_email_uq ON users(email) WHERE email IS NOT NULL`.
 
 **`categories`** — add `kind TEXT NOT NULL DEFAULT 'ostalo'` (`pice|hrana|nargila|ostalo`), `note_chips_json TEXT NOT NULL DEFAULT '[]'`, `active INTEGER NOT NULL DEFAULT 1`.
 
@@ -319,7 +320,7 @@ export const DEFAULT_SETTINGS = {
   payout_owner_fen: 5000,
   payment_methods: ['cash'] as ('cash'|'card')[],
   cash_custody: 'per_waiter', track_cash_tips: false,
-  approver_roles: ['admin', 'bartender'] as Role[],
+  approver_roles: ['admin', 'radnik'] as Role[],
   payout_approver_roles: ['admin'] as Role[],
   allow_cross_waiter_rounds: true,
   bartender_can_receive_goods: false,

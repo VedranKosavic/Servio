@@ -226,7 +226,7 @@ describe('who takes the envelope', () => {
     const { shiftId } = amarsNight()
     const result = settle(f.db, f.venueId, f.actor('Amar'), shiftId, {
       declared_fen: 2_500, outbox_len: 0,
-      receiver_user_id: f.userId('Emir'), receiver_pin: '123456',
+      receiver_user_id: f.userId('Emir'), receiver_pin: '3333',
     })
     expect(result.self_sealed).toBe(false)
 
@@ -247,8 +247,16 @@ describe('who takes the envelope', () => {
     )
   })
 
-  it('is never another waiter', () => {
+  /**
+   * The envelope goes to an approver, and *approver* is now a setting rather
+   * than a role: with `approver_roles` at its default every colleague may take
+   * it, which is what the venue wants at 02:00. This is the other venue — the
+   * one whose owner takes the approvals himself — where handing the night's cash
+   * to the person next to you is refused.
+   */
+  it('is never a colleague the owner has not made an approver', () => {
     const { shiftId } = amarsNight()
+    f.settingsWith({ approver_roles: ['admin'] })
     refuses(
       () => settle(f.db, f.venueId, f.actor('Amar'), shiftId, {
         declared_fen: 2_500, outbox_len: 0, receiver_user_id: f.userId('Lejla'),
@@ -263,15 +271,21 @@ describe('who takes the envelope', () => {
       declared_fen: 2_500, outbox_len: 0,
     })
 
-    // A waiter never decides anybody's money — not even to sign for it.
+    // A non-approver never decides anybody's money — not even to sign for it.
+    // The two settles below happen before the setting changes, because signing
+    // is what this test is about and `Emir` has to be able to hand his own over.
+    const emirs = settle(f.db, f.venueId, f.actor('Emir'), shiftId, {
+      declared_fen: 0, outbox_len: 0,
+    })
+
+    f.settingsWith({ approver_roles: ['admin'] })
     refuses(
       () => acceptSettlement(f.db, f.venueId, f.actor('Lejla'), shiftId, result.settlement_id),
       'NOT_APPROVER', 403,
     )
+    f.settingsWith({})
+
     // An approver may sign for anybody's envelope but his own.
-    const emirs = settle(f.db, f.venueId, f.actor('Emir'), shiftId, {
-      declared_fen: 0, outbox_len: 0,
-    })
     refuses(
       () => acceptSettlement(f.db, f.venueId, f.actor('Emir'), shiftId, emirs.settlement_id),
       'OWN_SETTLEMENT', 403,

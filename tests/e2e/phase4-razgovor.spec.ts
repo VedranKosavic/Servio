@@ -30,11 +30,9 @@
  *   SANK_E2E_URL=http://localhost:3113 npx playwright test tests/e2e/phase4-razgovor.spec.ts
  */
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
-import { ackRules, resetLimits } from './helpers'
+import { ackRules, resetLimits, pinLogin, type Person } from './helpers'
 
-const AMAR_PIN = '1111'
-const EMIR_PIN = '123456'
-const ADMIN = { email: 'haris@lounge.ba', password: 'lounge' }
+const ADMIN = { email: 'haris@lounge.ba', password: '1111' }
 
 interface LoginUser { id: string, name: string }
 
@@ -56,12 +54,11 @@ async function enrolOwnDevice(admin: BrowserContext, phone: BrowserContext, labe
   expect(joined.ok()).toBe(true)
 }
 
-async function loginPin(phone: BrowserContext, who: string, pin: string) {
+async function loginPin(phone: BrowserContext, who: Person) {
   const users = await (await phone.request.get('/api/auth/users')).json() as LoginUser[]
   const person = users.find(u => u.name === who)
   expect(person, `${who} is on the lock screen`).toBeTruthy()
-  const ok = await phone.request.post('/api/auth/pin', { data: { user_id: person!.id, pin } })
-  expect(ok.ok()).toBe(true)
+  await pinLogin(phone.request, who, 'konobar')
   // S12 stands in front of every /konobar screen once phase4-pravila has published.
   await ackRules(phone.request)
   return person!
@@ -115,11 +112,11 @@ test.describe('Razgovor', () => {
 
     amar = await browser.newContext()
     await enrolOwnDevice(haris, amar, 'Amar telefon')
-    await loginPin(amar, 'Amar', AMAR_PIN)
+    await loginPin(amar, 'Amar')
 
     emir = await browser.newContext()
     await enrolOwnDevice(haris, emir, 'Sank tablet')
-    await loginPin(emir, 'Emir', EMIR_PIN)
+    await loginPin(emir, 'Emir')
 
     const scratch = await amar.newPage()
     await scratch.goto('/konobar/razgovor/svi')

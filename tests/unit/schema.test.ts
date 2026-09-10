@@ -157,9 +157,14 @@ describe('the seed', () => {
     expect(unpriced).toEqual([])
   })
 
-  it('has three roles and no `owner`', () => {
+  it('has two roles, and neither `owner` nor the old floor pair', () => {
     const roles = new Set(f.db.select().from(schema.users).all().map(u => u.role))
-    expect([...roles].sort()).toEqual(['admin', 'bartender', 'waiter'])
+    expect([...roles].sort()).toEqual(['admin', 'radnik'])
+  })
+
+  it('gives every seeded person a PIN nobody else has', () => {
+    const pins = f.db.select().from(schema.users).all().map(u => f.pin(u.name))
+    expect(new Set(pins).size).toBe(pins.length)
   })
 
   it('gives every product exactly one open price row', () => {
@@ -192,7 +197,7 @@ describe('the seed', () => {
   it('stores PINs as scrypt hashes and never in the clear', () => {
     const amar = f.db.select().from(schema.users).all().find(u => u.name === 'Amar')!
     expect(amar.pinHash).toMatch(/^scrypt\$\d+\$\d+\$\d+\$[0-9a-f]+\$[0-9a-f]+$/)
-    expect(amar.pinHash).not.toContain('1111')
+    expect(amar.pinHash).not.toContain('2222')
 
     // Only the admin has a way into `/admin` on a laptop.
     const haris = f.db.select().from(schema.users).all().find(u => u.name === 'Haris')!

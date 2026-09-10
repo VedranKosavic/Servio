@@ -126,8 +126,7 @@ const NUM_KIND: Record<FieldKind, 'money' | 'decimal' | 'int'> = {
 
 const ROLES: Array<{ value: Role, label: string }> = [
   { value: 'admin', label: 'Vlasnik' },
-  { value: 'bartender', label: 'Šanker' },
-  { value: 'waiter', label: 'Konobar' },
+  { value: 'radnik', label: 'Radnik' },
 ]
 
 function labelOf(key: keyof Settings): string {

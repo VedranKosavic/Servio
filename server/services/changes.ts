@@ -33,6 +33,7 @@ import { shiftBrief } from './shifts'
 import { getMe } from './auth'
 import { chatSnapshot, myReadTag } from './chat'
 import { rulesVersion } from './rules'
+import { getSettings } from './contracts'
 
 /**
  * One `changes` row, returning its `seq`.
@@ -128,21 +129,24 @@ export function getChanges(
     changes: full ? allChangeRows(db, venueId) : moved,
   }
 
-  const isStaffFloor = actor.role === 'waiter'
+  // Whether the queues ride along is an *approver* question, not a role one:
+  // since the collapse to two roles, `settings.approver_roles` is the only
+  // thing that says whether this person decides anybody's money.
+  const isApprover = getSettings(db, venueId).approver_roles.includes(actor.role)
 
   if (entities.has('table')) result.tables_state = getTablesState(db, venueId, actor)
   if (entities.has('prep')) result.prep = { seq: top, ...getPrep(db, venueId) }
   if (entities.has('stock')) result.stock = getStock(db, venueId)
   if (entities.has('count')) result.counts = listCountBriefs(db, venueId)
   if (entities.has('shift')) result.shift = shiftSnapshot(db, venueId, actor)
-  // The queues are decisions, and a waiter decides nothing: §4.1 attaches
-  // `pending` for admins and bartenders only.
+  // The queues are decisions, and somebody who decides nothing has no use for
+  // them: §4.1 attaches `pending` for approvers only.
   //
   // All three entities, not just `adjustment`: a payout and a settlement bump
   // `shift` and a popis bumps `count`, so gating on `adjustment` alone left the
   // badge showing whatever the last void had left behind.
   const queuesMoved = entities.has('adjustment') || entities.has('shift') || entities.has('count')
-  if (queuesMoved && !isStaffFloor) result.pending = pendingCounts(db, venueId)
+  if (queuesMoved && isApprover) result.pending = pendingCounts(db, venueId)
   if (entities.has('menu') || entities.has('settings')) {
     result.menu_version = menuVersion(db, venueId)
   }

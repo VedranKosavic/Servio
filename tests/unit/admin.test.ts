@@ -364,7 +364,7 @@ describe('stock items', () => {
 describe('users', () => {
   it('stores only a hash, and hands back none of it', () => {
     const created = createUser(f.db, f.venueId, admin(), {
-      name: 'Nedim', initials: 'ne', role: 'waiter', pin: '4321',
+      name: 'Nedim', initials: 'ne', role: 'radnik', pin: '4321',
     })
 
     expect(created.name).toBe('Nedim')
@@ -379,22 +379,65 @@ describe('users', () => {
     expect(row.pinHash).not.toContain('4321')
     expect(row.pinPepperV).toBe(1)
 
-    // Two people with the same PIN must not share a hash — the salt is the id.
+    // Two different PINs must not produce related hashes — the salt is the id.
     const second = createUser(f.db, f.venueId, admin(), {
-      name: 'Adi', initials: 'AD', role: 'waiter', pin: '4321',
+      name: 'Adi', initials: 'AD', role: 'radnik', pin: '4322',
     })
     const other = f.db.select().from(schema.users).where(eq(schema.users.id, second.id)).get()!
     expect(other.pinHash).not.toBe(row.pinHash)
   })
 
+  /**
+   * The invariant that moved, and the sentence that names it (CLAUDE.md):
+   * **two people may no longer share a PIN.** This test used to assert the
+   * opposite — that Nedim and Adi could both be on 4321 and merely get
+   * different hashes, which was true and harmless while the lock screen asked
+   * *who* first. It no longer asks: the PIN is the only question, so a PIN two
+   * people answer identifies neither, and the salt property it was really about
+   * is asserted above with two different PINs instead.
+   */
+  it('refuses a PIN somebody active already uses, and frees it when they leave', () => {
+    createUser(f.db, f.venueId, admin(), {
+      name: 'Selma', initials: 'SE', role: 'radnik', pin: '8181',
+    })
+
+    expect(() => createUser(f.db, f.venueId, admin(), {
+      name: 'Selma D.', initials: 'SD', role: 'radnik', pin: '8181',
+    })).toThrow(/already belongs to somebody/)
+
+    // A seeded person's PIN is taken too — this is not only about new rows.
+    expect(() => createUser(f.db, f.venueId, admin(), {
+      name: 'Neko', initials: 'NE', role: 'radnik', pin: f.pin('Amar'),
+    })).toThrow(/already belongs to somebody/)
+
+    // Deactivated people hold nothing against anybody: their rows stay for the
+    // history on February's rounds, not for the lock screen.
+    const users = f.db.select().from(schema.users).all()
+    const selma = users.find(u => u.name === 'Selma')!
+    updateUser(f.db, f.venueId, admin(), selma.id, { active: false })
+
+    const reused = createUser(f.db, f.venueId, admin(), {
+      name: 'Amra', initials: 'AM', role: 'radnik', pin: '8181',
+    })
+    expect(reused.has_pin).toBe(true)
+  })
+
+  it('refuses a reset to a PIN that is already somebody else\'s', () => {
+    expect(() => resetPin(f.db, f.venueId, admin(), f.userId('Amar'), f.pin('Emir')))
+      .toThrow(/already belongs to somebody/)
+
+    // His own digits are not a collision with himself.
+    expect(resetPin(f.db, f.venueId, admin(), f.userId('Amar'), f.pin('Amar')).ok).toBe(true)
+  })
+
   it('takes a 6-digit PIN too, and refuses a 5-digit one', () => {
     const six = createUser(f.db, f.venueId, admin(), {
-      name: 'Selma', initials: 'SE', role: 'bartender', pin: '123456',
+      name: 'Selma', initials: 'SE', role: 'radnik', pin: '123456',
     })
     expect(six.pin_len).toBe(6)
 
     expect(() => createUser(f.db, f.venueId, admin(), {
-      name: 'Kenan', initials: 'KE', role: 'waiter', pin: '12345',
+      name: 'Kenan', initials: 'KE', role: 'radnik', pin: '12345',
     })).toThrow(/4 or 6/)
   })
 
@@ -405,7 +448,7 @@ describe('users', () => {
     })).toThrow(/already belongs/)
   })
 
-  it('deactivates a waiter, and refuses to let the admin lock himself out', () => {
+  it('deactivates a worker, and refuses to let the admin lock himself out', () => {
     const amar = f.userId('Amar')
     const gone = updateUser(f.db, f.venueId, admin(), amar, { active: false })
     expect(gone.active).toBe(false)
@@ -506,7 +549,7 @@ describe('the responses', () => {
       category_id: categoryId(), name: 'Espresso', price_fen: 220,
     })
     createUser(f.db, f.venueId, admin(), {
-      name: 'Nedim', initials: 'NE', role: 'waiter', pin: '4321', email: 'nedim@lounge.ba',
+      name: 'Nedim', initials: 'NE', role: 'radnik', pin: '4321', email: 'nedim@lounge.ba',
     })
 
     const responses: unknown[] = [

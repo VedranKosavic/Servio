@@ -416,7 +416,7 @@ function resolveTab(
 
   if (existing) {
     const crossWaiter = existing.assignedTo !== actor.userId
-    if (crossWaiter && actor.role === 'waiter' && !settings.allow_cross_waiter_rounds) {
+    if (crossWaiter && actor.role === 'radnik' && !settings.allow_cross_waiter_rounds) {
       throw forbidden('NOT_ASSIGNED', `tab ${existing.id} is assigned to somebody else`)
     }
     return {

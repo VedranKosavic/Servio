@@ -22,13 +22,13 @@
  */
 import { and, desc, eq, gt, gte, inArray, isNull, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
-import { SankError, badRequest, forbidden, locked, notFound, unauthorized, unprocessable } from '../utils/errors'
+import { SankError, badRequest, conflict, forbidden, locked, notFound, unauthorized, unprocessable } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
 import { hashSecret, hashToken, newToken, verifySecret } from '../utils/password'
 import { pinLimiter } from '../utils/rate-limit'
 import { getSettings, log } from './contracts'
 import type { Db, Queryable, Tx } from './types'
-import type { Actor, Role } from '#shared/types'
+import type { Actor, Role, ScreenMode } from '#shared/types'
 import type {
   DeviceBrief, LoginUser, MeContext, MeUser, MySession,
   PinLoginResult, SessionBrief, VenueBrief,
@@ -79,6 +79,7 @@ function toSessionBrief(row: SessionRow): SessionBrief {
     kind: row.kind,
     expires_at: row.expiresAt,
     borrowed: row.borrowed === 1,
+    mode: row.mode ?? null,
   }
 }
 
@@ -112,15 +113,26 @@ export type AttemptKind = 'pin' | 'password' | 'enrol' | 'approve'
 /**
  * What the failures are counted against.
  *
- * `auth_attempts` has no column for a free-text handle, so the two doors that
- * have no user *row* to point at are keyed on what they do have (§5.2's table,
+ * `auth_attempts` has no column for a free-text handle, so the doors that have
+ * no user *row* to point at are keyed on what they do have (§5.2's table,
  * expressed in the columns that exist):
  *
  * | kind | counted against |
  * |---|---|
- * | `pin`, `approve` | `(device_id, user_id)` |
+ * | `approve`, and `pin` with a known user | `(device_id, user_id)` |
+ * | **`pin` at the login door** | `(device_id, ip)`, with `user_id NULL` |
  * | `password` | `(ip, user_id)` — resolved from the email, `NULL` when it matches nobody, so every unknown address from one address shares one bucket and a real admin's bucket is his own |
  * | `enrol` | `(ip)` — a code is not a person |
+ *
+ * The middle row is what "the PIN identifies the person" costs. There is no
+ * user to count against at the login door any more — the account is unknown
+ * until the digits have already been compared against every one of them — so
+ * the bucket is the phone and the address it is dialling from. The thresholds
+ * are unchanged (5 / 10 / 15) and so is everything they trigger; only the key
+ * moved. Note that the **success** rows of that door carry `user_id NULL` too,
+ * even though by then the person is known: `lockoutState` clears a counter with
+ * a success *of the same subject*, and a success filed under Amar would not
+ * clear the failures filed under nobody.
  */
 export interface AttemptSubject {
   deviceId: string | null
@@ -149,6 +161,12 @@ function subjectWhere(venueId: string, kind: AttemptKind, s: AttemptSubject) {
       // email session legitimately has no device.
       sql`${schema.authAttempts.deviceId} IS ${s.deviceId}`,
       sql`${schema.authAttempts.userId} IS ${s.userId}`,
+      // The login door, where the account is unknown: `user_id IS NULL` alone
+      // would put every phone on the network into one bucket, so the address
+      // joins the device in the key. An approval, which knows its user, is
+      // deliberately *not* narrowed by IP — a waiter walking from the terrace's
+      // Wi-Fi to the bar's must not get five fresh guesses at the owner's PIN.
+      ...(s.userId === null ? [eq(schema.authAttempts.ip, s.ip)] : []),
     )
   }
   if (kind === 'password') {
@@ -199,9 +217,38 @@ export function lockoutState(
         .get()?.at ?? null
     : null
 
+  /**
+   * The key to the tablet, and the reason it had to be cut.
+   *
+   * A `reset` row used to belong to a person, because every counter did: an
+   * admin gave Emir new digits and Emir's failures everywhere went quiet. The
+   * pad's failures belong to nobody now, so a person-shaped reset can never
+   * reach them — and the count they feed is the unwindowed fifteen that shuts
+   * the device itself. Without a second shape of clear, a bar tablet locked at
+   * 23:00 on a Saturday stays locked: `unlockDevice` would clear `locked_at`
+   * and the very next wrong PIN would re-read the same fifteen and shut it
+   * again.
+   *
+   * So a reset row with a `device_id` and no `user_id` is the device's own
+   * clear, written by `clearDeviceCounter` below, and it wipes the slate for
+   * every subject standing at that device.
+   */
+  const clearedByDeviceReset = s.deviceId
+    ? q.select({ at: sql<string | null>`max(${schema.authAttempts.createdAt})` })
+        .from(schema.authAttempts)
+        .where(and(
+          eq(schema.authAttempts.venueId, venueId),
+          eq(schema.authAttempts.kind, 'reset'),
+          eq(schema.authAttempts.deviceId, s.deviceId),
+          isNull(schema.authAttempts.userId),
+        ))
+        .get()?.at ?? null
+    : null
+
   // ISO-8601 UTC strings sort exactly like the instants they describe, which is
   // why every timestamp in this database is one.
-  const lastClear = [clearedBySuccess, clearedByReset].filter(Boolean).sort().pop() ?? ''
+  const lastClear = [clearedBySuccess, clearedByReset, clearedByDeviceReset]
+    .filter(Boolean).sort().pop() ?? ''
 
   const failed = and(mine, eq(schema.authAttempts.ok, 0), gt(schema.authAttempts.createdAt, lastClear))
 
@@ -261,6 +308,29 @@ export function recordAttempt(db: Db, venueId: string, e: {
 }
 
 /**
+ * "This tablet is forgiven." The device-shaped half of a PIN reset.
+ *
+ * One committed row — `kind='reset'`, this device, **no user** — which
+ * `lockoutState` reads as `lastClear` for every subject standing at it. It is
+ * what makes an unlock an unlock: clearing `locked_at` without it leaves the
+ * fifteen failures on the record, and the next fat-fingered PIN shuts the
+ * device again before anybody has typed a right one.
+ *
+ * It clears counters; it does not delete evidence. The failed rows stay exactly
+ * where they were — `lockoutState` measures *from* the clear rather than
+ * emptying the table — so the *Dnevnik* and any later question about that night
+ * still have every attempt.
+ */
+export function clearDeviceCounter(db: Db, venueId: string, deviceId: string, now = nowIso()): void {
+  recordAttempt(db, venueId, {
+    kind: 'reset',
+    subject: { deviceId, userId: null, ip: '' },
+    ok: true,
+    now,
+  })
+}
+
+/**
  * A hash that matches nothing, so an unknown email costs the same milliseconds
  * as a known one.
  *
@@ -302,14 +372,41 @@ export function verifyMetered(db: Db, venueId: string | null, args: {
   const venue = venueId ?? soleVenueId(db)
   const { kind, subject } = args
 
-  const before = lockoutState(db, venue, kind, subject, now)
-  if (before.locked) throw lockedOut(kind, before.retryAfterS)
+  requireDoorOpen(db, venue, kind, subject, now)
 
   const ok = args.stored
     ? verifySecret(args.plain, args.saltId, args.stored)
     // Same work, same milliseconds, no answer leaked. The result is discarded.
     : (verifySecret(args.plain, 'dummy', dummyHash()), false)
 
+  meterOutcome(db, venue, kind, subject, ok, now)
+}
+
+/**
+ * Step one of the order above, on its own so the login door can share it.
+ *
+ * It is the *first* thing either verifier does: a locked subject is refused
+ * before a hash is even fetched, let alone compared.
+ */
+function requireDoorOpen(
+  db: Db, venue: string, kind: AttemptKind, subject: AttemptSubject, now: string,
+): void {
+  const before = lockoutState(db, venue, kind, subject, now)
+  if (before.locked) throw lockedOut(kind, before.retryAfterS)
+}
+
+/**
+ * Steps three to five, likewise shared: commit the evidence, escalate, throw.
+ *
+ * Splitting this out is what lets `resolvePinToUser` below — which cannot use
+ * `verifyMetered`, because it compares one typed PIN against *every* account
+ * rather than one stored hash — keep byte-for-byte the same metering,
+ * thresholds, Dnevnik entry and device lock. Two counters that drift apart is
+ * exactly the bug that makes a lockout theatre.
+ */
+function meterOutcome(
+  db: Db, venue: string, kind: AttemptKind, subject: AttemptSubject, ok: boolean, now: string,
+): void {
   recordAttempt(db, venue, { kind, subject, ok, now })
   if (ok) return
 
@@ -337,6 +434,62 @@ export function verifyMetered(db: Db, venueId: string | null, args: {
 
   if (after.locked) throw lockedOut(kind, after.retryAfterS)
   throw refusal(kind, after)
+}
+
+/**
+ * **The PIN identifies the person.** Four digits in, an account out.
+ *
+ * The pad draws no names, so nothing tells the server who is typing: it
+ * compares the digits against every active account of this venue that has a PIN
+ * at all, and answers 401 `INVALID_PIN` when none of them matches. Three
+ * accounts × one scrypt is a few hundred milliseconds at the login door, once a
+ * night per person, which is the price of the whole idea and cheap at it.
+ *
+ * Two details that are not decoration:
+ *
+ * - **The loop does not stop at the match.** Every candidate costs the same
+ *   scrypt whether it is the first or the last, so the time the door takes says
+ *   nothing about whose PIN was typed. It also costs one dummy hash when the
+ *   venue has nobody with a PIN, so an empty venue answers in the same beat as
+ *   a full one.
+ * - **The failures are counted against `(device, ip)`**, not against a person —
+ *   there is no person to count against yet. See the subject table above.
+ *
+ * A PIN unique inside the venue is what makes any of this an identity, which is
+ * why `createUser` and `resetPin` refuse a duplicate with 409 `PIN_TAKEN`.
+ */
+export function resolvePinToUser(
+  db: Db, venueId: string, deviceId: string | null, pin: string,
+  ctx: { ip: string, now?: string },
+): UserRow {
+  const now = ctx.now ?? nowIso()
+  const subject: AttemptSubject = { deviceId, userId: null, ip: ctx.ip }
+
+  requireDoorOpen(db, venueId, 'pin', subject, now)
+
+  const candidates = db.select().from(schema.users)
+    .where(and(eq(schema.users.venueId, venueId), eq(schema.users.active, 1)))
+    .all()
+    .filter(row => row.pinHash !== null)
+
+  const matches: UserRow[] = []
+  for (const row of candidates) {
+    if (verifySecret(pin, row.id, row.pinHash!)) matches.push(row)
+  }
+  if (candidates.length === 0) verifySecret(pin, 'dummy', dummyHash())
+
+  meterOutcome(db, venueId, 'pin', subject, matches.length > 0, now)
+
+  // Two people, one PIN. `requirePinFree` stops this being *set*, and
+  // `updateUser` drops a returning person's stale PIN rather than trust it — but
+  // a database edited by hand can still get here, and the one thing this door
+  // must never do is guess which of them is standing at the till. The attempt
+  // above is metered as a success, because the secret was correct and this is
+  // not somebody guessing.
+  if (matches.length > 1) {
+    throw conflict('PIN_AMBIGUOUS', 'that pin belongs to more than one active person')
+  }
+  return matches[0]!
 }
 
 function lockedOut(kind: AttemptKind, retryAfterS: number): SankError {
@@ -396,6 +549,42 @@ export function verifyPinMetered(
   })
 }
 
+/**
+ * A PIN belongs to at most one active person in a venue — 409 `PIN_TAKEN`.
+ *
+ * This is the invariant `resolvePinToUser` rests on: two people sharing 2222
+ * would make the pad ambiguous, and it would resolve to whichever row the
+ * `SELECT` happened to return first. So the rule is enforced where PINs are
+ * *set* rather than where they are used, which is the only place it can be —
+ * every PIN is a peppered scrypt hash salted with its own user id, so a unique
+ * index on `pin_hash` would be a unique index on random noise. It has to be a
+ * loop of `verifySecret`, and it has to run inside the same call that writes
+ * the new hash.
+ *
+ * Deactivated people do not hold a PIN against anybody: Lejla's account stays
+ * for the history on February's rounds, not for the lock screen, and
+ * `resolvePinToUser` never looks at it either. `except` is the person being
+ * given this PIN, so re-setting somebody's own PIN to the digits he already has
+ * is not a collision with himself.
+ */
+export function requirePinFree(
+  db: Db, venueId: string, pin: string, except: string | null,
+): void {
+  const others = db.select().from(schema.users)
+    .where(and(eq(schema.users.venueId, venueId), eq(schema.users.active, 1)))
+    .all()
+    .filter(row => row.pinHash !== null && row.id !== except)
+
+  for (const row of others) {
+    if (verifySecret(pin, row.id, row.pinHash!)) {
+      // The message never says *whose* it is. An admin setting a PIN would learn
+      // a colleague's four digits from the answer, and the whole point of the
+      // pad is that those digits are an identity.
+      throw conflict('PIN_TAKEN', 'that pin already belongs to somebody in this venue')
+    }
+  }
+}
+
 // ===========================================================================
 // The doors
 // ===========================================================================
@@ -406,6 +595,8 @@ function newSession(db: Db, e: {
   deviceId: string | null
   kind: 'admin' | 'staff'
   borrowed: boolean
+  /** The staff screen this session starts on; `null` until the worker picks. */
+  mode?: ScreenMode | null
   ttlS: number
   now: string
   ip?: string | null
@@ -423,6 +614,7 @@ function newSession(db: Db, e: {
     tokenHash: hashToken(token),
     kind: e.kind,
     borrowed: e.borrowed ? 1 : 0,
+    mode: e.mode ?? null,
     createdAt: e.now,
     lastSeenAt: e.now,
     expiresAt,
@@ -565,12 +757,22 @@ export function listMySessions(
 }
 
 /**
- * `POST /api/auth/pin` — a person on an enrolled device.
+ * `POST /api/auth/pin` — four digits on an enrolled device, and nothing else.
  *
- * The checks run in the order of §5.1, and the order is the point: the lockout
- * is consulted before anything else is even looked up, and the two 403s below
- * are decided *before* the PIN is compared, so a wrong PIN on somebody else's
- * phone does not tell you whether the PIN was right.
+ * The order is the whole design and it is not the old one. The pad no longer
+ * names anybody, so there is no user to look up, no deactivated account to
+ * refuse and no missing PIN to report *before* the compare — those three cases
+ * are simply "these digits belong to nobody", which is one 401 and one
+ * sentence. What is left runs in this order:
+ *
+ * 1. the lockout for `(device, ip)`, consulted before a hash is touched;
+ * 2. the digits against every active account with a PIN → the person, or 401;
+ * 3. the device rules, now that there *is* a person to apply them to;
+ * 4. the session, with the screen mode if he sent one.
+ *
+ * Step 3 after step 2 is deliberate: the PIN was right, and the metered attempt
+ * has already been committed as a success, so the 403 a wrong-phone admin gets
+ * is about the phone and never about the digits.
  */
 export function loginWithPin(
   db: Db, device: DeviceRow, body: PinLoginBody, ctx: { ip: string, userAgent?: string, now?: string },
@@ -578,41 +780,33 @@ export function loginWithPin(
   const now = ctx.now ?? nowIso()
   const venueId = device.venueId
 
-  const user = db.select().from(schema.users)
-    .where(and(eq(schema.users.id, body.user_id), eq(schema.users.venueId, venueId)))
-    .get()
-  if (!user) throw notFound('USER_NOT_FOUND', 'no such user in this venue')
-  if (user.active !== 1) throw forbidden('USER_NOT_ACTIVE', 'user is deactivated')
-  if (!user.pinHash) throw forbidden('NO_PIN', 'this user has no pin set')
+  const user = resolvePinToUser(db, venueId, device.id, body.pin, { ip: ctx.ip, now })
 
-  // The admin PIN rule. A PIN typed on a waiter's phone is captured once and
-  // approves everything afterwards, so an admin PINs only on a device bound to
-  // him. The dev device is exempt so that one laptop can test every screen.
+  // The admin PIN rule, unchanged. A PIN typed on a worker's phone is watched
+  // once and approves everything afterwards, so an admin PINs only on a device
+  // bound to him. The dev device is exempt so that one laptop can test every
+  // screen. This is the one place the owner still has to be on his own phone —
+  // he may open any screen once he is in.
   const devDevice = device.label === DEV_DEVICE_LABEL
   if (user.role === 'admin' && !devDevice && device.boundUserId !== user.id) {
     throw forbidden('ADMIN_DEVICE_ONLY', 'an admin may only pin in on his own device')
   }
 
   // A personal phone belongs to somebody. A colleague may still use it — a
-  // waiter whose battery died is a real Saturday night — but he has to say so,
-  // and he gets two hours instead of fourteen and a `borrowed` flag on the row.
-  let borrowed = false
-  if (device.mode === 'personal' && device.boundUserId && device.boundUserId !== user.id) {
-    if (!body.borrow) throw forbidden('NOT_YOUR_DEVICE', 'this is a colleague\'s phone')
-    borrowed = true
-  }
+  // worker whose battery died is a real Saturday night — and he no longer has
+  // to declare it, because the pad did not ask his name and the server already
+  // knows whose phone this is. He gets two hours instead of fourteen and a
+  // `borrowed` flag on the row, which is what that flag was ever for.
+  const borrowed = device.mode === 'personal'
+    && device.boundUserId !== null
+    && device.boundUserId !== user.id
 
-  verifyMetered(db, venueId, {
-    kind: 'pin',
-    subject: { deviceId: device.id, userId: user.id, ip: ctx.ip },
-    stored: user.pinHash,
-    saltId: user.id,
-    plain: body.pin,
-    now,
-  })
+  // An admin has no mode: his landing is `/admin` (`shared/landing.ts`), and he
+  // reaches `/konobar` or `/sanker` by opening them, not by being sent there.
+  const mode = user.role === 'admin' ? null : body.mode ?? null
 
   const session = newSession(db, {
-    venueId, userId: user.id, deviceId: device.id, kind: 'staff', borrowed,
+    venueId, userId: user.id, deviceId: device.id, kind: 'staff', borrowed, mode,
     ttlS: borrowed ? BORROWED_SESSION_S : STAFF_SESSION_S,
     now, ip: ctx.ip, userAgent: ctx.userAgent,
   })
@@ -626,6 +820,34 @@ export function loginWithPin(
     token: session.token,
     maxAgeS: session.maxAgeS,
   }
+}
+
+/**
+ * `POST /api/auth/mode` — *Na čemu si večeras?*, and the midnight switch.
+ *
+ * The second step of the login for a `radnik` who did not fold his choice into
+ * the PIN call, and the same route again whenever he moves between the bar and
+ * the floor. Nobody signs out to change screens: both screens are open to every
+ * worker, and the mode only decides where he is *sent*.
+ *
+ * For an admin it is a no-op that answers the same envelope. Refusing him would
+ * be a 403 on a tap he can only reach by accident, and storing a mode for him
+ * would put a value on a session whose landing ignores it.
+ */
+export function setSessionMode(
+  db: Db, venueId: string, actor: Actor, mode: ScreenMode, now = nowIso(),
+): MeContext {
+  if (actor.role !== 'admin') {
+    db.update(schema.sessions)
+      .set({ mode, lastSeenAt: now })
+      .where(and(
+        eq(schema.sessions.id, actor.sessionId),
+        eq(schema.sessions.venueId, venueId),
+        isNull(schema.sessions.revokedAt),
+      ))
+      .run()
+  }
+  return getMe(db, venueId, actor)
 }
 
 /**
@@ -664,7 +886,7 @@ export function getMe(q: Queryable, venueId: string, actor: Actor): MeContext {
     user: toMeUser(user),
     session: session
       ? toSessionBrief(session)
-      : { id: actor.sessionId, kind: actor.sessionKind, expires_at: '', borrowed: actor.borrowed },
+      : { id: actor.sessionId, kind: actor.sessionKind, expires_at: '', borrowed: actor.borrowed, mode: null },
     device: device ? toDeviceBrief(device) : null,
     venue: venueBrief(q, venueId),
     seq: currentSeq(q, venueId),
@@ -678,9 +900,15 @@ export function getMe(q: Queryable, venueId: string, actor: Actor): MeContext {
  * folder); the logic is auth's and lives here. Two things happen and both
  * matter: the new hash, and a `kind='reset'` attempt row that becomes the
  * `last_clear` every lockout count measures from — *and* the unlock of every
- * device this person locked. Resetting Emir's PIN unlocks the tablet Emir
- * locked; an unwindowed device lock with no key is a bar tablet that dies at
- * 23:00 on a Saturday and stays dead.
+ * device this reset can still be shown to be about: the ones bound to him, and
+ * the ones he failed on at the **approver** door, which names its approver.
+ *
+ * The pad's failures name nobody now, so the tablet a stranger shut by guessing
+ * is no longer reachable from a person's reset. Its key is `unlockDevice` in
+ * *Uređaji*, which since this change clears the counter as well as the flag —
+ * an unwindowed device lock with no key is a bar tablet that dies at 23:00 on a
+ * Saturday and stays dead, and clearing the flag alone would have been no key
+ * at all.
  */
 export function resetPin(
   db: Db, venueId: string, actor: Actor, userId: string, pin: string, now = nowIso(),
@@ -692,8 +920,19 @@ export function resetPin(
     .get()
   if (!user) throw notFound('USER_NOT_FOUND', 'no such user in this venue')
 
+  requirePinFree(db, venueId, pin, userId)
+
   // The devices this person actually failed on since his last success, plus the
   // one he is bound to — which is the tablet he was standing at.
+  //
+  // "Failed on" is a smaller set than it used to be, and the reason is the whole
+  // rekey: a wrong PIN at the **pad** is now filed against nobody, so it cannot
+  // be traced back to Emir here. What this still finds is Emir's failures at the
+  // *approver* door, which does name him. A tablet shut by anonymous fumbling at
+  // the pad is therefore not a person's problem to reset any more — it is the
+  // device's, and `unlockDevice` in *Uređaji* is its key. Both doors need an
+  // admin either way, so the Saturday-night story is unchanged; only which of
+  // the two screens he taps has moved.
   const failedOn = db.selectDistinct({ id: schema.authAttempts.deviceId })
     .from(schema.authAttempts)
     .where(and(
@@ -756,6 +995,11 @@ export function resetPin(
     ok: true,
     now,
   })
+
+  // Any device this reset actually reopened gets the device-shaped clear too,
+  // for the same reason `unlockDevice` writes one: the fifteen behind the lock
+  // are filed against nobody, and the row above only speaks for this person.
+  for (const device of unlocked) clearDeviceCounter(db, venueId, device.id, now)
 
   return { ok: true, unlocked: unlocked.map(d => d.id) }
 }

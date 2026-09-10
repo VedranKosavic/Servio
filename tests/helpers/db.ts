@@ -27,7 +27,7 @@ import type Database from 'better-sqlite3'
 import { openDatabase, type Db } from '../../server/database/client'
 import * as schema from '../../server/database/schema'
 import { businessDate } from '../../shared/dates'
-import { seed } from '../../server/database/seed'
+import { DEV_PINS, seed } from '../../server/database/seed'
 import type { Actor, Role } from '#shared/types'
 
 const id = () => randomUUID()
@@ -52,6 +52,15 @@ export interface Fixture {
   close: () => void
   venueId: string
   userId: (name: string) => string
+  /**
+   * The seeded PIN of a person, by name.
+   *
+   * Tests ask for it rather than spelling `'1111'`, because since the PIN
+   * identifies the person the seed can never hand two people the same digits —
+   * so the digits are the seed's business and any test that hard-codes them
+   * breaks the day the cast changes.
+   */
+  pin: (name: string) => string
   tableId: (name: string) => string
   productId: (name: string) => string
   stockItemId: (name: string) => string
@@ -107,7 +116,12 @@ export interface Fixture {
 
 export function makeFixture(): Fixture {
   const { db, sqlite } = openDatabase(':memory:')
-  seed(db, { devSecrets: true })
+  // `cast: 'full'` — the venue itself has three accounts (Haris, Amar, Emir),
+  // but the suites need somebody to hand a float to, somebody to swap a shift
+  // with and somebody to deactivate mid-test, so the fixture asks for the three
+  // extra names on top. Every PIN in it is different, because since the PIN
+  // identifies the person a shared one cannot be seeded at all.
+  seed(db, { devSecrets: true, cast: 'full' })
 
   const venueId = db.select().from(schema.venues).get()!.id
 
@@ -123,6 +137,11 @@ export function makeFixture(): Fixture {
   const stockItems = db.select().from(schema.stockItems).all()
 
   const userId = (name: string) => byName(users, name)
+  const pin = (name: string) => {
+    const value = DEV_PINS[name as keyof typeof DEV_PINS]
+    if (!value) throw new Error(`fixture: nobody named "${name}" is seeded`)
+    return value
+  }
   const tableId = (name: string) => byName(tables, name)
   const productId = (name: string) => byName(products, name)
   const stockItemId = (name: string) => byName(stockItems, name)
@@ -396,6 +415,7 @@ export function makeFixture(): Fixture {
     close: () => sqlite.close(),
     venueId,
     userId,
+    pin,
     tableId,
     productId,
     stockItemId,

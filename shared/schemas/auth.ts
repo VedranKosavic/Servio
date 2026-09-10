@@ -25,15 +25,43 @@ export const adminLoginBody = z.object({
   password: z.string().min(1).max(200),
 }).strict()
 
+/** *Konobar* or *Šanker* — the screen a worker is on tonight. */
+export const screenMode = z.enum(['konobar', 'sanker'])
+
 /**
- * `POST /api/auth/pin`. `user_id` is not a secret — the lock screen just drew
- * the names — and `borrow` is the deliberate "yes, this is Emir's phone and I
- * know it" tap that turns a 403 into a 2 h session.
+ * `POST /api/auth/pin` — **the PIN identifies the person**.
+ *
+ * There is no `user_id` any more, and there is no list of names in front of the
+ * pad: the server tries the digits against the active accounts of the venue the
+ * enrolled device belongs to and answers 401 when nothing matches. That is why
+ * `POST /api/admin/users` and `POST /api/admin/users/:id/pin` refuse a PIN that
+ * is already somebody's (409 `PIN_TAKEN`) — a PIN two people share identifies
+ * neither.
+ *
+ * `borrow` went with `user_id`, and for the same reason. It used to be the
+ * deliberate "yes, this is Emir's phone and I know it" tap, but the pad no
+ * longer asks *who* — so the server, which knows whose phone this is the moment
+ * the PIN resolves, marks the session `borrowed` itself and gives it two hours
+ * instead of fourteen. The property survives; the extra tap and its 403 do not.
+ *
+ * `mode` is the optional second step folded into the first call: a worker who
+ * already knows he is on the šank tonight can send it here instead of posting
+ * `/api/auth/mode` a moment later. It is ignored for an admin, who has no mode.
  */
 export const pinLoginBody = z.object({
-  user_id: uuid,
   pin,
-  borrow: z.boolean().optional(),
+  mode: screenMode.optional(),
+}).strict()
+
+/**
+ * `POST /api/auth/mode` — the chooser, and the switch.
+ *
+ * The same route serves both: a worker who has just PIN'd in and is looking at
+ * *Na čemu si večeras?*, and one who moves from the bar to the floor at
+ * midnight. Nobody signs out to change screens.
+ */
+export const setModeBody = z.object({
+  mode: screenMode,
 }).strict()
 
 /**
@@ -79,6 +107,7 @@ export const deviceActionBody = z.object({}).strict()
 
 export type AdminLoginBody = z.infer<typeof adminLoginBody>
 export type PinLoginBody = z.infer<typeof pinLoginBody>
+export type SetModeBody = z.infer<typeof setModeBody>
 export type EnrolDeviceBody = z.infer<typeof enrolDeviceBody>
 export type CreateEnrolCodeBody = z.infer<typeof createEnrolCodeBody>
 export type UpdateDeviceBody = z.infer<typeof updateDeviceBody>

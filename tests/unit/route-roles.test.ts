@@ -129,7 +129,7 @@ describe('ROUTE_ROLES', () => {
       if (value === 'public' || value === 'any') continue
       expect(Array.isArray(value), `${key} is neither public, any, nor a role list`).toBe(true)
       expect(value.length, `${key} has an empty role list`).toBeGreaterThan(0)
-      for (const role of value) expect(['admin', 'waiter', 'bartender']).toContain(role)
+      for (const role of value) expect(['admin', 'radnik']).toContain(role)
     }
   })
 

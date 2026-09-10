@@ -143,6 +143,38 @@ BEGIN SELECT RAISE(ABORT, 'tabs: only open -> paid with closed_at/closed_by'); E
  * The .sql file is copied byte for byte, so its hash matches and the real
  * migrator afterwards recognises it as already applied and runs only 0001.
  */
+/**
+ * A database as the café's actually is on the morning of the upgrade: every
+ * migration **up to 0004**, and the real triggers installed on top, because it
+ * has booted before.
+ *
+ * The trimmed migrations folder is the whole point. `openDatabase` would run
+ * 0005 too, and a database that has already swallowed 0005 cannot show what
+ * 0005 does to one that has not.
+ */
+function bootedAt0004(file: string): void {
+  const dir = scratch()
+  mkdirSync(join(dir, 'meta'), { recursive: true })
+  const journal = JSON.parse(readFileSync(join(MIGRATIONS, 'meta', '_journal.json'), 'utf8'))
+  journal.entries = journal.entries.filter((e: { idx: number }) => e.idx <= 4)
+  writeFileSync(join(dir, 'meta', '_journal.json'), JSON.stringify(journal, null, 2))
+  for (const entry of journal.entries as { tag: string }[]) {
+    writeFileSync(
+      join(dir, `${entry.tag}.sql`),
+      readFileSync(join(MIGRATIONS, `${entry.tag}.sql`), 'utf8'),
+    )
+  }
+
+  const sqlite = new Database(file)
+  applyPragmas(sqlite)
+  sqlite.pragma('foreign_keys = OFF')
+  migrate(drizzle(sqlite), { migrationsFolder: dir })
+  sqlite.pragma('foreign_keys = ON')
+  // The half that matters: this database has booted, so the guards are on it.
+  applyTriggers(sqlite)
+  sqlite.close()
+}
+
 function korak1Database(file: string): void {
   const dir = scratch()
   mkdirSync(join(dir, 'meta'), { recursive: true })
@@ -223,10 +255,12 @@ describe('a database that already holds Korak 1 data', () => {
     // `openDatabase` migrates, then re-applies the triggers.
     const { sqlite } = openDatabase(file)
     try {
-      // The one rename. 'owner' is not an accepted role value anywhere after it.
+      // Two renames now, 0001's and 0005's: Korak 1's 'owner' became 'admin',
+      // and 'waiter' and 'bartender' both became 'radnik'. Neither old value is
+      // an accepted role anywhere afterwards.
       const roles = sqlite.prepare('SELECT DISTINCT role AS r FROM users').all()
         .map(r => (r as { r: string }).r).sort()
-      expect(roles).toEqual(['admin', 'waiter'])
+      expect(roles).toEqual(['admin', 'radnik'])
       const haris = sqlite.prepare('SELECT role FROM users WHERE id = ?').get(harisId)
       expect(haris).toEqual({ role: 'admin' })
 
@@ -285,6 +319,83 @@ describe('a database that already holds Korak 1 data', () => {
       )
       expect(userColumns.has('telegram_chat_id')).toBe(false)
       expect(userColumns.has('email')).toBe(true)
+    } finally {
+      sqlite.close()
+    }
+  })
+
+  /**
+   * The hazard a fresh database can never show you, and the reason 0005 drops a
+   * trigger.
+   *
+   * Every other test in this file migrates a database that has **no triggers on
+   * it yet** — a `:memory:` fixture, or a hand-built Korak 1 file — because
+   * `applyTriggers()` runs *after* `migrate()`. The café's database has booted
+   * before, so the guards are already installed when the new file runs, and
+   * `shift_members` is append-only: `shift_members_update_guard` permits exactly
+   * `left_at`, once, NULL -> value. 0005 rewrites `role` on that table, which is
+   * not that shape.
+   *
+   * Without the `DROP TRIGGER IF EXISTS` in the file, this is what the owner
+   * would have got from `git pull` and a restart: an abort inside the migration,
+   * and a server that does not come up. So this test replays 0005 the way the
+   * upgrade really runs it — on a booted database, with triggers installed and a
+   * real `shift_members` row in it — by forgetting that 0005 was ever applied.
+   */
+  it('replays 0005 on a booted database, where the append-only guards are already installed', () => {
+    const dir = scratch()
+    const file = join(dir, 'sank.db')
+    bootedAt0004(file)
+
+    const seed = new Database(file)
+    applyPragmas(seed)
+    const venueId = randomUUID()
+    const userId = randomUUID()
+    const shiftId = randomUUID()
+    const now = '2026-02-14T18:00:00.000Z'
+    seed.prepare('INSERT INTO venues (id, name, slug, created_at) VALUES (?,?,?,?)')
+      .run(venueId, 'Lounge', 'lounge', now)
+    seed.prepare(
+      `INSERT INTO users (id, venue_id, name, initials, role, active, pin_pepper_v, created_at)
+       VALUES (?,?,?,?,'bartender',1,1,?)`,
+    ).run(userId, venueId, 'Emir', 'EM', now)
+    seed.prepare(
+      `INSERT INTO shifts (id, venue_id, business_date, status, opened_by, opened_at, created_at)
+       VALUES (?,?,'2026-02-14','open',?,?,?)`,
+    ).run(shiftId, venueId, userId, now, now)
+    // The row the migration has to rewrite, carrying a role that is about to
+    // stop existing.
+    seed.prepare(
+      `INSERT INTO shift_members (id, venue_id, shift_id, user_id, role, joined_at)
+       VALUES (?,?,?,?,'bartender',?)`,
+    ).run(randomUUID(), venueId, shiftId, userId, now)
+
+    // The guard is live, and it really does refuse this UPDATE — which is the
+    // half of the test that proves the other half is not vacuous.
+    expect(() => seed.exec(`UPDATE shift_members SET role = 'radnik'`))
+      .toThrow(/only left_at, once/)
+    seed.close()
+
+    // `git pull`, restart: `openDatabase` migrates 0005 and re-applies triggers.
+    const { sqlite } = openDatabase(file)
+    try {
+      expect(sqlite.prepare('SELECT DISTINCT role AS r FROM shift_members').all())
+        .toEqual([{ r: 'radnik' }])
+      expect(sqlite.prepare('SELECT DISTINCT role AS r FROM users').all())
+        .toEqual([{ r: 'radnik' }])
+      // The column 0005 adds, on a table that already existed.
+      expect(sqlite.prepare('PRAGMA table_info(sessions)').all()
+        .some(c => (c as { name: string }).name === 'mode')).toBe(true)
+
+      // And the guard the migration dropped is back, because `applyTriggers()`
+      // runs after `migrate()` at every boot — so the table is append-only again
+      // the moment the upgrade is over.
+      const count = sqlite
+        .prepare(`SELECT count(*) AS n FROM sqlite_master WHERE type='trigger'`)
+        .get() as { n: number }
+      expect(count.n).toBe(TRIGGER_NAMES.length)
+      expect(() => sqlite.exec(`UPDATE shift_members SET role = 'admin'`))
+        .toThrow(/only left_at, once/)
     } finally {
       sqlite.close()
     }

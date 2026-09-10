@@ -44,9 +44,9 @@
  *   SANK_E2E_URL=http://localhost:3113 npx playwright test tests/e2e/phase4-prijem.spec.ts
  */
 import { expect, test, type APIRequestContext, type BrowserContext, type Page } from '@playwright/test'
-import { ackRules, resetLimits } from './helpers'
+import { ackRules, resetLimits, pinLogin, type Person } from './helpers'
 
-const ADMIN = { email: 'haris@lounge.ba', password: 'lounge' }
+const ADMIN = { email: 'haris@lounge.ba', password: '1111' }
 
 /** The unknown line the stub always returns; the alias *Poveži* learns. */
 const UNKNOWN_TEXT = 'Salvete 33x33 bijele'
@@ -125,8 +125,7 @@ test.beforeAll(async ({ browser }) => {
     data: { code: code.code, label: 'Amarov telefon' },
   })
   expect(enrolled.ok(), await enrolled.text()).toBe(true)
-  const pin = await amar.post('/api/auth/pin', { data: { user_id: user.id, pin: '1111' } })
-  expect(pin.ok(), await pin.text()).toBe(true)
+  await pinLogin(amar, 'Amar', 'konobar')
   // S12 stands in front of every /konobar screen once phase4-pravila has published.
   await ackRules(amar)
 })
@@ -244,17 +243,51 @@ test('3 · Proknjiži knjiži prijem sa source=scan i zatvara sken', async () =>
   await page.close()
 })
 
-test('4 · konobar ne može poslati sliku otpremnice', async () => {
-  const res = await amar.post('/api/uploads', {
+/**
+ * The gate on a delivery photo was half role and half setting; it is all
+ * setting now.
+ *
+ * It read "an admin, or a bartender if `bartender_can_receive_goods`", and a
+ * waiter was refused by his role. With one worker role there is nobody left for
+ * the role half to refuse, so `bartender_can_receive_goods` does the whole job —
+ * which is the sentence its *Postavke* label always made, and the same setting
+ * that gates `POST /api/stock/deliveries`.
+ */
+test('4 · otpremnicu šalje radnik samo ako venue to dozvoljava', async () => {
+  const photo = () => ({
     multipart: {
       // Any bytes: the `kind` check is what answers, and it answers first.
-      image: { name: 'otpremnica.jpg', mimeType: 'image/jpeg', buffer: Buffer.from([0xFF, 0xD8, 0xFF, 0xD9]) },
+      image: {
+        name: 'otpremnica.jpg', mimeType: 'image/jpeg',
+        buffer: Buffer.from([0xFF, 0xD8, 0xFF, 0xD9]),
+      },
       kind: 'delivery',
     },
   })
-  expect(res.status()).toBe(422)
-  const body = await res.json() as { data?: { code?: string } }
-  expect(body.data?.code).toBe('KIND_FORBIDDEN')
+
+  // The seed turns the setting on, which is what the /sanker delivery screen
+  // needs, so Amar may photograph an otpremnica.
+  const allowed = await amar.post('/api/uploads', photo())
+  expect(allowed.status(), await allowed.text()).toBe(201)
+
+  const before = await (await haris.get('/api/admin/settings'))
+    .json() as { bartender_can_receive_goods: boolean }
+  expect((await haris.patch('/api/admin/settings', {
+    data: { bartender_can_receive_goods: false },
+  })).ok()).toBe(true)
+
+  try {
+    const res = await amar.post('/api/uploads', photo())
+    expect(res.status()).toBe(422)
+    const body = await res.json() as { data?: { code?: string } }
+    expect(body.data?.code).toBe('KIND_FORBIDDEN')
+  } finally {
+    // `settings_json` outlives this file and this browser, against the same
+    // data/verify.db, so putting it back is what makes the suite re-runnable.
+    await haris.patch('/api/admin/settings', {
+      data: { bartender_can_receive_goods: before.bartender_can_receive_goods },
+    })
+  }
 })
 
 test('5 · nepodešeno prepoznavanje je mirna kartica, a Ručno i dalje knjiži', async () => {

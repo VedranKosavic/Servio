@@ -20,22 +20,28 @@
  *   `nodevice` — no device cookie, or the owner revoked it → the enrol screen
  *   `offline`  — the server could not be reached; `me` is whatever we last knew
  */
-import type { MeContext, Role } from '#shared/types'
+import type { MeContext, Role, ScreenMode } from '#shared/types'
+import { landingFor } from '#shared/landing'
 import { ApiSideError } from '~/composables/useApi'
 
 export type MeStatus = 'unknown' | 'ready' | 'anon' | 'nodevice' | 'offline'
 
 /**
- * Where each role lives. Waiters get the floor plan, bartenders the ticket
- * queue, and since Phase 2 the admin gets the dashboard he logs in for.
+ * Where this session lives — `shared/landing.ts` with a route for the `null`.
  *
- * This is also the redirect a waiter who lands on `/admin` follows: he is
- * logged in, just not welcome there, so he goes to `/konobar` rather than back
- * to a login screen.
+ * The admin gets the dashboard he logs in for; a worker goes to whichever
+ * screen he picked tonight, and to the chooser when he has not picked one. It
+ * is also the redirect a worker who lands on `/admin` follows: he is logged in,
+ * just not welcome there, so he goes to his screen rather than back to a pad.
+ *
+ * `CHOOSER` is the one route this file names rather than `shared/landing.ts`:
+ * the chooser is a page, and pages are the client's business.
  */
-export function homeFor(role: Role | undefined): string {
-  if (role === 'admin') return '/admin'
-  return role === 'bartender' ? '/sanker' : '/konobar'
+export const CHOOSER = '/ekran'
+
+export function homeFor(role: Role | undefined, mode?: ScreenMode | null): string {
+  if (!role) return CHOOSER
+  return landingFor(role, mode ?? null) ?? CHOOSER
 }
 
 /** Everything this phone remembers on its own. Wiped when the device is revoked. */
@@ -59,9 +65,17 @@ export function useMe() {
   const venue = computed(() => me.value?.venue ?? null)
   const device = computed(() => me.value?.device ?? null)
   const session = computed(() => me.value?.session ?? null)
+
+  /**
+   * Which staff screen this session picked tonight — `konobar`, `sanker` or
+   * `null` for "has not chosen". It replaces every `role === 'bartender'`
+   * branch the app used to make: the screen is a session's choice now, not a
+   * property of the person, and an admin never has one.
+   */
+  const mode = computed(() => me.value?.session.mode ?? null)
   const settings = computed(() => me.value?.venue.settings ?? null)
   const isReady = computed(() => status.value === 'ready' && !!me.value)
-  const home = computed(() => homeFor(me.value?.user.role))
+  const home = computed(() => homeFor(me.value?.user.role, me.value?.session.mode))
 
   /**
    * Somebody PIN'd into a colleague's personal phone (*Drugi konobar*). The
@@ -207,6 +221,7 @@ export function useMe() {
   }
 
   return {
+    mode,
     me,
     status,
     user,

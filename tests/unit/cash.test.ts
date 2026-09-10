@@ -220,8 +220,8 @@ describe('deciding a payout', () => {
     expect(expectedCash(f.db, f.venueId, shiftId).drawer_expected_fen).toBe(0)
   })
 
-  it('sends a big one to the owner even where the setting lets a bartender in', () => {
-    f.settingsWith({ payout_approver_roles: ['admin', 'bartender'] })
+  it('sends a big one to the owner even where the setting lets a worker in', () => {
+    f.settingsWith({ payout_approver_roles: ['admin', 'radnik'] })
     const shiftId = f.openShift({ members: ['Amar', 'Emir'] })
     const payout = requestPayout(f.db, f.venueId, f.actor('Amar'), shiftId, {
       amount_fen: 6_000, reason: 'dobavljac',

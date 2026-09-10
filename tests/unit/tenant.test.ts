@@ -39,10 +39,14 @@ function enrolShared() {
   return { deviceId: result.device.id, token }
 }
 
-function pinIn(name: string, pin: string) {
+/**
+ * A person at the pad. The body names nobody — the digits do — so this takes a
+ * name only to ask the fixture which digits are his.
+ */
+function pinIn(name: string) {
   const device = enrolShared()
   const row = f.db.select().from(schema.devices).where(eq(schema.devices.id, device.deviceId)).get()!
-  const { token } = loginWithPin(f.db, row, { user_id: f.userId(name), pin }, { ip: IP, now: f.clock.now() })
+  const { token } = loginWithPin(f.db, row, { pin: f.pin(name) }, { ip: IP, now: f.clock.now() })
   return { session: token, device: device.token }
 }
 
@@ -70,7 +74,7 @@ describe('deny by default', () => {
   })
 
   it('403s a route that is not in ROUTE_ROLES, even for an admin', () => {
-    const admin = adminLogin(f.db, { email: 'haris@lounge.ba', password: 'lounge' }, { ip: IP })
+    const admin = adminLogin(f.db, { email: 'haris@lounge.ba', password: '1111' }, { ip: IP })
 
     // Nothing declares this. A new route is dead until somebody declares it.
     expect(ROUTE_ROLES['POST /api/secret/backdoor']).toBeUndefined()
@@ -78,31 +82,43 @@ describe('deny by default', () => {
       .toMatchObject({ ok: false, status: 403, code: 'FORBIDDEN' })
   })
 
-  it('403s a waiter on an admin route and lets the admin through', () => {
-    const amar = pinIn('Amar', '1111')
+  it('403s a radnik on an admin route and lets the admin through', () => {
+    const amar = pinIn('Amar')
     expect(ask('/api/admin/devices', 'GET', { s: amar.session, d: amar.device }))
       .toMatchObject({ ok: false, status: 403, code: 'FORBIDDEN' })
 
-    const admin = adminLogin(f.db, { email: 'haris@lounge.ba', password: 'lounge' }, { ip: IP })
+    const admin = adminLogin(f.db, { email: 'haris@lounge.ba', password: '1111' }, { ip: IP })
     expect(ask('/api/admin/devices', 'GET', { s: admin.token }).ok).toBe(true)
   })
 
-  it('403s a waiter on the owner dashboard reads', () => {
-    const amar = pinIn('Amar', '1111')
+  it('403s a radnik on the owner dashboard reads', () => {
+    const amar = pinIn('Amar')
     for (const path of ['/api/owner/live', '/api/owner/shifts', '/api/owner/log']) {
       expect(ask(path, 'GET', { s: amar.session, d: amar.device }))
         .toMatchObject({ ok: false, status: 403 })
     }
   })
 
-  it('lets a bartender decide an adjustment and refuses a waiter', () => {
-    const emir = pinIn('Emir', '123456')
+  /**
+   * This table is the **coarse** gate and only ever answers "which roles may
+   * knock". It used to look like it answered more, because `waiter` and
+   * `bartender` were two rows and the approval routes listed only one of them —
+   * so this test read like the approver rule. It never was: the fine gate is
+   * `settings.approver_roles`, enforced inside the service, and with one worker
+   * role the coarse table now says the honest thing out loud. Both workers get
+   * through the door here; `adjustments.test.ts` is where one of them is turned
+   * away at the desk.
+   */
+  it('lets any radnik knock on the decide route — the approver rule is the service\'s', () => {
     const id = '4f3c2b1a-0000-4000-8000-000000000001'
+
+    const emir = pinIn('Emir')
     expect(ask(`/api/adjustments/${id}/decide`, 'POST', { s: emir.session, d: emir.device }).ok).toBe(true)
 
-    const lejla = pinIn('Lejla', '2222')
-    expect(ask(`/api/adjustments/${id}/decide`, 'POST', { s: lejla.session, d: lejla.device }))
-      .toMatchObject({ ok: false, status: 403 })
+    const lejla = pinIn('Lejla')
+    expect(ask(`/api/adjustments/${id}/decide`, 'POST', { s: lejla.session, d: lejla.device }).ok).toBe(true)
+
+    expect(ROUTE_ROLES[`POST /api/adjustments/:id/decide`]).toEqual(['admin', 'radnik'])
   })
 })
 
@@ -230,7 +246,7 @@ describe('the limiters', () => {
     const approver = f.userId('Emir')
     const bucket = `${device.deviceId}:${approver}`
 
-    verifyPinMetered(f.db, f.venueId, approver, device.deviceId, '123456',
+    verifyPinMetered(f.db, f.venueId, approver, device.deviceId, '3333',
       { ip: IP, kind: 'approve', now: f.clock.now() })
     expect(pinLimiter.remaining(bucket)).toBe(PIN_LIMIT - 1)
 
@@ -241,7 +257,7 @@ describe('the limiters', () => {
 
     let refused: { status?: number, code?: string, data?: Record<string, unknown> } = {}
     try {
-      verifyPinMetered(f.db, f.venueId, approver, device.deviceId, '123456',
+      verifyPinMetered(f.db, f.venueId, approver, device.deviceId, '3333',
         { ip: IP, kind: 'approve', now: f.clock.now() })
     } catch (err) {
       refused = err as typeof refused
@@ -260,7 +276,7 @@ describe('the limiters', () => {
     expect(pinLimiter.remaining(`${device.deviceId}:${f.userId('Haris')}`)).toBe(PIN_LIMIT)
 
     // …and Haris can still approve on the same tablet.
-    verifyPinMetered(f.db, f.venueId, f.userId('Haris'), device.deviceId, '123456',
+    verifyPinMetered(f.db, f.venueId, f.userId('Haris'), device.deviceId, '1111',
       { ip: IP, kind: 'approve', now: f.clock.now() })
   })
 

@@ -459,8 +459,17 @@ describe('otpis', () => {
     expect(f.onHand('Šećer')).toBe(4150)
   })
 
-  it('keeps a waiter to the two reasons that are visibly accidents', () => {
-    f.openShift({ members: ['Amar'] })
+  /**
+   * `WAITER_REASONS` never asked what role you were — it asks whether you are an
+   * approver, and that has always been `settings.approver_roles`. What changed
+   * is the default answer: with one worker role, every worker is on that list,
+   * so *degustacija* is open to whoever is on the šank tonight. The rule still
+   * bites in the venue where the owner keeps the approvals.
+   */
+  it('keeps a non-approver to the two reasons that are visibly accidents', () => {
+    f.openShift({ members: ['Amar', 'Emir'] })
+    f.settingsWith({ approver_roles: ['admin'] })
+
     refuses(() => logWaste(f.db, f.venueId, f.actor('Amar'), {
       client_id: randomUUID(),
       stock_item_id: f.stockItemId('Coca-Cola 0,25 l'),
@@ -468,7 +477,9 @@ describe('otpis', () => {
       reason: 'degustacija',
     }), 'REASON_FORBIDDEN', 403)
 
-    // The bartender is a default approver, so he may write any of them.
+    // …and back on the venue's own settings, where a worker is an approver, he
+    // may write any of them.
+    f.settingsWith({})
     expect(logWaste(f.db, f.venueId, f.actor('Emir'), {
       client_id: randomUUID(),
       stock_item_id: f.stockItemId('Coca-Cola 0,25 l'),
@@ -477,9 +488,13 @@ describe('otpis', () => {
     }).id).toBeTruthy()
   })
 
-  it('flags a waiter breaking a bottle, and a big enough loss whoever writes it', () => {
+  it('flags a non-approver breaking a bottle, and a big enough loss whoever writes it', () => {
     f.openShift({ members: ['Amar', 'Emir'] })
 
+    // A bottle off the shelf is the one waste a person could quietly turn into
+    // a free round, so it is flagged when the person writing it is not an
+    // approver — which, on this venue's own settings, no worker is not.
+    f.settingsWith({ approver_roles: ['admin'] })
     const bottle = logWaste(f.db, f.venueId, f.actor('Amar'), {
       client_id: randomUUID(),
       stock_item_id: f.stockItemId('Coca-Cola 0,25 l'),
@@ -487,9 +502,10 @@ describe('otpis', () => {
       reason: 'razbijeno',
     })
     expect(bottle.needs_approval).toBe(true)
+    f.settingsWith({})
 
     // 10,00 KM is the default `waste_pin_threshold_fen`: 84 g of tobacco at
-    // 12 fen a gram is 10,08 KM, which crosses it even for the bartender.
+    // 12 fen a gram is 10,08 KM, which crosses it for an approver too.
     const tin = logWaste(f.db, f.venueId, f.actor('Emir'), {
       client_id: randomUUID(),
       stock_item_id: f.stockItemId('Al Fakher · Jabuka'),
@@ -989,8 +1005,8 @@ describe('Potvrđujem stanje — the witness (F9 step 4)', () => {
 })
 
 describe('otpis with the approver PIN on the spot (S13)', () => {
-  const EMIR_PIN = '123456'
-  const HARIS_PIN = '123456'
+  const EMIR_PIN = '3333'
+  const HARIS_PIN = '1111'
 
   /** A 12 KM bottle: over `waste_pin_threshold_fen` (10 KM) on its own. */
   function expensiveBottle(): string {
@@ -1064,8 +1080,9 @@ describe('otpis with the approver PIN on the spot (S13)', () => {
     expect(movements('waste')).toHaveLength(0)
   })
 
-  it('a waiter is not an approver, whatever PIN he types', () => {
+  it('a colleague the owner has not made an approver is not one, whatever PIN he types', () => {
     f.openShift({ members: ['Amar'] })
+    f.settingsWith({ approver_roles: ['admin'] })
     const itemId = expensiveBottle()
     refuses(
       () => logWaste(f.db, f.venueId, f.actor('Amar', { device: 'dev-1' }), {
@@ -1074,7 +1091,7 @@ describe('otpis with the approver PIN on the spot (S13)', () => {
         qty: 1,
         reason: 'razbijeno',
         approver_user_id: f.userId('Lejla'),
-        pin: '2222',
+        pin: '9999',
       }),
       'NOT_APPROVER', 403,
     )

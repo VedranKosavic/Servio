@@ -61,14 +61,19 @@ describe('createUpload', () => {
     expect(delivery.bytes).toBeGreaterThan(2_000_000)
   })
 
-  it('refuses a delivery photo from a waiter, and from a šanker without the setting', () => {
-    expectCode(
-      () => createUpload(f.db, f.venueId, f.actor('Amar'), { bytes: jpegBytes() }, 'delivery'),
-      'KIND_FORBIDDEN',
-    )
-
+  /**
+   * The gate here was half role and half setting; it is all setting now.
+   *
+   * It used to read "an admin, or a bartender if `bartender_can_receive_goods`"
+   * — and a waiter was refused by his role. With one worker role there is
+   * nobody left for the role half to refuse, so the setting does the whole job:
+   * on, and any worker may photograph a delivery; off, and only the owner may.
+   * That is the same sentence the *Postavke* label always made, and the same
+   * setting that gates `POST /api/stock/deliveries`.
+   */
+  it('refuses a delivery photo from a worker when the venue does not let workers receive goods', () => {
     // The dev seed turns `bartender_can_receive_goods` on, which is what the
-    // existing `/sanker` delivery screen needs — so the šanker is allowed here.
+    // existing `/sanker` delivery screen needs.
     expect(() => createUpload(
       f.db, f.venueId, f.actor('Emir'), { bytes: jpegBytes() }, 'delivery',
     )).not.toThrow()
@@ -76,6 +81,10 @@ describe('createUpload', () => {
     f.settingsWith({ bartender_can_receive_goods: false })
     expectCode(
       () => createUpload(f.db, f.venueId, f.actor('Emir'), { bytes: jpegBytes() }, 'delivery'),
+      'KIND_FORBIDDEN',
+    )
+    expectCode(
+      () => createUpload(f.db, f.venueId, f.actor('Amar'), { bytes: jpegBytes() }, 'delivery'),
       'KIND_FORBIDDEN',
     )
   })

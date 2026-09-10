@@ -13,7 +13,7 @@
  * `api-shapes.test.ts` walks every response and fails on any key matching
  * `/_hash$|token|password|pepper/`.
  */
-import type { Role } from '../types'
+import type { Role, ScreenMode } from '../types'
 import type { Settings } from '../settings'
 
 /** A person, as every screen sees them. Never a hash, never an email. */
@@ -64,6 +64,15 @@ export interface SessionBrief {
   expires_at: string
   /** Somebody PIN'd into a colleague's personal phone: 2 h, not 14 h. */
   borrowed: boolean
+  /**
+   * Which staff screen this session picked tonight, or `null` for "not yet".
+   *
+   * It lives on the session and not on the user because it is a shift's worth
+   * of choice, not a property of the person: Emir is on the šank tonight and on
+   * the floor tomorrow, and a reload at 02:00 must land him where he was. An
+   * admin session is always `null` — the owner's landing is `/admin`.
+   */
+  mode: ScreenMode | null
 }
 
 /**

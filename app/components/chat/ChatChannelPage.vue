@@ -47,7 +47,7 @@ const channel = computed(() => chat.channel(kind.value))
 const messages = computed(() => chat.thread(kind.value))
 const waiting = computed(() => chat.pendingFor(kind.value))
 const myId = computed(() => me.user.value?.id ?? '')
-const myRole = computed(() => me.user.value?.role ?? 'waiter')
+const myRole = computed(() => me.user.value?.role ?? 'radnik')
 const deleteWindowS = computed(() => me.settings.value?.chat_delete_own_s ?? 900)
 
 useHead({ title: computed(() => CHANNEL_NAMES[kind.value]) })

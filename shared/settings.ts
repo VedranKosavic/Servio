@@ -49,10 +49,16 @@ export const DEFAULT_SETTINGS = {
 
   /**
    * The fine gate on the seven approval routes. `ROUTE_ROLES` is the coarse one:
-   * an owner who drops `bartender` from this list gets a bartender who is
-   * exactly a waiter, refused by the service even though the route let him in.
+   * an owner who drops `radnik` from this list keeps every approval to himself,
+   * and the services refuse a worker even though the route let him in.
+   *
+   * It ships with `radnik` on it because that is what the venue does today —
+   * whoever is on the šank closes the shift and decides a storno at 01:00, and
+   * an owner asleep at home cannot. Collapsing `waiter` and `bartender` into
+   * one role means this setting, not the role, is now the only thing standing
+   * between a worker and somebody else's money.
    */
-  approver_roles: ['admin', 'bartender'] as Role[],
+  approver_roles: ['admin', 'radnik'] as Role[],
   payout_approver_roles: ['admin'] as Role[],
 
   /** During a rush anybody carries anybody's tray; refusing would lose the sale. */
@@ -128,8 +134,8 @@ export const settingsSchema = z.object({
   cash_custody: z.enum(['per_waiter', 'shared']),
   track_cash_tips: z.boolean(),
 
-  approver_roles: z.array(z.enum(['admin', 'waiter', 'bartender'])).min(1),
-  payout_approver_roles: z.array(z.enum(['admin', 'waiter', 'bartender'])).min(1),
+  approver_roles: z.array(z.enum(['admin', 'radnik'])).min(1),
+  payout_approver_roles: z.array(z.enum(['admin', 'radnik'])).min(1),
 
   allow_cross_waiter_rounds: z.boolean(),
   bartender_can_receive_goods: z.boolean(),

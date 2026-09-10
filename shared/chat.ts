@@ -27,19 +27,19 @@ export const CHANNEL_NAMES: Record<ChannelKind, string> = {
 /**
  * PLAN F12 (a). Three rows × three columns, and nothing else decides access.
  *
- * | role      | Svi | Konobari | Admini |
- * |-----------|-----|----------|--------|
- * | admin     | yes | **no**   | yes    |
- * | bartender | yes | yes      | no     |
- * | waiter    | yes | yes      | no     |
+ * | role   | Svi | Konobari | Admini |
+ * |--------|-----|----------|--------|
+ * | admin  | yes | **no**   | yes    |
+ * | radnik | yes | yes      | no     |
  *
- * The šanker is staff. The owner never sees *Konobari* in the app — that is a
- * server-enforced rule and a *Pravila* promise, and CLAUDE.md's "Konobari is
- * private" is this table.
+ * The šanker is staff, and since the collapse to two roles he is the same
+ * account as the konobar — the screen he picked tonight changes nothing here.
+ * The owner never sees *Konobari* in the app: that is a server-enforced rule
+ * and a *Pravila* promise, and CLAUDE.md's "Konobari is private" is this table.
  */
 export function canSee(role: Role, kind: ChannelKind): boolean {
   if (kind === 'svi') return true
-  if (kind === 'konobari') return role === 'waiter' || role === 'bartender'
+  if (kind === 'konobari') return role === 'radnik'
   return role === 'admin'
 }
 

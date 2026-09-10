@@ -32,6 +32,7 @@ import { emitChange } from '../utils/bus'
 import { bump, getSettings, log, unitCost } from './contracts'
 import { maxSeq } from './changes'
 import { onUserDeactivated } from './roster'
+import { requirePinFree } from './auth'
 import type { Actor, Db, Queryable, Tx } from './types'
 import type {
   CategoryAdmin, ChangeEntity, PinResetResult, ProductAdmin, RecipeLine,
@@ -871,7 +872,9 @@ export function listUsers(q: Queryable, venueId: string): UserAdmin[] {
  *
  * 4 or 6 digits are both legal for every role (§6.10) — the recommendation that
  * an admin uses 6 is advice on a screen, not a rule here, because a rule the
- * owner disagrees with at 23:00 is a rule he works around.
+ * owner disagrees with at 23:00 is a rule he works around. What is *not*
+ * advice, since the PIN started identifying the person, is that the digits are
+ * free: `requirePinFree` refuses a PIN somebody active already holds.
  */
 export function createUser(
   db: Db, venueId: string, actor: Actor, body: CreateUserBody, now = nowIso(),
@@ -879,6 +882,9 @@ export function createUser(
   if (!/^\d{4}$|^\d{6}$/.test(body.pin)) {
     throw unprocessable('PIN_LENGTH', 'a pin is 4 or 6 digits')
   }
+  // The PIN is the lock screen's only question, so it has to answer with one
+  // person: 409 `PIN_TAKEN` when somebody active already uses these digits.
+  requirePinFree(db, venueId, body.pin, null)
   if (body.email) requireEmailFree(db, body.email, null)
 
   const id = newId()
@@ -937,6 +943,16 @@ export function updateUser(
   if (patch.active === false && userId === actor.userId) {
     throw badRequest('SELF_DEACTIVATE', 'an admin may not deactivate himself')
   }
+  // Bringing somebody back is the one patch that can create a duplicate PIN
+  // without anybody typing one: his digits may have been given to a colleague
+  // while he was away, and a stored PIN is a peppered scrypt hash salted with
+  // its own user id — so two identical PINs are two unrelated strings and no
+  // query can spot the clash. His PIN is therefore dropped rather than trusted:
+  // he comes back with `has_pin: false` and the owner gives him fresh digits,
+  // which is one tap in *Osoblje* and the only answer that cannot be wrong.
+  // (`resolvePinToUser` refuses an ambiguous PIN outright, so the venue is
+  // never silently in the state this avoids either.)
+  const returning = patch.active === true && before.active !== 1 && before.pinHash !== null
   if (patch.email) requireEmailFree(db, patch.email, userId)
 
   const labels = changedLabels(before, patch, USER_LABELS, USER_COLUMNS)
@@ -949,6 +965,7 @@ export function updateUser(
       ...(patch.role !== undefined ? { role: patch.role } : {}),
       ...(patch.active !== undefined ? { active: flag(patch.active, 1) } : {}),
       ...(patch.email !== undefined ? { email: patch.email ?? null } : {}),
+      ...(returning ? { pinHash: null, pinSetAt: null } : {}),
     }).where(eq(schema.users.id, userId)).run()
 
     if (labels.length) {

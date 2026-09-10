@@ -1,5 +1,5 @@
 /**
- * The venue, as it really is: six people and a bar, 27 tables across two zones,
+ * The venue, as it really is: the staff and a bar, 27 tables across two zones,
  * the menu with its normativi, and the opening stock count.
  *
  * Run by `npm run db:seed`, and automatically at dev startup when the `venues`
@@ -9,11 +9,19 @@
  * silently doubles the stock on hand.
  *
  * **`devSecrets` is an explicit argument, not an environment guess.** With it
- * on (dev, tests) the six people get the PINs listed below and Haris gets an
+ * on (dev, tests) the seeded people get the PINs listed below and Haris gets an
  * email and a password, so a fresh clone can log in. With it off the users are
  * inserted with `pin_hash NULL` — which means "cannot log in" — and the CLI
  * prints a line telling whoever is installing to set the PINs in `/admin`. A
  * default PIN that reaches a real café is a PIN nobody ever changes.
+ *
+ * **`cast` is the second explicit argument.** The venue has three accounts —
+ * Haris, Amar and Emir — and that is what a fresh clone and the live database
+ * get. The unit fixture and the Playwright suite need more people than that
+ * (somebody to hand a float to, somebody to swap a shift with, somebody to
+ * deactivate mid-test), so they pass `cast: 'full'` and get three more. It is a
+ * flag and not an environment guess for the same reason `devSecrets` is: a test
+ * cast that can reach a real café is a stranger's name on the lock screen.
  */
 import { sql } from 'drizzle-orm'
 import type { Db } from './client'
@@ -27,10 +35,15 @@ const id = () => randomUUID()
 export interface SeedOptions {
   /** Give the seeded people the dev PINs and Haris his email + password. */
   devSecrets?: boolean
+  /**
+   * `'default'` — the three real accounts (Haris, Amar, Emir).
+   * `'full'` — those three plus Lejla, Dino and Tarik, for the test suites.
+   */
+  cast?: 'default' | 'full'
 }
 
 /**
- * Fixed ids for the six seeded people.
+ * Fixed ids for the seeded people.
  *
  * They are constants for one reason: `hashSecret` mixes the user id into the
  * hash, so a memoised hash is only reusable if the id is the same every time.
@@ -46,28 +59,30 @@ const SEED_USER_IDS = {
   Haris: '66666666-6666-4666-8666-666666666666',
 } as const
 
-/** Dev only. Documented in `docs/BACKEND.md` §5.6 and nowhere near production. */
-const DEV_PINS: Record<keyof typeof SEED_USER_IDS, string> = {
-  Amar: '1111',
-  Lejla: '2222',
-  Dino: '3333',
-  Tarik: '4444',
-  Emir: '123456',
-  Haris: '123456',
+/**
+ * Dev only, and **every one of them different**.
+ *
+ * Since the PIN identifies the person there is no such thing as a shared PIN:
+ * two people on 1111 make a pad that resolves to whichever row SQLite returned
+ * first, which is why `requirePinFree` refuses it at every door that sets one.
+ * The testing-phase `SANK_DEV_PIN` override — one number for the whole team —
+ * was deleted for exactly that reason: it can no longer produce a database
+ * anybody can log into. `db:dev-pins` survives, repointed at these per-account
+ * PINs, because a database seeded *before* this change already has six people
+ * behind one number and needs a way back that does not delete it.
+ */
+export const DEV_PINS: Record<keyof typeof SEED_USER_IDS, string> = {
+  Haris: '1111',
+  Amar: '2222',
+  Emir: '3333',
+  Lejla: '4444',
+  Dino: '5555',
+  Tarik: '6666',
 }
 
-const DEV_ADMIN_EMAIL = 'haris@lounge.ba'
-const DEV_ADMIN_PASSWORD = 'lounge'
-
-/**
- * Testing-phase override: with `SANK_DEV_PIN=1111` in `.env` every seeded
- * person gets that PIN (4 or 6 digits) and Haris gets it as his password too,
- * so a whole team can test with one number. Unset it and the per-person dev
- * PINs above apply. Never set on a production install.
- */
-const DEV_PIN_OVERRIDE = /^\d{4}$|^\d{6}$/.test(process.env.SANK_DEV_PIN?.trim() ?? '')
-  ? process.env.SANK_DEV_PIN!.trim()
-  : null
+export const DEV_ADMIN_EMAIL = 'haris@lounge.ba'
+/** The owner's laptop entrance at `/admin/login`, and his PIN, are the same 1111. */
+export const DEV_ADMIN_PASSWORD = '1111'
 
 /** Module scope, so the whole test suite pays for each hash exactly once. */
 const hashCache = new Map<string, string>()
@@ -111,20 +126,26 @@ export function seed(db: Db, opts: SeedOptions = {}): void {
     }).run()
 
     // -- People -------------------------------------------------------------
-    // Three roles: `admin` has the dashboard and the approvals, `waiter` and
-    // `bartender` are identical on the floor apart from the default screen and
-    // the fact that a bartender is a default approver (a setting, not a rule).
+    // Two roles: `admin` has the dashboard and the approvals and never appears
+    // on a staff screen; `radnik` is everybody else, and which screen he works
+    // tonight — Konobar or Šanker — is a choice on his session, not a property
+    // of his account. The three real accounts come first; `cast: 'full'` adds
+    // the three the test suites need.
     const staff: Array<{
       name: keyof typeof SEED_USER_IDS
-      role: 'admin' | 'waiter' | 'bartender'
+      role: 'admin' | 'radnik'
       pinLen: 4 | 6
     }> = [
-      { name: 'Amar', role: 'waiter', pinLen: 4 },
-      { name: 'Lejla', role: 'waiter', pinLen: 4 },
-      { name: 'Dino', role: 'waiter', pinLen: 4 },
-      { name: 'Tarik', role: 'waiter', pinLen: 4 },
-      { name: 'Emir', role: 'bartender', pinLen: 6 },
-      { name: 'Haris', role: 'admin', pinLen: 6 },
+      { name: 'Haris', role: 'admin', pinLen: 4 },
+      { name: 'Amar', role: 'radnik', pinLen: 4 },
+      { name: 'Emir', role: 'radnik', pinLen: 4 },
+      ...(opts.cast === 'full'
+        ? [
+            { name: 'Lejla', role: 'radnik', pinLen: 4 },
+            { name: 'Dino', role: 'radnik', pinLen: 4 },
+            { name: 'Tarik', role: 'radnik', pinLen: 4 },
+          ] as const
+        : []),
     ]
     for (const person of staff) {
       const userId = SEED_USER_IDS[person.name]
@@ -138,13 +159,13 @@ export function seed(db: Db, opts: SeedOptions = {}): void {
         initials: person.name.slice(0, 2).toUpperCase(),
         role: person.role,
         active: 1,
-        pinHash: devSecrets ? memoHash(DEV_PIN_OVERRIDE ?? DEV_PINS[person.name], userId) : null,
-        pinLen: DEV_PIN_OVERRIDE ? (DEV_PIN_OVERRIDE.length === 6 ? 6 : 4) : person.pinLen,
+        pinHash: devSecrets ? memoHash(DEV_PINS[person.name], userId) : null,
+        pinLen: person.pinLen,
         pinSetAt: devSecrets ? now : null,
         pinPepperV: 1,
         // Email + password is the only way into `/admin` on a laptop, and only an
         // admin has one.
-        passwordHash: devSecrets && isAdmin ? memoHash(DEV_PIN_OVERRIDE ?? DEV_ADMIN_PASSWORD, userId) : null,
+        passwordHash: devSecrets && isAdmin ? memoHash(DEV_ADMIN_PASSWORD, userId) : null,
         email: devSecrets && isAdmin ? DEV_ADMIN_EMAIL : null,
         logSeenAt: null,
         createdAt: now,

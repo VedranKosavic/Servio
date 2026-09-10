@@ -77,7 +77,7 @@ export function createUpload(
   //    the same setting that gates `POST /api/stock/deliveries`.
   if (kind === 'delivery') {
     const allowed = actor.role === 'admin'
-      || (actor.role === 'bartender' && settings.bartender_can_receive_goods)
+      || (actor.role === 'radnik' && settings.bartender_can_receive_goods)
     if (!allowed) throw unprocessable('KIND_FORBIDDEN', 'this session may not upload a delivery photo')
   }
 

@@ -71,11 +71,13 @@ export const users = sqliteTable('users', {
   /** "AM", "LJ" — what fits on an avatar circle. */
   initials: text('initials').notNull(),
   /**
-   * Three roles and no more. Korak 1's `'owner'` is renamed to `'admin'` by the
-   * Korak 2 migration; the *paths* that name the owner dashboard keep the word
+   * Two roles and no more — `admin` (*Vlasnik*) and `radnik` (*Radnik*).
+   * `0005_radnik.sql` maps Korak 2's `waiter` and `bartender` onto the one
+   * value; which screen a worker is on tonight lives on `sessions.mode`, not
+   * here. The *paths* that name the owner dashboard keep the word
    * (`/api/owner/live`), the role value never does.
    */
-  role: text('role', { enum: ['admin', 'waiter', 'bartender'] }).notNull(),
+  role: text('role', { enum: ['admin', 'radnik'] }).notNull(),
   /** SQLite has no boolean: 1 / 0. */
   active: integer('active').notNull().default(1),
   /** `scrypt$N$r$p$<salt hex>$<hash hex>`; NULL = this person cannot log in. */
@@ -336,6 +338,17 @@ export const sessions = sqliteTable('sessions', {
   kind: text('kind', { enum: ['admin', 'staff'] }).notNull(),
   /** 1 when somebody PIN'd into a colleague's personal phone: 2 h, not 14 h. */
   borrowed: integer('borrowed').notNull().default(0),
+  /**
+   * Which staff screen this session is working — `konobar`, `sanker`, or NULL
+   * for "has not chosen yet".
+   *
+   * It is a session column and not a user column on purpose: since the collapse
+   * to two roles the screen is a choice a worker makes after the PIN, once a
+   * night, and may switch at midnight without signing out. Storing it here is
+   * also what makes a reload at 02:00 land him where he was rather than back on
+   * the chooser. An admin session never has one.
+   */
+  mode: text('mode', { enum: ['konobar', 'sanker'] }),
   createdAt: text('created_at').notNull(),
   lastSeenAt: text('last_seen_at'),
   expiresAt: text('expires_at').notNull(),
@@ -411,7 +424,7 @@ export const shifts = sqliteTable('shifts', {
 ])
 
 /**
- * Who worked the shift. `role` is a snapshot, so a bartender promoted next month
+ * Who worked the shift. `role` is a snapshot, so a worker promoted next month
  * keeps his old shifts' lines. `left_at` may be set exactly once — a logout is
  * not a leave (§5.1), or Emir handing the tablet to Haris would end his hours.
  */
@@ -420,7 +433,7 @@ export const shiftMembers = sqliteTable('shift_members', {
   venueId: text('venue_id').notNull().references(() => venues.id),
   shiftId: text('shift_id').notNull().references(() => shifts.id),
   userId: text('user_id').notNull().references(() => users.id),
-  role: text('role', { enum: ['admin', 'waiter', 'bartender'] }).notNull(),
+  role: text('role', { enum: ['admin', 'radnik'] }).notNull(),
   joinedAt: text('joined_at').notNull(),
   leftAt: text('left_at'),
   leftAtSource: text('left_at_source', { enum: ['manual', 'auto'] }),

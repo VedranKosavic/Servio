@@ -44,9 +44,9 @@ let f: Fixture
 beforeEach(() => { f = makeFixture() })
 afterEach(() => { f.close() })
 
-const AMAR_PIN = '1111'
-const EMIR_PIN = '123456'
-const HARIS_PIN = '123456'
+const AMAR_PIN = '2222'
+const EMIR_PIN = '3333'
+const HARIS_PIN = '1111'
 
 const line = (product: string, qty = 1) => ({
   id: randomUUID(), product_id: f.productId(product), qty,
@@ -314,7 +314,7 @@ describe('the approver\'s PIN', () => {
   it('refuses a waiter approving his own request', () => {
     f.openShift({ members: ['Amar'] })
     const order = lock('Amar', 'Sto 7')
-    f.settingsWith({ approver_roles: ['admin', 'bartender', 'waiter'] })
+    f.settingsWith({ approver_roles: ['admin', 'radnik'] })
 
     refuses(() => request('Amar', lineOf(order.order_id), {
       approver_user_id: f.userId('Amar'), pin: AMAR_PIN,
@@ -479,11 +479,32 @@ describe('decideAdjustment', () => {
     ), 'SELF_APPROVAL', 403)
   })
 
-  it('refuses a waiter deciding anybody\'s', () => {
+  /**
+   * The gate that used to be the role, and is now only the setting.
+   *
+   * Before the collapse this test read "a waiter may not decide" and got that
+   * for free: `approver_roles` shipped as `['admin','bartender']`, so a waiter
+   * was refused by the *default*. There is one worker role now and it ships on
+   * that list — somebody has to be able to void a line at 01:00 — so the refusal
+   * has to be asked for, and asking for it is exactly what an owner who wants
+   * the approvals to himself does in *Postavke*.
+   */
+  it('refuses a worker in a venue whose owner keeps the approvals to himself', () => {
     const { adjustmentId } = pending()
+    f.settingsWith({ approver_roles: ['admin'] })
+
+    // `NOT_APPROVER` and not `FORBIDDEN`: `ROUTE_ROLES` let him through the door
+    // — `radnik` is on the coarse list and always will be — and it is the
+    // service reading `approver_roles` that turns him away. Those are two
+    // different refusals and the codes say which one happened.
     refuses(() => decideAdjustment(f.db, f.venueId, f.actor('Tarik'), adjustmentId, {
       outcome: 'applied',
-    }), 'FORBIDDEN', 403)
+    }), 'NOT_APPROVER', 403)
+
+    // …and the owner, who is on every version of that list, still can.
+    expect(decideAdjustment(f.db, f.venueId, f.adminActor(), adjustmentId, {
+      outcome: 'applied',
+    }).adjustment.status).toBe('applied')
   })
 
   it('refuses a bartender once his window has passed — "Ide vlasniku"', () => {
@@ -525,7 +546,8 @@ describe('decideAdjustment', () => {
 })
 
 describe('listPending', () => {
-  it('shows an admin everything and a waiter only his own', () => {
+  it('shows an admin everything and a non-approving worker only his own', () => {
+    f.settingsWith({ approver_roles: ['admin'] })
     f.openShift({ members: ['Amar', 'Lejla', 'Emir'] })
     const a = lock('Amar', 'Sto 1')
     const b = lock('Lejla', 'Sto 2')

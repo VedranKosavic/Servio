@@ -50,10 +50,9 @@
  *   npx playwright test tests/e2e/wp1-storno.spec.ts
  */
 import { expect, test, type APIRequestContext, type BrowserContext, type Page } from '@playwright/test'
-import { ackRules, resetLimits } from './helpers'
+import { ackRules, resetLimits, pinLogin, PINS, type Person } from './helpers'
 
-const ADMIN = { email: 'haris@lounge.ba', password: 'lounge' }
-const PINS: Record<string, string> = { Amar: '1111', Emir: '123456' }
+const ADMIN = { email: 'haris@lounge.ba', password: '1111' }
 
 interface Named { id: string, name: string }
 
@@ -80,10 +79,7 @@ async function enrolAndLogin(context: BrowserContext, who: string): Promise<void
   })
   expect(enrolled.ok(), await enrolled.text()).toBe(true)
 
-  const login = await context.request.post('/api/auth/pin', {
-    data: { user_id: user.id, pin: PINS[who] },
-  })
-  expect(login.ok(), await login.text()).toBe(true)
+  await pinLogin(context.request, who as Person, who === 'Emir' ? 'sanker' : 'konobar')
 
   // A published Pravila version stands in front of every /konobar screen (S12), and
   // phase4-pravila publishes one before this file runs. Clear it here so the

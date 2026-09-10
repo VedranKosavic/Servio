@@ -31,17 +31,14 @@
  *   SANK_E2E_URL=http://localhost:3114 npx playwright test tests/e2e/wp4-moja-smjena.spec.ts
  */
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
-import { ackRules, resetLimits } from './helpers'
+import { ackRules, resetLimits, pinLogin, PINS, type Person } from './helpers'
 
-const AMAR_PIN = '1111'
-const EMIR_PIN = '123456'
 /**
  * **Tarik's night, not Amar's.** The five spec files run in one command against
  * one database (§5.1) and Amar is the waiter every other file drives, so his
  * expected cash by the time this file runs is four files' worth of takings and a
  * blind settlement against it could never read *Tačno*. Tarik works only here.
  */
-const TARIK_PIN = '4444'
 
 interface Boot {
   tables: { id: string, name: string }[]
@@ -75,11 +72,9 @@ async function knownUsers(context: BrowserContext, fresh = false): Promise<Login
  * is `ip:…`, after it `d:…`), so it happens once, in `beforeAll`, and a login
  * that comes later costs the device's own bucket and nothing shared.
  */
-async function loginPin(context: BrowserContext, who = 'Amar', pin = AMAR_PIN) {
+async function loginPin(context: BrowserContext, who: Person = 'Amar') {
   const person = (await knownUsers(context)).find(u => u.name === who)!
-  expect((await context.request.post('/api/auth/pin', {
-    data: { user_id: person.id, pin },
-  })).ok()).toBe(true)
+  await pinLogin(context.request, who as Person, 'konobar')
 
   // A published Pravila version stands in front of every /konobar screen (S12), and
   // phase4-pravila publishes one before this file runs. Clear it here so the
@@ -88,9 +83,9 @@ async function loginPin(context: BrowserContext, who = 'Amar', pin = AMAR_PIN) {
   return person
 }
 
-async function enrolAndLogin(context: BrowserContext, pin = AMAR_PIN, who = 'Amar') {
+async function enrolAndLogin(context: BrowserContext, who: Person = 'Amar') {
   expect((await context.request.post('/api/dev/enrol', { data: {} })).ok()).toBe(true)
-  return await loginPin(context, who, pin)
+  return await loginPin(context, who)
 }
 
 /** A night on this phone, written through the real routes. */
@@ -147,7 +142,7 @@ test.describe('WP4 — Moja smjena', () => {
   test.beforeAll(async ({ browser }) => {
     context = await browser.newContext()
     await resetLimits(context.request)
-    await enrolAndLogin(context, TARIK_PIN, 'Tarik')
+    await enrolAndLogin(context, 'Tarik')
   })
 
   test.afterAll(async () => {
@@ -269,7 +264,7 @@ test.describe('WP4 — Moja smjena', () => {
     // auth calls a minute, which is the budget this whole test lives inside.
     const admin = await browser.newContext()
     expect((await admin.request.post('/api/auth/admin/login', {
-      data: { email: 'haris@lounge.ba', password: 'lounge' },
+      data: { email: 'haris@lounge.ba', password: '1111' },
     })).ok()).toBe(true)
     // Read it back first. `shared_device_idle_s` lives in `venues.settings_json`,
     // so it outlives this browser context and this file: left at two seconds it
@@ -283,8 +278,8 @@ test.describe('WP4 — Moja smjena', () => {
 
     try {
       // Two people on the same device, so the lock screen has something to rank.
-      await loginPin(context, 'Amar', AMAR_PIN)
-      await loginPin(context, 'Emir', EMIR_PIN)
+      await loginPin(context, 'Amar')
+      await loginPin(context, 'Emir')
 
       // Signed in here, so ranked here; Dino never has.
       const ranked = await knownUsers(context, true)
@@ -292,20 +287,19 @@ test.describe('WP4 — Moja smjena', () => {
       expect(ranked.find(u => u.name === 'Dino')?.last_login_at).toBeNull()
 
       // Log in through the screen itself, so the PIN is cached for the re-lock.
+      // No face to tap on the way in any more: the pad asks for digits and the
+      // digits say who typed them.
       await page.goto('/')
       await page.getByRole('button', { name: /Promijeni korisnika/ }).click()
-      await expect(page.getByRole('heading', { name: 'Prijava' })).toBeVisible()
+      await expect(page.getByRole('button', { name: '1', exact: true })).toBeVisible()
 
-      // Amar and Emir are the faces; Dino is behind *Ostali profili*.
-      await expect(page.getByRole('button', { name: /Amar/ })).toBeVisible()
-      await expect(page.getByRole('button', { name: /Dino/ })).toHaveCount(0)
-      await page.getByRole('button', { name: /Ostali profili/ }).click()
-      await expect(page.getByRole('button', { name: /Dino/ })).toBeVisible()
-
-      await page.getByRole('button', { name: /Amar/ }).first().click()
-      for (const digit of AMAR_PIN) {
-        await page.getByRole('button', { name: digit, exact: true }).click()
+      const pad = async (digits: string) => {
+        for (const digit of digits) {
+          await page.getByRole('button', { name: digit, exact: true }).click()
+        }
       }
+
+      await pad(PINS.Amar)
       await expect(page).toHaveURL(/\/konobar$/)
 
       // -- the tablet goes idle ----------------------------------------------
@@ -315,16 +309,13 @@ test.describe('WP4 — Moja smjena', () => {
       // -- and unlocks with no network at all --------------------------------
       await context.setOffline(true)
 
-      await page.getByRole('button', { name: /Amar/ }).first().click()
-      // The wrong PIN is refused locally, without inventing a session.
-      for (const digit of '9999') {
-        await page.getByRole('button', { name: digit, exact: true }).click()
-      }
-      await expect(page.getByText('Pogrešan PIN.')).toBeVisible()
+      // The wrong PIN is refused locally, without inventing a session. The
+      // sentence is the pad's, not a person's: offline or not, the screen has
+      // no idea whose digits these were meant to be.
+      await pad('9999')
+      await expect(page.getByText(/PIN nije prepoznat|Pogrešan PIN/)).toBeVisible()
 
-      for (const digit of AMAR_PIN) {
-        await page.getByRole('button', { name: digit, exact: true }).click()
-      }
+      await pad(PINS.Amar)
       await expect(page).toHaveURL(/\/konobar$/, { timeout: 15_000 })
 
       await context.setOffline(false)

@@ -33,7 +33,7 @@ const categoryKind = z.enum(['pice', 'hrana', 'nargila', 'ostalo'])
 const stockKind = z.enum(['pice', 'duhan', 'zar', 'potrosni', 'hrana'])
 const baseUnit = z.enum(['kom', 'g', 'ml'])
 const countMethod = z.enum(['count', 'weigh'])
-const role = z.enum(['admin', 'waiter', 'bartender'])
+const role = z.enum(['admin', 'radnik'])
 
 // ===========================================================================
 // Products and recipes

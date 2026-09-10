@@ -8,9 +8,10 @@
  * `server/api/**` and asserts the two sets match exactly, both directions.
  *
  * This is the **coarse** gate. The fine one is `settings.approver_roles`: the
- * seven `['admin','bartender']` rows below are a *default*, and an owner who
- * drops `bartender` from that setting gets a bartender the service refuses even
- * though this table let him through. A waiter never decides anybody's money.
+ * seven `AR_APPROVE` rows below let a `radnik` in at the door, and the setting
+ * decides whether the service then serves him. An owner who drops `radnik` from
+ * `approver_roles` in *Postavke* gets approvals that only he can give, refused
+ * by the service even though this table let the worker through.
  *
  * Note the word `owner` in some paths. Those name the owner *dashboard* screens
  * of PLAN §11; the **role** guarding them is `admin`. `'owner'` is not an
@@ -21,10 +22,16 @@ import { CHANNEL_KINDS } from './chat'
 
 export type RouteRole = Role[] | 'public' | 'any'
 
-/** Every role there is — the three-role list, spelled once. */
-const AWB: Role[] = ['admin', 'waiter', 'bartender']
-/** Approvals: admin, plus the bartender by default (`settings.approver_roles`). */
-const AB: Role[] = ['admin', 'bartender']
+/** Every role there is — the two-role list, spelled once. */
+const AR: Role[] = ['admin', 'radnik']
+/**
+ * The approval routes. Same two roles as `AR` — the coarse gate cannot express
+ * "a worker approves only while `approver_roles` says so" — but spelled
+ * separately because the *meaning* differs: these are the seven rows §5 calls
+ * the coarse half of `settings.approver_roles`, and reading `AR_APPROVE` in the
+ * table is how you find them.
+ */
+const AR_APPROVE: Role[] = ['admin', 'radnik']
 const A: Role[] = ['admin']
 
 /**
@@ -65,6 +72,9 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   'POST /api/auth/pin': 'public',
   'GET /api/auth/users': 'public',
   'POST /api/auth/logout': 'any',
+  // A radnik picking (or switching) his screen for tonight. `any`, not a role
+  // list: an admin may call it too and the service simply keeps his mode null.
+  'POST /api/auth/mode': 'any',
   'POST /api/devices/enrol': 'public',
   'POST /api/devices/heartbeat': 'any',
   'GET /api/me': 'any',
@@ -74,65 +84,65 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   'POST /api/dev/reset-limits': 'public',
 
   // -- Orders, tabs, payments, adjustments ---------------------------------
-  'POST /api/orders': AWB,
-  'GET /api/tables/state': AWB,
-  'GET /api/tabs/:id': AWB,
-  'POST /api/payments': AWB,
-  'POST /api/tabs/unpaid': AWB,
+  'POST /api/orders': AR,
+  'GET /api/tables/state': AR,
+  'GET /api/tabs/:id': AR,
+  'POST /api/payments': AR,
+  'POST /api/tabs/unpaid': AR,
   'POST /api/tabs/:id/unpaid/decide': A,
-  'POST /api/tabs/:id/move': AWB,
-  'POST /api/tabs/:id/assign': AWB,
-  'POST /api/tabs/:id/accept': AWB,
-  'POST /api/adjustments': AWB,
-  'POST /api/adjustments/:id/decide': AB,
-  'GET /api/adjustments/pending': AWB,
-  'POST /api/drafts/discard': AWB,
-  'GET /api/prep': AWB,
-  'POST /api/prep/:id/done': AWB,
+  'POST /api/tabs/:id/move': AR,
+  'POST /api/tabs/:id/assign': AR,
+  'POST /api/tabs/:id/accept': AR,
+  'POST /api/adjustments': AR,
+  'POST /api/adjustments/:id/decide': AR_APPROVE,
+  'GET /api/adjustments/pending': AR,
+  'POST /api/drafts/discard': AR,
+  'GET /api/prep': AR,
+  'POST /api/prep/:id/done': AR,
 
   // -- Shifts, cash, settlement --------------------------------------------
-  'POST /api/shifts/open': AWB,
-  'POST /api/shifts/:id/closing': AB,
-  'POST /api/shifts/:id/close': AB,
+  'POST /api/shifts/open': AR,
+  'POST /api/shifts/:id/closing': AR_APPROVE,
+  'POST /api/shifts/:id/close': AR_APPROVE,
   'POST /api/shifts/:id/force-close': A,
   'POST /api/shifts/:id/review': A,
   // Self-service: the service refuses a settle for anybody but the actor.
-  'POST /api/shifts/:id/settle': AWB,
-  'POST /api/shifts/:id/settlements/:id/accept': AB,
-  'POST /api/shifts/:id/leave': AWB,
-  'POST /api/shifts/:id/float': AB,
-  'POST /api/shifts/:id/payout': AWB,
+  'POST /api/shifts/:id/settle': AR,
+  'POST /api/shifts/:id/settlements/:id/accept': AR_APPROVE,
+  'POST /api/shifts/:id/leave': AR,
+  'POST /api/shifts/:id/float': AR_APPROVE,
+  'POST /api/shifts/:id/payout': AR,
   'POST /api/shifts/:id/pickup': A,
   'POST /api/shifts/:id/opening-float': A,
-  'POST /api/cash-movements/:id/decide': AB,
+  'POST /api/cash-movements/:id/decide': AR_APPROVE,
   // The receiver acknowledges his own float_out; that is the whole point.
-  'POST /api/cash-movements/:id/ack': AWB,
-  'GET /api/me/shift': AWB,
-  'GET /api/me/shift/lines': AWB,
-  'GET /api/me/shifts': AWB,
+  'POST /api/cash-movements/:id/ack': AR,
+  'GET /api/me/shift': AR,
+  'GET /api/me/shift/lines': AR,
+  'GET /api/me/shifts': AR,
   // Own row only — the service refuses a shift this person was not on (§1.6).
-  'PUT /api/me/shifts/:id/note': AWB,
-  'GET /api/me/sessions': AWB,
+  'PUT /api/me/shifts/:id/note': AR,
+  'GET /api/me/sessions': AR,
 
   // -- Stock ---------------------------------------------------------------
-  'GET /api/stock': AWB,
+  'GET /api/stock': AR,
   'POST /api/stock/opening': A,
-  // Admin always; the bartender only when `bartender_can_receive_goods` is on,
+  // Admin always; a radnik only when `bartender_can_receive_goods` is on,
   // which the service checks — this row is the coarse half of that rule.
-  'POST /api/stock/deliveries': AB,
-  'GET /api/stock/deliveries': AB,
+  'POST /api/stock/deliveries': AR_APPROVE,
+  'GET /api/stock/deliveries': AR_APPROVE,
   'POST /api/stock/deliveries/:id/reverse': A,
-  'POST /api/stock/waste': AWB,
-  'POST /api/stock/waste/:id/approve': AB,
+  'POST /api/stock/waste': AR,
+  'POST /api/stock/waste/:id/approve': AR_APPROVE,
   'POST /api/stock/corrections': A,
-  'POST /api/stock/counts': AWB,
+  'POST /api/stock/counts': AR,
   'POST /api/stock/counts/:id/confirm': A,
-  // *Potvrđujem stanje*: the incoming custodian, whoever he is. A waiter taking
-  // the bar over from the šanker witnesses exactly like a šanker does, and the
+  // *Potvrđujem stanje*: the incoming custodian, whoever he is. A worker taking
+  // the bar over witnesses exactly like the one handing it over does, and the
   // service refuses the one person who must not — the counter himself.
-  'POST /api/stock/counts/:id/witness': AWB,
-  'GET /api/stock/counts': AWB,
-  'GET /api/stock/counts/:id': AWB,
+  'POST /api/stock/counts/:id/witness': AR,
+  'GET /api/stock/counts': AR,
+  'GET /api/stock/counts/:id': AR,
 
   // -- Sync and boot -------------------------------------------------------
   'GET /api/changes': 'any',
@@ -189,28 +199,28 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   'PATCH /api/admin/settings': A,
 
   // -- Phase 4: Razgovor ---------------------------------------------------
-  // Every row here is AWB and the *channel* is what decides access, through
+  // Every row here is AR and the *channel* is what decides access, through
   // `canSee` inside the service — the coarse gate cannot express "an admin may
   // open two of the three rooms".
-  'GET /api/chat/since': AWB,
-  'GET /api/chat/:channel/messages': AWB,
-  'POST /api/chat/:channel/messages': AWB,
-  'POST /api/chat/:channel/pin': AWB,
-  'POST /api/chat/messages/:id/delete': AWB,
-  'POST /api/chat/messages/:id/forward': AWB,
-  'POST /api/chat/read': AWB,
+  'GET /api/chat/since': AR,
+  'GET /api/chat/:channel/messages': AR,
+  'POST /api/chat/:channel/messages': AR,
+  'POST /api/chat/:channel/pin': AR,
+  'POST /api/chat/messages/:id/delete': AR,
+  'POST /api/chat/messages/:id/forward': AR,
+  'POST /api/chat/read': AR,
   'POST /api/chat/users/:id/mute': A,
 
   // -- Phase 4: slike ------------------------------------------------------
   // `kind='delivery'` is gated inside the service by `bartender_can_receive_goods`,
   // the same setting that gates `POST /api/stock/deliveries`.
-  'POST /api/uploads': AWB,
-  'GET /api/uploads/:id': AWB,
+  'POST /api/uploads': AR,
+  'GET /api/uploads/:id': AR,
 
   // -- Phase 4: Raspored ---------------------------------------------------
-  'GET /api/roster': AWB,
-  'GET /api/me/roster': AWB,
-  'GET /api/me/roster/hours': AWB,
+  'GET /api/roster': AR,
+  'GET /api/me/roster': AR,
+  'GET /api/me/roster/hours': AR,
   'POST /api/roster/weeks/copy': A,
   'POST /api/roster/weeks/publish': A,
   'POST /api/roster/assignments': A,
@@ -218,10 +228,10 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   'DELETE /api/roster/assignments/:id': A,
   'GET /api/roster/swaps': A,
   // Own row only — the service refuses a swap on anybody else's shift.
-  'POST /api/roster/swaps': AWB,
-  'POST /api/roster/swaps/:id/accept': AWB,
-  'POST /api/roster/swaps/:id/decline': AWB,
-  'POST /api/roster/swaps/:id/cancel': AWB,
+  'POST /api/roster/swaps': AR,
+  'POST /api/roster/swaps/:id/accept': AR,
+  'POST /api/roster/swaps/:id/decline': AR,
+  'POST /api/roster/swaps/:id/cancel': AR,
   'POST /api/roster/swaps/:id/assign': A,
   'GET /api/roster/hours': A,
   'GET /api/admin/shift-templates': A,
@@ -229,13 +239,13 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   'PATCH /api/admin/shift-templates/:id': A,
 
   // -- Phase 4: Pravila ----------------------------------------------------
-  'GET /api/rules': AWB,
-  'POST /api/me/rules/ack': AWB,
+  'GET /api/rules': AR,
+  'POST /api/me/rules/ack': AR,
   'GET /api/admin/rules': A,
   'POST /api/admin/rules': A,
 
   // -- Phase 4: Prijem sa slike --------------------------------------------
-  'POST /api/stock/deliveries/scan': AB,
+  'POST /api/stock/deliveries/scan': AR_APPROVE,
   'POST /api/stock/scans/:id/discard': A,
   'POST /api/stock/supplier-aliases': A,
 }

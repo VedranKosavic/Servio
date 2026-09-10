@@ -55,7 +55,7 @@ beforeEach(() => { f = makeFixture() })
 afterEach(() => { f.close() })
 
 /** Haris's seeded dev PIN — `closeShift` runs the real `verifyPinMetered`. */
-const HARIS_PIN = '123456'
+const HARIS_PIN = '1111'
 
 interface Night {
   shiftId: string

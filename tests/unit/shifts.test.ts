@@ -196,21 +196,25 @@ describe('closing the night', () => {
 
     refuses(
       () => closeShift(f.db, f.venueId, f.actor('Emir'), shiftId, {
-        cash_counted_fen: 0, pin: '123456',
+        cash_counted_fen: 0, pin: '1111',
       }),
       'NO_OPEN_COUNT', 409,
     )
 
     const result = closeShift(f.db, f.venueId, f.adminActor(), shiftId, {
-      cash_counted_fen: 0, pin: '123456', override_no_open_count: true,
+      cash_counted_fen: 0, pin: '1111', override_no_open_count: true,
     })
     expect(result.shift.status).toBe('closed')
     const kinds = vi.mocked(contracts.log).mock.calls.map(c => c[2].kind)
     expect(kinds).toContain('override')
   })
 
-  it('refuses a waiter: nobody counts the drawer but an approver', () => {
+  it('refuses a non-approver: nobody counts the drawer but an approver', () => {
     const shiftId = nightReadyToClose()
+    // One worker role, and `approver_roles` ships with it on — so the person
+    // this rule turns away is a worker in a venue whose owner has kept the
+    // approvals, not a worker of a particular kind.
+    f.settingsWith({ approver_roles: ['admin'] })
     refuses(
       () => closeShift(f.db, f.venueId, f.actor('Amar'), shiftId, {
         cash_counted_fen: 13_000, pin,
@@ -350,7 +354,7 @@ describe('review', () => {
     const tab = f.lock('Amar', 'Sto 1', [{ product: 'Red Bull' }])
     f.pay('Amar', tab.tabId, 500, { method: 'card' })
     closeTab(f, tab.tabId, 'Amar')
-    closeShift(f.db, f.venueId, f.adminActor(), shiftId, { cash_counted_fen: 0, pin: '123456' })
+    closeShift(f.db, f.venueId, f.adminActor(), shiftId, { cash_counted_fen: 0, pin: '1111' })
 
     refuses(
       () => reviewShift(f.db, f.venueId, f.adminActor(), shiftId, { card_total_fen: 700 }),
@@ -366,7 +370,7 @@ describe('review', () => {
     // A card total that matches needs nothing.
     const other = f.openShift({ members: ['Amar'] })
     f.submitCount('Amar', ['Šećer'], { phase: 'open' })
-    closeShift(f.db, f.venueId, f.adminActor(), other, { cash_counted_fen: 0, pin: '123456' })
+    closeShift(f.db, f.venueId, f.adminActor(), other, { cash_counted_fen: 0, pin: '1111' })
     expect(reviewShift(f.db, f.venueId, f.adminActor(), other, { card_total_fen: 0 }).status)
       .toBe('reviewed')
   })

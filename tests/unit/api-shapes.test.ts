@@ -93,7 +93,7 @@ describe('GET /api/bootstrap', () => {
     const boot = getBootstrap(f.db, f.venueId, f.actor('Amar'))
 
     expect(boot.me.name).toBe('Amar')
-    expect(boot.me.role).toBe('waiter')
+    expect(boot.me.role).toBe('radnik')
     expect(boot.me.has_pin).toBe(true)
     // `f.actor()` builds an actor with no device, which is what an admin's
     // email session looks like too.
@@ -118,12 +118,14 @@ describe('GET /api/bootstrap', () => {
     expect(boot.seq).toBe(0)
   })
 
-  it('speaks the three Korak 2 roles', () => {
+  it('speaks the two roles and neither retired one', () => {
     const boot = getBootstrap(f.db, f.venueId, f.actor('Amar'))
     expect(boot.users.find(u => u.name === 'Haris')?.role).toBe('admin')
-    expect(boot.users.find(u => u.name === 'Emir')?.role).toBe('bartender')
-    // 'owner' is not an accepted role value anywhere after the migration.
-    expect(boot.users.map(u => u.role)).not.toContain('owner')
+    expect(boot.users.find(u => u.name === 'Emir')?.role).toBe('radnik')
+    // None of the three retired values is accepted anywhere after 0001 and 0005.
+    for (const gone of ['owner', 'waiter', 'bartender']) {
+      expect(boot.users.map(u => u.role)).not.toContain(gone)
+    }
   })
 
   /**

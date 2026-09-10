@@ -24,7 +24,15 @@ if (!isEmpty(db)) {
   // sets them in `/admin`, which is the only way a default PIN never reaches a
   // café.
   const devSecrets = process.env.NODE_ENV !== 'production'
-  seed(db, { devSecrets })
+  // The cast is the same kind of decision, and the same kind of flag. The venue
+  // has three accounts — Haris, Amar, Emir — and that is what a fresh clone and
+  // the café's own database get. The Playwright suite needs somebody to hand a
+  // float to and somebody to swap a shift with, so its harness sets
+  // `SANK_SEED_CAST=full` and gets Lejla, Dino and Tarik as well. Spelled out
+  // rather than inferred from `NODE_ENV`, so a test cast can never arrive in a
+  // café as a stranger's name on the lock screen.
+  const cast = process.env.SANK_SEED_CAST === 'full' ? 'full' : 'default'
+  seed(db, { devSecrets, cast })
   // Counted, not written down: the line said "14 products" for as long as the
   // seed had fourteen, and then it said it for a while longer.
   const { tables, products } = getHealth(db)

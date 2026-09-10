@@ -181,7 +181,7 @@ export function useAdjustments() {
   }
 
   const approvers = computed<MeUser[]>(() => {
-    const roles = (settings.value?.approver_roles ?? ['admin', 'bartender']) as Role[]
+    const roles = (settings.value?.approver_roles ?? ['admin', 'radnik']) as Role[]
     const boundTo = me.device.value?.bound_user_id ?? null
     return staff.value.filter(user => (
       roles.includes(user.role)
@@ -191,14 +191,18 @@ export function useAdjustments() {
   })
 
   /**
-   * The bartender to name in the offline sentence — PLAN's copy says "Emir
+   * The person to name in the offline sentence — PLAN's copy says "Emir
    * potvrđuje sa svog telefona", and a name only helps if it is the right one.
-   * With more than one bartender on the staff list there is no way to know which
-   * of them is behind the bar tonight, so the sentence falls back to the role.
+   *
+   * There is no `bartender` role to look for any more, and the *mode* a
+   * colleague picked tonight lives on his session, which this phone cannot see.
+   * So the sentence names somebody only when the answer is unambiguous: exactly
+   * one worker who is not me. Otherwise it falls back to the word.
    */
   const approverName = computed(() => {
-    const bartenders = (boot.value?.users ?? []).filter(u => u.role === 'bartender')
-    return bartenders.length === 1 ? bartenders[0]!.name : 'šanker'
+    const others = (boot.value?.users ?? [])
+      .filter(u => u.role === 'radnik' && u.id !== me.user.value?.id)
+    return others.length === 1 ? others[0]!.name : 'šanker'
   })
 
   // -- the local half of the ladder ------------------------------------------

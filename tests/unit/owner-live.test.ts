@@ -474,7 +474,7 @@ describe('the owner\'s screens are the owner\'s', () => {
       [`/api/owner/shift/${shiftId}/lines`, 'GET'],
     ]
 
-    for (const [name, pin] of [['Amar', '1111'], ['Emir', '123456']] as const) {
+    for (const [name, pin] of [['Amar', '2222'], ['Emir', '3333']] as const) {
       const cookies = pinIn(name, pin)
       for (const [path, method] of paths) {
         const verdict = authorizeRequest(f.db, {

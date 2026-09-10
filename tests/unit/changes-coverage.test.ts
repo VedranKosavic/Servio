@@ -488,7 +488,7 @@ const CALLS: Record<string, () => void | Promise<void>> = {
 
   [join('admin', 'users', 'index.post.ts')]: () => {
     createUser(f.db, f.venueId, f.adminActor(), {
-      name: 'Nedim', initials: 'NE', role: 'waiter', pin: '1234',
+      name: 'Nedim', initials: 'NE', role: 'radnik', pin: '1234',
     })
   },
 
@@ -700,7 +700,7 @@ function lineOf(orderId: string): string {
 }
 
 /** Haris's seeded dev PIN — `closeShift` runs the real `verifyPinMetered`. */
-const HARIS_PIN = '123456'
+const HARIS_PIN = '1111'
 
 /**
  * A night the close will accept: an opening count (or it is `NO_OPEN_COUNT`),

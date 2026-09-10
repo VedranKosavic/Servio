@@ -141,7 +141,7 @@ describe('getChanges', () => {
     expect(behind.full).toBe(true)
   })
 
-  it('withholds the pending queues from a waiter and the log cursor from staff', () => {
+  it('withholds the pending queues from a non-approver and the log cursor from staff', () => {
     f.voidLine('Amar', f.lock('Amar', 'Sto 9', [{ product: 'Kafa' }]).lineIds[0]!)
     f.logEntry()
     f.db.transaction((tx) => {
@@ -153,14 +153,20 @@ describe('getChanges', () => {
     expect(forAdmin.pending?.adjustments).toBe(1)
     expect(forAdmin.log_max_at).toBeTruthy()
 
-    const forWaiter = getChanges(f.db, f.venueId, f.actor('Amar'), 0)
-    expect(forWaiter.pending).toBeUndefined()
-    expect(forWaiter.log_max_at).toBeUndefined()
+    // A worker decides voids by default — one role, and `approver_roles` ships
+    // with `radnik` on it — so he gets the queue, and still no Dnevnik. The
+    // Dnevnik is the half that is a role rule and stays one: it is owner-only.
+    const forWorker = getChanges(f.db, f.venueId, f.actor('Amar'), 0)
+    expect(forWorker.pending?.adjustments).toBe(1)
+    expect(forWorker.log_max_at).toBeUndefined()
 
-    // A bartender decides voids, so he does get the queue — and still no Dnevnik.
-    const forBartender = getChanges(f.db, f.venueId, f.actor('Emir'), 0)
-    expect(forBartender.pending?.adjustments).toBe(1)
-    expect(forBartender.log_max_at).toBeUndefined()
+    // …and in a venue whose owner keeps the approvals to himself, the queue
+    // goes with them: no `pending` key at all, not a zeroed one.
+    f.settingsWith({ approver_roles: ['admin'] })
+    const forFloor = getChanges(f.db, f.venueId, f.actor('Amar'), 0)
+    expect(forFloor.pending).toBeUndefined()
+    expect(forFloor.log_max_at).toBeUndefined()
+    expect(getChanges(f.db, f.venueId, admin(), 0).pending?.adjustments).toBe(1)
   })
 
   it('never leaks a second venue', () => {
