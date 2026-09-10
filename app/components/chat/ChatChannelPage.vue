@@ -111,7 +111,11 @@ onMounted(async () => {
   // own bubbles on the right. It also arms the shared-tablet re-lock.
   void me.requireSession()
   window.addEventListener('scroll', measure, { passive: true })
-  draft.value = await chat.loadDraft(kind.value)
+  // The stored draft only fills an **empty** field. IndexedDB answers a tick or
+  // two after the composer is already on screen and focusable, and a waiter who
+  // started typing in that gap must not watch his first words disappear.
+  const stored = await chat.loadDraft(kind.value)
+  if (!draft.value) draft.value = stored
   await chat.rememberChannel(kind.value)
   await toBottom()
 })

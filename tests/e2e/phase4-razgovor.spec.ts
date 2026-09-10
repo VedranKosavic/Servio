@@ -80,8 +80,21 @@ async function jpegBuffer(page: Page): Promise<Buffer> {
   return Buffer.from(dataUrl.split(',')[1]!, 'base64')
 }
 
+/**
+ * Type and send.
+ *
+ * The fill is retried until the value sticks: the screen arrives as finished
+ * HTML and Vue takes it over a moment later, and anything typed inside that
+ * moment is wiped by the first re-render. A person is slower than Playwright
+ * and rarely hits it; a test that types the instant the page loads hits it
+ * every few runs, and then *Pošalji* stays greyed out over an empty field.
+ */
 async function sendText(page: Page, text: string) {
-  await page.getByLabel('Poruka').fill(text)
+  const field = page.getByLabel('Poruka')
+  await expect(async () => {
+    await field.fill(text)
+    await expect(field).toHaveValue(text)
+  }).toPass({ timeout: 15_000 })
   await page.getByRole('button', { name: 'Pošalji' }).click()
 }
 

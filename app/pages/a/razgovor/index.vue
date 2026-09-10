@@ -61,7 +61,12 @@ watch(draft, text => void saveDraft(text))
 async function pick(kind: ChannelKind) {
   active.value = kind
   showThread.value = true
-  draft.value = await chat.loadDraft(kind)
+  // Clear first, then restore only if the field is still empty: IndexedDB
+  // answers after the thread is already on screen, and a reply started in that
+  // gap must survive.
+  draft.value = ''
+  const stored = await chat.loadDraft(kind)
+  if (!draft.value) draft.value = stored
   await chat.rememberChannel(kind)
   const last = messages.value[messages.value.length - 1]
   if (last) chat.markRead(kind, last.seq)
