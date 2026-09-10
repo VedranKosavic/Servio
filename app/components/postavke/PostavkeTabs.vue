@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * The six screens of *Meni i postavke*, as one strip of chips.
+ * The eight screens of *Meni i postavke*, as one strip of chips.
  *
  * The left nav has one item for all of them ("Meni i postavke"), so this is what
  * actually moves the owner between the catalogue, the floor plan, the staff, the
