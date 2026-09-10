@@ -21,6 +21,11 @@ deploy/.deploy.env
 uploads/
 data/uploads/
 data/verify-uploads/
+# …but `uploads/` above is a bare directory name, so git applies it at **every**
+# level — including `server/api/uploads/`, which is source code and was silently
+# untracked until this line brought it back. A directory has to be re-included
+# before anything inside it can be.
+!server/api/uploads/
 .DS_Store
 
 # Playwright's own output: traces, screenshots and the HTML report of a run.
