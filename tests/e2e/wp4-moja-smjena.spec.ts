@@ -31,6 +31,7 @@
  *   SANK_E2E_URL=http://localhost:3114 npx playwright test tests/e2e/wp4-moja-smjena.spec.ts
  */
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
+import { ackRules, resetLimits } from './helpers'
 
 const AMAR_PIN = '1111'
 const EMIR_PIN = '123456'
@@ -79,6 +80,11 @@ async function loginPin(context: BrowserContext, who = 'Amar', pin = AMAR_PIN) {
   expect((await context.request.post('/api/auth/pin', {
     data: { user_id: person.id, pin },
   })).ok()).toBe(true)
+
+  // A published Pravila version stands in front of every /k screen (S12), and
+  // phase4-pravila publishes one before this file runs. Clear it here so the
+  // spec does not depend on where it sits in the alphabet.
+  await ackRules(context.request)
   return person
 }
 
@@ -140,6 +146,7 @@ test.describe.configure({ mode: 'serial' })
 test.describe('WP4 — Moja smjena', () => {
   test.beforeAll(async ({ browser }) => {
     context = await browser.newContext()
+    await resetLimits(context.request)
     await enrolAndLogin(context, TARIK_PIN, 'Tarik')
   })
 
@@ -264,56 +271,69 @@ test.describe('WP4 — Moja smjena', () => {
     expect((await admin.request.post('/api/auth/admin/login', {
       data: { email: 'haris@lounge.ba', password: 'lounge' },
     })).ok()).toBe(true)
+    // Read it back first. `shared_device_idle_s` lives in `venues.settings_json`,
+    // so it outlives this browser context and this file: left at two seconds it
+    // relocks every later /k spec two seconds after login, against the same
+    // data/verify.db. The `finally` below is what makes the suite re-runnable.
+    const before = await (await admin.request.get('/api/admin/settings'))
+      .json() as { shared_device_idle_s: number }
     expect((await admin.request.patch('/api/admin/settings', {
       data: { shared_device_idle_s: 2 },
     })).ok()).toBe(true)
-    await admin.close()
 
-    // Two people on the same device, so the lock screen has something to rank.
-    await loginPin(context, 'Amar', AMAR_PIN)
-    await loginPin(context, 'Emir', EMIR_PIN)
+    try {
+      // Two people on the same device, so the lock screen has something to rank.
+      await loginPin(context, 'Amar', AMAR_PIN)
+      await loginPin(context, 'Emir', EMIR_PIN)
 
-    // Signed in here, so ranked here; Dino never has.
-    const ranked = await knownUsers(context, true)
-    expect(ranked.find(u => u.name === 'Amar')?.last_login_at).toBeTruthy()
-    expect(ranked.find(u => u.name === 'Dino')?.last_login_at).toBeNull()
+      // Signed in here, so ranked here; Dino never has.
+      const ranked = await knownUsers(context, true)
+      expect(ranked.find(u => u.name === 'Amar')?.last_login_at).toBeTruthy()
+      expect(ranked.find(u => u.name === 'Dino')?.last_login_at).toBeNull()
 
-    // Log in through the screen itself, so the PIN is cached for the re-lock.
-    await page.goto('/')
-    await page.getByRole('button', { name: /Promijeni korisnika/ }).click()
-    await expect(page.getByRole('heading', { name: 'Ko si?' })).toBeVisible()
+      // Log in through the screen itself, so the PIN is cached for the re-lock.
+      await page.goto('/')
+      await page.getByRole('button', { name: /Promijeni korisnika/ }).click()
+      await expect(page.getByRole('heading', { name: 'Ko si?' })).toBeVisible()
 
-    // Amar and Emir are the faces; Dino is behind *Svi ostali*.
-    await expect(page.getByRole('button', { name: /Amar/ })).toBeVisible()
-    await expect(page.getByRole('button', { name: /Dino/ })).toHaveCount(0)
-    await page.getByRole('button', { name: /Svi ostali/ }).click()
-    await expect(page.getByRole('button', { name: /Dino/ })).toBeVisible()
+      // Amar and Emir are the faces; Dino is behind *Svi ostali*.
+      await expect(page.getByRole('button', { name: /Amar/ })).toBeVisible()
+      await expect(page.getByRole('button', { name: /Dino/ })).toHaveCount(0)
+      await page.getByRole('button', { name: /Svi ostali/ }).click()
+      await expect(page.getByRole('button', { name: /Dino/ })).toBeVisible()
 
-    await page.getByRole('button', { name: /Amar/ }).first().click()
-    for (const digit of AMAR_PIN) {
-      await page.getByRole('button', { name: digit, exact: true }).click()
+      await page.getByRole('button', { name: /Amar/ }).first().click()
+      for (const digit of AMAR_PIN) {
+        await page.getByRole('button', { name: digit, exact: true }).click()
+      }
+      await expect(page).toHaveURL(/\/k$/)
+
+      // -- the tablet goes idle ----------------------------------------------
+      await expect(page).toHaveURL(/\/$/, { timeout: 15_000 })
+      await expect(page.getByText('Telefon se zaključao sam')).toBeVisible()
+
+      // -- and unlocks with no network at all --------------------------------
+      await context.setOffline(true)
+
+      await page.getByRole('button', { name: /Amar/ }).first().click()
+      // The wrong PIN is refused locally, without inventing a session.
+      for (const digit of '9999') {
+        await page.getByRole('button', { name: digit, exact: true }).click()
+      }
+      await expect(page.getByText('Pogrešan PIN.')).toBeVisible()
+
+      for (const digit of AMAR_PIN) {
+        await page.getByRole('button', { name: digit, exact: true }).click()
+      }
+      await expect(page).toHaveURL(/\/k$/, { timeout: 15_000 })
+
+      await context.setOffline(false)
+    } finally {
+      await context.setOffline(false)
+      await admin.request.patch('/api/admin/settings', {
+        data: { shared_device_idle_s: before.shared_device_idle_s },
+      })
+      await admin.close()
     }
-    await expect(page).toHaveURL(/\/k$/)
-
-    // -- the tablet goes idle ----------------------------------------------
-    await expect(page).toHaveURL(/\/$/, { timeout: 15_000 })
-    await expect(page.getByText('Telefon se zaključao sam')).toBeVisible()
-
-    // -- and unlocks with no network at all --------------------------------
-    await context.setOffline(true)
-
-    await page.getByRole('button', { name: /Amar/ }).first().click()
-    // The wrong PIN is refused locally, without inventing a session.
-    for (const digit of '9999') {
-      await page.getByRole('button', { name: digit, exact: true }).click()
-    }
-    await expect(page.getByText('Pogrešan PIN.')).toBeVisible()
-
-    for (const digit of AMAR_PIN) {
-      await page.getByRole('button', { name: digit, exact: true }).click()
-    }
-    await expect(page).toHaveURL(/\/k$/, { timeout: 15_000 })
-
-    await context.setOffline(false)
   })
 })

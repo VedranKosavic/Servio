@@ -36,6 +36,7 @@
  *   SANK_E2E_URL=http://localhost:3113 npx playwright test tests/e2e/phase4-raspored.spec.ts
  */
 import { expect, test, type APIRequestContext, type BrowserContext, type Page } from '@playwright/test'
+import { ackRules, resetLimits } from './helpers'
 
 const ADMIN = { email: 'haris@lounge.ba', password: 'lounge' }
 const PINS: Record<string, string> = { Amar: '1111', Dino: '3333' }
@@ -90,6 +91,11 @@ async function enrolAndLogin(context: BrowserContext, who: string): Promise<void
     data: { user_id: user.id, pin: PINS[who] },
   })
   expect(login.ok(), await login.text()).toBe(true)
+
+  // A published Pravila version stands in front of every /k screen (S12), and
+  // phase4-pravila publishes one before this file runs. Clear it here so the
+  // spec does not depend on where it sits in the alphabet.
+  await ackRules(context.request)
 }
 
 /** Put somebody on a shift. Tolerates a row that is already there. */
@@ -110,6 +116,7 @@ async function roster(workDate: string, templateName: string, who: string): Prom
 test.beforeAll(async ({ playwright, browser }) => {
   const baseURL = process.env.SANK_E2E_URL ?? 'http://localhost:3112'
   admin = await playwright.request.newContext({ baseURL })
+  await resetLimits(admin)
   expect((await admin.post('/api/auth/admin/login', { data: ADMIN })).ok()).toBe(true)
 
   users = await (await admin.get('/api/admin/users')).json() as Named[]

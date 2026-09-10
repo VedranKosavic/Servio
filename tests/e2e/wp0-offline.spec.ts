@@ -37,6 +37,7 @@
  *   npx playwright test
  */
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
+import { ackRules, resetLimits } from './helpers'
 
 const AMAR_PIN = '1111'
 
@@ -55,6 +56,11 @@ async function loginAsAmar(context: BrowserContext, page: Page): Promise<Map<str
   expect((await context.request.post('/api/auth/pin', {
     data: { user_id: amar.id, pin: AMAR_PIN },
   })).ok()).toBe(true)
+
+  // A published Pravila version stands in front of every /k screen (S12), and
+  // phase4-pravila publishes one before this file runs. Clear it here so the
+  // spec does not depend on where it sits in the alphabet.
+  await ackRules(context.request)
 
   const boot = await (await context.request.get('/api/bootstrap')).json() as
     { tables: BootTable[] }
@@ -142,6 +148,7 @@ async function loginAsAmarNoWorker(context: BrowserContext): Promise<void> {
   expect((await context.request.post('/api/auth/pin', {
     data: { user_id: amar.id, pin: AMAR_PIN },
   })).ok()).toBe(true)
+  await ackRules(context.request)
 }
 
 /**
@@ -197,6 +204,7 @@ test.describe.configure({ mode: 'serial' })
 test.describe('WP0 — the offline outbox', () => {
   test.beforeAll(async ({ browser }) => {
     context = await browser.newContext()
+    await resetLimits(context.request)
     const page = await context.newPage()
     tables = await loginAsAmar(context, page)
     await page.close()

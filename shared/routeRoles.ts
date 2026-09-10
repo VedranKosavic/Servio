@@ -70,6 +70,8 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   'GET /api/me': 'any',
   // 404s outright unless SANK_DEV_ENROL=1, which /opt/sank/.env never sets.
   'POST /api/dev/enrol': 'public',
+  // Same gate, same reason: the e2e suite clears the auth window between files.
+  'POST /api/dev/reset-limits': 'public',
 
   // -- Orders, tabs, payments, adjustments ---------------------------------
   'POST /api/orders': AWB,

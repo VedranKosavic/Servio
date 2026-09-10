@@ -9,6 +9,7 @@
  * Diacritics are folded before matching: a phone keyboard in a hurry types
  * "secer", and *Šećer* should still come up.
  */
+import { bsCompare } from '#shared/collate'
 import type { StockItem } from '#shared/types'
 
 const props = defineProps<{ items: StockItem[], selectedId: string | null }>()
@@ -26,7 +27,7 @@ const shown = computed(() => {
   const needle = fold(query.value.trim())
   const list = [...props.items].sort((a, b) => {
     if (a.is_spot !== b.is_spot) return a.is_spot ? -1 : 1
-    return a.name.localeCompare(b.name, 'bs')
+    return bsCompare(a.name, b.name)
   })
   if (!needle) return list
   return list.filter(item => fold(item.name).includes(needle))

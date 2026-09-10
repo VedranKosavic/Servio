@@ -143,6 +143,11 @@ describe('ROUTE_ROLES', () => {
       'POST /api/auth/admin/login',
       'POST /api/auth/pin',
       'POST /api/dev/enrol',
+      // Both `dev/*` doors are `public` only in the sense that they answer
+      // before a session exists; both 404 unless SANK_DEV_ENROL === '1', which
+      // /opt/sank/.env never sets. `reset-limits` clears the auth window so the
+      // nine e2e spec files can run in one command.
+      'POST /api/dev/reset-limits',
       'POST /api/devices/enrol',
     ])
   })

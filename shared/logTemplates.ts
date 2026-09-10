@@ -30,6 +30,10 @@
  * rendered body for exactly that.
  */
 import { z } from 'zod'
+// Dates are written the Bosnian way everywhere the owner reads them — a raw
+// `2026-09-14` in a Dnevnik title is the same event dated two different ways
+// in two places, because the Razgovor line for it already says "sub 19.09.".
+import { shortDateBs, weekdayBs } from './dates'
 import type { AlertRuleKey } from './constants'
 import type { Settings } from './settings'
 
@@ -688,21 +692,23 @@ export const LOG = {
   roster_published: defineLog({
     group: 'ekipa',
     body: body({ week_start: z.string() }),
-    title: b => `Raspored objavljen · sedmica od ${b.week_start}`,
+    title: b => `Raspored objavljen · sedmica od ${shortDateBs(b.week_start)}`,
   }),
 
   roster_changed: defineLog({
     group: 'ekipa',
     quiet: true,
     body: body({ work_date: z.string().optional(), week_start: z.string().optional(), what: z.string() }),
-    title: b => `Raspored izmijenjen · ${b.work_date ?? b.week_start ?? ''} · ${b.what}`,
+    title: b => `Raspored izmijenjen · ${b.work_date
+      ? `${weekdayBs(b.work_date)} ${shortDateBs(b.work_date)}`
+      : b.week_start ? `sedmica od ${shortDateBs(b.week_start)}` : ''} · ${b.what}`,
   }),
 
   /** *Nije došao*. Important on purpose: it is the start of a conversation. */
   roster_absent: defineLog({
     group: 'ekipa',
     body: body({ assignment_id: id, user_id: id, work_date: z.string() }),
-    title: (b, n) => `Nije došao · ${n.user(b.user_id)} · ${b.work_date}`,
+    title: (b, n) => `Nije došao · ${n.user(b.user_id)} · ${weekdayBs(b.work_date)} ${shortDateBs(b.work_date)}`,
   }),
 
   /**
@@ -714,7 +720,7 @@ export const LOG = {
     group: 'ekipa',
     alert: { rule: 'roster_sick' },
     body: body({ assignment_id: id, user_id: id, work_date: z.string() }),
-    title: (b, n) => `Bolovanje prijavljeno · ${n.user(b.user_id)} · ${b.work_date}`,
+    title: (b, n) => `Bolovanje prijavljeno · ${n.user(b.user_id)} · ${weekdayBs(b.work_date)} ${shortDateBs(b.work_date)}`,
   }),
 
   swap_requested: defineLog({
@@ -725,7 +731,7 @@ export const LOG = {
       to_user_id: id.nullish(), reason: z.string(), work_date: z.string(),
     }),
     title: (b, n) =>
-      `Traži zamjenu · ${n.user(b.user_id)} · ${b.work_date}`
+      `Traži zamjenu · ${n.user(b.user_id)} · ${weekdayBs(b.work_date)} ${shortDateBs(b.work_date)}`
       + (b.to_user_id ? ` → ${n.user(b.to_user_id)}` : ' · otvoreno'),
   }),
 
@@ -736,7 +742,7 @@ export const LOG = {
       from_user_id: id, to_user_id: id, work_date: z.string(),
     }),
     title: (b, n) =>
-      `Zamjena prihvaćena · ${b.work_date} · ${n.user(b.to_user_id)} umjesto ${n.user(b.from_user_id)}`,
+      `Zamjena prihvaćena · ${weekdayBs(b.work_date)} ${shortDateBs(b.work_date)} · ${n.user(b.to_user_id)} umjesto ${n.user(b.from_user_id)}`,
   }),
 
   swap_assigned: defineLog({
@@ -746,7 +752,7 @@ export const LOG = {
       from_user_id: id, to_user_id: id, work_date: z.string(),
     }),
     title: (b, n) =>
-      `Zamjena dodijeljena · ${b.work_date} · ${n.user(b.to_user_id)} umjesto ${n.user(b.from_user_id)}`,
+      `Zamjena dodijeljena · ${weekdayBs(b.work_date)} ${shortDateBs(b.work_date)} · ${n.user(b.to_user_id)} umjesto ${n.user(b.from_user_id)}`,
   }),
 
   swap_declined: defineLog({

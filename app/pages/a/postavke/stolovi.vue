@@ -10,6 +10,7 @@
  * 409 `TABLE_HAS_OPEN_TAB` and the sentence explains what to do about it, rather
  * than the screen quietly showing a switch that flips back.
  */
+import { bsCompare } from '#shared/collate'
 import type { TableAdmin, Zone } from '#shared/types'
 import type { CreateTableBody, UpdateTableBody } from '#shared/schemas'
 
@@ -53,7 +54,7 @@ useAdminChanges({
 const inZone = computed(() => tables.value
   .filter(table => table.zone === zone.value)
   .slice()
-  .sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name, 'bs')))
+  .sort((a, b) => a.sort - b.sort || bsCompare(a.name, b.name)))
 
 const counts = computed(() => ({
   unutra: tables.value.filter(table => table.zone === 'unutra').length,

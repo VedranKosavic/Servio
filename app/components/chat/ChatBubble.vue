@@ -94,7 +94,7 @@ const src = computed(() => props.localSrc ?? props.message.image?.url ?? null)
           <template v-if="message.kind === 'image'">
             <span
               v-if="message.image && message.image.expired"
-              class="flex h-24 w-[280px] max-w-full items-center justify-center rounded-xl bg-surface-2 text-text-2"
+              class="flex h-24 w-[320px] max-w-full items-center justify-center rounded-xl bg-surface-2 text-text-2"
             >
               Slika istekla
             </span>
@@ -104,7 +104,7 @@ const src = computed(() => props.localSrc ?? props.message.image?.url ?? null)
               :width="(message.image && message.image.width) || 320"
               :height="(message.image && message.image.height) || 240"
               alt="Slika"
-              class="h-auto w-[280px] max-w-full rounded-xl bg-surface-2"
+              class="h-auto w-[320px] max-w-full rounded-xl bg-surface-2"
               @click.stop="emit('image', { message, src })"
             >
           </template>

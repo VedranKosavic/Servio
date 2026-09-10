@@ -30,6 +30,7 @@
  *   SANK_E2E_URL=http://localhost:3113 npx playwright test tests/e2e/phase4-razgovor.spec.ts
  */
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
+import { ackRules, resetLimits } from './helpers'
 
 const AMAR_PIN = '1111'
 const EMIR_PIN = '123456'
@@ -61,6 +62,8 @@ async function loginPin(phone: BrowserContext, who: string, pin: string) {
   expect(person, `${who} is on the lock screen`).toBeTruthy()
   const ok = await phone.request.post('/api/auth/pin', { data: { user_id: person!.id, pin } })
   expect(ok.ok()).toBe(true)
+  // S12 stands in front of every /k screen once phase4-pravila has published.
+  await ackRules(phone.request)
   return person!
 }
 
@@ -106,6 +109,7 @@ test.describe('Razgovor', () => {
 
   test.beforeAll(async ({ browser }) => {
     haris = await browser.newContext()
+    await resetLimits(haris.request)
     const loggedIn = await haris.request.post('/api/auth/admin/login', { data: ADMIN })
     expect(loggedIn.ok()).toBe(true)
 

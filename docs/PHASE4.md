@@ -492,6 +492,8 @@ SANK_E2E_URL=http://localhost:3113 npx playwright test   # terminal 2
 
 `SANK_SCAN_STUB=1` installs the deterministic `ScanModel` (`setScanModel`) that returns a fixed eight-line otpremnica — six green, one amber, one unknown. It is read **once at boot**, is never true in production, and is the only reason check 6 costs nothing and never calls the API.
 
+`SANK_DEV_ENROL=1` also turns on `POST /api/dev/reset-limits`, which every spec file calls once in its `test.beforeAll`. Without it the whole directory cannot run in one command: nine files back-to-back from one IP spend about five auth calls each, `authLimiter` allows ten a minute, and from the fourth file on every `beforeAll` dies with `RATE_LIMITED`. The limiter itself is **not** widened — it has to behave in CI exactly as it does on the VPS, where this route 404s and does not exist.
+
 **Three sessions, and how each logs in.** *Amar* (waiter, PIN 1111) and *Emir* (bartender, PIN 123456) each enrol their **own** device through `POST /api/admin/enrol-codes` + `POST /api/devices/enrol` — not `POST /api/dev/enrol`, which reuses one device row and rotates its token, so the second enrolment would invalidate the first's cookie. *Haris* is an admin session: `haris@lounge.ba / lounge` at `/a/login`, no device. **A device is enrolled once per file, in `test.beforeAll`**; `authLimiter` allows ten auth calls a minute keyed by the device cookie or, before enrolment, by the IP, and `DEV_MULTIPLIER` is 1 in a built server. What is reset between tests is IndexedDB and localStorage — never the cookies.
 
 ### 5.2 The seven checks

@@ -44,6 +44,7 @@
  *   SANK_E2E_URL=http://localhost:3113 npx playwright test tests/e2e/phase4-prijem.spec.ts
  */
 import { expect, test, type APIRequestContext, type BrowserContext, type Page } from '@playwright/test'
+import { ackRules, resetLimits } from './helpers'
 
 const ADMIN = { email: 'haris@lounge.ba', password: 'lounge' }
 
@@ -104,6 +105,7 @@ const draftCard = (page: Page) => page.locator('section, article').filter({ hasT
 test.beforeAll(async ({ browser }) => {
   harisCtx = await browser.newContext()
   haris = harisCtx.request
+  await resetLimits(haris)
 
   const login = await haris.post('/api/auth/admin/login', { data: ADMIN })
   expect(login.ok(), await login.text()).toBe(true)
@@ -125,6 +127,8 @@ test.beforeAll(async ({ browser }) => {
   expect(enrolled.ok(), await enrolled.text()).toBe(true)
   const pin = await amar.post('/api/auth/pin', { data: { user_id: user.id, pin: '1111' } })
   expect(pin.ok(), await pin.text()).toBe(true)
+  // S12 stands in front of every /k screen once phase4-pravila has published.
+  await ackRules(amar)
 })
 
 test.afterAll(async () => {

@@ -15,6 +15,7 @@
  * `app/utils/` file because `app/utils/adminFormat.ts` belongs to WP0 and a
  * path in Šank has exactly one owner (`docs/PHASE2.md` §3).
  */
+import { bsCompare } from '#shared/collate'
 import { LOG } from '#shared/logTemplates'
 import type { LogGroup } from '#shared/logTemplates'
 import type { LogKind } from '#shared/types'
@@ -234,7 +235,7 @@ export function kindOptions(): Array<{ value: string, label: string }> {
   for (const group of DNEVNIK_GROUPS) {
     const kinds = (Object.keys(KIND_LABEL) as LogKind[])
       .filter(kind => LOG[kind].group === group.key)
-      .sort((a, b) => KIND_LABEL[a].localeCompare(KIND_LABEL[b], 'bs'))
+      .sort((a, b) => bsCompare(KIND_LABEL[a], KIND_LABEL[b]))
     for (const kind of kinds) {
       options.push({ value: kind, label: `${group.label} · ${KIND_LABEL[kind]}` })
     }

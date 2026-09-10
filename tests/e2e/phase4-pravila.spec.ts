@@ -35,6 +35,7 @@
  *   SANK_E2E_URL=http://localhost:3113 npx playwright test tests/e2e/phase4-pravila.spec.ts
  */
 import { expect, test, type BrowserContext } from '@playwright/test'
+import { resetLimits } from './helpers'
 
 const AMAR_PIN = '1111'
 /**
@@ -92,6 +93,7 @@ test.describe.configure({ mode: 'serial' })
 test.describe('Phase 4 — Pravila', () => {
   test.beforeAll(async ({ browser }) => {
     phone = await browser.newContext()
+    await resetLimits(phone.request)
     expect((await phone.request.post('/api/dev/enrol', { data: {} })).ok()).toBe(true)
     await loginPin(phone, 'Amar', AMAR_PIN)
 
@@ -221,6 +223,36 @@ test.describe('Phase 4 — Pravila', () => {
       expect(body).not.toContain(word)
     }
     expect(/\p{Extended_Pictographic}/u.test(body)).toBe(false)
+
+    await page.close()
+  })
+
+  /**
+   * §5.2 check 7 asks for a clean console, and by this point in the file the
+   * Dnevnik has rows of every Phase 4 group to render.
+   *
+   * It caught a real one: the *Vrsta* dropdown sorted its options with
+   * `localeCompare(…, 'bs')`, which Node resolves to Bosnian collation and
+   * Chromium falls back to en-US — so the server rendered the options in one
+   * order and the browser hydrated them in another, and Vue said so. The sort
+   * goes through `shared/collate.ts` now; this is the assertion that keeps it
+   * there.
+   */
+  test('/a/dnevnik loads with nothing in the console', async () => {
+    const page = await laptop.newPage()
+    await page.setViewportSize({ width: 1440, height: 900 })
+
+    const errors: string[] = []
+    page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()) })
+    page.on('pageerror', err => errors.push(String(err)))
+
+    await page.goto('/a/dnevnik')
+    await expect(page.getByRole('heading', { name: 'Dnevnik' })).toBeVisible()
+    // Vue reports a hydration mismatch after the whole tree is patched, which is
+    // a tick or two after the heading is on screen.
+    await page.waitForTimeout(1500)
+
+    expect(errors, errors.join('\n')).toEqual([])
 
     await page.close()
   })

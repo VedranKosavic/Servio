@@ -272,6 +272,11 @@ describe('every LOG_KINDS member', () => {
     expect(entry.title_bs).not.toMatch(/\{|\}|undefined|NaN|\[object/)
     expect(entry.quiet).toBe(isQuiet(kind))
     expect(entry.kind).toBe(kind)
+    // No ISO date in a Bosnian sentence. The owner reads `08.09.2026.` and
+    // `sub 19.09.` everywhere else in the app — the Razgovor line for the very
+    // same roster event already writes it that way — so a raw `2026-09-19`
+    // here would date one event two different ways in two places.
+    expect(entry.title_bs, kind).not.toMatch(/\d{4}-\d{2}-\d{2}/)
   })
 
   it('no rendered body carries a secret', () => {

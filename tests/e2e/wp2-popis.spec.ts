@@ -41,6 +41,7 @@
  * built in `beforeAll`, is how it does not.
  */
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
+import { ackRules, resetLimits } from './helpers'
 
 const PINS: Record<string, string> = { Amar: '1111', Emir: '123456' }
 
@@ -97,11 +98,17 @@ async function loginAs(context: BrowserContext, name: string): Promise<User> {
     data: { user_id: user.id, pin: PINS[name] },
   })
   expect(pin.ok(), await pin.text()).toBe(true)
+
+  // A published Pravila version stands in front of every /k screen (S12), and
+  // phase4-pravila publishes one before this file runs. Clear it here so the
+  // spec does not depend on where it sits in the alphabet.
+  await ackRules(context.request)
   return user
 }
 
 test.beforeAll(async ({ browser }) => {
   const admin = await browser.newContext()
+  await resetLimits(admin.request)
   const login = await admin.request.post('/api/auth/admin/login', {
     data: { email: 'haris@lounge.ba', password: 'lounge' },
   })

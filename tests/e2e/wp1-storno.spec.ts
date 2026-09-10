@@ -50,6 +50,7 @@
  *   npx playwright test tests/e2e/wp1-storno.spec.ts
  */
 import { expect, test, type APIRequestContext, type BrowserContext, type Page } from '@playwright/test'
+import { ackRules, resetLimits } from './helpers'
 
 const ADMIN = { email: 'haris@lounge.ba', password: 'lounge' }
 const PINS: Record<string, string> = { Amar: '1111', Emir: '123456' }
@@ -83,6 +84,11 @@ async function enrolAndLogin(context: BrowserContext, who: string): Promise<void
     data: { user_id: user.id, pin: PINS[who] },
   })
   expect(login.ok(), await login.text()).toBe(true)
+
+  // A published Pravila version stands in front of every /k screen (S12), and
+  // phase4-pravila publishes one before this file runs. Clear it here so the
+  // spec does not depend on where it sits in the alphabet.
+  await ackRules(context.request)
 }
 
 /** Lock a round through the API — this file is about what happens *after* one. */
@@ -179,6 +185,7 @@ test.describe('WP1 — storno, gratis and the approval queue', () => {
   test.beforeAll(async ({ browser }) => {
     const adminCtx = await browser.newContext()
     admin = adminCtx.request
+    await resetLimits(admin)
     const login = await admin.post('/api/auth/admin/login', { data: ADMIN })
     expect(login.ok(), await login.text()).toBe(true)
 
