@@ -35,7 +35,7 @@ defineEmits<{ close: [] }>()
       <span class="grow text-section font-bold">Pregled narudžbe</span>
       <button
         type="button"
-        class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control"
+        class="flex size-[var(--tap)] shrink-0 items-center justify-center rounded-control"
         aria-label="Zatvori"
         @click="$emit('close')"
       >

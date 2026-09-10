@@ -708,7 +708,7 @@ function lateWasNotPaid(row: TableState) {
           <WaiterSyncChip compact />
           <button
             type="button"
-            class="flex size-12 shrink-0 items-center justify-center rounded-control bg-surface-2 text-text transition-colors active:bg-surface-3"
+            class="flex size-[var(--tap)] shrink-0 items-center justify-center rounded-control bg-surface-2 text-text transition-colors active:bg-surface-3"
             aria-label="Više"
             @click="menuOpen = true"
           >
@@ -894,7 +894,7 @@ function lateWasNotPaid(row: TableState) {
               <!-- The ⋯ twin of the long press: napomena, and *Na račun kuće*. -->
               <button
                 type="button"
-                class="flex size-11 shrink-0 items-center justify-center rounded-field bg-surface-2 text-text-2 transition-colors active:bg-surface-3"
+                class="flex size-[var(--tap)] shrink-0 items-center justify-center rounded-field bg-surface-2 text-text-2 transition-colors active:bg-surface-3"
                 :aria-label="`Napomena · ${nameById.get(line.product_id) ?? 'stavka'}`"
                 @click="noteLine(line.id)"
               >
@@ -904,7 +904,7 @@ function lateWasNotPaid(row: TableState) {
               </button>
               <button
                 type="button"
-                class="flex size-11 shrink-0 items-center justify-center rounded-field bg-surface-2 text-text transition-colors active:bg-surface-3"
+                class="flex size-[var(--tap)] shrink-0 items-center justify-center rounded-field bg-surface-2 text-text transition-colors active:bg-surface-3"
                 :aria-label="`Skini jedan · ${nameById.get(line.product_id) ?? 'stavka'}`"
                 @click="removeOne(line.id)"
               >
@@ -915,7 +915,7 @@ function lateWasNotPaid(row: TableState) {
               <span class="num w-6 shrink-0 text-center text-body font-bold">{{ line.qty }}</span>
               <button
                 type="button"
-                class="flex size-11 shrink-0 items-center justify-center rounded-field bg-surface-2 text-text transition-colors active:bg-surface-3"
+                class="flex size-[var(--tap)] shrink-0 items-center justify-center rounded-field bg-surface-2 text-text transition-colors active:bg-surface-3"
                 :aria-label="`Dodaj jedan · ${nameById.get(line.product_id) ?? 'stavka'}`"
                 @click="addOne(line.id)"
               >

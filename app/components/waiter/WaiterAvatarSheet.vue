@@ -86,7 +86,7 @@ function noteFor(item: (typeof WAITER_MENU)[number]): string | null {
       </div>
       <button
         type="button"
-        class="-mr-2 flex h-12 w-12 items-center justify-center rounded-control text-text-2"
+        class="-mr-2 flex size-[var(--tap)] items-center justify-center rounded-control text-text-2"
         aria-label="Zatvori"
         @click="emit('close')"
       >

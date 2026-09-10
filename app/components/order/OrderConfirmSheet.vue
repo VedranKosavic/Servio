@@ -110,7 +110,7 @@ const totalFen = computed(() => rows.value.reduce((sum, r) => sum + r.lineFen, 0
         <div class="flex items-center justify-end gap-2">
           <button
             type="button"
-            class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-surface"
+            class="flex size-[var(--tap)] shrink-0 items-center justify-center rounded-control bg-surface"
             :aria-label="`Napomena · ${row.name}`"
             @click="emit('note', row.id)"
           >
@@ -122,7 +122,7 @@ const totalFen = computed(() => rows.value.reduce((sum, r) => sum + r.lineFen, 0
 
           <button
             type="button"
-            class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-surface text-section font-bold"
+            class="flex size-[var(--tap)] shrink-0 items-center justify-center rounded-control bg-surface text-section font-bold"
             :aria-label="`Skini jedan · ${row.name}`"
             @click="emit('remove', row.id)"
           >
@@ -131,7 +131,7 @@ const totalFen = computed(() => rows.value.reduce((sum, r) => sum + r.lineFen, 0
           <span class="num w-8 shrink-0 text-center text-body font-bold">{{ row.qty }}</span>
           <button
             type="button"
-            class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-surface text-section font-bold"
+            class="flex size-[var(--tap)] shrink-0 items-center justify-center rounded-control bg-surface text-section font-bold"
             :aria-label="`Dodaj jedan · ${row.name}`"
             @click="emit('add', row.id)"
           >

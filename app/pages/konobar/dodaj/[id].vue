@@ -409,7 +409,7 @@ async function confirm() {
             <button
               v-if="query"
               type="button"
-              class="-mr-2 flex size-11 shrink-0 items-center justify-center rounded-field text-text-2"
+              class="-mr-2 flex size-[var(--tap)] shrink-0 items-center justify-center rounded-field text-text-2"
               aria-label="Obriši traženje"
               @click="query = ''"
             >
@@ -431,7 +431,7 @@ async function confirm() {
             v-for="item in tabs"
             :key="item.id"
             type="button"
-            class="pill h-12 shrink-0"
+            class="pill min-h-[var(--tap)] shrink-0"
             :class="activeTab === item.id ? 'pill-on' : ''"
             @click="activeTab = item.id"
           >
@@ -461,7 +461,7 @@ async function confirm() {
           Ništa ne odgovara traženom.
         </p>
 
-        <p class="text-center text-caption tracking-normal text-muted">
+        <p class="text-center text-label text-muted">
           Dodir = +1 · dugi dodir = napomena
         </p>
       </div>
