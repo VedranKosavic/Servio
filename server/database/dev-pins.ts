@@ -3,7 +3,9 @@
  * `SANK_DEV_PIN` (default 1111) and every admin's password to the same value,
  * in place, on the database file at `DB_PATH` (default data/sank.db). Safe to
  * run while the dev server is up: SQLite in WAL mode lets two processes write.
- * Never run this against a real café's database.
+ * Runs with `.env` loaded (node --env-file) so the hash uses the same PIN_PEPPER
+ * as the server; a different pepper makes every PIN fail. Never run this against
+ * a real café's database.
  */
 import { isAbsolute, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
