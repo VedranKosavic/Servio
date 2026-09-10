@@ -67,10 +67,17 @@ export function routeKey(method: string, path: string): string {
 export const ROUTE_ROLES: Record<string, RouteRole> = {
   // -- Auth and devices ----------------------------------------------------
   // `public` means "before a session exists", not "before anything exists":
-  // the PIN and user-list routes still require an enrolled device cookie.
+  // the PIN door and the pad's digit-count still require an enrolled device
+  // cookie. The *roster* is not among them any more — `GET /api/auth/users` is
+  // `any`, because the lock screen stopped drawing names and a body listing
+  // every person, initials and **role** was, to a thief holding an enrolled
+  // phone, a map of which of the three PINs opens the dashboard. Its three
+  // callers all read it behind a session already. What a pad legitimately needs
+  // before one exists is one number, and that is `pin-len`.
   'POST /api/auth/admin/login': 'public',
   'POST /api/auth/pin': 'public',
-  'GET /api/auth/users': 'public',
+  'GET /api/auth/pin-len': 'public',
+  'GET /api/auth/users': 'any',
   'POST /api/auth/logout': 'any',
   // A radnik picking (or switching) his screen for tonight. `any`, not a role
   // list: an admin may call it too and the service simply keeps his mode null.

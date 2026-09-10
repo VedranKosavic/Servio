@@ -191,14 +191,22 @@ describe('device enrolment', () => {
       .toBe('BOUND_USER_REQUIRED')
   })
 
-  it('answers with the venue and the staff list so the lock screen can draw', () => {
+  /**
+   * It used to answer with the roster too — `users`, every active person's name,
+   * initials and **role** — because the lock screen drew faces. The lock screen
+   * is a pad now and draws nothing, so what was left was a list of which of the
+   * three PINs opens the dashboard, handed to whoever posts a six-character
+   * code. The envelope is the device and the venue, and nothing else.
+   */
+  it('answers with the device and the venue, and never the roster', () => {
     const code = mintEnrolCode(f.db, f.venueId, f.adminActor(), { mode: 'shared', label: 'Tablet' })
     const { result } = enrolDevice(f.db, { code: code.code }, { ip: IP })
 
     expect(result.venue.slug).toBe('lounge')
-    expect(result.users).toHaveLength(6)
-    expect(result.users[0]).toHaveProperty('has_pin', true)
-    expect(JSON.stringify(result)).not.toMatch(/_hash|password|pepper|token/)
+    expect(result).not.toHaveProperty('users')
+    const body = JSON.stringify(result)
+    expect(body).not.toMatch(/_hash|password|pepper|token/)
+    for (const name of ['Amar', 'Emir', 'Haris']) expect(body).not.toContain(name)
   })
 
   it('stores only a hash of the code and of the device token', () => {
@@ -556,7 +564,7 @@ describe('getting back in', () => {
     expect(deviceRow(f, his.deviceId).lockedAt).not.toBeNull()
 
     const before = attempts(f).length
-    resetPin(f.db, f.venueId, f.adminActor(), f.userId('Emir'), '654321', f.clock.now())
+    resetPin(f.db, f.venueId, f.adminActor(), f.userId('Emir'), '6543', f.clock.now())
 
     expect(deviceRow(f, his.deviceId).lockedAt).toBeNull()
     // Two clears: the person's, and the device-shaped one for the phone this
@@ -566,7 +574,7 @@ describe('getting back in', () => {
 
     f.clock.advance(1)
     expect(loginWithPin(f.db, deviceRow(f, his.deviceId), {
-      pin: '654321',
+      pin: '6543',
     }, { ip: IP, now: f.clock.now() }).result.user.name).toBe('Emir')
   })
 
@@ -586,7 +594,7 @@ describe('getting back in', () => {
       f.clock.advance(901)
     }
 
-    resetPin(f.db, f.venueId, f.adminActor(), f.userId('Emir'), '654321', f.clock.now())
+    resetPin(f.db, f.venueId, f.adminActor(), f.userId('Emir'), '6543', f.clock.now())
     expect(deviceRow(f, tablet.deviceId).lockedAt).not.toBeNull()
   })
 
@@ -644,8 +652,39 @@ describe('getting back in', () => {
     expect(attempts(f).length).toBe(before + 1)
     expect(attempts(f, { kind: 'reset' })).toHaveLength(1)
     expect(attempts(f, { ok: false })).toHaveLength(1)
-    expect(catchError(() => unlockDevice(f.db, f.venueId, f.adminActor(), device.deviceId)).code)
-      .toBe('DEVICE_NOT_LOCKED')
+  })
+
+  /**
+   * The bar tablet at 23:00, and the reason *Otključaj* stopped asking whether
+   * `locked_at` is set. Ten wrong PINs are a 15-minute lock that is *counted*
+   * and never flagged — the pad's failures are filed against the device with no
+   * user, so no PIN reset reaches them either. The old 409 made the owner's one
+   * key answer "this device is not locked" to a tablet nobody could type on.
+   */
+  it('unlockDevice clears a counter-only lock, with locked_at never set', () => {
+    const device = enrol(f, 'shared')
+    // Ten wrong PINs at the pad, written the way the pad writes them: against
+    // the device, with `user_id NULL`, because the pad does not know who typed.
+    for (let i = 0; i < 10; i++) {
+      f.db.insert(schema.authAttempts).values({
+        id: `att-${i}`, venueId: f.venueId, deviceId: device.deviceId, userId: null,
+        ip: IP, kind: 'pin', ok: 0, createdAt: f.clock.now(),
+      }).run()
+    }
+
+    const subject = { deviceId: device.deviceId, userId: null, ip: IP }
+    expect(lockoutState(f.db, f.venueId, 'pin', subject, f.clock.now()).locked).toBe(true)
+    // The 15-minute step is *counted*, never flagged — which is exactly why the
+    // old `DEVICE_NOT_LOCKED` guard refused the case the owner most needed.
+    expect(deviceRow(f, device.deviceId).lockedAt).toBeNull()
+
+    const after = unlockDevice(f.db, f.venueId, f.adminActor(), device.deviceId)
+
+    expect(after.locked_at).toBeNull()
+    expect(lockoutState(f.db, f.venueId, 'pin', subject, f.clock.now()).locked).toBe(false)
+    // Cleared, not erased: the ten failures are still on the record.
+    expect(attempts(f, { ok: false })).toHaveLength(10)
+    expect(attempts(f, { kind: 'reset' })).toHaveLength(1)
   })
 })
 

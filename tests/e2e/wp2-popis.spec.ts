@@ -89,11 +89,11 @@ async function enrolAndLogin(
 
 /** The PIN door, on a browser that already holds a device cookie. */
 async function loginAs(context: BrowserContext, name: string): Promise<User> {
-  const users = await (await context.request.get('/api/auth/users')).json() as User[]
-  const user = users.find(u => u.name === name)!
-  expect(user).toBeTruthy()
-
-  await pinLogin(context.request, name as Person, name === 'Emir' ? 'sanker' : 'konobar')
+  // The PIN answers with the person it belongs to. The roster read that used to
+  // stand here is gone with the route's `public`: the lock screen draws no
+  // names, so nothing may read them before a session exists.
+  const { user } = await pinLogin(context.request, name as Person, name === 'Emir' ? 'sanker' : 'konobar')
+  expect(user.name).toBe(name)
 
   // A published Pravila version stands in front of every /konobar screen (S12), and
   // phase4-pravila publishes one before this file runs. Clear it here so the

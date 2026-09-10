@@ -17,6 +17,12 @@ const props = defineProps<{
   error: string | null
   /** The answer, once the reset went through. */
   result: PinResetResult | null
+  /**
+   * The café's PIN length — every active PIN in a venue has the same number of
+   * digits, because the pad fires on a fixed number of taps. `null` only while
+   * nobody has one at all.
+   */
+  pinLen: 4 | 6 | null
 }>()
 
 const emit = defineEmits<{ close: [], save: [pin: string] }>()
@@ -25,9 +31,19 @@ const pin = ref('')
 
 watch(() => props.open, (open) => { if (open) pin.value = '' })
 
-const valid = computed(() => /^\d{4}$|^\d{6}$/.test(pin.value))
-const error = computed(() =>
-  pin.value !== '' && !valid.value ? 'PIN je 4 ili 6 cifara.' : null)
+const rule = computed(() => (props.pinLen
+  ? new RegExp(`^\\d{${props.pinLen}}$`)
+  : /^\d{4}$|^\d{6}$/))
+
+const hint = computed(() => (props.pinLen ? `${props.pinLen} cifre` : '4 ili 6 cifara'))
+
+const valid = computed(() => rule.value.test(pin.value))
+const error = computed(() => {
+  if (pin.value === '' || valid.value) return null
+  return props.pinLen
+    ? `Svi PIN-ovi u lokalu imaju ${props.pinLen} cifre.`
+    : 'PIN je 4 ili 6 cifara.'
+})
 </script>
 
 <template>
@@ -66,7 +82,7 @@ const error = computed(() =>
       <UiField
         v-model="pin"
         label="PIN"
-        placeholder="4 ili 6 cifara"
+        :placeholder="hint"
         autocomplete="off"
         hint="Reci ga radniku uživo. Nigdje se ne prikazuje ponovo."
       />

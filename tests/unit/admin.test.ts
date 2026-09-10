@@ -430,20 +430,46 @@ describe('users', () => {
     expect(resetPin(f.db, f.venueId, admin(), f.userId('Amar'), f.pin('Amar')).ok).toBe(true)
   })
 
-  it('takes a 6-digit PIN too, and refuses a 5-digit one', () => {
-    const six = createUser(f.db, f.venueId, admin(), {
-      name: 'Selma', initials: 'SE', role: 'radnik', pin: '123456',
-    })
-    expect(six.pin_len).toBe(6)
-
+  it('refuses a 5-digit PIN', () => {
     expect(() => createUser(f.db, f.venueId, admin(), {
       name: 'Kenan', initials: 'KE', role: 'radnik', pin: '12345',
     })).toThrow(/4 or 6/)
   })
 
+  /**
+   * 4 and 6 are both legal lengths, but **not in the same venue** — and that is
+   * the rule that closes the prefix hole, not tidiness.
+   *
+   * "Unique" alone was never enough. `222299` and `2222` are two different PINs
+   * and neither is the other, so the old check let an admin set both; but the
+   * pad has to fire on some number of taps before it can ask the server whose
+   * they are, so the six-digit typist's fourth tap sent `2222` — and signed in
+   * whoever `2222` belongs to. One length per venue makes the prefix
+   * unreachable and lets the pad fire on the real length from the first tap.
+   */
+  it('refuses a PIN of a different length to the ones the venue already uses', () => {
+    expect(() => createUser(f.db, f.venueId, admin(), {
+      name: 'Selma', initials: 'SE', role: 'radnik', pin: '222299',
+    })).toThrow(/same number of digits/)
+    // The very hole, from the other end: `2222` is Amar's, and the first four of
+    // the six above. Neither the duplicate check nor the pad could have caught it.
+    expect(() => resetPin(f.db, f.venueId, admin(), f.userId('Haris'), '222299'))
+      .toThrow(/same number of digits/)
+
+    // A venue with no PINs at all takes either length, and the first one fixes
+    // it: this is the only way the café changes from four digits to six.
+    f.db.update(schema.users).set({ pinHash: null }).run()
+    const now6 = createUser(f.db, f.venueId, admin(), {
+      name: 'Selma', initials: 'SE', role: 'radnik', pin: '222299',
+    })
+    expect(now6.pin_len).toBe(6)
+    expect(() => resetPin(f.db, f.venueId, admin(), f.userId('Amar'), '2222'))
+      .toThrow(/same number of digits/)
+  })
+
   it('refuses an email that already belongs to somebody', () => {
     expect(() => createUser(f.db, f.venueId, admin(), {
-      name: 'Lažni Haris', initials: 'LH', role: 'admin', pin: '111111',
+      name: 'Lažni Haris', initials: 'LH', role: 'admin', pin: '8282',
       email: 'haris@lounge.ba',
     })).toThrow(/already belongs/)
   })
@@ -482,12 +508,12 @@ describe('users', () => {
     const amar = f.userId('Amar')
     const before = f.db.select().from(schema.users).where(eq(schema.users.id, amar)).get()!
 
-    const result = resetPin(f.db, f.venueId, admin(), amar, '998877')
+    const result = resetPin(f.db, f.venueId, admin(), amar, '9988')
     expect(result.ok).toBe(true)
 
     const after = f.db.select().from(schema.users).where(eq(schema.users.id, amar)).get()!
     expect(after.pinHash).not.toBe(before.pinHash)
-    expect(after.pinLen).toBe(6)
+    expect(after.pinLen).toBe(4)
     expect(entries('user_changed').map(e => JSON.parse(e.bodyJson).what)).toEqual(['pin_resetovan'])
   })
 })

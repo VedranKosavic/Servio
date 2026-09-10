@@ -48,9 +48,8 @@ interface BootTable { id: string, name: string }
 async function loginAsAmar(context: BrowserContext, page: Page): Promise<Map<string, string>> {
   expect((await context.request.post('/api/dev/enrol', { data: {} })).ok()).toBe(true)
 
-  const users = await (await context.request.get('/api/auth/users')).json() as
-    { id: string, name: string }[]
-  const amar = users.find(u => u.name === 'Amar')!
+  // The login answers with the person, so there is no roster to read first —
+  // and there could not be: `GET /api/auth/users` is behind a session now.
   await pinLogin(context.request, 'Amar', 'konobar')
 
   // A published Pravila version stands in front of every /konobar screen (S12), and

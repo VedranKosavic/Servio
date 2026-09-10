@@ -138,7 +138,12 @@ describe('ROUTE_ROLES', () => {
       .filter(([, v]) => v === 'public').map(([k]) => k).sort()
 
     expect(isPublic).toEqual([
-      'GET /api/auth/users',
+      // The pad's one pre-session read, and it is a number of digits and
+      // nothing else. `GET /api/auth/users` was here until the lock screen
+      // stopped drawing names: a roster readable by whoever holds an enrolled
+      // phone — names, initials and **roles** — is a map of which of the three
+      // PINs opens the dashboard. It is `any` now.
+      'GET /api/auth/pin-len',
       'GET /api/health',
       'POST /api/auth/admin/login',
       'POST /api/auth/pin',

@@ -127,7 +127,13 @@ describe('deny by default', () => {
 describe('the two public routes that still need a device', () => {
   it('401 NO_DEVICE without a device cookie', () => {
     expect(ask('/api/auth/pin', 'POST')).toMatchObject({ ok: false, status: 401, code: 'NO_DEVICE' })
-    expect(ask('/api/auth/users', 'GET')).toMatchObject({ ok: false, status: 401, code: 'NO_DEVICE' })
+    expect(ask('/api/auth/pin-len', 'GET')).toMatchObject({ ok: false, status: 401, code: 'NO_DEVICE' })
+  })
+
+  it('keeps the roster behind a session — an enrolled device alone is not enough', () => {
+    const device = enrolShared()
+    expect(ask('/api/auth/users', 'GET', { d: device.token }))
+      .toMatchObject({ ok: false, status: 401, code: 'NO_SESSION' })
   })
 
   it('passes with one, and hands the device to the handler', () => {

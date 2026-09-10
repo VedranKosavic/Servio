@@ -5,8 +5,10 @@
  * A phone enrols once with a six-character code and keeps a device cookie; a
  * person then PIN-logs in against that device. So this page is where a phone
  * gets into the café and where it is taken back out: *Povuci* kills its cookie,
- * *Otključaj* clears the lock a run of wrong PINs left behind, and *Novi uređaj*
- * mints the code somebody types on the phone itself.
+ * *Otključaj* clears every lockout a run of wrong PINs left behind — the flagged
+ * one at fifteen failures *and* the counted ones at five and ten, which is why
+ * it is offered on a phone the table calls *aktivan* — and *Novi uređaj* mints
+ * the code somebody types on the phone itself.
  *
  * A revoked device is never deleted — every round it locked still points at it.
  */

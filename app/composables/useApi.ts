@@ -220,11 +220,20 @@ export function useApi() {
     getMe: () => request<MeContext>('/api/me'),
 
     /**
-     * The names the lock screen draws — served before any session exists, to
-     * whoever holds an enrolled device. Nothing but name, initials, role and
-     * how many digits the PIN pad should draw.
+     * The venue's live staff — name, initials, role, PIN length. Behind a
+     * session (`any`): the lock screen stopped drawing faces, so a roster
+     * readable by anyone holding an enrolled phone was a list of which of the
+     * three PINs opens the dashboard and nothing a screen still needed.
      */
     getLoginUsers: () => request<LoginUser[]>('/api/auth/users'),
+
+    /**
+     * How many digits the pad waits for — the one thing the login screen may
+     * know before a session, and the one thing it cannot work without. Every
+     * active PIN in a venue is the same length (`requirePinFree`), so this is
+     * that length, and the pad fires on the last digit from the first tap.
+     */
+    getPinLen: () => request<{ pin_len: 4 | 6 }>('/api/auth/pin-len'),
 
     /**
      * Four digits (or six) against the device cookie — and nothing else. The

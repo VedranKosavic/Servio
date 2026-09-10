@@ -49,12 +49,13 @@ async function loginAsAmar(context: BrowserContext, page: Page): Promise<Map<str
   // anywhere `SANK_DEV_ENROL=1` is not set, which is everywhere but here.
   expect((await context.request.post('/api/dev/enrol', { data: {} })).ok()).toBe(true)
 
-  const users = await (await context.request.get('/api/auth/users')).json() as
-    { id: string, name: string }[]
-  const amar = users.find(u => u.name === 'Amar')!
-  expect(amar).toBeTruthy()
-  // The pad names nobody: these digits are the whole login.
-  await pinLogin(context.request, 'Amar', 'konobar')
+  // The pad names nobody: these digits are the whole login, and the answer
+  // names the person. This file used to read `GET /api/auth/users` first to
+  // find Amar's id — that route is behind a session now (the lock screen draws
+  // no names, so a roster readable before one was a list of whose PIN opens
+  // what), and the login response was always the shorter way to the same id.
+  const { user: amar } = await pinLogin(context.request, 'Amar', 'konobar')
+  expect(amar.name).toBe('Amar')
 
   // A published Pravila version stands in front of every /konobar screen (S12), and
   // phase4-pravila publishes one before this file runs. Clear it here so the
@@ -142,9 +143,6 @@ const chip = (page: Page, text: RegExp | string) => page.locator('.chip').filter
 /** `loginAsAmar` without the service-worker handshake, for a context that blocks it. */
 async function loginAsAmarNoWorker(context: BrowserContext): Promise<void> {
   expect((await context.request.post('/api/dev/enrol', { data: {} })).ok()).toBe(true)
-  const users = await (await context.request.get('/api/auth/users')).json() as
-    { id: string, name: string }[]
-  const amar = users.find(u => u.name === 'Amar')!
   // The pad names nobody: these digits are the whole login.
   await pinLogin(context.request, 'Amar', 'konobar')
   await ackRules(context.request)

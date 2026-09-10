@@ -21,6 +21,16 @@ const props = defineProps<{
   meId: string | null
   pending: boolean
   error: string | null
+  /**
+   * How many digits this café's PINs have, or `null` when nobody has one yet.
+   *
+   * Every active PIN in a venue is one length — the pad fires on a fixed number
+   * of taps, so a six-digit PIN whose first four are a colleague's would sign
+   * the colleague in. The server refuses the mismatch (409 `PIN_LEN_MIXED`);
+   * this is the same rule said before the admin types, which is the half he can
+   * act on.
+   */
+  pinLen: 4 | 6 | null
 }>()
 
 const emit = defineEmits<{
@@ -56,11 +66,23 @@ watch(() => [props.open, props.user?.id], () => {
 const initialsError = computed(() =>
   initials.value.trim().length > 3 ? 'Najviše tri slova.' : null)
 
-/** Four or six digits, both legal for every role; six is advice, not a rule. */
+/**
+ * Four or six digits, both legal for every role — but only one of them in a
+ * café that already has PINs, and then it is the one the others use.
+ */
+const pinRule = computed(() => (props.pinLen
+  ? new RegExp(`^\\d{${props.pinLen}}$`)
+  : /^\d{4}$|^\d{6}$/))
+
+const pinHint = computed(() => (props.pinLen ? `${props.pinLen} cifre` : '4 ili 6 cifara'))
+
 const pinError = computed(() => {
   if (props.user) return null
   if (pin.value === '') return null
-  return /^\d{4}$|^\d{6}$/.test(pin.value) ? null : 'PIN je 4 ili 6 cifara.'
+  if (pinRule.value.test(pin.value)) return null
+  return props.pinLen
+    ? `Svi PIN-ovi u lokalu imaju ${props.pinLen} cifre.`
+    : 'PIN je 4 ili 6 cifara.'
 })
 
 const isSelf = computed(() => props.user !== null && props.user.id === props.meId)
@@ -68,7 +90,7 @@ const isSelf = computed(() => props.user !== null && props.user.id === props.meI
 const canSave = computed(() => {
   if (name.value.trim() === '' || initials.value.trim() === '') return false
   if (initialsError.value) return false
-  if (!props.user) return /^\d{4}$|^\d{6}$/.test(pin.value)
+  if (!props.user) return pinRule.value.test(pin.value)
   return pinError.value === null
 })
 
@@ -145,7 +167,7 @@ function save() {
       v-if="!user"
       v-model="pin"
       label="PIN"
-      placeholder="4 ili 6 cifara"
+      :placeholder="pinHint"
       autocomplete="off"
       :error="pinError ?? undefined"
       hint="Bez PIN-a se ne može prijaviti ni na jedan telefon."

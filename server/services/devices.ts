@@ -22,8 +22,8 @@ import { badRequest, conflict, notFound, SankError, unauthorized } from '../util
 import { newId, nowIso } from '../utils/ids'
 import { hashSecret, hashToken, newEnrolCode, newToken, verifySecret } from '../utils/password'
 import {
-  DEV_DEVICE_LABEL, activeUsers, clearDeviceCounter, revokeSessionsOfDevice,
-  toDeviceBrief, toMeUser, venueBrief, verifyMetered,
+  DEV_DEVICE_LABEL, clearDeviceCounter, revokeSessionsOfDevice,
+  toDeviceBrief, venueBrief, verifyMetered,
 } from './auth'
 import { getSettings, log } from './contracts'
 import type { Db, Queryable, Tx } from './types'
@@ -167,11 +167,21 @@ export function enrolDevice(
   return { result: enrolResult(db, device), token }
 }
 
+/**
+ * What a freshly enrolled phone is told: which device it now is, and which café
+ * it belongs to.
+ *
+ * It used to carry `users` — the whole active roster, names, initials and
+ * **roles** — because the lock screen drew faces. The lock screen is a pad now,
+ * so nothing renders that list, and handing it to whoever posts a six-character
+ * code told a thief which of the three PINs opens the dashboard. It is gone
+ * from the envelope and from `EnrolResult`; the pad's one pre-session read is
+ * `GET /api/auth/pin-len`, which is a number.
+ */
 function enrolResult(db: Db, device: DeviceRow): EnrolResult {
   return {
     device: toDeviceBrief(device),
     venue: venueBrief(db, device.venueId),
-    users: activeUsers(db, device.venueId).map(toMeUser),
   }
 }
 
@@ -307,18 +317,29 @@ export function revokeDevice(
 }
 
 /**
- * `POST /api/admin/devices/:id/unlock` — the other way back in after the 15-fail
- * device lock (§5.2), for when the locked-out person is not the one you want to
- * re-PIN.
+ * `POST /api/admin/devices/:id/unlock` — *Otključaj*, and the only key the bar
+ * tablet has.
  *
- * It deliberately does **not** clear `auth_attempts`. The evidence stays; only
+ * **It does not ask whether the device is *flagged* locked, because two of the
+ * three locks never set that flag.** `locked_at` is written at the fifteenth
+ * failure and nowhere else (`DEVICE_LOCK_FAILS`); the 60-second step at five and
+ * the 15-minute step at ten are *counted*, not flagged — they live in
+ * `auth_attempts`, and since the pad's failures name nobody they are filed
+ * against the device with `user_id NULL`, which no PIN reset can reach. So this
+ * used to refuse the two cases it was most needed for: ten wrong guesses on the
+ * bar tablet at 23:00 gave a quarter-hour of dead screen whose remedy answered
+ * *"ovaj uređaj nije zaključan"* and changed nothing, and the staff could only
+ * wait it out. The 409 is gone and the clear always runs.
+ *
+ * What it still does **not** do is erase the record: `clearDeviceCounter` writes
+ * a `kind='reset'` row that the counters measure *from*, so the failures
+ * themselves stay in `auth_attempts` for the Dnevnik. The evidence stays; only
  * the door reopens.
  */
 export function unlockDevice(
   db: Db, venueId: string, actor: Actor, deviceId: string, now = nowIso(),
 ): DeviceAdmin {
   const device = requireDevice(db, venueId, deviceId)
-  if (!device.lockedAt) throw conflict('DEVICE_NOT_LOCKED', 'this device is not locked')
 
   db.transaction((tx) => {
     tx.update(schema.devices).set({ lockedAt: null }).where(eq(schema.devices.id, deviceId)).run()
@@ -330,12 +351,12 @@ export function unlockDevice(
     })
   })
 
-  // …and the counter behind the lock, or this is not an unlock. The fifteen
-  // failures that shut the tablet were filed against nobody — the pad does not
-  // know who was typing — so no PIN reset can reach them, and clearing
-  // `locked_at` alone would let the next wrong digit re-read the same fifteen
-  // and shut it again. Outside the transaction above, and after it, for the
-  // reason every attempt row is: a clear that rolls back has cleared nothing.
+  // …and the counter behind the lock, or this is not an unlock. The failures
+  // that shut the tablet were filed against nobody — the pad does not know who
+  // was typing — so no PIN reset can reach them, and clearing `locked_at` alone
+  // would let the next wrong digit re-read the same fifteen and shut it again.
+  // Outside the transaction above, and after it, for the reason every attempt
+  // row is: a clear that rolls back has cleared nothing.
   clearDeviceCounter(db, venueId, deviceId, now)
 
   return listDevices(db, venueId).find(d => d.id === deviceId)!

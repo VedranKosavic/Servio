@@ -32,6 +32,7 @@ import { listLoginUsers, listMySessions } from '../../server/services/auth'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
 import { jpegBytes, scratchUploads } from '../helpers/phase4'
 import { businessDate } from '../../shared/dates'
+import { ROLE_LABELS } from '../../shared/landing'
 import { chatSince, postMessage } from '../../server/services/chat'
 import { getMyRoster, rosterHours } from '../../server/services/roster'
 import { latestRules, publishRules } from '../../server/services/rules'
@@ -125,6 +126,16 @@ describe('GET /api/bootstrap', () => {
     // None of the three retired values is accepted anywhere after 0001 and 0005.
     for (const gone of ['owner', 'waiter', 'bartender']) {
       expect(boot.users.map(u => u.role)).not.toContain(gone)
+    }
+    // And the labels the screens print are the same two. *Osoblje* kept a local
+    // copy of this map that still said `waiter` / `bartender`, so its *Uloga*
+    // column rendered `undefined` for every radnik and typecheck saw nothing:
+    // `tsc` does not read `<script setup>` inside a `.vue` file. Pinning the
+    // keys here is what makes the next role rename a red test rather than a
+    // blank cell.
+    expect(Object.keys(ROLE_LABELS).sort()).toEqual(['admin', 'radnik'])
+    for (const role of boot.users.map(u => u.role)) {
+      expect(ROLE_LABELS[role]).toBeTruthy()
     }
   })
 

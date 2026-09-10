@@ -38,7 +38,13 @@ export const AUTH_ERRORS = {
   DEVICE_REVOKED: 'Uređaj je odjavljen ili zaključan. Javi se vlasniku.',
   DEVICE_MISMATCH: 'Prijava ne pripada ovom uređaju. Prijavi se ponovo.',
   DEVICE_ALREADY_REVOKED: 'Uređaj je već odjavljen.',
-  DEVICE_NOT_LOCKED: 'Uređaj nije zaključan.',
+  // `DEVICE_NOT_LOCKED` stood here — 'Uređaj nije zaključan.' — and it was the
+  // 409 *Otključaj* answered when `devices.locked_at` was null. It refused the
+  // two locks that never write that column: the 60-second step at five failures
+  // and the 15-minute one at ten are counted in `auth_attempts`, not flagged, so
+  // the owner's only key answered "not locked" to a tablet nobody could type on.
+  // `unlockDevice` clears the counter unconditionally now, the sentence had no
+  // thrower left, and `errors.test.ts` fails on those.
   DEVICE_NOT_FOUND: 'Uređaj nije pronađen.',
   BOUND_USER_REQUIRED: 'Za lični telefon izaberi čiji je.',
 
@@ -68,6 +74,13 @@ export const AUTH_ERRORS = {
    * against anybody — their rows stay for the history, not for the lock screen.
    */
   PIN_TAKEN: 'Taj PIN već koristi neko drugi. Izaberi drugi.',
+  /**
+   * The other half of the same rule. Unique digits are not enough while the
+   * lengths differ: the pad fires on a fixed number of taps, so a six-digit PIN
+   * whose first four are somebody else's would sign that somebody else in on the
+   * fourth tap. One length per venue makes that unreachable.
+   */
+  PIN_LEN_MIXED: 'Svi PIN-ovi u lokalu moraju imati isti broj cifara.',
   /** Belt and braces: the pad must never guess which of two people typed. */
   PIN_AMBIGUOUS: 'Taj PIN koristi više osoba. Javi se vlasniku.',
 

@@ -128,7 +128,6 @@ export interface PinLoginResult {
 export interface EnrolResult {
   device: DeviceBrief
   venue: VenueBrief
-  users: MeUser[]
 }
 
 /** `POST /api/admin/enrol-codes` — what the admin reads out across the bar. */

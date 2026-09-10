@@ -38,7 +38,11 @@ review log in [docs/reviews.md](docs/reviews.md). The app itself is Bosnian-only
 
 **The first screen is a PIN pad and nothing else** — no names, no role buttons. The PIN
 identifies the person, which is why every PIN in a venue has to be different and why the
-app refuses to set one that is already taken. A fresh `npm run db:seed` creates three
+app refuses to set one that is already taken. For the same reason every PIN in a venue has
+the same number of digits: the pad fires on the last tap, so if one person's PIN were six
+digits and its first four were somebody else's whole PIN, the fourth tap would sign that
+somebody else in. Four or six are both fine; mixing them inside one café is not, and the
+app refuses that too (*Svi PIN-ovi u lokalu moraju imati isti broj cifara*). A fresh `npm run db:seed` creates three
 accounts: **Haris 1111** (vlasnik — lands on `/admin`, and `haris@lounge.ba` / `1111` is
 the same door on a laptop), **Amar 2222** and **Emir 3333** (radnici). A radnik picks
 *Konobar* or *Šanker* after the PIN and can switch later without signing out; both screens

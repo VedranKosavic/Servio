@@ -15,6 +15,15 @@
  *   server clamps what a phone claims about time.
  *
  * A device is revoked, never deleted: the rounds it locked keep pointing at it.
+ *
+ * **Otključaj is offered on every live phone, not only on a flagged one.** Of
+ * the three lockout steps only the last writes `devices.locked_at`: five wrong
+ * PINs are 60 seconds and ten are 15 minutes, and both of those are *counted*
+ * in `auth_attempts` rather than flagged — with the pad's failures filed against
+ * nobody, so no PIN reset reaches them either. A button that appeared only for
+ * the flag was therefore missing in the two cases the bar actually hits, and the
+ * *zaključan* pill only ever names the third. `unlockDevice` clears the flag and
+ * the counter together and is safe to press on a phone that is fine.
  */
 import type { DeviceAdmin } from '#shared/types'
 
@@ -99,9 +108,9 @@ const skewed = computed(() =>
           Preimenuj
         </UiButton>
         <UiButton
-          v-if="locked && !revoked"
+          v-if="!revoked"
           small
-          variant="soft"
+          :variant="locked ? 'soft' : 'ghost'"
           :disabled="pending"
           @click="emit('unlock')"
         >Otključaj</UiButton>
@@ -123,5 +132,10 @@ const skewed = computed(() =>
 .p-label small { color: var(--muted); font-size: var(--text-caption); }
 .p-muted { color: var(--muted); }
 .p-quiet { color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.p-actions { display: inline-flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+/* Three buttons since *Otključaj* stopped hiding itself, and they stay on one
+   line: the table scrolls sideways inside its own box (UiTable), which is the
+   app's rule for wide content, and a *Povuci* that wraps under the row it
+   belongs to reads like a button for the next device. */
+.p-actions { display: inline-flex; gap: 6px; justify-content: flex-end; flex-wrap: nowrap; }
+.p-actions :deep(button) { white-space: nowrap; }
 </style>

@@ -58,15 +58,37 @@ const busy = ref(false)
 const message = ref<string | null>(null)
 
 /**
- * How long a PIN this pad will accept.
+ * How many digits this pad waits for, and it is the venue's number rather than
+ * a guess.
  *
- * Four until four have been refused, because every account in the café has four
- * and a pad that waited for a *Potvrdi* would cost every login a fifth tap. A
- * refusal is the only evidence this screen can have that somebody's PIN is six
- * digits long — the pad cannot ask whose it is — so that is when it grows the
- * two extra dots and the confirm key (see `WaiterPinPad`).
+ * The pad has nobody in front of it, so it cannot read a length off an account —
+ * but it does not have to, because every active PIN in a venue is the same
+ * length (`requirePinFree`, 409 `PIN_LEN_MIXED`) and `GET /api/auth/pin-len`
+ * says which. That is the whole of what this screen may know before a session:
+ * a number of digits, naming nobody.
+ *
+ * It used to start at 4 and jump to 6 the first time a PIN was refused —
+ * "somebody's PIN must be six, then" — which was wrong twice over. It fired on
+ * the fourth digit of a six-digit PIN, so if those four were a colleague's whole
+ * PIN it signed **the colleague** in; and after any one mistype it stopped
+ * firing on four for the rest of the visit, so every login until a reload became
+ * five taps and a correct four-digit PIN did nothing visible at all.
+ *
+ * 4 is the fallback when the read fails — the café's real length, and the pad
+ * still works offline on a re-lock, where there is no server to ask.
  */
-const maxLen = ref<4 | 6>(4)
+const pinLen = ref<4 | 6>(4)
+
+async function loadPinLen() {
+  try {
+    pinLen.value = (await api.getPinLen()).pin_len
+  } catch {
+    // No device yet, or no network. Neither is worth a sentence on this screen:
+    // 4 is the café's length, and a wrong guess costs a refusal and not an
+    // identity — the length is uniform, so no prefix of anybody's PIN is
+    // anybody else's.
+  }
+}
 
 const enrolCode = ref('')
 const enrolLabel = ref('')
@@ -132,6 +154,7 @@ onMounted(async () => {
     message.value = relocked.value ? null : 'Nema veze sa serverom.'
   }
   view.value = 'pin'
+  await loadPinLen()
 })
 
 // -- enrol ------------------------------------------------------------------
@@ -153,6 +176,7 @@ async function enrolPath() {
     await api.devEnrol()
     message.value = null
     view.value = 'pin'
+    await loadPinLen()
   } catch {
     // No dev door: the six characters the owner reads out across the bar.
   } finally {
@@ -173,6 +197,9 @@ async function submitCode() {
     })
     enrolCode.value = ''
     view.value = 'pin'
+    // This browser only became a device a moment ago, so the boot read of the
+    // pad's length either never ran or 401'd. Ask now, before the first tap.
+    await loadPinLen()
   } catch (err) {
     message.value = apiErrorText(err)
   } finally {
@@ -267,7 +294,6 @@ async function attempt(pin: string): Promise<boolean> {
       // expired, waits for the network rather than being let through.
       message.value = 'Nema veze — prijava traži internet.'
     } else {
-      if (e.code === 'INVALID_PIN') maxLen.value = 6
       message.value = apiErrorText(err)
     }
   } finally {
@@ -397,8 +423,7 @@ async function afterLogin() {
           </div>
 
           <WaiterPinPad
-            :pin-len="4"
-            :max-len="maxLen"
+            :pin-len="pinLen"
             size="screen"
             corner="clear"
             :busy="busy"

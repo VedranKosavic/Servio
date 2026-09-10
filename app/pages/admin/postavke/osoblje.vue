@@ -10,8 +10,14 @@
  * **No response here carries a hash and no screen shows one.** The PIN column
  * says whether one exists and how many dots the pad draws, and nothing else.
  */
-import type { PinResetResult, Role, UserAdmin } from '#shared/types'
+import type { PinResetResult, UserAdmin } from '#shared/types'
 import type { CreateUserBody, UpdateUserBody } from '#shared/schemas'
+// The one map, in `shared/`. This file used to keep its own copy — and it still
+// said `waiter` / `bartender`, two keys that stopped being roles in 0005, so the
+// *Uloga* column rendered `undefined` for every radnik. A local copy of a shared
+// table is a blank cell waiting for the next rename; `api-shapes.test.ts` now
+// pins the shared one's keys to exactly `admin` and `radnik`.
+import { ROLE_LABELS } from '#shared/landing'
 
 definePageMeta({ middleware: 'admin', layout: 'admin' })
 
@@ -20,13 +26,8 @@ useHead({ title: 'Osoblje' })
 const api = useAdminApi()
 const me = useMe()
 
-const ROLE_LABELS: Record<Role, string> = {
-  waiter: 'Konobar',
-  bartender: 'Šanker',
-  admin: 'Vlasnik',
-}
-
 const users = ref<UserAdmin[]>([])
+
 const loading = ref(true)
 const error = ref<string | null>(null)
 
@@ -39,6 +40,26 @@ const pinFor = ref<UserAdmin | null>(null)
 const pinPending = ref(false)
 const pinError = ref<string | null>(null)
 const pinResult = ref<PinResetResult | null>(null)
+
+/**
+ * The café's PIN length — one number, because every active PIN in a venue has
+ * to have the same number of digits (the pad fires on a fixed number of taps,
+ * so a six-digit PIN whose first four are a colleague's would sign the
+ * colleague in). `null` while nobody else has a PIN: then either length is
+ * free, and the one set fixes it.
+ *
+ * `except` is the person being given this PIN, and it matters in exactly one
+ * café: the one where he is the only account with a PIN at all, where the rule
+ * has nobody to disagree with him and the server would allow either length.
+ * Being stricter than the server here would be a screen refusing something the
+ * app permits.
+ */
+function pinLenExcept(except: string | null): 4 | 6 | null {
+  return users.value.find(u => u.active && u.has_pin && u.id !== except)?.pin_len ?? null
+}
+
+const newUserPinLen = computed(() => pinLenExcept(null))
+const resetPinLen = computed(() => pinLenExcept(pinFor.value?.id ?? null))
 
 async function load() {
   try {
@@ -166,6 +187,7 @@ async function resetPin(pin: string) {
       :open="sheetOpen"
       :user="editing"
       :me-id="me.user.value?.id ?? null"
+      :pin-len="newUserPinLen"
       :pending="sheetPending"
       :error="sheetError"
       @close="sheetOpen = false"
@@ -174,6 +196,7 @@ async function resetPin(pin: string) {
     />
 
     <PostavkePinSheet
+      :pin-len="resetPinLen"
       :open="pinFor !== null"
       :user="pinFor"
       :pending="pinPending"

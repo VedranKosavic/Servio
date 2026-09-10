@@ -46,10 +46,7 @@ import { resetLimits, pinLogin, type Person } from './helpers'
  * behalf here would break a test about something else entirely. Amar confirms
  * through the screen, in the test below.
  */
-const OTHERS: [string, string][] = [
-  ['Tarik', '4444'],
-  ['Emir', '123456'],
-]
+const OTHERS: Person[] = ['Tarik', 'Emir']
 
 const DOC = [
   '# Pravila lokala',
@@ -70,20 +67,12 @@ const DOC = [
 let phone: BrowserContext
 let laptop: BrowserContext
 
-interface LoginUser { id: string, name: string }
-
-let loginUsers: LoginUser[] | null = null
-
-/** Read once: `GET /api/auth/users` is an auth door, ten a minute (§5.1). */
-async function knownUsers(context: BrowserContext): Promise<LoginUser[]> {
-  loginUsers ??= await (await context.request.get('/api/auth/users')).json() as LoginUser[]
-  return loginUsers
-}
-
 async function loginPin(context: BrowserContext, who: Person) {
-  const person = (await knownUsers(context)).find(u => u.name === who)!
-  await pinLogin(context.request, who, 'konobar')
-  return person
+  // The PIN identifies the person and the answer names him, so the roster read
+  // that used to stand in front of this is gone — as it had to be: the lock
+  // screen draws no names, and `GET /api/auth/users` is behind a session now.
+  const { user } = await pinLogin(context.request, who, 'konobar')
+  return user
 }
 
 test.describe.configure({ mode: 'serial' })
@@ -106,8 +95,8 @@ test.describe('Phase 4 — Pravila', () => {
     // See the file header: the people who log in later confirm here, so the
     // next spec file's waiter meets his floor plan and not this file's gate.
     const version = await (await laptop.request.get('/api/rules')).json() as { version: number }
-    for (const [who, pin] of OTHERS) {
-      await loginPin(phone, who, pin)
+    for (const who of OTHERS) {
+      await loginPin(phone, who)
       expect((await phone.request.post('/api/me/rules/ack', {
         data: { version: version.version },
       })).ok()).toBe(true)

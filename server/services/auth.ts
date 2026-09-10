@@ -566,6 +566,25 @@ export function verifyPinMetered(
  * `resolvePinToUser` never looks at it either. `except` is the person being
  * given this PIN, so re-setting somebody's own PIN to the digits he already has
  * is not a collision with himself.
+ *
+ * **And every PIN in a venue is the same length** — 409 `PIN_LEN_MIXED`. That
+ * is a second rule and it is not tidiness, it is the same rule seen from the
+ * other end. "Unique" is not enough once the lengths differ: `222299` and
+ * `2222` are two different PINs and both are free, but the pad has to fire on
+ * *some* number of digits before it can ask the server whose they are, so a
+ * six-digit PIN whose first four are somebody else's would sign that somebody
+ * else in on the fourth tap — the typist never reaching digit five, and the
+ * server never seeing anything ambiguous. A prefix, in other words, is a
+ * collision even though the two hashes are not. Making the length uniform makes
+ * the prefix unreachable and lets the pad fire on the real length from the
+ * first tap (`GET /api/auth/pin-len` is where it reads that length).
+ *
+ * The price is that changing the café from four digits to six is not one
+ * person at a time: the first PIN set in a venue fixes the length, and every
+ * other account has to be re-PIN'd before an account of the new length is
+ * accepted. With three accounts that is three taps in *Osoblje*, and the
+ * alternative — comparing every new six-digit PIN's prefix against every
+ * four-digit hash, and a pad that may never auto-fire — costs more everywhere.
  */
 export function requirePinFree(
   db: Db, venueId: string, pin: string, except: string | null,
@@ -575,6 +594,16 @@ export function requirePinFree(
     .all()
     .filter(row => row.pinHash !== null && row.id !== except)
 
+  // Length first, and in its own pass: it is a property of the venue rather
+  // than of any one row, so the answer must not depend on which row the
+  // `SELECT` happened to return first.
+  if (others.some(row => row.pinLen !== pin.length)) {
+    throw conflict(
+      'PIN_LEN_MIXED',
+      'every active pin in a venue has the same number of digits',
+    )
+  }
+
   for (const row of others) {
     if (verifySecret(pin, row.id, row.pinHash!)) {
       // The message never says *whose* it is. An admin setting a PIN would learn
@@ -583,6 +612,24 @@ export function requirePinFree(
       throw conflict('PIN_TAKEN', 'that pin already belongs to somebody in this venue')
     }
   }
+}
+
+/**
+ * How many digits a PIN has in this venue — the one number the pad needs before
+ * it knows anything else, and the only thing it may know before a session.
+ *
+ * `requirePinFree` keeps the active accounts to a single length, so this is
+ * that length; four when nobody has a PIN yet, which is the length the next one
+ * set will fix. It names nobody, counts nobody and says nothing about whether
+ * anybody is enrolled at all: a stranger holding the tablet learns that the
+ * café types four digits, which he can see anybody do from across the bar.
+ */
+export function venuePinLen(q: Queryable, venueId: string): 4 | 6 {
+  const row = q.select().from(schema.users)
+    .where(and(eq(schema.users.venueId, venueId), eq(schema.users.active, 1)))
+    .all()
+    .find(u => u.pinHash !== null)
+  return row?.pinLen === 6 ? 6 : 4
 }
 
 // ===========================================================================
@@ -1012,7 +1059,7 @@ export function resetPin(
 export const DEV_DEVICE_LABEL = 'dev'
 
 /** Routes that are `public` but still need an enrolled device in front of them. */
-const DEVICE_REQUIRED_PUBLIC = new Set(['POST /api/auth/pin', 'GET /api/auth/users'])
+const DEVICE_REQUIRED_PUBLIC = new Set(['POST /api/auth/pin', 'GET /api/auth/pin-len'])
 
 export interface AuthzOk {
   ok: true
@@ -1166,10 +1213,3 @@ export function revokeSessionsOfDevice(tx: Tx, venueId: string, deviceId: string
     .run()
 }
 
-/** Used by `GET /api/auth/users` and the enrol response: the venue's live staff. */
-export function activeUsers(q: Queryable, venueId: string): UserRow[] {
-  return q.select().from(schema.users)
-    .where(and(eq(schema.users.venueId, venueId), eq(schema.users.active, 1)))
-    .orderBy(schema.users.name)
-    .all()
-}

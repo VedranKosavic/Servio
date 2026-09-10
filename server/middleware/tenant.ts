@@ -26,7 +26,7 @@ import { routeKey } from '#shared/routeRoles'
 const AUTH_DOORS = new Set([
   'POST /api/auth/admin/login',
   'POST /api/auth/pin',
-  'GET /api/auth/users',
+  'GET /api/auth/pin-len',
   'POST /api/devices/enrol',
   'POST /api/dev/enrol',
 ])

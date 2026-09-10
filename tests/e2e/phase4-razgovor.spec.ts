@@ -34,8 +34,6 @@ import { ackRules, resetLimits, pinLogin, type Person } from './helpers'
 
 const ADMIN = { email: 'haris@lounge.ba', password: '1111' }
 
-interface LoginUser { id: string, name: string }
-
 /**
  * One phone, enrolled once, with a code an admin minted for it.
  *
@@ -55,13 +53,12 @@ async function enrolOwnDevice(admin: BrowserContext, phone: BrowserContext, labe
 }
 
 async function loginPin(phone: BrowserContext, who: Person) {
-  const users = await (await phone.request.get('/api/auth/users')).json() as LoginUser[]
-  const person = users.find(u => u.name === who)
-  expect(person, `${who} is on the lock screen`).toBeTruthy()
-  await pinLogin(phone.request, who, 'konobar')
+  // `GET /api/auth/users` is behind a session now, and it never had to be read
+  // first: the PIN identifies the person, and the answer says who that is.
+  const { user: person } = await pinLogin(phone.request, who, 'konobar')
   // S12 stands in front of every /konobar screen once phase4-pravila has published.
   await ackRules(phone.request)
-  return person!
+  return person
 }
 
 /** A real JPEG, made by the browser itself — the only decoder we can rely on. */
