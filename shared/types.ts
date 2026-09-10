@@ -53,6 +53,9 @@ export interface Actor {
 export type ChangeEntity =
   | 'table' | 'prep' | 'stock' | 'count' | 'shift' | 'adjustment'
   | 'menu' | 'settings' | 'user' | 'device' | 'log'
+  // Phase 4. A chat write bumps `chat` and nothing else — never `table`,
+  // `shift` or anything a waiter's floor plan reads.
+  | 'chat' | 'roster' | 'rules'
 
 export type { LogKind } from './logTemplates'
 
@@ -60,8 +63,12 @@ export type { LogKind } from './logTemplates'
 
 export type * from './types/admin'
 export type * from './types/auth'
+export type * from './types/chat'
 export type * from './types/money'
 export type * from './types/owner'
+export type * from './types/roster'
+export type * from './types/rules'
+export type * from './types/scan'
 export type * from './types/shifts'
 export type * from './types/stock'
 export type * from './types/sync'
@@ -91,8 +98,29 @@ export type {
   WasteReason,
 } from './schemas'
 
+// Phase 4's bodies, the same way.
+export type {
+  AckRulesBody,
+  AssignmentBody,
+  AssignmentPatch,
+  DecideSwapBody,
+  DiscardScanBody,
+  LinkAliasBody,
+  MarkReadBody,
+  MuteUserBody,
+  PostMessageBody,
+  PublishRulesBody,
+  ScanDeliveryBody,
+  SetPinBody,
+  ShiftTemplateBody,
+  ShiftTemplatePatch,
+  SwapBody,
+  WeekBody,
+} from './schemas'
+
 // --- the shared constants and settings --------------------------------------
 
+export type { ChannelKind } from './chat'
 export type { Settings, SettingsPatch } from './settings'
 export type { AlertRuleKey } from './constants'
 export type { RouteRole } from './routeRoles'

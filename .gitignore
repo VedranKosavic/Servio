@@ -15,7 +15,12 @@ data/
 # anybody else's business either; `deploy/deploy.env.example` is the committed
 # template it is copied from.
 deploy/.deploy.env
+# Photos, wherever UPLOAD_DIR points. `data/` above already covers the default
+# (`data/uploads`); this catches a custom one and the verification run's
+# `data/verify-uploads`.
 uploads/
+data/uploads/
+data/verify-uploads/
 .DS_Store
 
 # Playwright's own output: traces, screenshots and the HTML report of a run.

@@ -17,6 +17,7 @@
  * accepted role value anywhere after the Korak 2 migration.
  */
 import type { Role } from './types'
+import { CHANNEL_KINDS } from './chat'
 
 export type RouteRole = Role[] | 'public' | 'any'
 
@@ -33,11 +34,25 @@ const A: Role[] = ['admin']
  */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+/**
+ * Phase 4 adds one more rule, and it is not decoration: `svi` is not a uuid, so
+ * `POST /api/chat/svi/messages` would normalise to itself, find no key, and be
+ * 403'd by `tenant.ts` — deny-by-default doing exactly its job against a route
+ * that is perfectly legitimate. A segment in `CHANNEL_KINDS` **immediately after
+ * `/api/chat`** therefore becomes `:channel`. Position matters: only that one
+ * slot, so a message id that happened to be the word `svi` somewhere deeper
+ * could never be mistaken for a channel.
+ */
 export function routeKey(method: string, path: string): string {
   const clean = (path.split('?')[0] ?? '').replace(/\/+$/, '') || '/'
-  const normalised = clean
-    .split('/')
-    .map(seg => (UUID.test(seg) ? ':id' : seg))
+  const segments = clean.split('/')
+  const normalised = segments
+    .map((seg, i) => {
+      if (UUID.test(seg)) return ':id'
+      const isChannelSlot = i === 3 && segments[1] === 'api' && segments[2] === 'chat'
+      if (isChannelSlot && (CHANNEL_KINDS as string[]).includes(seg)) return ':channel'
+      return seg
+    })
     .join('/')
   return `${method.toUpperCase()} ${normalised}`
 }
@@ -170,4 +185,55 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   'POST /api/admin/enrol-codes': A,
   'GET /api/admin/settings': A,
   'PATCH /api/admin/settings': A,
+
+  // -- Phase 4: Razgovor ---------------------------------------------------
+  // Every row here is AWB and the *channel* is what decides access, through
+  // `canSee` inside the service — the coarse gate cannot express "an admin may
+  // open two of the three rooms".
+  'GET /api/chat/since': AWB,
+  'GET /api/chat/:channel/messages': AWB,
+  'POST /api/chat/:channel/messages': AWB,
+  'POST /api/chat/:channel/pin': AWB,
+  'POST /api/chat/messages/:id/delete': AWB,
+  'POST /api/chat/messages/:id/forward': AWB,
+  'POST /api/chat/read': AWB,
+  'POST /api/chat/users/:id/mute': A,
+
+  // -- Phase 4: slike ------------------------------------------------------
+  // `kind='delivery'` is gated inside the service by `bartender_can_receive_goods`,
+  // the same setting that gates `POST /api/stock/deliveries`.
+  'POST /api/uploads': AWB,
+  'GET /api/uploads/:id': AWB,
+
+  // -- Phase 4: Raspored ---------------------------------------------------
+  'GET /api/roster': AWB,
+  'GET /api/me/roster': AWB,
+  'GET /api/me/roster/hours': AWB,
+  'POST /api/roster/weeks/copy': A,
+  'POST /api/roster/weeks/publish': A,
+  'POST /api/roster/assignments': A,
+  'PATCH /api/roster/assignments/:id': A,
+  'DELETE /api/roster/assignments/:id': A,
+  'GET /api/roster/swaps': A,
+  // Own row only — the service refuses a swap on anybody else's shift.
+  'POST /api/roster/swaps': AWB,
+  'POST /api/roster/swaps/:id/accept': AWB,
+  'POST /api/roster/swaps/:id/decline': AWB,
+  'POST /api/roster/swaps/:id/cancel': AWB,
+  'POST /api/roster/swaps/:id/assign': A,
+  'GET /api/roster/hours': A,
+  'GET /api/admin/shift-templates': A,
+  'POST /api/admin/shift-templates': A,
+  'PATCH /api/admin/shift-templates/:id': A,
+
+  // -- Phase 4: Pravila ----------------------------------------------------
+  'GET /api/rules': AWB,
+  'POST /api/me/rules/ack': AWB,
+  'GET /api/admin/rules': A,
+  'POST /api/admin/rules': A,
+
+  // -- Phase 4: Prijem sa slike --------------------------------------------
+  'POST /api/stock/deliveries/scan': AB,
+  'POST /api/stock/scans/:id/discard': A,
+  'POST /api/stock/supplier-aliases': A,
 }

@@ -31,6 +31,8 @@ import { getPrep } from './prep'
 import { getStock } from './stock'
 import { shiftBrief } from './shifts'
 import { getMe } from './auth'
+import { chatSnapshot, myReadTag } from './chat'
+import { rulesVersion } from './rules'
 
 /**
  * One `changes` row, returning its `seq`.
@@ -81,7 +83,11 @@ export function minSeq(db: Queryable, venueId: string): number {
  * out of his own browser cache with the server never being asked.
  */
 export function changeTag(db: Queryable, venueId: string, actor: Actor): string {
-  return `${maxSeq(db, venueId)}-${actor.role}-${actor.userId.slice(0, 8)}`
+  // Phase 4 appends the requester's own `MAX(last_read_seq)`. Without it a phone
+  // that has just marked a channel read would 304 its way to a stale badge:
+  // `maxSeq` did not move, the role and user did not move, and the one thing
+  // that did is not in the tag (PHASE4 §2.11). One indexed lookup.
+  return `${maxSeq(db, venueId)}-${actor.role}-${actor.userId.slice(0, 8)}-r${myReadTag(db, venueId, actor)}`
 }
 
 /**
@@ -159,13 +165,43 @@ export function getChanges(
     result.me = getMe(db, venueId, actor)
   }
 
+  /**
+   * Phase 4 — and this is the whole of "one poll" for chat: the 15 s tick
+   * carries the **unread counts**, so S16 never runs a timer of its own. The
+   * snapshot is built from `canSee`, so an admin's answer has no *Konobari* row
+   * in it at all — not a row with a zero in it.
+   *
+   * `user` is in the trigger set because a mute is a `users` write and the muted
+   * phone has to learn about it.
+   */
+  if (entities.has('chat') || entities.has('user')) {
+    result.chat = chatSnapshot(db, venueId, actor)
+  }
+  // The roster is a plain refetch: the feed says it moved and the screen asks
+  // its own read, because the staff projection is a different query.
+  if (entities.has('roster')) result.roster = { max_at: rosterMaxAt(db, venueId) }
+  // Moved: the ack gate re-evaluates at the next login.
+  if (entities.has('rules')) result.rules_version = rulesVersion(db, venueId)
+
   return result
+}
+
+/** The newest roster change, as the cursor a screen compares against. */
+function rosterMaxAt(db: Queryable, venueId: string): string {
+  const row = db.select({ at: schema.changes.createdAt })
+    .from(schema.changes)
+    .where(and(eq(schema.changes.venueId, venueId), eq(schema.changes.entity, 'roster')))
+    .orderBy(desc(schema.changes.seq))
+    .limit(1)
+    .get()
+  return row?.at ?? ''
 }
 
 /** Every entity the feed can talk about. `full` answers as if all of them moved. */
 export const ALL_ENTITIES: ChangeEntity[] = [
   'table', 'prep', 'stock', 'count', 'shift', 'adjustment',
   'menu', 'settings', 'user', 'device', 'log',
+  'chat', 'roster', 'rules',
 ]
 
 /**

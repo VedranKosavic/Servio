@@ -20,6 +20,7 @@ import type { Db } from './client'
 import * as schema from './schema'
 import { randomUUID } from 'node:crypto'
 import { hashSecret } from '../utils/password'
+import { CHANNEL_KINDS, CHANNEL_NAMES } from '#shared/chat'
 
 const id = () => randomUUID()
 
@@ -416,6 +417,40 @@ export function seed(db: Db, opts: SeedOptions = {}): void {
         }).run()
       }
     })
+
+    // -- Razgovor -----------------------------------------------------------
+    // The three rooms are seeded with the venue and are never created, renamed
+    // or deleted by a user (PLAN F12). `canSee` decides who opens which.
+    for (const kind of CHANNEL_KINDS) {
+      tx.insert(schema.chatChannels).values({
+        id: id(),
+        venueId,
+        kind,
+        name: CHANNEL_NAMES[kind],
+        createdAt: now,
+      }).run()
+    }
+
+    // -- Raspored -----------------------------------------------------------
+    // `end_time <= start_time` means the shift ends the next day, which is what
+    // *Večernja* 16:00–01:00 is. No timezone maths anywhere: these are wall
+    // clocks the owner wrote on a plan.
+    const templates = [
+      { name: 'Dnevna', start: '08:00', end: '16:00', sort: 1 },
+      { name: 'Večernja', start: '16:00', end: '01:00', sort: 2 },
+    ]
+    for (const t of templates) {
+      tx.insert(schema.shiftTemplates).values({
+        id: id(),
+        venueId,
+        name: t.name,
+        startTime: t.start,
+        endTime: t.end,
+        sort: t.sort,
+        active: 1,
+        createdAt: now,
+      }).run()
+    }
   })
 }
 

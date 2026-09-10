@@ -26,6 +26,8 @@ import type {
   AdjustmentResult,
   ApiError,
   Bootstrap,
+  ChatPage,
+  ChatSince,
   ChangesResult,
   CreateDeliveryBody,
   CreateOrderBody,
@@ -45,8 +47,14 @@ import type {
   PaymentResult,
   PendingAdjustment,
   PinLoginResult,
+  MyRoster,
+  HoursRow,
+  PostMessageResult,
   Prep,
   PrepOrder,
+  RulesView,
+  SwapRequestView,
+  UploadResult,
   SettleResult,
   StockResponse,
   Tab,
@@ -62,6 +70,8 @@ import type {
   DecideAdjustmentBody, DiscardDraftBody, EnrolDeviceBody, HeartbeatBody, PinLoginBody,
   SettleBody, StaffNoteBody,
 } from '#shared/schemas'
+import type { PostMessageBody, SetPinBody, SwapBody } from '#shared/schemas'
+import type { ChannelKind } from '#shared/chat'
 import { errorMessage } from '#shared/errors'
 
 export class ApiSideError extends Error implements ApiError {
@@ -131,7 +141,7 @@ const rawFetch = $fetch as unknown as
   (url: string, options?: Record<string, unknown>) => Promise<unknown>
 
 async function request<T>(url: string, options?: {
-  method?: 'GET' | 'POST' | 'PUT'
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
   /**
    * A heavy GET the server ETags (BACKEND §4.2).
@@ -408,5 +418,103 @@ export function useApi() {
       ),
 
     getHealth: () => request<Health>('/api/health'),
+
+    // -- Razgovor (Phase 4) --------------------------------------------------
+
+    /**
+     * Bootstrap, catch-up or `reset`. S16 calls this on mount, after every own
+     * send and on `visibilitychange` — **never on a timer of its own**: the
+     * 15 s `/api/changes` carries the badge counts, and that is the one poll.
+     */
+    getChatSince: (cursor?: number) =>
+      request<ChatSince>(`/api/chat/since${cursor ? `?cursor=${cursor}` : ''}`, { etag: true }),
+
+    /** *Učitaj starije*, backwards from `beforeSeq`. */
+    getChatHistory: (channel: ChannelKind, beforeSeq?: number, limit = 50) =>
+      request<ChatPage>(
+        `/api/chat/${channel}/messages?limit=${limit}`
+        + (beforeSeq ? `&before_seq=${beforeSeq}` : ''),
+      ),
+
+    /**
+     * Send. The chat store's own pending list retries this — a replay of the
+     * same `client_id` answers 200 with `already_applied: true`, never a 409, so
+     * a photo taken with the wifi off appears exactly once.
+     */
+    postChatMessage: (channel: ChannelKind, body: PostMessageBody) =>
+      request<PostMessageResult>(`/api/chat/${channel}/messages`, {
+        method: 'POST', body, timeoutMs: 8000,
+      }),
+
+    /** *Za naručiti*: replace, append one line, or *Naručeno ✓* (admin only). */
+    setChatPin: (channel: ChannelKind, body: SetPinBody) =>
+      request<{ ok: true }>(`/api/chat/${channel}/pin`, { method: 'POST', body }),
+
+    /** *Obriši* / *Ukloni sliku*. A soft delete: the placeholder says who and when. */
+    deleteChatMessage: (id: string) =>
+      request<{ ok: true }>(`/api/chat/messages/${id}/delete`, { method: 'POST', body: {} }),
+
+    /** *Proslijedi u…* and *Prijavi vlasniku*. */
+    forwardChatMessage: (id: string, to: ChannelKind) =>
+      request<PostMessageResult>(`/api/chat/messages/${id}/forward`, {
+        method: 'POST', body: { to },
+      }),
+
+    /** The badge cursor, debounced 1 s on the client. Bumps nothing. */
+    markChatRead: (channel: ChannelKind, seq: number) =>
+      request<{ ok: true }>('/api/chat/read', { method: 'POST', body: { channel, seq } }),
+
+    /**
+     * `POST /api/uploads`, multipart. The phone downscales first
+     * (`app/utils/image.ts`); this is the belt, not the braces.
+     */
+    uploadImage: (blob: Blob, kind: 'chat' | 'delivery' = 'chat') => {
+      const form = new FormData()
+      form.append('image', blob, 'slika.jpg')
+      form.append('kind', kind)
+      return request<UploadResult>('/api/uploads', { method: 'POST', body: form, timeoutMs: 20_000 })
+    },
+
+    // -- Raspored (Phase 4) --------------------------------------------------
+
+    /**
+     * S17. Every write below is **online only** and disabled with "Nema veze"
+     * (PHASE4 §3, WP2): a swap is not urgent, and a queued one would need
+     * server-side conflict rules for nothing.
+     */
+    getMyRoster: () => request<MyRoster>('/api/me/roster'),
+
+    /** *Moji sati* — own rows only; the route never takes a user id. */
+    getMyHours: (month: string) =>
+      request<HoursRow[]>(`/api/me/roster/hours?month=${encodeURIComponent(month)}`),
+
+    /** *Traži zamjenu* — on your own row, optional colleague, reason and note. */
+    requestSwap: (body: SwapBody) =>
+      request<SwapRequestView>('/api/roster/swaps', { method: 'POST', body }),
+
+    /** *Preuzimam*. `force_double` is the retry after the *Dupla smjena* sheet. */
+    acceptSwap: (id: string, forceDouble = false) =>
+      request<SwapRequestView>(`/api/roster/swaps/${id}/accept`, {
+        method: 'POST', body: forceDouble ? { force_double: true } : {},
+      }),
+
+    declineSwap: (id: string) =>
+      request<SwapRequestView>(`/api/roster/swaps/${id}/decline`, { method: 'POST', body: {} }),
+
+    /** *Povuci* — the requester's own. A withdrawn `bolest` returns the row to `planned`. */
+    cancelSwap: (id: string) =>
+      request<SwapRequestView>(`/api/roster/swaps/${id}/cancel`, { method: 'POST', body: {} }),
+
+    // -- Pravila (Phase 4) ---------------------------------------------------
+
+    /**
+     * S12. `must_ack` is a **client** rule: nothing on the server refuses an
+     * order because a waiter has not read v3 (PHASE4 §2.8).
+     */
+    getRules: () => request<RulesView>('/api/rules'),
+
+    /** *Potvrđujem Pravila v3*. An old version is 409 `RULES_STALE`. */
+    ackRules: (version: number) =>
+      request<RulesView>('/api/me/rules/ack', { method: 'POST', body: { version } }),
   }
 }

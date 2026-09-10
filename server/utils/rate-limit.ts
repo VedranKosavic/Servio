@@ -145,9 +145,20 @@ export const ordersLimiter = createBurstLimiter(
   RATE_LIMITS.orders.limit * DEV_MULTIPLIER, RATE_LIMITS.orders.windowS,
 )
 
+/**
+ * Sending chat messages. Keyed by `deviceId ?? sessionId`, ten a minute
+ * (PHASE4 §2.5) — the same leash shape as `orders`, for the same reason: the
+ * chat store's pending list flushes on `online`, on `visibilitychange` and
+ * after every money-outbox flush, and a bug in one of those is a loop.
+ */
+export const chatLimiter = createBurstLimiter(
+  RATE_LIMITS.chat.limit * DEV_MULTIPLIER, RATE_LIMITS.chat.windowS,
+)
+
 /** Forget every window. Tests, and nothing else. */
 export function resetLimiters(): void {
   authLimiter.reset()
   pinLimiter.reset()
   ordersLimiter.reset()
+  chatLimiter.reset()
 }

@@ -12,11 +12,9 @@ useHead({ title: 'Više' })
 
 const changes = useAdminChanges()
 
-const links = [
-  { to: '/a/postavke', label: 'Meni i postavke', sub: 'Cijene, normativi, stolovi, osoblje, uređaji' },
-  { to: '/a/dnevnik', label: 'Dnevnik', sub: 'Ko je šta uradio, po danima' },
-  { to: '/a/izvoz', label: 'Izvoz', sub: 'CSV fajlovi za period' },
-]
+// The list comes from `app/utils/adminNav.ts` (WP0), the same array the left
+// nav reads — so a Phase 4 row lands in both places at once.
+const links = adminMore()
 </script>
 
 <template>
@@ -26,14 +24,23 @@ const links = [
     </header>
 
     <UiCard>
-      <NuxtLink v-for="link in links" :key="link.to" :to="link.to" class="a-more-row">
-        <span class="a-more-text">
-          <strong>{{ link.label }}</strong>
-          <small>{{ link.sub }}</small>
+      <template v-for="link in links" :key="link.id">
+        <span v-if="!link.ready" class="a-more-row a-more-soon">
+          <span class="a-more-text">
+            <strong>{{ link.label }}</strong>
+            <small>{{ link.sub }}</small>
+          </span>
+          <UiPill tone="neutral">{{ link.soon }}</UiPill>
         </span>
-        <UiPill v-if="link.to === '/a/dnevnik' && changes.logUnread.value" tone="bad">novo</UiPill>
-        <UiIcon name="chevron-right" :size="20" />
-      </NuxtLink>
+        <NuxtLink v-else :to="link.to" class="a-more-row">
+          <span class="a-more-text">
+            <strong>{{ link.label }}</strong>
+            <small>{{ link.sub }}</small>
+          </span>
+          <UiPill v-if="link.id === 'dnevnik' && changes.logUnread.value" tone="bad">novo</UiPill>
+          <UiIcon name="chevron-right" :size="20" />
+        </NuxtLink>
+      </template>
     </UiCard>
   </div>
 </template>
@@ -60,6 +67,7 @@ const links = [
 }
 
 .a-more-row:last-child { border-bottom: 0; }
+.a-more-soon { opacity: 0.5; }
 .a-more-text { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .a-more-text small { color: var(--muted); font-size: 13px; }
 </style>

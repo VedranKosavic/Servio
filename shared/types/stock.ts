@@ -104,6 +104,13 @@ export interface DeliveryView {
   entered_by: string
   entered_by_name: string
   note: string | null
+  /**
+   * `'manual'` or `'scan'` (PHASE4 §2.9). Both columns have existed since Korak
+   * 2 and are written for the first time in Phase 4; the *Prijem* screen reads
+   * them back to confirm the draft it posted really did flip its scan.
+   */
+  source: string
+  scan_id: string | null
   lines: DeliveryLineView[]
   /** The same `client_id` was posted before; this is the stored answer (§2). */
   already_applied: boolean

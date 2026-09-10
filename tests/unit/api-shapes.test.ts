@@ -30,6 +30,13 @@ import { getTab, getTablesState } from '../../server/services/tabs'
 import { getLive, getOwnerShift, listOwnerShifts, shiftLines } from '../../server/services/owner'
 import { listLoginUsers, listMySessions } from '../../server/services/auth'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
+import { jpegBytes, scratchUploads } from '../helpers/phase4'
+import { businessDate } from '../../shared/dates'
+import { chatSince, postMessage } from '../../server/services/chat'
+import { getMyRoster, rosterHours } from '../../server/services/roster'
+import { latestRules, publishRules } from '../../server/services/rules'
+import { scanDelivery, setScanModel, stubScanModel } from '../../server/services/scan'
+import { createUpload } from '../../server/services/uploads'
 
 let f: Fixture
 
@@ -572,5 +579,124 @@ describe('GET /api/me/sessions and GET /api/auth/users', () => {
       'active', 'has_pin', 'id', 'initials', 'last_login_at', 'name', 'pin_len', 'role',
     ])
     expect(JSON.stringify(rows)).not.toMatch(/_hash|token|password|pepper|email/i)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Phase 4 — the four envelopes the UI packages build against
+// ---------------------------------------------------------------------------
+
+/**
+ * Each of these is asserted **by name**, not by "has some fields": four screens
+ * are written against these shapes in parallel, and a field that quietly
+ * disappears has to fail here rather than as a blank line on somebody's phone.
+ */
+describe('GET /api/chat/since', () => {
+  it('carries the channels, the cursor and the messages — and no forbidden room', () => {
+    postMessage(f.db, f.venueId, f.actor('Amar'), 'svi', {
+      client_id: randomUUID(), kind: 'text', body: 'nema leda',
+    })
+
+    const answer = chatSince(f.db, f.venueId, f.actor('Amar'), null)
+    expect(Object.keys(answer).sort())
+      .toEqual(['channels', 'cursor', 'has_more', 'messages', 'muted_until'])
+
+    expect(Object.keys(answer.channels[0]!).sort()).toEqual([
+      'id', 'kind', 'last_seq', 'members', 'name', 'pinned_at', 'pinned_text',
+      'preview', 'preview_at', 'unread',
+    ])
+    expect(Object.keys(answer.messages[0]!).sort()).toEqual([
+      'at', 'author_id', 'author_initials', 'author_name', 'body', 'channel',
+      'client_id', 'deleted_at', 'deleted_by_name', 'forwarded_from_id', 'id',
+      'image', 'kind', 'reply_preview', 'reply_to_id', 'seq', 'system_key',
+      'system_payload',
+    ])
+
+    // The room is visible to the people in it, by name.
+    const svi = answer.channels.find(c => c.kind === 'svi')!
+    expect(svi.members).toContain('Haris')
+    expect(answer.channels.find(c => c.kind === 'konobari')!.members)
+      .not.toContain('Haris')
+  })
+})
+
+describe('GET /api/me/roster and GET /api/roster/hours', () => {
+  it('carries two weeks, the offers and my own requests', () => {
+    const mine = getMyRoster(f.db, f.venueId, f.actor('Amar'))
+    expect(Object.keys(mine).sort()).toEqual(['mine', 'next_week', 'offers', 'this_week'])
+    expect(Object.keys(mine.this_week).sort())
+      .toEqual(['days', 'published_at', 'published_by_name', 'templates', 'week_start'])
+    // Seven day rows, always — an empty week is seven empty days, not no days.
+    expect(mine.this_week.days).toHaveLength(7)
+    expect(Object.keys(mine.this_week.templates[0]!).sort())
+      .toEqual(['active', 'end_time', 'id', 'name', 'sort', 'start_time'])
+  })
+
+  it('carries the planned-against-worked row *Sati* prints', () => {
+    const shiftId = f.openShift({ members: ['Amar'] })
+    expect(shiftId).toBeTruthy()
+
+    const rows = rosterHours(f.db, f.venueId, businessDate(f.clock.now()).slice(0, 7))
+    expect(Object.keys(rows[0]!).sort()).toEqual([
+      'absent_days', 'days', 'early_leave_min', 'late_min', 'no_shift_rows',
+      'planned_h', 'planned_shifts', 'sick_days', 'swaps_given', 'swaps_taken',
+      'unplanned_rows', 'user_id', 'user_name', 'worked_h',
+    ])
+  })
+})
+
+describe('GET /api/rules', () => {
+  it('carries the text, the publisher and this reader\'s own acknowledgement', () => {
+    publishRules(f.db, f.venueId, f.adminActor(), { body_md: '# Pravila\n\nSlike samo šanka.' })
+    const view = latestRules(f.db, f.venueId, f.actor('Amar'))
+
+    expect(Object.keys(view).sort()).toEqual([
+      'body_md', 'must_ack', 'my_ack_at', 'my_ack_version', 'published_at',
+      'published_by_name', 'version',
+    ])
+    expect(view.published_by_name).toBe('Haris')
+    expect(view.must_ack).toBe(true)
+  })
+})
+
+describe('POST /api/stock/deliveries/scan', () => {
+  it('carries the draft the owner edits, with its header counts', async () => {
+    const dir = scratchUploads()
+    setScanModel(stubScanModel())
+    try {
+      const upload = createUpload(
+        f.db, f.venueId, f.adminActor(), { bytes: jpegBytes(1600, 1200) }, 'delivery',
+      )
+      const draft = await scanDelivery(f.db, f.venueId, f.adminActor(), { upload_id: upload.id })
+
+      expect(Object.keys(draft).sort()).toEqual([
+        'counts', 'date', 'error', 'image_url', 'invoice_no', 'lines', 'model',
+        'scan_id', 'status', 'supplier', 'upload_id',
+      ])
+      expect(Object.keys(draft.lines[0]!).sort()).toEqual([
+        'confidence', 'from_alias', 'match', 'pack', 'qty', 'stock_item_id',
+        'stock_item_name', 'text', 'unit_price_fen',
+      ])
+      expect(draft.model).toBe('claude-opus-5')
+      expect(draft.image_url).toBe(`/api/uploads/${upload.id}`)
+    } finally {
+      setScanModel(null)
+      dir.cleanup()
+    }
+  })
+})
+
+describe('no Phase 4 response carries a secret either', () => {
+  it('sweeps the four new envelopes', () => {
+    publishRules(f.db, f.venueId, f.adminActor(), { body_md: '# Pravila\n\nTekst.' })
+    const payloads = [
+      chatSince(f.db, f.venueId, f.actor('Amar'), null),
+      getMyRoster(f.db, f.venueId, f.actor('Amar')),
+      latestRules(f.db, f.venueId, f.actor('Amar')),
+      rosterHours(f.db, f.venueId, businessDate(f.clock.now()).slice(0, 7)),
+    ]
+    for (const payload of payloads) {
+      expect(JSON.stringify(payload)).not.toMatch(/_hash|token|password|pepper|email/i)
+    }
   })
 })

@@ -32,27 +32,21 @@ useHead({
   meta: [{ name: 'theme-color', content: '#1f2a2e' }],
 })
 
-interface NavItem {
-  to: string
-  label: string
-  icon: 'pulse' | 'money' | 'box' | 'users' | 'list' | 'calendar'
-  /** Shown in the bottom tab bar as well as in the left nav. */
-  tab?: boolean
-  badge?: () => number
-  dot?: () => boolean
+/**
+ * The rows come from `app/utils/adminNav.ts` (WP0) rather than an inline array,
+ * so a Phase 4 package adding *Razgovor* edits one file instead of this one and
+ * `a/vise.vue` both. The badges stay here, because they are this shell's state.
+ */
+const items = ADMIN_NAV
+const badge: Record<string, () => number> = {
+  puls: () => changes.attentionCount.value,
+}
+const dot: Record<string, () => boolean> = {
+  dnevnik: () => changes.logUnread.value,
 }
 
-const items: NavItem[] = [
-  { to: '/a', label: 'Puls', icon: 'pulse', tab: true, badge: () => changes.attentionCount.value },
-  { to: '/a/smjene', label: 'Smjena', icon: 'money', tab: true },
-  { to: '/a/roba', label: 'Roba', icon: 'box', tab: true },
-  { to: '/a/postavke', label: 'Meni i postavke', icon: 'users' },
-  { to: '/a/dnevnik', label: 'Dnevnik', icon: 'list', dot: () => changes.logUnread.value },
-  { to: '/a/izvoz', label: 'Izvoz', icon: 'calendar' },
-]
-
-/** The three pages the phone hides behind *Više*. */
-const moreItems = computed(() => items.filter(item => !item.tab))
+/** The pages the phone hides behind *Više*. */
+const moreItems = computed(() => adminMore())
 
 function isActive(to: string): boolean {
   // `/a` is the exact page; everything else owns its whole subtree.
@@ -63,7 +57,7 @@ function isActive(to: string): boolean {
 const moreActive = computed(() =>
   route.path === '/a/vise' || moreItems.value.some(item => isActive(item.to)))
 
-const moreDot = computed(() => moreItems.value.some(item => item.dot?.() ?? false))
+const moreDot = computed(() => moreItems.value.some(item => dot[item.id]?.() ?? false))
 
 async function signOut() {
   await me.logout()
@@ -80,19 +74,28 @@ async function signOut() {
         <small>Kontrolna ploča</small>
       </NuxtLink>
 
-      <NuxtLink
-        v-for="item in items"
-        :key="item.to"
-        :to="item.to"
-        class="a-nav-item"
-        :class="{ on: isActive(item.to) }"
-        :aria-current="isActive(item.to) ? 'page' : undefined"
-      >
-        <UiIcon :name="item.icon" />
-        <span>{{ item.label }}</span>
-        <span v-if="item.badge?.()" class="a-n">{{ item.badge() }}</span>
-        <span v-else-if="item.dot?.()" class="a-n a-n-dot" aria-label="novo" />
-      </NuxtLink>
+      <template v-for="item in items" :key="item.id">
+        <!-- A screen that does not exist yet is greyed out and says so, rather
+             than being absent: a nav that grows an item every week teaches
+             nobody where anything is. -->
+        <span v-if="!item.ready" class="a-nav-item a-nav-soon">
+          <UiIcon :name="item.icon" />
+          <span>{{ item.label }}</span>
+          <small>{{ item.soon }}</small>
+        </span>
+        <NuxtLink
+          v-else
+          :to="item.to"
+          class="a-nav-item"
+          :class="{ on: isActive(item.to) }"
+          :aria-current="isActive(item.to) ? 'page' : undefined"
+        >
+          <UiIcon :name="item.icon" />
+          <span>{{ item.label }}</span>
+          <span v-if="badge[item.id]?.()" class="a-n">{{ badge[item.id]!() }}</span>
+          <span v-else-if="dot[item.id]?.()" class="a-n a-n-dot" aria-label="novo" />
+        </NuxtLink>
+      </template>
 
       <div class="a-nav-foot">
         <!-- Same reason as the line below: the venue's real name only exists on
@@ -121,8 +124,8 @@ async function signOut() {
     <!-- The phone tabs. Hidden at 1024 px and above. -->
     <nav class="a-tabs" aria-label="Glavna navigacija">
       <NuxtLink
-        v-for="item in items.filter(i => i.tab)"
-        :key="item.to"
+        v-for="item in adminTabs()"
+        :key="item.id"
         :to="item.to"
         class="a-tab"
         :class="{ on: isActive(item.to) }"
@@ -130,7 +133,7 @@ async function signOut() {
       >
         <span class="a-tab-icon">
           <UiIcon :name="item.icon" />
-          <span v-if="item.badge?.()" class="a-n a-n-float">{{ item.badge() }}</span>
+          <span v-if="badge[item.id]?.()" class="a-n a-n-float">{{ badge[item.id]!() }}</span>
         </span>
         <span class="a-tab-label">{{ item.label }}</span>
       </NuxtLink>
@@ -218,6 +221,12 @@ async function signOut() {
 }
 
 .a-nav-item:hover { color: var(--nav-ink); }
+/* A row whose screen has not landed: greyed out and honest, never absent. */
+.a-nav-soon { opacity: 0.45; cursor: default; }
+.a-nav-soon > span { min-width: 0; }
+/* `nowrap`, or "stiže uskoro" breaks over two lines inside a 220 px nav and the
+   row grows taller than every other one. */
+.a-nav-soon small { margin-left: auto; font-size: 11px; white-space: nowrap; }
 .a-nav-item.on { background: var(--accent); color: var(--on-accent); font-weight: 600; }
 
 .a-n {

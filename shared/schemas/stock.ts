@@ -41,6 +41,15 @@ export const createDeliveryBody = z.object({
   /** The invoice date — one of exactly three timestamps a body may carry (§2). */
   delivered_at: clientAt.optional(),
   note: shortNote.optional(),
+  /**
+   * *Prijem sa slike* (PHASE4 §2.9). `deliveries.source` and `deliveries.scan_id`
+   * have existed since Korak 2 and are written for the first time here: the scan
+   * produces a draft, the owner edits every line, and *Proknjiži* posts through
+   * this same route with `source: 'scan'`. The route then flips the scan to
+   * `applied` inside the delivery's own transaction.
+   */
+  source: z.enum(['manual', 'scan']).optional(),
+  scan_id: uuid.optional(),
   lines: z.array(z.object({
     stock_item_id: uuid,
     /** Whole packs off the invoice: "2 gajbe". */

@@ -62,8 +62,57 @@ function korak2Database(file: string): void {
   // The café's server has the Korak 2 triggers installed when the new build
   // boots, and `applyTriggers()` runs *after* `migrate()` — so 0003 executes
   // with `tabs_no_delete` and friends still in force.
-  applyTriggers(sqlite)
+  applyTriggersForExistingTables(sqlite)
   sqlite.close()
+}
+
+/**
+ * `triggers.sql` as this database can take it.
+ *
+ * The file is always the **current** one, and it grows: Phase 4 added guards on
+ * `chat_messages`, `uploads`, `roster_assignments`, `swap_requests`, `rules` and
+ * `delivery_scans`, none of which exist at migration 0002. Running the whole
+ * file here would fail with "no such table" long before the migration under test
+ * ever ran — which would say nothing about 0003 and everything about the fixture.
+ *
+ * So each statement is tried and a "no such table" is skipped. That reproduces
+ * the real situation exactly: whatever guards a database of that vintage can
+ * carry are in force while 0003 executes, and `openDatabase()` installs the rest
+ * afterwards — which is what the assertions below check.
+ */
+function applyTriggersForExistingTables(sqlite: Database.Database): void {
+  const sql = readFileSync(resolve(process.cwd(), 'server/database/triggers.sql'), 'utf8')
+  for (const statement of splitTriggerStatements(sql)) {
+    try {
+      sqlite.exec(statement)
+    } catch (err) {
+      if (!/no such table/i.test(String(err))) throw err
+    }
+  }
+}
+
+/**
+ * Split on `END;` and on a bare `;` outside a `BEGIN … END` block — a trigger
+ * body contains semicolons of its own, so a naive `split(';')` would cut one in
+ * half.
+ */
+function splitTriggerStatements(sql: string): string[] {
+  const out: string[] = []
+  let current = ''
+  let inBody = false
+  for (const line of sql.split('\n')) {
+    const trimmed = line.trim()
+    if (trimmed.startsWith('--') || trimmed === '') continue
+    current += `${line}\n`
+    if (/^BEGIN$/i.test(trimmed)) inBody = true
+    if (inBody) {
+      if (/^END;$/i.test(trimmed)) { out.push(current); current = ''; inBody = false }
+      continue
+    }
+    if (trimmed.endsWith(';')) { out.push(current); current = '' }
+  }
+  if (current.trim()) out.push(current)
+  return out
 }
 
 interface Seeded { venueId: string, tabId: string, paidTabId: string, orderId: string }

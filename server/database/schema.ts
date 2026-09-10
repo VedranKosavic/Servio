@@ -97,6 +97,16 @@ export const users = sqliteTable('users', {
   /** The Dnevnik badge: everything after this is "new". */
   logSeenAt: text('log_seen_at'),
   createdAt: text('created_at').notNull().default(''),
+  /**
+   * *Pravila* — when this person last tapped *Potvrđujem*, and on which version.
+   * The ack gate is a client rule (PHASE4 §2.8): nothing on the server refuses
+   * an order because a waiter has not read v3, because refusing to record a
+   * round the guest is already drinking would put money outside the ledger.
+   */
+  rulesAckAt: text('rules_ack_at'),
+  rulesVersion: integer('rules_version'),
+  /** *Utišaj* — the owner's mute, as the instant it lifts. NULL = not muted. */
+  chatMutedUntil: text('chat_muted_until'),
 }, t => [
   index('users_venue_idx').on(t.venueId),
   // An email identifies a person before any venue is known, so this unique is
@@ -1036,3 +1046,242 @@ export const taskRuns = sqliteTable('task_runs', {
   ok: integer('ok').notNull(),
   error: text('error'),
 }, t => [uniqueIndex('task_runs_uq').on(t.venueId, t.task, t.businessDate)])
+
+// ---------------------------------------------------------------------------
+// Phase 4 — Razgovor, uploads, Raspored, Pravila, Prijem sa slike
+// ---------------------------------------------------------------------------
+
+/**
+ * The three rooms, seeded with the venue and never created, renamed or deleted
+ * by anybody. Deliberately **mutable** and deliberately without triggers: a
+ * pinned note (*Za naručiti*) is a note, not a ledger, and every version of it
+ * is kept as a `chat_pin_changed` system message in the thread.
+ */
+export const chatChannels = sqliteTable('chat_channels', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  kind: text('kind', { enum: ['svi', 'konobari', 'admini'] }).notNull(),
+  name: text('name').notNull(),
+  pinnedText: text('pinned_text'),
+  pinnedBy: text('pinned_by'),
+  pinnedAt: text('pinned_at'),
+  createdAt: text('created_at').notNull(),
+}, t => [uniqueIndex('chat_channels_kind_uq').on(t.venueId, t.kind)])
+
+/**
+ * One message. `seq` is **venue-wide** and assigned as `MAX(seq)+1` inside the
+ * insert transaction, exactly like `orders.shift_seq` — so one integer is the
+ * cursor for every channel and a phone catches up with a single `seq > cursor`.
+ *
+ * A soft delete keeps the body: it is moderation evidence, and the placeholder
+ * on screen shows who removed it and when, never the text. `redacted_at` is the
+ * Phase 5 retention task and nothing in Phase 4 writes it.
+ */
+export const chatMessages = sqliteTable('chat_messages', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  channelId: text('channel_id').notNull().references(() => chatChannels.id),
+  clientId: text('client_id').notNull(),
+  seq: integer('seq').notNull(),
+  kind: text('kind', { enum: ['text', 'image', 'system'] }).notNull(),
+  /** ≤ 2000 chars. An image message may carry a caption here. */
+  body: text('body'),
+  uploadId: text('upload_id').references(() => uploads.id),
+  replyToId: text('reply_to_id').references((): AnySQLiteColumn => chatMessages.id),
+  forwardedFromId: text('forwarded_from_id').references((): AnySQLiteColumn => chatMessages.id),
+  /** NULL only for `kind='system'` — the one way the server speaks. */
+  authorId: text('author_id').references(() => users.id),
+  deviceId: text('device_id'),
+  systemKey: text('system_key'),
+  systemPayloadJson: text('system_payload_json'),
+  clientCreatedAt: text('client_created_at'),
+  clientCreatedAtAdj: text('client_created_at_adj'),
+  createdAt: text('created_at').notNull(),
+  deletedAt: text('deleted_at'),
+  deletedBy: text('deleted_by'),
+  redactedAt: text('redacted_at'),
+}, t => [
+  uniqueIndex('chat_messages_client_uq').on(t.venueId, t.clientId),
+  index('chat_messages_seq_idx').on(t.venueId, t.seq),
+  index('chat_messages_channel_seq_idx').on(t.venueId, t.channelId, t.seq),
+])
+
+/**
+ * The read cursor behind the badges. A plain upsert, shown to nobody, and
+ * *Pravila* says both — PHASE4 §4: no read receipts, ever, in any form.
+ */
+export const chatReads = sqliteTable('chat_reads', {
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  channelId: text('channel_id').notNull().references(() => chatChannels.id),
+  userId: text('user_id').notNull().references(() => users.id),
+  lastReadSeq: integer('last_read_seq').notNull().default(0),
+  updatedAt: text('updated_at').notNull(),
+}, t => [primaryKey({ columns: [t.venueId, t.channelId, t.userId] })])
+
+/**
+ * A JPEG on disk, and the row that outlives it.
+ *
+ * The row is never DELETEd — only `deleted_at` is stamped when the file is
+ * unlinked. That is how the reference count and the hourly GC stay honest: a
+ * message still points at an id that says "gone", and the screen renders
+ * "Slika istekla" instead of a broken image.
+ */
+export const uploads = sqliteTable('uploads', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  kind: text('kind', { enum: ['chat', 'delivery'] }).notNull(),
+  /** Relative to `UPLOAD_DIR`: `chat/2026/09/<uuid>.jpg`. */
+  path: text('path').notNull(),
+  bytes: integer('bytes').notNull(),
+  /** 0 when the JPEG header could not be parsed — never a failed upload. */
+  width: integer('width').notNull().default(0),
+  height: integer('height').notNull().default(0),
+  mime: text('mime').notNull().default('image/jpeg'),
+  createdBy: text('created_by').notNull().references(() => users.id),
+  deviceId: text('device_id'),
+  createdAt: text('created_at').notNull(),
+  deletedAt: text('deleted_at'),
+}, t => [
+  index('uploads_kind_idx').on(t.venueId, t.kind, t.createdAt),
+  index('uploads_creator_idx').on(t.venueId, t.createdBy, t.createdAt),
+])
+
+/**
+ * *Šablon smjene* — "Večernja 16:00–01:00". `end_time <= start_time` means the
+ * shift ends the next day. Not a ledger: a template is a plan, and editing one
+ * tomorrow must not rewrite anybody's past hours — which is why an assignment
+ * copies the two times at insert, like a price at lock.
+ */
+export const shiftTemplates = sqliteTable('shift_templates', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  name: text('name').notNull(),
+  startTime: text('start_time').notNull(),
+  endTime: text('end_time').notNull(),
+  sort: integer('sort').notNull().default(0),
+  active: integer('active').notNull().default(1),
+  createdAt: text('created_at').notNull(),
+}, t => [uniqueIndex('shift_templates_name_uq').on(t.venueId, t.name)])
+
+/** One Monday-anchored week of the plan. `published_at` is what staff may see. */
+export const rosterWeeks = sqliteTable('roster_weeks', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  /** A Monday ISO date from `weekStart()`. */
+  weekStart: text('week_start').notNull(),
+  publishedAt: text('published_at'),
+  publishedBy: text('published_by'),
+  createdBy: text('created_by').notNull(),
+  createdAt: text('created_at').notNull(),
+}, t => [uniqueIndex('roster_weeks_start_uq').on(t.venueId, t.weekStart)])
+
+/**
+ * One person in one cell. The mutable roster is the documented exception to
+ * append-only (PLAN §6) — but a cell *change* is a new row plus a `removed` row,
+ * never an overwrite, and `roster_assignments_status_guard` is what says so.
+ *
+ * The partial unique index is "the same person twice in one cell", and it is
+ * partial on purpose: a `swapped` giver row and the taker's new row are the same
+ * date and template, and both must be able to exist.
+ */
+export const rosterAssignments = sqliteTable('roster_assignments', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  workDate: text('work_date').notNull(),
+  templateId: text('template_id').notNull().references(() => shiftTemplates.id),
+  userId: text('user_id').notNull().references(() => users.id),
+  /** Snapshotted from the template at insert — see `shift_templates`. */
+  startTime: text('start_time').notNull(),
+  endTime: text('end_time').notNull(),
+  status: text('status', {
+    enum: ['planned', 'swapped', 'sick', 'absent', 'removed'],
+  }).notNull().default('planned'),
+  origin: text('origin', { enum: ['owner', 'copy', 'swap'] }).notNull().default('owner'),
+  swapRequestId: text('swap_request_id'),
+  note: text('note'),
+  createdBy: text('created_by').notNull(),
+  createdAt: text('created_at').notNull(),
+  updatedBy: text('updated_by'),
+  updatedAt: text('updated_at'),
+}, t => [
+  uniqueIndex('roster_assignments_cell_uq')
+    .on(t.venueId, t.workDate, t.templateId, t.userId)
+    .where(sql`status NOT IN ('swapped','removed')`),
+  index('roster_assignments_date_idx').on(t.venueId, t.workDate),
+  index('roster_assignments_user_idx').on(t.venueId, t.userId, t.workDate),
+])
+
+/**
+ * *Traži zamjenu*. One live request per shift, which is what the partial unique
+ * index says. `reason='bolest'` also sets the assignment `sick` in the same
+ * transaction — the one door sickness enters the roster through.
+ */
+export const swapRequests = sqliteTable('swap_requests', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  assignmentId: text('assignment_id').notNull().references(() => rosterAssignments.id),
+  fromUserId: text('from_user_id').notNull().references(() => users.id),
+  /** A named colleague, or NULL for an open offer anybody may take. */
+  toUserId: text('to_user_id').references(() => users.id),
+  reason: text('reason', { enum: ['zamjena', 'bolest'] }).notNull(),
+  note: text('note'),
+  status: text('status', {
+    enum: ['pending', 'accepted', 'declined', 'cancelled'],
+  }).notNull().default('pending'),
+  decidedBy: text('decided_by'),
+  decidedAt: text('decided_at'),
+  createdAt: text('created_at').notNull(),
+}, t => [
+  uniqueIndex('swap_requests_live_uq')
+    .on(t.venueId, t.assignmentId)
+    .where(sql`status = 'pending'`),
+  index('swap_requests_status_idx').on(t.venueId, t.status, t.createdAt),
+  index('swap_requests_from_idx').on(t.venueId, t.fromUserId, t.status),
+])
+
+/** *Pravila*, versioned. Append-only: a correction is a new version. */
+export const rules = sqliteTable('rules', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  version: integer('version').notNull(),
+  bodyMd: text('body_md').notNull(),
+  publishedAt: text('published_at').notNull(),
+  publishedBy: text('published_by').notNull(),
+}, t => [uniqueIndex('rules_version_uq').on(t.venueId, t.version)])
+
+/**
+ * One photo of an otpremnica, read once by the model. Nothing here posts stock:
+ * the draft goes back to the owner, who edits every line and calls the existing
+ * `POST /api/stock/deliveries` with `source: 'scan'` and this row's id.
+ */
+export const deliveryScans = sqliteTable('delivery_scans', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  uploadId: text('upload_id').notNull().references(() => uploads.id),
+  model: text('model').notNull(),
+  rawJson: text('raw_json'),
+  status: text('status', {
+    enum: ['uploaded', 'parsed', 'applied', 'discarded'],
+  }).notNull().default('uploaded'),
+  error: text('error'),
+  createdBy: text('created_by').notNull().references(() => users.id),
+  createdAt: text('created_at').notNull(),
+  parsedAt: text('parsed_at'),
+}, t => [
+  index('delivery_scans_status_idx').on(t.venueId, t.status, t.createdAt),
+])
+
+/**
+ * What one supplier calls one of our items. The alias is stored lowercased and
+ * diacritic-folded by the service, so "Coca Cola 0,25" and "coca-cola 0.25"
+ * collide **on purpose** — that collision is the whole feature.
+ */
+export const supplierAliases = sqliteTable('supplier_aliases', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  stockItemId: text('stock_item_id').notNull().references(() => stockItems.id),
+  alias: text('alias').notNull(),
+  supplierName: text('supplier_name'),
+  createdBy: text('created_by').notNull(),
+  createdAt: text('created_at').notNull(),
+}, t => [uniqueIndex('supplier_aliases_alias_uq').on(t.venueId, t.alias)])

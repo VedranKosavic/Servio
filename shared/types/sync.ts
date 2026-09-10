@@ -12,6 +12,7 @@
  * `MeContext` is what `GET /api/me` answers.
  */
 import type { ChangeEntity } from '../types'
+import type { ChatChangesSnapshot } from './chat'
 import type { LogKind } from '../logTemplates'
 import type { MeContext } from './auth'
 import type { Prep, TablesStateResponse } from './money'
@@ -90,6 +91,16 @@ export interface ChangesResult {
   /** Admins only. */
   log_max_at?: string
   me?: MeSnapshot
+  /**
+   * Phase 4. The 15 s poll carries the **unread counts** — that is the whole of
+   * "one poll" for chat: S16 calls `GET /api/chat/since` on mount, after every
+   * own send and on `visibilitychange`, never on a timer of its own.
+   */
+  chat?: ChatChangesSnapshot
+  /** The client refetches its own roster read; the feed carries no roster rows. */
+  roster?: { max_at: string }
+  /** Moved: the ack gate re-evaluates. */
+  rules_version?: number
 }
 
 // --- the Dnevnik ------------------------------------------------------------
