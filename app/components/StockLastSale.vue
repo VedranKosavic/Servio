@@ -9,6 +9,11 @@
  *
  * It reads in stock units, not menu units: two coffees leave as "−14 g Kafa
  * (mljevena)", which is exactly the deduction the bartender is being shown.
+ *
+ * **It is no longer amber.** A warn-toned slab at the top of the shelf reads as
+ * a problem, and this is the most ordinary event in the café: a round went out.
+ * It is a card with an eyebrow now — the same shape as a group heading over its
+ * card — so it belongs to the page instead of interrupting it.
  */
 import type { StockItem } from '#shared/types'
 
@@ -20,20 +25,73 @@ defineProps<{
 </script>
 
 <template>
-  <div class="flex items-start gap-2.5 rounded-xl bg-warn-soft px-3 py-2.5 text-warn">
-    <svg
-      width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="mt-1 shrink-0"
-    >
-      <path d="M4 12l16-8-6 16-2-6z" />
-    </svg>
-    <div class="min-w-0 text-[15px]">
-      <div>Zadnja narudžba · {{ table }} · {{ clockHm(at) }}</div>
-      <div class="num font-bold">
-        <span v-for="(item, index) in items" :key="item.id">
-          <span v-if="index > 0"> · </span>{{ formatMovementQty(item.last_movement!.qty_delta, item.base_unit) }} {{ item.name }}
-        </span>
-      </div>
-    </div>
-  </div>
+  <section class="ls card">
+    <header class="ls-head">
+      <span class="eyebrow">Zadnja narudžba</span>
+      <span class="num ls-when">{{ table }} · {{ clockHm(at) }}</span>
+    </header>
+
+    <ul class="ls-items">
+      <li v-for="item in items" :key="item.id" class="ls-item">
+        <span class="num ls-qty">{{ formatMovementQty(item.last_movement!.qty_delta, item.base_unit) }}</span>
+        <span class="ls-name">{{ item.name }}</span>
+      </li>
+    </ul>
+  </section>
 </template>
+
+<style scoped>
+.ls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+}
+
+.ls-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.ls-when {
+  margin-left: auto;
+  font-size: var(--text-caption);
+  color: var(--muted);
+}
+
+.ls-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ls-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+/* The same right-aligned tabular column the shelf below uses, so the strip and
+   the list read on one grid. */
+.ls-qty {
+  flex-shrink: 0;
+  min-width: 68px;
+  text-align: right;
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.ls-name {
+  min-width: 0;
+  font-size: var(--text-label);
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>

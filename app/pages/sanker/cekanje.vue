@@ -72,53 +72,36 @@ function answerable(row: PendingAdjustment): boolean {
   return row.seconds_since_lock + ticketAgeSeconds(row.created_at, now.value) <= windowS.value
 }
 
+/** The header's second line: how many decisions are actually his. */
+const subtitle = computed(() => {
+  if (!loaded.value) return undefined
+  const n = pending.value.length
+  if (n === 0) return 'Ništa ne čeka'
+  if (n === 1) return '1 zahtjev čeka'
+  return n < 5 ? `${n} zahtjeva čekaju` : `${n} zahtjeva čeka`
+})
+
 const mine = computed(() => pending.value.filter(answerable))
 const theirs = computed(() => pending.value.filter(row => !answerable(row)))
 </script>
 
 <template>
   <div class="flex flex-1 flex-col">
-    <header class="flex items-center gap-2.5 border-b border-line py-2.5">
-      <h1 class="flex-1 truncate text-xl font-bold">
-        Na čekanju
-      </h1>
-      <WaiterSyncChip />
-      <button
-        type="button"
-        class="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface-2 text-sm font-bold"
-        aria-label="Korisnik"
-        @click="menuOpen = true"
-      >
-        {{ me.user.value?.initials ?? '?' }}
-      </button>
-    </header>
+    <SankerHeader title="Na čekanju" :subtitle="subtitle" @menu="menuOpen = true" />
 
     <WaiterOutboxBanner />
 
-    <main class="flex flex-1 flex-col gap-3 py-4">
-      <p v-if="loadError" class="rounded-xl bg-danger-soft px-3 py-2 text-[15px] text-danger" role="alert">
+    <main class="flex flex-1 flex-col gap-4 py-4">
+      <p v-if="loadError" class="note note-danger" role="alert">
         {{ loadError }}
       </p>
 
       <WaiterFailedCard />
       <WaiterUpdatePrompt />
 
-      <AdjPendingCard
-        v-for="row in mine"
-        :key="row.id"
-        :row="row"
-        :now="now"
-        :window-s="windowS"
-        :busy="deciding === row.id"
-        @decide="decide"
-      />
-
-      <template v-if="theirs.length">
-        <h2 class="pt-1 text-[15px] font-semibold text-text-2">
-          Čeka vlasnika
-        </h2>
+      <div v-if="mine.length" class="flex flex-col gap-3">
         <AdjPendingCard
-          v-for="row in theirs"
+          v-for="row in mine"
           :key="row.id"
           :row="row"
           :now="now"
@@ -126,13 +109,29 @@ const theirs = computed(() => pending.value.filter(row => !answerable(row)))
           :busy="deciding === row.id"
           @decide="decide"
         />
-      </template>
+      </div>
 
-      <p v-if="loaded && pending.length === 0" class="card px-4 py-8 text-center text-text-2">
+      <section v-if="theirs.length" class="group">
+        <h2 class="eyebrow group-label">Čeka vlasnika</h2>
+        <div class="flex flex-col gap-3">
+          <AdjPendingCard
+            v-for="row in theirs"
+            :key="row.id"
+            :row="row"
+            :now="now"
+            :window-s="windowS"
+            :busy="deciding === row.id"
+            @decide="decide"
+          />
+        </div>
+      </section>
+
+      <p v-if="loaded && pending.length === 0" class="empty">
         Ništa ne čeka odobrenje.
+        <span>Storno i gratis koje konobari zatraže stižu ovdje sami.</span>
       </p>
 
-      <p class="pt-1 text-center text-sm text-muted">
+      <p class="foot">
         Šanker odobrava storno dok je tura mlađa od 15 minuta. Poslije odlučuje vlasnik.
       </p>
     </main>
@@ -142,3 +141,23 @@ const theirs = computed(() => pending.value.filter(row => !answerable(row)))
     <WaiterAvatarSheet v-if="menuOpen" @close="menuOpen = false" />
   </div>
 </template>
+
+<style scoped>
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.group-label { margin: 0; }
+
+.foot {
+  margin: 4px 0 0;
+  font-size: var(--text-label);
+  line-height: 1.45;
+  text-align: center;
+  color: var(--muted);
+}
+</style>
