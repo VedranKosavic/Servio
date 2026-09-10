@@ -30,6 +30,14 @@
  * Nothing is posted until *Proknjiži* — a delivery is a ledger row and ledger
  * rows are append-only: a mistake here is corrected by another row, never by an
  * edit (PLAN.md §9).
+ *
+ * **The sheet is three steps and it says which one it is on.** *Prijem robe* →
+ * *Odaberi artikal* → *Koliko je stiglo*, each with its own title in the same
+ * bar, so a bartender who looks up mid-typing knows where he is. It is built on
+ * the system's `.sheet-scrim` / `.sheet-panel` and on `.input` / `.input-num`
+ * rather than on hand-rolled `card-2` boxes, so it arrives with the same 260 ms
+ * ease as every other sheet in the app and switches off under reduced motion for
+ * free (docs/DESIGN.md §5).
  */
 import { formatKm, parseKm } from '#shared/money'
 import type { StockItem } from '#shared/types'
@@ -65,6 +73,14 @@ const emit = defineEmits<{
 
 type Mode = 'note' | 'pick' | 'line'
 const mode = ref<Mode>('note')
+
+/** The bar's own title, per step — one sheet, three places to be. */
+const STEP: Record<Mode, { eyebrow: string, title: string }> = {
+  note: { eyebrow: 'Otpremnica', title: 'Prijem robe' },
+  pick: { eyebrow: 'Prijem robe', title: 'Odaberi artikal' },
+  line: { eyebrow: 'Prijem robe', title: 'Koliko je stiglo' },
+}
+
 
 // -- the note header --------------------------------------------------------
 
@@ -178,152 +194,152 @@ function isoFromDate(value: string): string | undefined {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-40">
-    <div class="absolute inset-0 bg-black/55" @click="emit('close')" />
+  <div class="dl">
+    <div class="sheet-scrim" @click="emit('close')" />
 
-    <div
-      class="absolute inset-x-0 bottom-0 flex max-h-[92dvh] flex-col gap-3 rounded-t-[20px] border-t border-line bg-surface px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-3"
-      role="dialog"
-      aria-label="Prijem robe"
-    >
-      <span class="mx-auto h-1 w-10 shrink-0 rounded-full bg-line" />
+    <section class="sheet-panel dl-panel" role="dialog" aria-label="Prijem robe">
+      <span class="dl-grip" aria-hidden="true" />
 
-      <div class="flex shrink-0 items-center gap-2">
-        <h2 class="flex-1 text-xl font-bold">
-          Prijem robe
-        </h2>
-        <button type="button" class="btn btn-ghost min-h-11 px-3" @click="emit('close')">
+      <header class="dl-head">
+        <div class="dl-head-lines">
+          <p class="eyebrow">{{ STEP[mode].eyebrow }}</p>
+          <h2 class="page-title dl-title">{{ STEP[mode].title }}</h2>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" @click="emit('close')">
           Otkaži
         </button>
-      </div>
+      </header>
 
       <!-- The note: who, which invoice, when, and the lines so far -->
-      <div v-if="mode === 'note'" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
-        <label class="flex flex-col gap-1.5">
-          <span class="text-sm text-text-2">Dobavljač</span>
+      <div v-if="mode === 'note'" class="dl-body">
+        <label class="field">
+          <span class="eyebrow">Dobavljač</span>
           <input
             v-model="supplier"
             type="text"
             maxlength="80"
             placeholder="npr. Coca-Cola HBC"
-            class="card-2 h-12 w-full px-3.5 text-base outline-none placeholder:text-muted"
+            class="input"
           >
         </label>
 
-        <div class="flex gap-2">
-          <label class="flex flex-1 flex-col gap-1.5">
-            <span class="text-sm text-text-2">Broj otpremnice</span>
+        <div class="dl-pair">
+          <label class="field">
+            <span class="eyebrow">Broj otpremnice</span>
             <input
               v-model="invoiceNo"
               type="text"
               maxlength="40"
               placeholder="nije obavezno"
-              class="card-2 h-12 w-full px-3.5 text-base outline-none placeholder:text-muted"
+              class="input"
             >
           </label>
-          <label class="flex flex-1 flex-col gap-1.5">
-            <span class="text-sm text-text-2">Datum</span>
-            <input
-              v-model="deliveredOn"
-              type="date"
-              class="card-2 num h-12 w-full px-3.5 text-base outline-none"
-            >
+          <label class="field">
+            <span class="eyebrow">Datum</span>
+            <input v-model="deliveredOn" type="date" class="input num">
           </label>
         </div>
 
-        <div class="flex flex-col gap-2">
-          <div
-            v-for="(line, index) in draftLines"
-            :key="index"
-            class="card-2 flex items-center gap-3 px-3.5 py-2.5"
-          >
-            <div class="min-w-0 flex-1">
-              <div class="truncate font-semibold">
-                {{ line.item_name }}
-              </div>
-              <div class="num text-sm text-text-2">
+        <div v-if="draftLines.length" class="dl-lines">
+          <div v-for="(line, index) in draftLines" :key="index" class="dl-line">
+            <div class="dl-line-text">
+              <span class="dl-line-name">{{ line.item_name }}</span>
+              <span class="num dl-line-qty">
                 {{ line.packs ? `${line.packs} pak · ` : '' }}{{ line.loose ? `${line.loose} ${line.base_unit} · ` : '' }}ukupno {{ line.qty }} {{ line.base_unit }}
-              </div>
+              </span>
             </div>
-            <span class="num shrink-0 font-semibold">{{ formatKm(line.line_cost_fen) }}</span>
+            <span class="num dl-line-cost">{{ formatKm(line.line_cost_fen) }}</span>
             <button
               type="button"
-              class="shrink-0 px-1 text-text-2"
+              class="dl-remove"
               aria-label="Ukloni stavku"
               @click="removeLine(index)"
             >
-              ✕
+              <svg
+                width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="1.8" stroke-linecap="round" aria-hidden="true"
+              >
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
             </button>
           </div>
 
-          <p v-if="draftLines.length === 0" class="rounded-xl bg-surface-2 px-3 py-4 text-center text-[15px] text-text-2">
-            Nema stavki. Dodaj šta je stiglo.
-          </p>
+          <div class="dl-total">
+            <span class="eyebrow">Ukupno</span>
+            <span class="num dl-total-value">{{ formatKm(total) }}</span>
+          </div>
         </div>
 
-        <button type="button" class="btn h-12" @click="mode = 'pick'">
-          + Dodaj stavku
-        </button>
-
-        <div v-if="draftLines.length" class="flex items-baseline justify-between border-t border-line pt-2">
-          <span class="text-text-2">Ukupno</span>
-          <span class="num text-xl font-bold">{{ formatKm(total) }}</span>
-        </div>
-
-        <p v-if="error" class="rounded-xl bg-danger-soft px-3 py-2 text-[15px] text-danger" role="alert">
-          {{ error }}
+        <p v-else class="empty">
+          Još nema stavki.
+          <span>Dodaj šta je stiglo sa otpremnice.</span>
         </p>
 
-        <button type="button" class="btn btn-accent h-14 w-full" :disabled="!canSubmit" @click="submit">
-          {{ busy ? 'Knjižim…' : 'Proknjiži' }}
+        <button type="button" class="btn btn-secondary dl-add" @click="mode = 'pick'">
+          <svg
+            width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" aria-hidden="true"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          Dodaj stavku
         </button>
+
+        <p v-if="error" class="note note-danger" role="alert">{{ error }}</p>
+
+        <div class="dl-foot">
+          <button type="button" class="btn btn-primary btn-lg w-full" :disabled="!canSubmit" @click="submit">
+            {{ busy ? 'Knjižim…' : 'Proknjiži' }}
+          </button>
+        </div>
       </div>
 
       <!-- Which article -->
-      <div v-else-if="mode === 'pick'" class="flex min-h-0 flex-1 flex-col gap-3">
+      <div v-else-if="mode === 'pick'" class="dl-body dl-body-pick">
         <input
           v-model="query"
           type="search"
           inputmode="search"
           placeholder="Traži artikal…"
-          class="card-2 h-12 w-full shrink-0 px-3.5 text-base outline-none placeholder:text-muted"
+          class="input dl-search"
         >
-        <div class="-mx-1 min-h-0 flex-1 overflow-y-auto px-1">
+
+        <div class="dl-hits">
           <button
             v-for="item in matches"
             :key="item.id"
             type="button"
-            class="flex w-full items-center gap-3 border-b border-line py-3 text-left last:border-b-0"
+            class="dl-hit"
             @click="pickItem(item.id)"
           >
-            <span class="min-w-0 flex-1 truncate">{{ item.name }}</span>
-            <span class="num shrink-0 text-sm text-text-2">
+            <span class="dl-hit-name">{{ item.name }}</span>
+            <span class="num dl-hit-qty">
               {{ formatStockQty(item.on_hand, item.base_unit) }}
             </span>
           </button>
-          <p v-if="matches.length === 0" class="py-6 text-center text-text-2">
+
+          <p v-if="matches.length === 0" class="empty">
             Nema artikla s tim imenom.
           </p>
         </div>
-        <button type="button" class="btn btn-ghost h-12 shrink-0" @click="mode = 'note'">
-          Nazad
-        </button>
+
+        <div class="dl-foot">
+          <button type="button" class="btn btn-secondary w-full" @click="mode = 'note'">
+            Nazad
+          </button>
+        </div>
       </div>
 
       <!-- How much of it, and what it cost -->
-      <div v-else-if="selected" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
-        <button
-          type="button"
-          class="card-2 flex items-center gap-2 px-3.5 py-3 text-left"
-          @click="mode = 'pick'"
-        >
-          <span class="min-w-0 flex-1 truncate font-semibold">{{ selected.name }}</span>
-          <span class="chip shrink-0">Promijeni</span>
+      <div v-else-if="selected" class="dl-body">
+        <button type="button" class="dl-chosen" @click="mode = 'pick'">
+          <span class="dl-chosen-name">{{ selected.name }}</span>
+          <span class="chip">Promijeni</span>
         </button>
 
-        <div class="flex gap-2">
-          <label v-if="selected.pack_qty" class="flex flex-1 flex-col gap-1.5">
-            <span class="text-sm text-text-2">
+        <div class="dl-pair">
+          <label v-if="selected.pack_qty" class="field">
+            <span class="eyebrow">
               {{ selected.pack_name || 'Pakovanja' }} × {{ selected.pack_qty }}
             </span>
             <input
@@ -331,60 +347,289 @@ function isoFromDate(value: string): string | undefined {
               type="text"
               inputmode="decimal"
               placeholder="0"
-              class="card-2 num h-14 w-full px-3.5 text-2xl font-semibold outline-none placeholder:text-muted"
+              class="input input-num"
             >
           </label>
 
-          <label class="flex flex-1 flex-col gap-1.5">
-            <span class="text-sm text-text-2">Pojedinačno ({{ selected.base_unit }})</span>
+          <label class="field">
+            <span class="eyebrow">Pojedinačno ({{ selected.base_unit }})</span>
             <input
               v-model="looseRaw"
               type="text"
               inputmode="decimal"
               placeholder="0"
-              class="card-2 num h-14 w-full px-3.5 text-2xl font-semibold outline-none placeholder:text-muted"
+              class="input input-num"
             >
           </label>
         </div>
 
-        <p v-if="lineQty > 0" class="num text-[15px] text-text-2">
-          Ukupno: {{ formatStockQty(lineQty, selected.base_unit) }}
+        <p v-if="lineQty > 0" class="note">
+          <span class="num">Ukupno {{ formatStockQty(lineQty, selected.base_unit) }}</span>
         </p>
 
-        <label class="flex flex-col gap-1.5">
-          <span class="text-sm text-text-2">Cijena stavke sa fakture (KM)</span>
-          <div class="card-2 flex h-14 items-center gap-2 px-3.5">
-            <input
-              v-model="costRaw"
-              type="text"
-              inputmode="decimal"
-              placeholder="0,00"
-              class="num min-w-0 flex-1 bg-transparent text-2xl font-semibold outline-none placeholder:text-muted"
-            >
-            <span class="shrink-0 text-text-2">KM</span>
-          </div>
-          <span v-if="unitCostText" class="num text-sm text-text-2">≈ {{ unitCostText }}</span>
-          <span v-else class="text-sm text-text-2">Obavezno — iz nje se računa prosječna nabavna cijena.</span>
+        <label class="field">
+          <span class="eyebrow">Cijena stavke sa fakture (KM)</span>
+          <input
+            v-model="costRaw"
+            type="text"
+            inputmode="decimal"
+            placeholder="0,00"
+            class="input input-num"
+          >
+          <span v-if="unitCostText" class="num dl-hint">≈ {{ unitCostText }}</span>
+          <span v-else class="dl-hint">Obavezno — iz nje se računa prosječna nabavna cijena.</span>
         </label>
 
-        <label class="flex flex-col gap-1.5">
-          <span class="text-sm text-text-2">Napomena (nije obavezno)</span>
+        <label class="field">
+          <span class="eyebrow">Napomena (nije obavezno)</span>
           <input
             v-model="lineNote"
             type="text"
             maxlength="200"
             placeholder="npr. gratis gajba, oštećeno"
-            class="card-2 h-12 w-full px-3.5 text-base outline-none placeholder:text-muted"
+            class="input"
           >
         </label>
 
-        <button type="button" class="btn btn-accent h-14 w-full" :disabled="!lineReady" @click="addLine">
-          Dodaj stavku
-        </button>
-        <button type="button" class="btn btn-ghost h-12" @click="mode = 'note'">
-          Nazad
-        </button>
+        <div class="dl-foot dl-foot-two">
+          <button type="button" class="btn btn-secondary" @click="mode = 'note'">
+            Nazad
+          </button>
+          <button type="button" class="btn btn-primary btn-lg dl-grow" :disabled="!lineReady" @click="addLine">
+            Dodaj stavku
+          </button>
+        </div>
       </div>
-    </div>
+    </section>
   </div>
 </template>
+
+<style scoped>
+.dl {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.dl-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 92dvh;
+  padding: 10px 16px 0;
+}
+
+/* The handle that says "this came from below and can go back". */
+.dl-grip {
+  align-self: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 4px;
+  border-radius: var(--radius-chip);
+  background: var(--line);
+}
+
+.dl-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-shrink: 0;
+  padding-bottom: 4px;
+}
+
+.dl-head-lines { flex: 1; min-width: 0; }
+.dl-head-lines p { margin: 0; }
+.dl-title { margin: 2px 0 0; }
+
+.dl-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+}
+
+.dl-body-pick { gap: 10px; }
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dl-pair {
+  display: flex;
+  gap: 10px;
+}
+
+.dl-pair .field { flex: 1; min-width: 0; }
+
+.dl-hint {
+  font-size: var(--text-label);
+  color: var(--muted);
+}
+
+/* ---- the lines on the note --------------------------------------------- */
+
+.dl-lines {
+  display: flex;
+  flex-direction: column;
+}
+
+.dl-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.dl-line-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dl-line-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dl-line-qty {
+  font-size: var(--text-caption);
+  color: var(--muted);
+}
+
+.dl-line-cost {
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.dl-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  margin-right: -10px;
+  border: 0;
+  border-radius: var(--radius-field);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.dl-total {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.dl-total .eyebrow { flex: 1; }
+
+.dl-total-value {
+  font-size: var(--text-section);
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.dl-add { width: 100%; }
+
+/* ---- picking an article ------------------------------------------------- */
+
+.dl-search { flex-shrink: 0; }
+
+.dl-hits {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.dl-hit {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--text-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.dl-hit:last-child { border-bottom: 0; }
+
+.dl-hit-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dl-hit-qty {
+  flex-shrink: 0;
+  font-size: var(--text-label);
+  color: var(--muted);
+}
+
+.dl-chosen {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 14px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--line-soft);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: var(--text-body);
+  cursor: pointer;
+}
+
+.dl-chosen-name {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- the foot ----------------------------------------------------------- */
+
+/* The sheet's own action bar: it sits on the panel's material so the fields
+   scroll under it rather than behind a gradient of the page ground. */
+.dl-foot {
+  position: sticky;
+  bottom: 0;
+  margin-top: auto;
+  padding: 12px 0 calc(4px + env(safe-area-inset-bottom));
+  background: var(--surface);
+}
+
+.dl-foot-two {
+  display: flex;
+  gap: 10px;
+}
+
+.dl-grow { flex: 1; }
+</style>

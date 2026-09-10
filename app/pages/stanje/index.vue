@@ -61,6 +61,12 @@ const groups = computed(() =>
     items: items.value.filter(item => item.kind === group.kind),
   })))
 
+/** The header's second line: how much shelf there is to read. */
+const subtitle = computed(() => {
+  if (!loaded.value) return undefined
+  return items.value.length === 1 ? '1 artikal' : `${items.value.length} artikala`
+})
+
 /**
  * The last round, rebuilt from the per-item last movements: find the newest
  * sale, then take every item whose last movement is that same sale (one round
@@ -135,33 +141,30 @@ async function postDelivery(delivery: {
 
 <template>
   <div class="flex flex-1 flex-col">
-    <header class="flex items-center gap-2.5 border-b border-line py-2.5">
-      <h1 class="flex-1 truncate text-xl font-bold">
-        Stanje šanka
-      </h1>
-      <WaiterSyncChip />
-      <button
-        type="button"
-        class="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface-2 text-sm font-bold"
-        aria-label="Korisnik"
-        @click="menuOpen = true"
-      >
-        {{ me.user.value?.initials ?? '?' }}
-      </button>
+    <SankerHeader title="Stanje šanka" :subtitle="subtitle" @menu="menuOpen = true" />
+
+    <main class="flex flex-1 flex-col gap-5 py-4">
+      <!--
+        *Prijem robe* is the screen's one action and it used to live in the top
+        bar, where at 390 px it squeezed the title down to a single letter. It
+        sits under the header now, full width, where a thumb reaches it and the
+        title is safe.
+      -->
       <button
         v-if="canReceive"
         type="button"
-        class="btn btn-accent px-3 text-base"
+        class="btn btn-primary w-full"
         @click="sheetOpen = true"
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <svg
+          width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+        >
           <path d="M12 5v14M5 12h14" />
         </svg>
         Prijem robe
       </button>
-    </header>
 
-    <main class="flex flex-1 flex-col gap-4 py-4">
       <StockLastSale
         v-if="lastSale"
         :table="lastSale.table"
@@ -169,19 +172,23 @@ async function postDelivery(delivery: {
         :items="lastSale.items"
       />
 
-      <StockGroup
-        v-for="group in groups"
-        :key="group.kind"
-        :title="group.title"
-        :items="group.items"
-      />
+      <div class="flex flex-col gap-5">
+        <StockGroup
+          v-for="group in groups"
+          :key="group.kind"
+          :title="group.title"
+          :items="group.items"
+        />
+      </div>
 
-      <p v-if="loaded && items.length === 0" class="card px-4 py-8 text-center text-text-2">
+      <p v-if="loaded && items.length === 0" class="empty">
         Nema artikala na stanju.
+        <span>Vlasnik dodaje artikle u kontrolnoj ploči.</span>
       </p>
 
-      <p class="pt-1 text-center text-sm text-muted">
-        Svaka poslana narudžba oduzima od stanja. Prijem robe dodaje.
+      <p class="foot">
+        Svaka zaključana tura oduzima od stanja, prijem robe dodaje. Ništa ovdje
+        nije upisano ručno.
         <template v-if="!canReceive">
           <br>
           Prijem robe knjiži vlasnik. Ako treba da ga knjiži šanker, vlasnik to
@@ -203,11 +210,27 @@ async function postDelivery(delivery: {
       @submit="postDelivery"
     />
 
-    <div
-      v-if="toast"
-      class="fixed inset-x-0 bottom-24 z-50 mx-auto w-fit rounded-full bg-good-soft px-4 py-2 font-semibold text-good"
-    >
+    <div v-if="toast" class="toast toast-good" role="status">
       {{ toast }}
     </div>
   </div>
 </template>
+
+<style scoped>
+.foot {
+  margin: 4px 0 0;
+  font-size: var(--text-label);
+  line-height: 1.45;
+  text-align: center;
+  color: var(--muted);
+}
+
+/* The one confirmation this screen gives back, in the app's toast with the
+   good-tone ink rather than a pill of its own invention. */
+.toast-good {
+  background: var(--good-soft);
+  border-color: transparent;
+  color: var(--good);
+  font-weight: 600;
+}
+</style>
