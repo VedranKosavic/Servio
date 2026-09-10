@@ -1,148 +1,177 @@
 <script setup lang="ts">
 /**
- * S12 *Pravila* — the thresholds a person is measured against, written down.
+ * S12 *Pravila* — the published house rules, and the one screen that can stand
+ * in front of the floor plan.
  *
- * "Accountability, not surveillance" (CLAUDE.md) is only true if the numbers
- * are published. Every figure on this page is read from `me.venue.settings`,
- * which the phone already has — there is **no** `/api/rules` route and Phase 3
- * adds none (PHASE3 §1.12), and nothing here is acknowledged, signed or stored:
- * a rule you have to tick a box about is a contract, and this is a notice
- * board.
+ * Three layers, in this order, and each is here for a different reason:
  *
- * Two sections that are not thresholds and matter more than the thresholds:
- * what *označeno za razgovor* actually means, and the honest paragraph about
- * the database file — which is in *Pravila* because it is true whether or not
- * anybody writes it down, and writing it down is the only version of it that
- * respects the person reading.
+ * 1. **The published document.** `rules.body_md`, written by the owner on
+ *    `/a/postavke/pravila` and versioned; a correction is a new version, never
+ *    an edit. The `{{…}}` thresholds inside it are filled from
+ *    `me.venue.settings` at render time, so a number changed in *Podešavanja*
+ *    changes here on every phone **without** a new version — which is the whole
+ *    point of publishing rules instead of printing them.
+ * 2. **The thresholds**, listed in full whether or not the document quotes
+ *    them. A venue that has published nothing still owes its staff the numbers.
+ * 3. **The fairness contract** (PLAN §8, F12): what a flag means, what the app
+ *    records, and the honest paragraph about the database file. Those are the
+ *    app's promises, not the owner's text, so they are not editable from `/a`.
+ *
+ * **The gate.** On the first login after a new version this screen stands in
+ * front of S1 with no *Kasnije*: `app/middleware/pravila.global.ts` sends every
+ * dark route here while `useRules().gateActive` is true, and *Potvrđujem* is
+ * disabled until the text has actually been scrolled to the end. It is a client
+ * rule only — the server never refuses an order over it (PHASE4 §2.8) — and it
+ * never appears mid-shift.
  */
-import { formatKm } from '#shared/money'
+import { localDate } from '#shared/dates'
 
 useHead({ title: 'Pravila' })
 
 const me = useMe()
+const rules = useRules()
+// Destructured so the template reads `view`, not `rules.view.value`: a ref
+// returned at the top level of `<script setup>` is unwrapped in the template,
+// one nested inside an object is not.
+const { view, error, acking, published, mustAck, gateActive: gate } = rules
 
-onMounted(() => { void me.requireSession() })
+const settings = computed(() => me.settings.value)
+const blocks = computed(() => renderRules(view.value?.body_md ?? '', settings.value))
 
-const s = computed(() => me.settings.value)
+onMounted(async () => {
+  if (!await me.requireSession()) return
+  await rules.ensure()
+})
 
-function minutes(seconds: number): string {
-  if (seconds < 60) return `${seconds} sekundi`
-  const m = Math.round(seconds / 60)
-  return m === 1 ? '1 minut' : `${m} minuta`
+/**
+ * The one timer this screen has is the app's one timer. `rules_version` moving
+ * means the owner published while somebody was reading: the text is refetched
+ * so the page stops lying, and the gate deliberately does not appear — that
+ * waits for the next login (`useRules().onVersion`).
+ */
+useChanges({
+  raw: (result) => { void rules.onVersion(result.rules_version) },
+})
+
+/**
+ * Has he reached the end of the text?
+ *
+ * An `IntersectionObserver` on an empty div after the last section, rather than
+ * scroll arithmetic: it is one line, it is right on a short document (the mark
+ * is already visible, so the button is enabled immediately) and it does not fire
+ * on every scroll event.
+ */
+const endMark = ref<HTMLElement | null>(null)
+const reachedEnd = ref(false)
+
+useIntersectionObserver(endMark, (entries) => {
+  if (entries.some(entry => entry.isIntersecting)) reachedEnd.value = true
+})
+
+/**
+ * *Potvrđujem*, from PLAN §12's glossary, with the version named.
+ *
+ * PLAN §10 writes this button as "Pročitao sam Pravila v3" and the done-when in
+ * PHASE4 calls it *Potvrđujem*; the glossary word wins because it is the one
+ * that works for Lejla as well as for Amar — "pročitao sam" is a man saying it,
+ * and half the staff is not one.
+ */
+const ackLabel = computed(() => `Potvrđujem Pravila v${view.value?.version ?? 1}`)
+const canAck = computed(() => reachedEnd.value && !acking.value)
+
+async function confirm() {
+  const wasGate = gate.value
+  if (!await rules.ack()) return
+  // Straight to work. Anywhere else would be a second tap for nothing.
+  if (wasGate) await navigateTo(me.home.value)
 }
 
-/** Every published number, in the order somebody meets them during a shift. */
-const rules = computed(() => {
-  const v = s.value
-  if (!v) return []
-  return [
-    {
-      title: 'Vlastiti storno',
-      value: minutes(v.void_self_window_s),
-      detail: `Grešku na svojoj turi ispravljaš sam u prvih ${minutes(v.void_self_window_s)} od zaključavanja. `
-        + `Najviše ${v.self_void_max_per_shift} puta po smjeni i do ${formatKm(v.self_void_max_fen)} po stavci.`,
-    },
-    {
-      title: 'Storno preko šankera',
-      value: minutes(v.bartender_approve_window_s),
-      detail: 'Poslije toga o storno odlučuje vlasnik. Dok se ne odobri, iznos ostaje u tvom pazaru — '
-        + 'nije kazna, nego stanje: roba je izdata i nije naplaćena.',
-    },
-    {
-      title: 'Na račun kuće — osoblje',
-      value: `${v.staff_drinks_per_shift} po smjeni`,
-      detail: `Do ${formatKm(v.staff_drink_max_fen)} po piću, i samo za pića koja su na spisku. `
-        + 'Sve ostalo se zaključava po punoj cijeni i neko odlučuje.',
-    },
-    {
-      title: 'Tolerancija pazara',
-      value: formatKm(v.cash_tolerance_fen),
-      detail: `Razlika do ${formatKm(v.cash_tolerance_fen)} ili ${String(v.cash_tolerance_pct).replace('.', ',')} % `
-        + 'očekivanog iznosa je u toleranciji. Iznad toga se stavka označava za razgovor.',
-    },
-    {
-      title: 'Otpis traži PIN',
-      value: formatKm(v.waste_pin_threshold_fen),
-      detail: `Otpis iznad ${formatKm(v.waste_pin_threshold_fen)} potvrđuje šanker ili vlasnik svojim PIN-om. `
-        + `Najviše ${v.waste_events_per_shift_per_user} otpisa po osobi po smjeni.`,
-    },
-    {
-      title: 'Zajednički uređaj',
-      value: minutes(v.shared_device_idle_s),
-      detail: `Šank tablet se sam zaključa nakon ${minutes(v.shared_device_idle_s)} bez dodira. `
-        + 'Tuđi telefon možeš koristiti ako kažeš da ga posuđuješ — prijava tada traje 2 sata.',
-    },
-  ]
-})
+/** "10.09.2026. 22:41" — the same zone every other screen renders. */
+function stamp(iso: string | null): string {
+  if (!iso) return ''
+  return `${localDate(iso)} ${clockHm(iso)}`
+}
 </script>
 
 <template>
   <ClientOnly>
     <div class="flex flex-1 flex-col">
-      <WaiterHeader title="Pravila" back-to="/k/moja-smjena">
+      <WaiterHeader title="Pravila" :back-to="gate ? undefined : '/k/moja-smjena'">
         <template #right>
-          <WaiterSyncChip compact />
+          <span v-if="gate" class="chip chip-warn">Potvrdi da nastaviš</span>
+          <WaiterSyncChip v-else compact />
         </template>
       </WaiterHeader>
 
-      <main class="flex flex-1 flex-col gap-4 py-4">
+      <main class="flex flex-1 flex-col gap-4 py-4" :class="mustAck ? 'pb-28' : ''">
+        <section v-if="gate" class="card flex flex-col gap-2 p-4">
+          <h2 class="text-xl font-bold text-warn">
+            Nova verzija Pravila
+          </h2>
+          <p class="text-[15px] text-text-2">
+            Objavljena je verzija v{{ view?.version }}. Pročitaj je do kraja i
+            potvrdi — poslije toga ideš na svoj ekran. Ovo se pita jednom po
+            verziji i nikad usred smjene.
+          </p>
+        </section>
+
+        <p v-if="error" class="card px-4 py-3 text-[15px] text-danger" role="alert">
+          {{ error }}
+        </p>
+
         <p class="text-[17px] text-text-2">
-          Ovo su brojevi po kojima se mjeri rad u ovom lokalu. Pišu ovdje zato
-          što pravilo koje ne znaš unaprijed nije pravilo.
+          Ovo su pravila po kojima se radi u ovom lokalu. Pišu ovdje zato što
+          pravilo koje ne znaš unaprijed nije pravilo.
         </p>
 
-        <section v-if="rules.length" class="card flex flex-col px-4">
-          <div
-            v-for="rule in rules"
-            :key="rule.title"
-            class="flex flex-col gap-1 border-t border-line py-3 first:border-t-0 first:pt-0"
-          >
-            <div class="flex items-baseline justify-between gap-3">
-              <span class="text-[17px] font-semibold">{{ rule.title }}</span>
-              <span class="num shrink-0 font-bold text-accent">{{ rule.value }}</span>
-            </div>
-            <p class="text-[15px] text-text-2">
-              {{ rule.detail }}
-            </p>
+        <section v-if="published" class="card flex flex-col gap-3 p-4">
+          <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span class="text-xl font-bold">Pravila v{{ view?.version }}</span>
+            <span class="text-[13px] text-muted">
+              objavio {{ view?.published_by_name }} · {{ stamp(view?.published_at ?? null) }}
+            </span>
           </div>
+          <PravilaDoc :blocks="blocks" class="text-[15px] text-text-2" />
         </section>
 
-        <p v-else class="card px-4 py-8 text-center text-text-2">
-          Pravila stižu s prijavom — otvori ekran ponovo kad budeš prijavljen.
+        <p v-else class="card px-4 py-6 text-center text-[15px] text-text-2">
+          Pisana pravila još nisu objavljena. Brojevi ispod vrijede i bez njih.
         </p>
 
-        <section class="card flex flex-col gap-2 p-4">
-          <h2 class="text-xl font-bold">
-            Označeno za razgovor
-          </h2>
-          <p class="text-[15px] text-text-2">
-            Kad nešto pređe prag odozgo, Šank to označi i vlasnik pogleda. To
-            nije optužba i ne ide nikome osim vlasniku: nema poruka, nema
-            obavještenja, nema liste najboljih ni najgorih. Manjak od pet maraka
-            u petak uveče je stavka za razgovor, ne presuda.
-          </p>
-          <p class="text-[15px] text-text-2">
-            Svoje brojeve vidiš prvi i vidiš sve — tuđe ne vidiš nikad.
-          </p>
-        </section>
+        <h2 class="px-1 text-xl font-bold">
+          Pragovi
+        </h2>
+        <PravilaPragovi :settings="settings" />
 
-        <section class="card flex flex-col gap-2 p-4">
-          <h2 class="text-xl font-bold">
-            Šta se zapisuje
-          </h2>
-          <p class="text-[15px] text-text-2">
-            Svaka tura, naplata, storno i otpis zapisuju se s tvojim imenom i
-            vremenom, i ne brišu se — ispravka je novi zapis pored starog, nikad
-            umjesto njega.
-          </p>
-          <p class="text-[15px] text-text-2">
-            Sve to stoji u jednoj bazi na serveru lokala. Vlasnik ima pristup toj
-            datoteci i tehnički može vidjeti sve što je u njoj. To piše ovdje
-            zato što je istina, a ne zato što je lijepo — aplikacija koja bi to
-            prećutala ne bi bila poštenija, samo tiša.
-          </p>
-        </section>
+        <PravilaFer :settings="settings" />
+
+        <p
+          v-if="view?.my_ack_version"
+          class="px-1 text-[13px] text-muted"
+        >
+          Potvrđena verzija v{{ view.my_ack_version }} · {{ stamp(view.my_ack_at) }}
+        </p>
+
+        <!-- The end of the text. Seeing this is what enables *Potvrđujem*. -->
+        <div ref="endMark" aria-hidden="true" class="h-px w-full" />
       </main>
+
+      <div
+        v-if="mustAck"
+        class="sticky bottom-0 -mx-4 border-t border-line bg-bg px-4 pb-[env(safe-area-inset-bottom)] pt-3"
+      >
+        <p v-if="!reachedEnd" class="pb-2 text-center text-[13px] text-muted">
+          Pročitaj tekst do kraja.
+        </p>
+        <button
+          type="button"
+          class="btn btn-accent h-14 w-full text-[17px]"
+          :disabled="!canAck"
+          @click="confirm"
+        >
+          {{ acking ? 'Potvrđujem…' : ackLabel }}
+        </button>
+      </div>
     </div>
 
     <template #fallback>
