@@ -16,9 +16,15 @@ data/
 # template it is copied from.
 deploy/.deploy.env
 # Photos, wherever UPLOAD_DIR points. `data/` above already covers the default
-# (`data/uploads`); this catches a custom one and the verification run's
-# `data/verify-uploads`.
-uploads/
+# (`data/uploads`); these catch a custom one at the repo root and the
+# verification run's `data/verify-uploads`.
+#
+# The leading slash is load-bearing: a bare `uploads/` matches **any** directory
+# with that name at any depth, which silently swallowed `server/api/uploads/` —
+# the two route files of `POST /api/uploads` and `GET /api/uploads/:id` — and a
+# route that is not in the repo is a 403 in production and a red
+# `route-roles.test.ts` at home.
+/uploads/
 data/uploads/
 data/verify-uploads/
 .DS_Store

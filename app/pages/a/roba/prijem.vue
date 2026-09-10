@@ -2,6 +2,12 @@
 /**
  * *Prijem robe* — book a delivery note, and see the ones already booked.
  *
+ * Two ways in, one ledger. **Ručno** is the typed otpremnica and stays the
+ * fallback; **Sa slike** (PHASE4 WP3) photographs the paper, hands it to the
+ * model, and produces a *draft* the owner edits — which then posts through the
+ * very same `POST /api/stock/deliveries`, with `source: 'scan'` and the
+ * `scan_id`. Nothing about movements, the moving average or storno changes.
+ *
  * A delivery is never deleted. A mistake is **reversed**: the reversal writes
  * the opposite movements and leaves both documents in the ledger, so the
  * evening's paper trail still adds up a year from now.
@@ -38,6 +44,25 @@ function instantRange(): { from: string, to: string } {
   const end = new Date(Date.parse(cutoffIso(nextBusinessDate(to))) - 1)
   return { from: cutoffIso(from), to: end.toISOString() }
 }
+
+/**
+ * Which way in. *Ručno* is the default because it is the one that always works;
+ * *Sa slike* is one tap away and the segment remembers nothing between visits —
+ * a delivery is a decision, not a preference.
+ */
+const mode = ref<'rucno' | 'slika'>('rucno')
+
+const MODES = [
+  { value: 'rucno', label: 'Ručno' },
+  { value: 'slika', label: 'Sa slike' },
+]
+
+/**
+ * Set when `POST /api/stock/deliveries/scan` answered `503 SCAN_NOT_CONFIGURED`.
+ * The venue has no key; the typed form opens beneath the calm card and the page
+ * does not ask again.
+ */
+const scanOff = ref(false)
 
 const items = ref<StockItemAdmin[]>([])
 const deliveries = ref<DeliveryView[]>([])
@@ -133,7 +158,21 @@ const total = computed(() => deliveries.value
 
     <p v-if="error" class="a-error">{{ error }}</p>
 
-    <RobaPrijemForm :items="items" @posted="loadDeliveries" />
+    <UiSeg v-model="mode" :options="MODES" label="Način prijema" />
+
+    <RobaScanCard
+      v-if="mode === 'slika'"
+      :items="items"
+      @posted="loadDeliveries"
+      @catalogue="loadCatalogue"
+      @fallback="scanOff = true"
+    />
+
+    <RobaPrijemForm
+      v-if="mode === 'rucno' || scanOff"
+      :items="items"
+      @posted="loadDeliveries"
+    />
 
     <UiCard title="Proknjiženi prijemi" :count="`${deliveries.length} · ${formatKm(total)}`">
       <template #actions>
