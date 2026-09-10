@@ -42,7 +42,7 @@ defineEmits<{ paid: [], unpaid: [] }>()
       Jesi li ovo naplatio?
     </p>
     <div class="flex flex-col gap-2">
-      <button type="button" class="btn btn-primary h-12" :disabled="busy" @click="$emit('paid')">
+      <button type="button" class="btn btn-primary" :disabled="busy" @click="$emit('paid')">
         Naplaćeno gotovina
       </button>
       <button type="button" class="btn btn-secondary" :disabled="busy" @click="$emit('unpaid')">

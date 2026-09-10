@@ -74,101 +74,91 @@ const totalFen = computed(() => rows.value.reduce((sum, r) => sum + r.lineFen, 0
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50">
-    <div class="sheet-scrim" @click="emit('close')" />
-
-    <div
-      class="sheet-panel absolute inset-x-0 bottom-0 mx-auto flex max-h-[92dvh] w-full max-w-3xl flex-col gap-3 overflow-y-auto px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-3"
-      role="dialog"
-      aria-label="Zaključi turu"
-    >
-      <span class="mx-auto h-1 w-10 shrink-0 rounded-full bg-line" />
-
-      <div class="flex items-center gap-2">
-        <span class="chip bg-line text-text">{{ tableName }}</span>
-        <span class="section-title grow">Nova tura</span>
-        <span class="num text-label text-text-2">{{ stavke(count) }}</span>
-      </div>
-
-      <p v-if="error" class="note note-danger" role="alert">
-        {{ error }}
-      </p>
-
-      <ul class="flex flex-col gap-2">
-        <!-- Two rows, not one: at 390 px a name, its aromas, a note, two
-             steppers and an amount on one line squeeze the name to "Narg…". -->
-        <li v-for="row in rows" :key="row.id" class="card-2 flex flex-col gap-2 p-2.5">
-          <div class="flex items-baseline gap-2">
-            <span class="min-w-0 grow text-body font-semibold">{{ row.name }}</span>
-            <span class="num shrink-0 text-body font-semibold">{{ formatKm(row.lineFen) }}</span>
-          </div>
-
-          <div v-if="row.flavours.length || row.note" class="flex flex-wrap gap-1.5">
-            <span v-for="flavour in row.flavours" :key="flavour" class="chip">{{ flavour }}</span>
-            <span v-if="row.note" class="chip chip-warn">{{ row.note }}</span>
-          </div>
-
-          <!-- The note button is a pencil, not the three dots. The ellipsis is
-               the overflow menu in the *Sto N* header, and the same glyph doing
-               two jobs teaches a waiter one meaning and hands him the other —
-               here, sitting the same size and material beside − and +, it read
-               as part of the stepper. It also sits *with* the stepper now: the
-               row used to spend a whole line on a lone button at the far left
-               and ~180 px of nothing in the middle, which cost the sheet a
-               drink of the three that fit above the fold. -->
-          <div class="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-surface"
-              :aria-label="`Napomena · ${row.name}`"
-              @click="emit('note', row.id)"
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" />
-              </svg>
-            </button>
-
-            <button
-              type="button"
-              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-surface text-section font-bold"
-              :aria-label="`Skini jedan · ${row.name}`"
-              @click="emit('remove', row.id)"
-            >
-              −
-            </button>
-            <span class="num w-8 shrink-0 text-center text-body font-bold">{{ row.qty }}</span>
-            <button
-              type="button"
-              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-surface text-section font-bold"
-              :aria-label="`Dodaj jedan · ${row.name}`"
-              @click="emit('add', row.id)"
-            >
-              +
-            </button>
-          </div>
-        </li>
-      </ul>
-
-      <div class="flex items-baseline gap-2 border-t border-line pt-3">
-        <span class="section-title grow">Ukupno</span>
-        <span class="num text-metric font-bold">{{ formatKm(totalFen) }}</span>
-      </div>
-
-      <button
-        type="button"
-        class="btn btn-primary btn-lg"
-        :disabled="busy || count === 0"
-        @click="emit('confirm')"
-      >
-        {{ busy ? 'Šaljem…' : 'Potvrdi' }}
-      </button>
-      <button type="button" class="btn btn-ghost" :disabled="busy" @click="emit('close')">
-        Nazad
-      </button>
-      <p class="text-center text-label text-text-2">
-        Zaključena tura se ne mijenja — greška se ispravlja stornom.
-      </p>
+  <OrderSheet label="Zaključi turu" @close="emit('close')">
+    <div class="flex items-center gap-2">
+      <span class="chip bg-line text-text">{{ tableName }}</span>
+      <span class="section-title grow">Nova tura</span>
+      <span class="num text-label text-text-2">{{ stavke(count) }}</span>
     </div>
-  </div>
+
+    <p v-if="error" class="note note-danger" role="alert">
+      {{ error }}
+    </p>
+
+    <ul class="flex flex-col gap-2">
+      <!-- Two rows, not one: at 390 px a name, its aromas, a note, two
+           steppers and an amount on one line squeeze the name to "Narg…". -->
+      <li v-for="row in rows" :key="row.id" class="card-2 flex flex-col gap-2 p-2.5">
+        <div class="flex items-baseline gap-2">
+          <span class="min-w-0 grow text-body font-semibold">{{ row.name }}</span>
+          <span class="num shrink-0 text-body font-semibold">{{ formatKm(row.lineFen) }}</span>
+        </div>
+
+        <div v-if="row.flavours.length || row.note" class="flex flex-wrap gap-1.5">
+          <span v-for="flavour in row.flavours" :key="flavour" class="chip">{{ flavour }}</span>
+          <span v-if="row.note" class="chip chip-warn">{{ row.note }}</span>
+        </div>
+
+        <!-- The note button is a pencil, not the three dots. The ellipsis is
+             the overflow menu in the *Sto N* header, and the same glyph doing
+             two jobs teaches a waiter one meaning and hands him the other —
+             here, sitting the same size and material beside − and +, it read
+             as part of the stepper. It also sits *with* the stepper now: the
+             row used to spend a whole line on a lone button at the far left
+             and ~180 px of nothing in the middle, which cost the sheet a
+             drink of the three that fit above the fold. -->
+        <div class="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-surface"
+            :aria-label="`Napomena · ${row.name}`"
+            @click="emit('note', row.id)"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" />
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-surface text-section font-bold"
+            :aria-label="`Skini jedan · ${row.name}`"
+            @click="emit('remove', row.id)"
+          >
+            −
+          </button>
+          <span class="num w-8 shrink-0 text-center text-body font-bold">{{ row.qty }}</span>
+          <button
+            type="button"
+            class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-surface text-section font-bold"
+            :aria-label="`Dodaj jedan · ${row.name}`"
+            @click="emit('add', row.id)"
+          >
+            +
+          </button>
+        </div>
+      </li>
+    </ul>
+
+    <div class="flex items-baseline gap-2 border-t border-line pt-3">
+      <span class="section-title grow">Ukupno</span>
+      <span class="num text-metric font-bold">{{ formatKm(totalFen) }}</span>
+    </div>
+
+    <button
+      type="button"
+      class="btn btn-primary btn-lg"
+      :disabled="busy || count === 0"
+      @click="emit('confirm')"
+    >
+      {{ busy ? 'Šaljem…' : 'Potvrdi' }}
+    </button>
+    <button type="button" class="btn btn-ghost" :disabled="busy" @click="emit('close')">
+      Nazad
+    </button>
+    <p class="text-center text-label text-text-2">
+      Zaključena tura se ne mijenja — greška se ispravlja stornom.
+    </p>
+  </OrderSheet>
 </template>

@@ -427,7 +427,7 @@ function openLoose() {
 
           <button
             type="button"
-            class="avatar avatar-accent size-12"
+            class="avatar avatar-accent size-[var(--tap)]"
             aria-label="Korisnik"
             @click="menuOpen = true"
           >
@@ -610,7 +610,7 @@ function openLoose() {
 
         <!-- A sentence, not two arrows. This is the only place in the app that
              used "→" as vocabulary, and the app speaks Bosnian everywhere else. -->
-        <p class="text-center text-caption tracking-normal text-muted">
+        <p class="text-center text-label text-muted">
           Dodirni sto za narudžbu, zadrži za žar.
         </p>
       </div>
@@ -627,7 +627,7 @@ function openLoose() {
       <div class="action-bar justify-end">
         <button
           type="button"
-          class="btn btn-primary btn-lg shadow-pop"
+          class="btn btn-primary btn-lg"
           @click="openLoose"
         >
           + Bez stola

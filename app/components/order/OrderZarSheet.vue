@@ -39,77 +39,67 @@ const single = computed(() => (props.bowls.length === 1 ? props.bowls[0]! : null
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50">
-    <div class="sheet-scrim" @click="emit('close')" />
-
-    <div
-      class="sheet-panel absolute inset-x-0 bottom-0 mx-auto flex max-h-[85dvh] w-full max-w-3xl flex-col gap-3 overflow-y-auto px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-3"
-      role="dialog"
-      aria-label="Dodatni žar"
-    >
-      <span class="mx-auto h-1 w-10 shrink-0 rounded-full bg-line" />
-
-      <div class="flex items-center gap-2">
-        <span class="chip bg-line text-text">{{ tableName }}</span>
-        <span class="section-title grow">Dodatni žar</span>
-      </div>
-
-      <p v-if="loading" class="py-6 text-center text-text-2">
-        Učitavanje…
-      </p>
-
-      <p v-else-if="error" class="note note-danger" role="alert">
-        {{ error }}
-      </p>
-
-      <p v-else-if="!zarName" class="note note-warn">
-        Nema proizvoda za žar u meniju — javi vlasniku.
-      </p>
-
-      <p v-else-if="bowls.length === 0" class="py-4 text-center text-label text-text-2">
-        Na ovom stolu nema upaljene nargile.
-      </p>
-
-      <!-- One bowl: one tap, and the sheet says which bowl it is topping up. -->
-      <template v-else-if="single">
-        <p class="text-label text-text-2">
-          {{ single.name_snapshot }}
-          <span v-if="single.flavour_names.length">· {{ single.flavour_names.join(' + ') }}</span>
-          · {{ single.round }}
-        </p>
-        <button
-          type="button"
-          class="btn btn-primary btn-lg"
-          :disabled="busy"
-          @click="emit('zar', single.id)"
-        >
-          {{ busy ? 'Šaljem…' : 'Žar' }}
-        </button>
-      </template>
-
-      <!-- Two bowls: the app must not guess which one went out. -->
-      <template v-else>
-        <p class="text-label text-text-2">
-          Koja nargila?
-        </p>
-        <button
-          v-for="bowl in bowls"
-          :key="bowl.id"
-          type="button"
-          class="btn btn-secondary btn-lg justify-between"
-          :disabled="busy"
-          @click="emit('zar', bowl.id)"
-        >
-          <span class="truncate">
-            {{ bowl.flavour_names.join(' + ') || bowl.name_snapshot }}
-          </span>
-          <span class="chip">{{ bowl.round }}</span>
-        </button>
-      </template>
-
-      <button type="button" class="btn btn-ghost" :disabled="busy" @click="emit('close')">
-        Otkaži
-      </button>
+  <OrderSheet label="Dodatni žar" @close="emit('close')">
+    <div class="flex items-center gap-2">
+      <span class="chip bg-line text-text">{{ tableName }}</span>
+      <span class="section-title grow">Dodatni žar</span>
     </div>
-  </div>
+
+    <p v-if="loading" class="py-6 text-center text-text-2">
+      Učitavanje…
+    </p>
+
+    <p v-else-if="error" class="note note-danger" role="alert">
+      {{ error }}
+    </p>
+
+    <p v-else-if="!zarName" class="note note-warn">
+      Nema proizvoda za žar u meniju — javi vlasniku.
+    </p>
+
+    <p v-else-if="bowls.length === 0" class="py-4 text-center text-label text-text-2">
+      Na ovom stolu nema upaljene nargile.
+    </p>
+
+    <!-- One bowl: one tap, and the sheet says which bowl it is topping up. -->
+    <template v-else-if="single">
+      <p class="text-label text-text-2">
+        {{ single.name_snapshot }}
+        <span v-if="single.flavour_names.length">· {{ single.flavour_names.join(' + ') }}</span>
+        · {{ single.round }}
+      </p>
+      <button
+        type="button"
+        class="btn btn-primary btn-lg"
+        :disabled="busy"
+        @click="emit('zar', single.id)"
+      >
+        {{ busy ? 'Šaljem…' : 'Žar' }}
+      </button>
+    </template>
+
+    <!-- Two bowls: the app must not guess which one went out. -->
+    <template v-else>
+      <p class="text-label text-text-2">
+        Koja nargila?
+      </p>
+      <button
+        v-for="bowl in bowls"
+        :key="bowl.id"
+        type="button"
+        class="btn btn-secondary btn-lg justify-between"
+        :disabled="busy"
+        @click="emit('zar', bowl.id)"
+      >
+        <span class="truncate">
+          {{ bowl.flavour_names.join(' + ') || bowl.name_snapshot }}
+        </span>
+        <span class="chip">{{ bowl.round }}</span>
+      </button>
+    </template>
+
+    <button type="button" class="btn btn-ghost" :disabled="busy" @click="emit('close')">
+      Otkaži
+    </button>
+  </OrderSheet>
 </template>

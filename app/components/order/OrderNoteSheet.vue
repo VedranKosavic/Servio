@@ -57,56 +57,46 @@ function saveText() {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50">
-    <div class="sheet-scrim" @click="emit('close')" />
+  <OrderSheet label="Napomena" @close="emit('close')">
+    <h2 class="section-title">
+      {{ title }}
+    </h2>
 
-    <div
-      class="sheet-panel absolute inset-x-0 bottom-0 mx-auto flex max-h-[92dvh] w-full max-w-3xl flex-col gap-3 overflow-y-auto px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-3"
-      role="dialog"
-      aria-label="Napomena"
-    >
-      <span class="mx-auto h-1 w-10 shrink-0 rounded-full bg-line" />
-
-      <h2 class="section-title">
-        {{ title }}
-      </h2>
-
-      <div v-if="chips.length" class="flex flex-wrap gap-2">
-        <button
-          v-for="chip in chips"
-          :key="chip"
-          type="button"
-          class="pill h-12"
-          @click="pick(chip)"
-        >
-          {{ chip }}
-        </button>
-      </div>
-
-      <label class="flex flex-col gap-1.5">
-        <span class="text-label text-text-2">Ili napiši</span>
-        <input
-          ref="field"
-          v-model="text"
-          type="text"
-          maxlength="120"
-          placeholder="npr. bez leda"
-          class="card-2 h-14 px-3.5 text-body outline-none placeholder:text-muted"
-          @keyup.enter="saveText"
-        >
-      </label>
-
-      <button type="button" class="btn btn-primary btn-lg" @click="saveText">
-        Sačuvaj napomenu
-      </button>
-
-      <button type="button" class="btn h-12 justify-between" @click="emit('comp')">
-        Na račun kuće
-      </button>
-
-      <button type="button" class="btn btn-ghost" @click="emit('close')">
-        Otkaži
+    <div v-if="chips.length" class="flex flex-wrap gap-2">
+      <button
+        v-for="chip in chips"
+        :key="chip"
+        type="button"
+        class="pill h-12"
+        @click="pick(chip)"
+      >
+        {{ chip }}
       </button>
     </div>
-  </div>
+
+    <label class="flex flex-col gap-1.5">
+      <span class="text-label text-text-2">Ili napiši</span>
+      <input
+        ref="field"
+        v-model="text"
+        type="text"
+        maxlength="120"
+        placeholder="npr. bez leda"
+        class="card-2 h-14 px-3.5 text-body outline-none placeholder:text-muted"
+        @keyup.enter="saveText"
+      >
+    </label>
+
+    <button type="button" class="btn btn-primary btn-lg" @click="saveText">
+      Sačuvaj napomenu
+    </button>
+
+    <button type="button" class="btn justify-between" @click="emit('comp')">
+      Na račun kuće
+    </button>
+
+    <button type="button" class="btn btn-ghost" @click="emit('close')">
+      Otkaži
+    </button>
+  </OrderSheet>
 </template>
