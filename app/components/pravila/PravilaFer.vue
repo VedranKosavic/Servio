@@ -33,7 +33,7 @@ const deleteWindow = computed(() => value('chat_delete_own_s') || '15 minuta')
       Šta znači „označeno za razgovor“
     </h2>
     <p class="text-[15px] text-text-2">
-      Kad nešto pređe prag odozgo, Šank to označi i vlasnik pogleda. To nije
+      Kad nešto pređe prag odozgo, {{ APP_NAME }} to označi i vlasnik pogleda. To nije
       optužba i ne ide nikome osim vlasniku: nema poruka, nema obavještenja,
       nema liste najboljih ni najgorih. Manjak od pet maraka u petak uveče je
       stavka za razgovor, ne presuda.

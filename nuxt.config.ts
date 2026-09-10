@@ -1,4 +1,7 @@
 import tailwindcss from '@tailwindcss/vite'
+// The wordmark, from the one file that holds it. The config is read before
+// Nuxt's auto-imports exist, so this is the one place it is imported by path.
+import { APP_DESCRIPTION, APP_NAME } from './shared/brand'
 
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
@@ -27,9 +30,9 @@ export default defineNuxtConfig({
     // `WaiterUpdatePrompt.vue`).
     registerType: 'prompt',
     manifest: {
-      name: 'Šank',
-      short_name: 'Šank',
-      description: 'Narudžbe, smjene i stanje šanka',
+      name: APP_NAME,
+      short_name: APP_NAME,
+      description: APP_DESCRIPTION,
       lang: 'bs',
       display: 'standalone',
       orientation: 'portrait',
@@ -182,7 +185,7 @@ export default defineNuxtConfig({
         { name: 'theme-color', content: '#0e0e12' },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
-        { name: 'apple-mobile-web-app-title', content: 'Šank' },
+        { name: 'apple-mobile-web-app-title', content: APP_NAME },
       ],
       link: [
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },

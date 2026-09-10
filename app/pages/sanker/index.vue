@@ -34,7 +34,7 @@ const now = useTimestamp({ interval: 2000 })
   <div class="flex flex-1 flex-col">
     <header class="flex items-center gap-2.5 border-b border-line py-2.5">
       <h1 class="flex-1 truncate text-xl font-bold">
-        Šank · narudžbe
+        {{ APP_NAME }} · narudžbe
       </h1>
       <WaiterSyncChip />
       <button

@@ -42,6 +42,19 @@ const links = adminMore()
         </NuxtLink>
       </template>
     </UiCard>
+
+    <!-- The phone has no left nav, so the cross-link to the waiter app lives
+         here — the owner also serves tables, and `/konobar` asks for a session
+         rather than for a role. -->
+    <UiCard>
+      <NuxtLink to="/konobar" class="a-more-row">
+        <span class="a-more-text">
+          <strong>Konobarski ekran</strong>
+          <small>Stolovi, narudžbe i naplata</small>
+        </span>
+        <UiIcon name="chevron-right" :size="20" />
+      </NuxtLink>
+    </UiCard>
   </div>
 </template>
 

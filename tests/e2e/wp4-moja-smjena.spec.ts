@@ -294,12 +294,12 @@ test.describe('WP4 — Moja smjena', () => {
       // Log in through the screen itself, so the PIN is cached for the re-lock.
       await page.goto('/')
       await page.getByRole('button', { name: /Promijeni korisnika/ }).click()
-      await expect(page.getByRole('heading', { name: 'Ko si?' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Prijava' })).toBeVisible()
 
-      // Amar and Emir are the faces; Dino is behind *Svi ostali*.
+      // Amar and Emir are the faces; Dino is behind *Ostali profili*.
       await expect(page.getByRole('button', { name: /Amar/ })).toBeVisible()
       await expect(page.getByRole('button', { name: /Dino/ })).toHaveCount(0)
-      await page.getByRole('button', { name: /Svi ostali/ }).click()
+      await page.getByRole('button', { name: /Ostali profili/ }).click()
       await expect(page.getByRole('button', { name: /Dino/ })).toBeVisible()
 
       await page.getByRole('button', { name: /Amar/ }).first().click()

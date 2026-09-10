@@ -63,7 +63,7 @@ const rules = computed(() => {
     {
       title: 'Zajednički uređaj',
       value: value('shared_device_idle_s'),
-      detail: `Šank tablet se sam zaključa nakon ${value('shared_device_idle_s')} bez dodira. `
+      detail: `Tablet na šanku se sam zaključa nakon ${value('shared_device_idle_s')} bez dodira. `
         + 'Tuđi telefon možeš koristiti ako kažeš da ga posuđuješ — prijava tada traje 2 sata.',
     },
   ]

@@ -37,6 +37,7 @@
  *   npx playwright test
  */
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
+import { APP_NAME } from '../../shared/brand'
 import { ackRules, resetLimits } from './helpers'
 
 const AMAR_PIN = '1111'
@@ -389,7 +390,9 @@ test.describe('WP0 — the offline outbox', () => {
     const manifest = await context.request.get('/manifest.webmanifest')
     expect(manifest.status()).toBe(200)
     const body = await manifest.json()
-    expect(body.name).toBe('Šank')
+    // The wordmark lives in `app/utils/brand.ts`; the manifest reads it.
+    expect(body.name).toBe(APP_NAME)
+    expect(body.short_name).toBe(APP_NAME)
     expect(body.start_url).toBe('/konobar')
     expect(body.display).toBe('standalone')
     expect(body.lang).toBe('bs')

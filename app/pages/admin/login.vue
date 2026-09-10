@@ -59,8 +59,8 @@ async function submit() {
   <div class="a-login" data-theme="light">
     <form class="a-login-card" @submit.prevent="submit">
       <div class="a-login-brand">
-        Šank
-        <small>Kontrolna ploča</small>
+        {{ APP_NAME }}
+        <small>{{ APP_TAGLINE }}</small>
       </div>
 
       <UiField

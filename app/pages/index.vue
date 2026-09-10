@@ -49,7 +49,7 @@ const api = useApi()
 const me = useMe()
 const lock = useLock()
 
-type View = 'boot' | 'enrol' | 'people' | 'pin' | 'signed' | 'admin-note'
+type View = 'boot' | 'enrol' | 'people' | 'pin' | 'signed'
 const view = ref<View>('boot')
 
 const people = ref<LoginUser[]>([])
@@ -60,7 +60,7 @@ const message = ref<string | null>(null)
 /** Set by a 403 `NOT_YOUR_DEVICE`: this is a colleague's personal phone. */
 const borrowing = ref(false)
 
-/** *Svi ostali* — the faces are three, the list behind them is everybody. */
+/** *Ostali profili* — the faces are three, the list behind them is everybody. */
 const showAll = ref(false)
 
 const enrolCode = ref('')
@@ -217,7 +217,7 @@ const rest = computed(() => split.value.rest)
 const restLabel = computed(() => (
   me.device.value?.mode === 'personal'
     ? 'Drugi konobar'
-    : `Svi ostali (${rest.value.length})`
+    : `Ostali profili (${rest.value.length})`
 ))
 
 // -- enrol ------------------------------------------------------------------
@@ -337,12 +337,19 @@ async function submitPin(pin: string) {
   }
 }
 
-/** Waiter → stolovi, šanker → tiketi, admin → a word about Phase 2 first. */
+/**
+ * The landing rule, and there is only one of it.
+ *
+ * The destination comes from the role and from nowhere else: `homeFor()` in
+ * `useMe.ts` maps waiter → `/konobar`, šanker → `/sanker`, admin → `/admin`.
+ * `/admin/login` calls `navigateTo('/admin')` after the same
+ * `refreshAfterLogin()`, so an owner who signs in with a PIN on a phone and an
+ * owner who signs in with a password on a laptop land on the same screen.
+ *
+ * Until this commit an admin was parked on a card saying the dashboard was not
+ * built yet. It has been built since Phase 2; the card was a dead end.
+ */
 async function afterLogin() {
-  if (me.user.value?.role === 'admin') {
-    view.value = 'admin-note'
-    return
-  }
   await navigateTo(me.home.value)
 }
 
@@ -374,7 +381,7 @@ const ROLE_LABEL: Record<string, string> = {
   <main class="mx-auto flex w-full max-w-[480px] flex-1 flex-col justify-center gap-7 py-8">
     <div class="text-center">
       <h1 class="text-5xl font-extrabold tracking-tight">
-        Šank
+        {{ APP_NAME }}
       </h1>
       <p v-if="me.venue.value" class="mt-1 text-[15px] text-text-2">
         {{ me.venue.value.name }}
@@ -390,26 +397,7 @@ const ROLE_LABEL: Record<string, string> = {
       <!-- Already logged in: one tap back into the shift -->
       <div v-else-if="view === 'signed' && me.user.value" class="flex flex-col gap-3">
         <button type="button" class="btn btn-accent h-16 text-xl" @click="afterLogin">
-          Nastavi kao {{ me.user.value.name }} ({{ ROLE_LABEL[me.user.value.role] }})
-        </button>
-        <button type="button" class="btn btn-ghost" :disabled="busy" @click="changeUser">
-          Promijeni korisnika
-        </button>
-      </div>
-
-      <!-- The owner dashboard is not built yet -->
-      <div v-else-if="view === 'admin-note'" class="flex flex-col gap-4">
-        <div class="card flex flex-col gap-2 p-4 text-center">
-          <p class="text-lg font-semibold">
-            Kontrolna tabla još nije spremna
-          </p>
-          <p class="text-[15px] text-text-2">
-            Vlasnički pregled (/admin) stiže u drugoj fazi. Do tada koristiš isti
-            ekran kao konobari — stolovi, narudžbe i naplata rade normalno.
-          </p>
-        </div>
-        <button type="button" class="btn btn-accent h-14 text-lg" @click="navigateTo('/konobar')">
-          Nastavi na stolove
+          Nastavi kao {{ me.user.value.name }} · {{ ROLE_LABEL[me.user.value.role] }}
         </button>
         <button type="button" class="btn btn-ghost" :disabled="busy" @click="changeUser">
           Promijeni korisnika
@@ -443,7 +431,7 @@ const ROLE_LABEL: Record<string, string> = {
           v-model="enrolLabel"
           type="text"
           maxlength="40"
-          placeholder="Naziv uređaja (npr. Šank tablet)"
+          placeholder="Naziv uređaja (npr. Tablet na šanku)"
           class="card-2 h-12 w-full px-3.5 text-base outline-none placeholder:text-muted"
         >
 
@@ -477,9 +465,14 @@ const ROLE_LABEL: Record<string, string> = {
 
       <!-- Pick a name -->
       <div v-else class="flex flex-col gap-3">
-        <h2 class="text-center text-2xl font-semibold">
-          Ko si?
-        </h2>
+        <div class="text-center">
+          <h2 class="text-2xl font-semibold">
+            Prijava
+          </h2>
+          <p class="mt-1 text-[15px] text-text-2">
+            Odaberi svoj profil
+          </p>
+        </div>
 
         <p v-if="relocked" class="text-center text-[15px] text-text-2">
           Telefon se zaključao sam. Unesi PIN da nastaviš.
@@ -537,7 +530,7 @@ const ROLE_LABEL: Record<string, string> = {
         </p>
 
         <button type="button" class="btn btn-ghost" :disabled="busy" @click="loadPeople">
-          Osvježi
+          Osvježi listu
         </button>
       </div>
 

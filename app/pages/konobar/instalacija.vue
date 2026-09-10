@@ -110,7 +110,7 @@ onMounted(() => {
                 3 · Otvori s ikone
               </div>
               <p class="text-[15px] text-text-2">
-                Ikona Šanka na početnom ekranu — ne više preko Safarija.
+                Ikona na početnom ekranu — ne više preko Safarija.
               </p>
             </div>
           </li>

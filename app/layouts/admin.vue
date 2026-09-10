@@ -70,8 +70,8 @@ async function signOut() {
     <!-- The laptop nav. Hidden below 1024 px, where the tab bar takes over. -->
     <nav class="a-nav" aria-label="Glavna navigacija">
       <NuxtLink to="/admin" class="a-brand">
-        Šank
-        <small>Kontrolna ploča</small>
+        {{ APP_NAME }}
+        <small>{{ APP_TAGLINE }}</small>
       </NuxtLink>
 
       <template v-for="item in items" :key="item.id">
@@ -103,6 +103,11 @@ async function signOut() {
         <ClientOnly>
           <div class="a-venue">{{ me.venue.value?.name ?? 'Lounge' }}</div>
         </ClientOnly>
+        <!-- The owner also serves tables. `/konobar` asks for a session and not
+             for a role (`requireSession()` with no argument), so this is the one
+             link he needs to cross over — and back, from the waiter menu. -->
+        <NuxtLink to="/konobar" class="a-cross">Konobarski ekran</NuxtLink>
+
         <div class="a-who">
           <!-- The session is a httpOnly cookie the client-only `admin` middleware
                resolves, so SSR has no user and the client does. Rendering half
@@ -267,6 +272,19 @@ async function signOut() {
   color: var(--nav-ink);
   font-weight: 600;
   font-size: 13px;
+}
+
+.a-cross {
+  min-height: 44px;
+  border-radius: 10px;
+  background: var(--nav-well);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  color: var(--nav-ink);
+  font-weight: 600;
+  font-size: 13px;
+  text-decoration: none;
 }
 
 .a-who { display: flex; align-items: center; gap: 8px; padding: 0 4px; }

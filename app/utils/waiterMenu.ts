@@ -54,5 +54,9 @@ export const WAITER_MENU: WaiterMenuItem[] = [
   // and nothing else in this file moves.
   { id: 'chat', label: 'Razgovor', to: '/konobar/razgovor', toBartender: '/sanker/razgovor', roles: ['waiter', 'bartender'], ready: true },
   { id: 'roster', label: 'Raspored', to: '/konobar/raspored', toBartender: '/sanker/raspored', roles: ['waiter', 'bartender'], ready: true },
+  // The owner also serves tables, so he can be here — and this is his way back.
+  // `/admin` is the only row he does not share with the waiters; the light
+  // dashboard's own nav carries the mirror of it, *Konobarski ekran*.
+  { id: 'dashboard', label: 'Kontrolna ploča', to: '/admin', roles: ['admin'], ready: true },
   { id: 'logout', label: 'Odjavi se', action: 'logout', roles: ['waiter', 'bartender', 'admin'], ready: true },
 ]

@@ -111,7 +111,7 @@ function hoursText(hours: number): string {
     </div>
 
     <p class="text-[15px] text-text-2">
-      Pazar vidiš tek kad ga predaš — prebrojiš pa upišeš, i tek onda ti Šank
+      Pazar vidiš tek kad ga predaš — prebrojiš pa upišeš, i tek onda ti {{ APP_NAME }}
       kaže koliko je očekivao.
     </p>
   </section>

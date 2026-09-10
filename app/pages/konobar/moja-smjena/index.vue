@@ -172,7 +172,7 @@ async function saveNote(shiftId: string, body: string) {
               />
             </div>
             <p v-else class="py-6 text-center text-text-2">
-              Ovo ti je prva smjena u Šanku.
+              Ovo ti je prva zabilježena smjena.
             </p>
           </section>
 
