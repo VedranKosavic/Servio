@@ -132,10 +132,10 @@ const starDisabled = computed(() => props.favouriteFull && !props.product.is_fav
 .inactive td { opacity: 0.55; }
 
 .p-name { display: flex; flex-direction: column; gap: 1px; min-width: 140px; }
-.p-name small { color: var(--muted); font-size: 12px; }
+.p-name small { color: var(--muted); font-size: var(--text-caption); }
 
 .p-since {
-  font-size: 12px;
+  font-size: var(--text-caption);
   color: var(--muted);
   margin-top: 2px;
   font-variant-numeric: tabular-nums;

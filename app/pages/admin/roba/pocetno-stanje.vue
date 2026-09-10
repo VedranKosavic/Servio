@@ -171,9 +171,9 @@ async function send() {
 
 <style scoped>
 .a-page { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-.a-error { margin: 0; color: var(--danger); font-size: 14px; }
-.a-ok { margin: 0; color: var(--good); font-size: 14px; }
-.a-note { margin: 0; color: var(--ink-2); font-size: 14px; }
+.a-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
+.a-ok { margin: 0; color: var(--good); font-size: var(--text-label); }
+.a-note { margin: 0; color: var(--ink-2); font-size: var(--text-label); }
 
 .a-rows { display: flex; flex-direction: column; gap: 8px; }
 
@@ -189,7 +189,7 @@ async function send() {
 }
 
 .a-row-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.a-row-name small { color: var(--muted); font-size: 12px; }
+.a-row-name small { color: var(--muted); font-size: var(--text-caption); }
 
 .a-foot { display: flex; justify-content: flex-end; }
 

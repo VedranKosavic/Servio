@@ -117,14 +117,14 @@ function save() {
   border-radius: 8px;
   background: var(--danger-soft);
   color: var(--danger);
-  font-size: 13px;
+  font-size: var(--text-micro);
 }
 
 .p-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
 .p-caption {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--text-caption);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
@@ -135,7 +135,7 @@ function save() {
 .p-code {
   margin: 0;
   font-family: var(--font-title);
-  font-size: 48px;
+  font-size: var(--text-display);
   font-weight: 800;
   letter-spacing: 0.12em;
   text-align: center;
@@ -146,5 +146,5 @@ function save() {
   font-variant-numeric: tabular-nums;
 }
 
-.p-hint { margin: 0; font-size: 13px; color: var(--muted); }
+.p-hint { margin: 0; font-size: var(--text-micro); color: var(--muted); }
 </style>

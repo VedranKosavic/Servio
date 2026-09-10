@@ -224,7 +224,7 @@ function lastLine(row: StanjeRow): string {
 
 .a-roba-note {
   display: block;
-  font-size: 12px;
+  font-size: var(--text-caption);
   color: var(--muted);
 }
 
@@ -232,10 +232,10 @@ function lastLine(row: StanjeRow): string {
 .a-roba-dash { color: var(--muted); }
 
 .a-roba-status { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
-.a-roba-status small { font-size: 12px; color: var(--muted); }
+.a-roba-status small { font-size: var(--text-caption); color: var(--muted); }
 
 .a-stanje { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.a-roba-empty { margin: 0; color: var(--muted); font-size: 14px; }
+.a-roba-empty { margin: 0; color: var(--muted); font-size: var(--text-label); }
 
 @media (max-width: 1023px) {
   /* The article name is the row's link into its ledger, so it is a thumb's

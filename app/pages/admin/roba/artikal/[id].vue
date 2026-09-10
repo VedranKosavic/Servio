@@ -241,8 +241,8 @@ async function send() {
 
 <style scoped>
 .a-page { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-.a-error { margin: 0; color: var(--danger); font-size: 14px; }
-.a-muted { margin: 0; color: var(--ink-2); font-size: 14px; }
+.a-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
+.a-muted { margin: 0; color: var(--ink-2); font-size: var(--text-label); }
 
 .a-tiles {
   display: grid;

@@ -139,11 +139,11 @@ const envelopes = computed(() => props.settlements.map(settlement => ({
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 4px 12px;
   align-items: baseline;
-  font-size: 14px;
+  font-size: var(--text-label);
 }
 
 .s-row dt { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.s-row dt small { color: var(--muted); font-size: 12px; }
+.s-row dt small { color: var(--muted); font-size: var(--text-caption); }
 
 .s-row dd {
   margin: 0;
@@ -167,14 +167,14 @@ const envelopes = computed(() => props.settlements.map(settlement => ({
 
 h3 {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: var(--text-micro);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
   font-weight: 600;
 }
 
-.s-quiet { color: var(--muted); font-size: 14px; margin: 0; }
+.s-quiet { color: var(--muted); font-size: var(--text-label); margin: 0; }
 
 .s-env {
   display: flex;
@@ -186,7 +186,7 @@ h3 {
 
 .s-env:last-child { border-bottom: 0; }
 .s-env-text { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.s-env-text small { color: var(--muted); font-size: 12px; }
+.s-env-text small { color: var(--muted); font-size: var(--text-caption); }
 
 @media (max-width: 1023px) {
   .s-env { flex-wrap: wrap; }

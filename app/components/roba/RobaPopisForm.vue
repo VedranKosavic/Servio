@@ -223,7 +223,7 @@ async function send() {
 .a-row.flagged { background: var(--warn-soft); border-color: var(--warn); }
 
 .a-row-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.a-row-name small { color: var(--muted); font-size: 12px; }
+.a-row-name small { color: var(--muted); font-size: var(--text-caption); }
 
 .a-row-inputs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 
@@ -233,11 +233,11 @@ async function send() {
   font-weight: 600;
 }
 
-.a-override { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); }
+.a-override { display: flex; align-items: center; gap: 8px; font-size: var(--text-micro); color: var(--ink-2); }
 .a-override input { width: 18px; height: 18px; }
 
-.a-muted { margin: 0; color: var(--muted); font-size: 13px; }
-.a-error { margin: 0; color: var(--danger); font-size: 14px; }
+.a-muted { margin: 0; color: var(--muted); font-size: var(--text-micro); }
+.a-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
 .a-foot { display: flex; justify-content: flex-end; }
 
 @media (max-width: 1023px) {

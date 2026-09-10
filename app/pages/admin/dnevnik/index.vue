@@ -147,10 +147,7 @@ watch(query, load, { immediate: true, deep: true })
 
 <template>
   <div class="a-page">
-    <header class="a-page-head">
-      <h1>Dnevnik</h1>
-      <p class="a-page-sub">ko je šta uradio · samo vlasnici</p>
-    </header>
+    <UiPageHead eyebrow="Podešavanje" title="Dnevnik" sub="Ko je šta uradio · samo vlasnici" />
 
     <DnevnikFilters
       :important="important"
@@ -177,19 +174,9 @@ watch(query, load, { immediate: true, deep: true })
 </template>
 
 <style scoped>
-.a-page { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.a-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
-.a-page-head { display: flex; flex-direction: column; gap: 2px; }
 
-.a-page-head h1 {
-  font-family: var(--font-title);
-  font-weight: 700;
-  font-size: 28px;
-  letter-spacing: -0.015em;
-  margin: 0;
-  line-height: 1.1;
-}
 
-.a-page-sub { margin: 0; color: var(--muted); font-size: 14px; }
 .a-error { margin: 0; color: var(--danger); }
 </style>

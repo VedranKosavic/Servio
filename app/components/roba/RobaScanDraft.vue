@@ -358,15 +358,20 @@ function confirmDiscard() {
 
 .a-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .a-total { display: flex; align-items: baseline; gap: 8px; margin-right: auto; }
-.a-total-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
-.a-total strong { font-size: 20px; font-weight: 600; }
+.a-total-label { font-size: var(--text-caption); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+.a-total strong {
+  font-family: var(--font-display);
+  font-size: var(--text-title);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
 
 .a-foot span > :deep(button:disabled) { pointer-events: none; }
 
-.a-problems { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
-.a-muted { margin: 0; color: var(--muted); font-size: 13px; }
-.a-warn { margin: 0; color: var(--warn); font-size: 14px; }
-.a-error { margin: 0; color: var(--danger); font-size: 14px; }
+.a-problems { margin: 0; padding-left: 18px; color: var(--muted); font-size: var(--text-micro); }
+.a-muted { margin: 0; color: var(--muted); font-size: var(--text-micro); }
+.a-warn { margin: 0; color: var(--warn); font-size: var(--text-label); }
+.a-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
 
 @media (max-width: 1023px) {
   .a-top { grid-template-columns: 1fr; }

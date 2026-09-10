@@ -102,7 +102,7 @@ function onChange(event: Event) {
 .p-toggle input:checked ~ .p-track .p-knob { transform: translateX(16px); border-color: var(--good); }
 .p-toggle input:focus-visible ~ .p-track { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-.p-word { font-size: 13px; color: var(--ink-2); font-weight: 600; }
+.p-word { font-size: var(--text-micro); color: var(--ink-2); font-weight: 600; }
 
 @media (prefers-reduced-motion: reduce) {
   .p-knob { transition: none; }
@@ -112,6 +112,6 @@ function onChange(event: Event) {
   .p-track { width: 46px; height: 28px; border-radius: 14px; }
   .p-knob { width: 22px; height: 22px; }
   .p-toggle input:checked ~ .p-track .p-knob { transform: translateX(18px); }
-  .p-word { font-size: 15px; }
+  .p-word { font-size: var(--text-body); }
 }
 </style>

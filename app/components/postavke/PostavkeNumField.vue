@@ -56,7 +56,7 @@ const emit = defineEmits<{
 .p-nf { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 
 .p-nf-label {
-  font-size: 12px;
+  font-size: var(--text-caption);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
@@ -69,6 +69,6 @@ const emit = defineEmits<{
 
 .p-nf-badge { text-transform: none; letter-spacing: 0; }
 
-.p-nf-error { font-size: 13px; color: var(--danger); }
-.p-nf-hint { font-size: 13px; color: var(--muted); }
+.p-nf-error { font-size: var(--text-micro); color: var(--danger); }
+.p-nf-hint { font-size: var(--text-micro); color: var(--muted); }
 </style>

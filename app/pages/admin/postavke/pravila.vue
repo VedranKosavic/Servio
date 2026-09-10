@@ -301,7 +301,7 @@ function insertToken(key: string) {
   color: var(--ink);
   padding: 12px;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--text-label);
   line-height: 1.5;
 }
 
@@ -313,16 +313,16 @@ function insertToken(key: string) {
   background: var(--surface-2);
   padding: 14px;
   color: var(--ink);
-  font-size: 14px;
+  font-size: var(--text-label);
   line-height: 1.5;
 }
 
-.p-hint { margin: 0; color: var(--muted); font-size: 13px; }
-.p-hint code { font-size: 13px; }
-.p-foot { margin: 0; color: var(--muted); font-size: 13px; }
+.p-hint { margin: 0; color: var(--muted); font-size: var(--text-micro); }
+.p-hint code { font-size: var(--text-micro); }
+.p-foot { margin: 0; color: var(--muted); font-size: var(--text-micro); }
 
 .p-tokens { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.p-tokens-label { color: var(--muted); font-size: 13px; }
+.p-tokens-label { color: var(--muted); font-size: var(--text-micro); }
 
 .p-token {
   display: inline-flex;
@@ -335,7 +335,7 @@ function insertToken(key: string) {
   background: var(--surface);
   color: var(--ink-2);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-micro);
   cursor: pointer;
 }
 
@@ -363,10 +363,10 @@ function insertToken(key: string) {
 }
 
 .p-version-no { font-weight: 700; font-variant-numeric: tabular-nums; }
-.p-version-meta { color: var(--muted); font-size: 13px; }
+.p-version-meta { color: var(--muted); font-size: var(--text-micro); }
 .p-version-actions { margin-left: auto; display: flex; gap: 6px; }
 
-.p-sheet { margin: 0; font-size: 14px; color: var(--ink-2); }
+.p-sheet { margin: 0; font-size: var(--text-label); color: var(--ink-2); }
 
 @media (max-width: 1023px) {
   .p-token { height: 44px; }

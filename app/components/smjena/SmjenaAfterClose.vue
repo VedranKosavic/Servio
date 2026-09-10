@@ -39,5 +39,5 @@ const sentence = computed(() => {
 
 <style scoped>
 .s-late { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
-.s-quiet { margin: 0; color: var(--muted); font-size: 13px; }
+.s-quiet { margin: 0; color: var(--muted); font-size: var(--text-micro); }
 </style>

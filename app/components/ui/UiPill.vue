@@ -18,10 +18,12 @@ withDefaults(defineProps<{
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 24px;
-  padding: 0 10px;
-  border-radius: 12px;
-  font-size: 12px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: var(--radius-chip);
+  font-size: var(--text-caption);
+  line-height: 1;
+  letter-spacing: 0.01em;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -30,5 +32,5 @@ withDefaults(defineProps<{
 .t-warn { background: var(--warn-soft); color: var(--warn); }
 .t-bad { background: var(--danger-soft); color: var(--danger); }
 .t-neutral { background: var(--surface-2); color: var(--ink-2); }
-.t-accent { background: var(--accent-soft); color: var(--accent-ink); }
+.t-accent { background: var(--accent-soft); color: var(--accent-text); }
 </style>

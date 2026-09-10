@@ -158,17 +158,17 @@ const unitCostText = computed(() => {
 .skipped { opacity: 0.6; }
 
 .a-line-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.a-ocr { font-size: 13px; color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
-.a-src, .a-skipped { font-size: 12px; font-weight: 600; color: var(--muted); }
+.a-ocr { font-size: var(--text-micro); color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
+.a-src, .a-skipped { font-size: var(--text-caption); font-weight: 600; color: var(--muted); }
 
 .a-unknown { display: flex; flex-direction: column; gap: 10px; }
 .a-unknown-acts { display: flex; gap: 8px; flex-wrap: wrap; }
 
 .a-line-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1.2fr; gap: 12px; }
 .a-line-foot { display: flex; align-items: center; gap: 12px; }
-.a-line-qty { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.a-line-qty { font-size: var(--text-micro); color: var(--muted); font-variant-numeric: tabular-nums; }
 .a-line-foot .a-btn { margin-left: auto; }
-.a-muted { margin: 0; color: var(--muted); font-size: 13px; }
+.a-muted { margin: 0; color: var(--muted); font-size: var(--text-micro); }
 
 @media (max-width: 1023px) {
   .a-line-grid { grid-template-columns: 1fr 1fr; }

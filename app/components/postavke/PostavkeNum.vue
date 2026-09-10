@@ -123,7 +123,7 @@ function onBlur() {
   background: var(--field-bg);
   padding: 0 8px;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--text-label);
   color: var(--ink);
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -132,10 +132,10 @@ function onBlur() {
 .p-num-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .p-num-input:disabled { opacity: 0.5; }
 
-.p-num-suffix { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.p-num-suffix { font-size: var(--text-caption); color: var(--muted); white-space: nowrap; }
 
 @media (max-width: 1023px) {
-  .p-num-input { height: 44px; font-size: 16px; padding: 0 10px; }
-  .p-num-suffix { font-size: 14px; }
+  .p-num-input { height: 44px; font-size: var(--text-section); padding: 0 10px; }
+  .p-num-suffix { font-size: var(--text-label); }
 }
 </style>

@@ -81,7 +81,7 @@ const error = computed(() =>
   border-radius: 8px;
   background: var(--danger-soft);
   color: var(--danger);
-  font-size: 13px;
+  font-size: var(--text-micro);
 }
 
 .p-ok {
@@ -90,9 +90,9 @@ const error = computed(() =>
   border-radius: 8px;
   background: var(--good-soft);
   color: var(--good);
-  font-size: 14px;
+  font-size: var(--text-label);
   font-weight: 600;
 }
 
-.p-hint { margin: 0; font-size: 13px; color: var(--muted); }
+.p-hint { margin: 0; font-size: var(--text-micro); color: var(--muted); }
 </style>

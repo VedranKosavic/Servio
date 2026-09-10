@@ -131,7 +131,7 @@ function save() {
   border-radius: 8px;
   background: var(--danger-soft);
   color: var(--danger);
-  font-size: 13px;
+  font-size: var(--text-micro);
 }
 
 .p-warn {
@@ -140,13 +140,13 @@ function save() {
   border-radius: 8px;
   background: var(--warn-soft);
   color: var(--warn);
-  font-size: 13px;
+  font-size: var(--text-micro);
 }
 
 .p-row { display: flex; align-items: center; gap: 12px; }
 
 .p-caption {
-  font-size: 12px;
+  font-size: var(--text-caption);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);

@@ -120,7 +120,7 @@ const skewed = computed(() =>
 <style scoped>
 .off td { opacity: 0.55; }
 .p-label { display: flex; flex-direction: column; gap: 1px; min-width: 130px; }
-.p-label small { color: var(--muted); font-size: 12px; }
+.p-label small { color: var(--muted); font-size: var(--text-caption); }
 .p-muted { color: var(--muted); }
 .p-quiet { color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .p-actions { display: inline-flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }

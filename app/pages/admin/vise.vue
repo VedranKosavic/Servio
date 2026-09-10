@@ -19,9 +19,7 @@ const links = adminMore()
 
 <template>
   <div class="a-page">
-    <header class="a-page-head">
-      <h1>Više</h1>
-    </header>
+    <UiPageHead title="Više" sub="Ostatak kontrolne ploče" />
 
     <UiCard>
       <template v-for="link in links" :key="link.id">
@@ -59,14 +57,7 @@ const links = adminMore()
 </template>
 
 <style scoped>
-.a-page { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-.a-page-head h1 {
-  font-family: var(--font-title);
-  font-weight: 700;
-  font-size: 28px;
-  letter-spacing: -0.015em;
-  margin: 0;
-}
+.a-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
 .a-more-row {
   display: flex;
@@ -82,5 +73,5 @@ const links = adminMore()
 .a-more-row:last-child { border-bottom: 0; }
 .a-more-soon { opacity: 0.5; }
 .a-more-text { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.a-more-text small { color: var(--muted); font-size: 13px; }
+.a-more-text small { color: var(--muted); font-size: var(--text-micro); }
 </style>

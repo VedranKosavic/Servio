@@ -71,27 +71,27 @@ const total = computed(() => rows.value.reduce((sum, row) => sum + row.promet_fe
 
 <template>
   <div class="a-page">
-    <header class="a-page-head">
-      <h1>Smjene</h1>
-      <p class="a-page-sub">Svaka noć, i šta je od nje ostalo u kasi</p>
-    </header>
+    <UiPageHead eyebrow="Lokal" title="Smjene" sub="Svaka noć, i šta je od nje ostalo u kasi" />
 
-    <UiCard>
+    <UiCard quiet>
       <UiPeriod />
     </UiCard>
 
     <p v-if="error" class="a-error">{{ error }}</p>
 
-    <UiCard title="Smjene" :count="rows.length">
+    <UiCard title="Smjene" :count="`${rows.length}`" flush>
       <template #actions>
-        <span class="a-total">Ukupno <UiMoney :fen="total" :colour="false" /></span>
+        <span class="a-total">
+          <span class="a-total-label">Ukupno</span>
+          <UiMoney class="a-total-value" :fen="total" :colour="false" />
+        </span>
       </template>
 
       <p v-if="!loading && !rows.length" class="a-muted">
         U ovom periodu nema nijedne smjene.
       </p>
 
-      <UiTable v-else :columns="columns" :loading="loading">
+      <UiTable v-else :columns="columns" :loading="loading" hover>
         <tr v-for="row in rows" :key="row.id" class="a-row">
           <td>
             <NuxtLink :to="`/admin/smjena/${row.id}`">{{ dateBs(row.business_date) }}</NuxtLink>
@@ -122,23 +122,29 @@ const total = computed(() => rows.value.reduce((sum, row) => sum + row.promet_fe
 </template>
 
 <style scoped>
-.a-page { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.a-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
-.a-page-head h1 {
-  font-family: var(--font-title);
-  font-weight: 700;
-  font-size: 28px;
-  letter-spacing: -0.015em;
-  margin: 0;
-  line-height: 1.1;
+
+.a-muted { margin: 0 20px; color: var(--muted); font-size: var(--text-label); }
+.a-quiet { color: var(--muted); }
+.a-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
+
+.a-total { display: inline-flex; align-items: baseline; gap: 8px; }
+
+.a-total-label {
+  font-size: var(--text-caption);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--muted);
 }
 
-.a-page-sub { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
-.a-muted { margin: 0; color: var(--muted); }
-.a-quiet { color: var(--muted); }
-.a-error { margin: 0; color: var(--danger); }
-
-.a-total { font-size: 14px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.a-total-value {
+  font-family: var(--font-display);
+  font-size: var(--text-section);
+  font-weight: 700;
+  color: var(--ink);
+}
 
 .a-row :deep(a) { color: inherit; text-decoration: none; font-weight: 600; }
 .a-row :deep(a:hover) { text-decoration: underline; }

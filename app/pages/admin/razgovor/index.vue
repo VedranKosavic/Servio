@@ -186,10 +186,11 @@ const pinnedLines = computed(() =>
 
 <template>
   <div class="a-page">
-    <header class="a-page-head">
-      <h1>Razgovor</h1>
-      <p class="a-page-sub">Svi i Admini · Konobari je njihov kanal</p>
-    </header>
+    <UiPageHead
+      eyebrow="Ljudi"
+      title="Razgovor"
+      sub="Svi i Admini · Konobari je njihov kanal"
+    />
 
     <p v-if="error" class="a-error">{{ error }}</p>
 
@@ -340,19 +341,9 @@ const pinnedLines = computed(() =>
 </template>
 
 <style scoped>
-.a-page { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-.a-page-head { display: flex; flex-direction: column; gap: 2px; }
+.a-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
-.a-page-head h1 {
-  font-family: var(--font-title);
-  font-weight: 700;
-  font-size: 28px;
-  letter-spacing: -0.015em;
-  margin: 0;
-  line-height: 1.1;
-}
 
-.a-page-sub { margin: 0; color: var(--muted); font-size: 14px; }
 .a-error { margin: 0; color: var(--danger); }
 
 /* Two panes on a laptop, one column on a phone. */
@@ -387,7 +378,7 @@ const pinnedLines = computed(() =>
 .a-ch.on { border-color: var(--accent); background: var(--accent-soft); }
 .a-ch-top { display: flex; align-items: center; gap: 8px; }
 .a-ch-name { font-weight: 600; flex-grow: 1; }
-.a-ch-at { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.a-ch-at { font-size: var(--text-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .a-ch-n {
   min-width: 22px;
@@ -395,7 +386,7 @@ const pinnedLines = computed(() =>
   border-radius: 11px;
   background: var(--danger);
   color: var(--on-accent);
-  font-size: 12px;
+  font-size: var(--text-caption);
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -404,7 +395,7 @@ const pinnedLines = computed(() =>
   font-variant-numeric: tabular-nums;
 }
 
-.a-ch-prev { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.a-ch-prev { color: var(--muted); font-size: var(--text-micro); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .a-pane {
   display: flex;
@@ -418,7 +409,7 @@ const pinnedLines = computed(() =>
 }
 
 .a-pane-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
-.a-members { color: var(--muted); font-size: 13px; }
+.a-members { color: var(--muted); font-size: var(--text-micro); }
 
 .a-back {
   border: 0;
@@ -441,7 +432,7 @@ const pinnedLines = computed(() =>
   color: var(--ink);
 }
 
-.a-pin-tag { font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+.a-pin-tag { font-weight: 700; font-size: var(--text-caption); text-transform: uppercase; letter-spacing: 0.04em; }
 .a-pin ul { margin: 0; padding-left: 18px; flex-grow: 1; }
 
 .a-pin-done {
@@ -532,7 +523,7 @@ const pinnedLines = computed(() =>
   background: transparent;
   color: var(--ink);
   font: inherit;
-  font-size: 16px;
+  font-size: var(--text-section);
   text-align: left;
   cursor: pointer;
 }

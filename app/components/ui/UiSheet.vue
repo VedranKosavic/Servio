@@ -146,58 +146,87 @@ onBeforeUnmount(() => {
   position: absolute;
   inset: 0;
   background: var(--scrim);
+  animation: a-fade var(--dur-base) var(--ease-standard);
 }
 
 .a-sheet {
   position: relative;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 16px 16px 0 0;
+  border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
+  box-shadow: var(--shadow-sheet);
   width: 100%;
   max-height: 88dvh;
   display: flex;
   flex-direction: column;
   padding-bottom: env(safe-area-inset-bottom);
+  animation: a-sheet-up var(--dur-sheet) var(--ease-out-soft);
 }
 
 .a-sheet-head {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--line);
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line-soft);
 }
 
-.a-sheet-head h2 { margin: 0; font-size: 17px; font-weight: 600; }
+.a-sheet-head h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-section);
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  font-weight: 700;
+}
 
 .a-sheet-x {
   margin-left: auto;
+  margin-right: -8px;
   width: 44px;
   height: 44px;
   border: 0;
   background: transparent;
-  color: var(--ink-2);
-  border-radius: 10px;
+  color: var(--muted);
+  border-radius: var(--radius-field);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-standard);
 }
 
+.a-sheet-x:hover { background: var(--surface-2); color: var(--ink); }
+
 .a-sheet-body {
-  padding: 16px;
+  padding: 20px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
+  font-size: var(--text-body);
 }
 
 .a-sheet-foot {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
-  padding: 12px 16px 16px;
-  border-top: 1px solid var(--line);
+  padding: 14px 20px 18px;
+  border-top: 1px solid var(--line-soft);
+  background: var(--surface-3);
+}
+
+/* The vocabulary is three things: a sheet slides 12 % up and fades in, a tap
+   scales the surface, a state change cross-fades. Both durations are tokens,
+   so `prefers-reduced-motion` collapses them to 1 ms for free. */
+@keyframes a-sheet-up {
+  from { transform: translateY(12%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes a-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* A laptop gets a centred dialog; the phone keeps the sheet at the bottom,
@@ -206,8 +235,10 @@ onBeforeUnmount(() => {
   .a-sheet-root { align-items: center; }
   .a-sheet {
     width: min(560px, 92vw);
-    border-radius: 14px;
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-pop);
     max-height: 82dvh;
   }
+  .a-sheet-foot { border-radius: 0 0 var(--radius-panel) var(--radius-panel); }
 }
 </style>

@@ -381,7 +381,7 @@ async function submitSheet() {
 .a-stack { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 
 .a-error { margin: 0; color: var(--danger); }
-.a-muted { margin: 0; color: var(--muted); font-size: 13px; }
+.a-muted { margin: 0; color: var(--muted); font-size: var(--text-micro); }
 
 .a-skeleton {
   display: grid;

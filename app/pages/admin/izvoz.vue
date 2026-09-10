@@ -68,10 +68,7 @@ const links = computed(() => ({
 
 <template>
   <div class="a-page">
-    <header class="a-page-head">
-      <h1>Izvoz</h1>
-      <p class="a-page-sub">CSV fajlovi za izabrani period</p>
-    </header>
+    <UiPageHead eyebrow="Podešavanje" title="Izvoz" sub="CSV fajlovi za izabrani period" />
 
     <UiCard title="Period">
       <UiPeriod />
@@ -121,22 +118,12 @@ const links = computed(() => ({
 </template>
 
 <style scoped>
-.a-page { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.a-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
-.a-page-head { display: flex; flex-direction: column; gap: 2px; }
 
-.a-page-head h1 {
-  font-family: var(--font-title);
-  font-weight: 700;
-  font-size: 28px;
-  letter-spacing: -0.015em;
-  margin: 0;
-  line-height: 1.1;
-}
 
-.a-page-sub { margin: 0; color: var(--muted); font-size: 14px; }
 
-.a-note { margin: 0; color: var(--muted); font-size: 13px; max-width: 70ch; }
+.a-note { margin: 0; color: var(--muted); font-size: var(--text-micro); max-width: 70ch; }
 .a-note code { font-family: ui-monospace, "SFMono-Regular", "Menlo", monospace; }
 
 .i-grid {

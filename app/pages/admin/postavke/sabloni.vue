@@ -207,9 +207,9 @@ const columns = [
 </template>
 
 <style scoped>
-.s-quiet { margin: 0; color: var(--muted); font-size: 13px; }
+.s-quiet { margin: 0; color: var(--muted); font-size: var(--text-micro); }
 .s-error { margin: 0; color: var(--danger); font-weight: 500; }
-.s-foot { margin: 0; color: var(--muted); font-size: 13px; }
+.s-foot { margin: 0; color: var(--muted); font-size: var(--text-micro); }
 .s-n { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .s-act { white-space: nowrap; }
 .s-act :deep(.a-btn) + :deep(.a-btn) { margin-left: 6px; }
@@ -218,7 +218,7 @@ const columns = [
 .s-times { display: flex; gap: 10px; }
 
 .s-time { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
-.s-time span { font-size: 13px; color: var(--ink-2); font-weight: 600; }
+.s-time span { font-size: var(--text-micro); color: var(--ink-2); font-weight: 600; }
 
 .s-time input {
   height: 44px;

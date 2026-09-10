@@ -192,13 +192,13 @@ const PHASE_LABELS: Record<CountView['phase'], string> = {
 
 <style scoped>
 .a-page { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-.a-error { margin: 0; color: var(--danger); font-size: 14px; }
-.a-ok { margin: 0; color: var(--good); font-size: 14px; }
-.a-muted { margin: 0; color: var(--muted); font-size: 13px; }
+.a-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
+.a-ok { margin: 0; color: var(--good); font-size: var(--text-label); }
+.a-muted { margin: 0; color: var(--muted); font-size: var(--text-micro); }
 
 .a-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 
-.a-est { display: block; font-size: 12px; color: var(--muted); }
+.a-est { display: block; font-size: var(--text-caption); color: var(--muted); }
 .a-zero { color: var(--muted); }
 
 /* The three line colours from the kit. The word is always in the row too. */
@@ -210,14 +210,14 @@ const PHASE_LABELS: Record<CountView['phase'], string> = {
   background: var(--warn-soft);
   border-radius: 10px;
   padding: 10px 12px;
-  font-size: 13px;
+  font-size: var(--text-micro);
   color: var(--ink-2);
 }
 
 .a-stale p { margin: 0 0 6px; }
 .a-stale ul { margin: 0; padding-left: 18px; }
 
-.a-override { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); }
+.a-override { display: flex; align-items: center; gap: 8px; font-size: var(--text-micro); color: var(--ink-2); }
 .a-override input { width: 18px; height: 18px; }
 
 @media (max-width: 1023px) {

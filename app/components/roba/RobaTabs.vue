@@ -44,10 +44,9 @@ function isActive(tab: Tab): boolean {
 
 <template>
   <header class="a-roba-head">
-    <div class="a-roba-title">
-      <h1>Roba</h1>
-      <p v-if="sub" class="a-roba-sub">{{ sub }}</p>
-    </div>
+    <UiPageHead eyebrow="Lokal" title="Roba" :sub="sub">
+      <template v-if="$slots.actions" #actions><slot name="actions" /></template>
+    </UiPageHead>
 
     <nav class="a-roba-tabs" aria-label="Roba">
       <NuxtLink
@@ -59,67 +58,61 @@ function isActive(tab: Tab): boolean {
         :aria-current="isActive(tab) ? 'page' : undefined"
       >{{ tab.label }}</NuxtLink>
     </nav>
-
-    <div v-if="$slots.actions" class="a-roba-actions"><slot name="actions" /></div>
   </header>
 </template>
 
 <style scoped>
-.a-roba-head {
-  display: flex;
-  align-items: flex-end;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.a-roba-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-
-.a-roba-title h1 {
-  font-family: var(--font-title);
-  font-weight: 700;
-  font-size: 28px;
-  letter-spacing: -0.015em;
-  margin: 0;
-  line-height: 1.1;
-}
-
-.a-roba-sub { margin: 0; color: var(--muted); font-size: 14px; }
+/**
+ * The tab strip, shared shape.
+ *
+ * *Roba* used to draw its six tabs as a segmented well and *Meni i postavke* drew
+ * its eight as copper pills — two different ideas of "the same page, a different
+ * part" in one product, which is exactly what makes an app feel assembled rather
+ * than designed. Both are now an underlined bar: the row reads as one strip, the
+ * copper rule under the current tab is the only colour on it, and the strip
+ * scrolls sideways on a phone while the page body never does.
+ */
+.a-roba-head { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 
 .a-roba-tabs {
-  margin-left: auto;
-  display: inline-flex;
-  gap: 2px;
-  background: var(--surface-2);
-  border-radius: 10px;
-  padding: 3px;
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
   max-width: 100%;
   /* Six labels do not fit on a phone; the strip scrolls rather than wrapping
      into two rows that push the page's first card off the screen. */
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+
+.a-roba-tabs::-webkit-scrollbar { display: none; }
 
 .a-roba-tab {
-  height: 30px;
+  height: 40px;
   padding: 0 12px;
-  border-radius: 8px;
   display: inline-flex;
   align-items: center;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink-2);
+  font-size: var(--text-label);
+  font-weight: 500;
+  color: var(--muted);
   text-decoration: none;
   white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color var(--dur-fast) var(--ease-standard);
 }
 
-.a-roba-tab.on { background: var(--surface); color: var(--ink); }
+.a-roba-tab:hover { color: var(--ink); }
 
-.a-roba-actions { display: flex; gap: 8px; align-items: center; }
+.a-roba-tab.on {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
 
 @media (max-width: 1023px) {
-  .a-roba-head { align-items: flex-start; }
-  .a-roba-tabs { margin-left: 0; width: 100%; }
   /* A thumb's target — 44 px, like every other control below the breakpoint. */
-  .a-roba-tab { height: 44px; font-size: 15px; padding: 0 14px; }
+  .a-roba-tab { height: 46px; font-size: var(--text-body); padding: 0 14px; }
 }
 </style>

@@ -237,7 +237,7 @@ async function createProduct(body: CreateProductBody) {
   border-radius: 10px;
   background: var(--warn-soft);
   color: var(--warn);
-  font-size: 14px;
+  font-size: var(--text-label);
   font-weight: 500;
 }
 
@@ -253,14 +253,14 @@ async function createProduct(body: CreateProductBody) {
   background: var(--field-bg);
   padding: 0 12px;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--text-label);
   color: var(--ink);
 }
 
 .p-search:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .p-fav-count {
-  font-size: 13px;
+  font-size: var(--text-micro);
   color: var(--muted);
   font-variant-numeric: tabular-nums;
   margin-left: auto;
@@ -269,7 +269,7 @@ async function createProduct(body: CreateProductBody) {
 .p-empty { margin: 0; color: var(--muted); }
 
 @media (max-width: 1023px) {
-  .p-search { height: 44px; font-size: 16px; max-width: none; }
-  .p-fav-count { margin-left: 0; font-size: 14px; }
+  .p-search { height: 44px; font-size: var(--text-section); max-width: none; }
+  .p-fav-count { margin-left: 0; font-size: var(--text-label); }
 }
 </style>

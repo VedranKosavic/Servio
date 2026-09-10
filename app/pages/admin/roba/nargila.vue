@@ -207,9 +207,9 @@ function kg(value: number): string {
 
 <style scoped>
 .a-page { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-.a-error { margin: 0; color: var(--danger); font-size: 14px; }
-.a-muted { margin: 0; color: var(--muted); font-size: 13px; }
-.a-est { display: block; font-size: 12px; color: var(--muted); }
+.a-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
+.a-muted { margin: 0; color: var(--muted); font-size: var(--text-micro); }
+.a-est { display: block; font-size: var(--text-caption); color: var(--muted); }
 
 .a-tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
 
@@ -222,13 +222,13 @@ function kg(value: number): string {
   background: var(--surface);
   color: var(--ink);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--text-label);
   font-weight: 600;
   padding: 0 10px;
 }
 
 @media (max-width: 1023px) {
   .a-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .a-month { height: 44px; font-size: 15px; }
+  .a-month { height: 44px; font-size: var(--text-body); }
 }
 </style>

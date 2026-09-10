@@ -72,7 +72,7 @@ onBeforeUnmount(() => {
 .a-thumb-hint {
   display: block;
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: var(--text-caption);
   color: var(--muted);
   text-align: left;
 }
@@ -93,5 +93,5 @@ onBeforeUnmount(() => {
 
 .a-full img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .a-close { position: fixed; right: 16px; bottom: 16px; }
-.a-muted { margin: 0; color: var(--muted); font-size: 13px; }
+.a-muted { margin: 0; color: var(--muted); font-size: var(--text-micro); }
 </style>

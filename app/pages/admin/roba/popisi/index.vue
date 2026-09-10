@@ -135,8 +135,8 @@ function onSubmitted(saved: CountView) {
 
 <style scoped>
 .a-page { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-.a-error { margin: 0; color: var(--danger); font-size: 14px; }
-.a-muted { margin: 0; color: var(--muted); font-size: 14px; }
+.a-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
+.a-muted { margin: 0; color: var(--muted); font-size: var(--text-label); }
 .a-nowrap { white-space: nowrap; }
 .a-go { color: var(--muted); display: inline-flex; align-items: center; justify-content: flex-end; min-height: 24px; }
 .a-go:hover { color: var(--accent-ink); }

@@ -1,16 +1,28 @@
 <script setup lang="ts">
 /**
- * The 92 px stat tile across the top of *Puls* and *Smjena*.
+ * The stat tile across the top of *Puls*, *Smjena* and *Roba*.
  *
- * `value` is 30 px / 600 and **tabular** — every digit the same width, so a row
- * of tiles lines up on the comma and 1.284,00 does not jump about when it
- * becomes 1.290,00.
+ * **The tile leads with the number.** The eyebrow above it is 12 px caps in
+ * `--muted` and the line under it is 13 px — both are there to be read *after*
+ * the figure, when the eye has already found the one thing the tile is about.
+ * The value is the display face at `--text-metric` and **tabular**: every digit
+ * the same width, so a row of tiles lines up on the comma and 1.284,00 does not
+ * shuffle when it becomes 1.290,00.
+ *
+ * `unit` is the currency, set beside the number at label size rather than on a
+ * line of its own — "86,00" with "KM" underneath it reads as two facts, and it
+ * is one. A tile whose value is a count passes no unit.
+ *
+ * `tone` colours the number and nothing else, and it never carries the meaning
+ * alone: a red figure always has a sub-line saying what is red about it.
  */
 withDefaults(defineProps<{
   /** The eyebrow: "Promet danas". */
   label: string
   /** Already formatted — this component never formats money itself. */
   value: string | number
+  /** "KM", beside the number. Omit for a count. */
+  unit?: string
   /** The quiet second line: "7 stolova · 145,50 KM". */
   sub?: string
   tone?: 'plain' | 'good' | 'warn' | 'bad'
@@ -20,7 +32,9 @@ withDefaults(defineProps<{
 <template>
   <div class="a-tile" :class="`t-${tone}`">
     <div class="a-tile-label">{{ label }}</div>
-    <div class="a-tile-value"><slot name="value">{{ value }}</slot></div>
+    <div class="a-tile-value" :class="{ 'is-slot': !!$slots.value }">
+      <slot name="value">{{ value }}</slot><span v-if="unit && !$slots.value" class="a-tile-unit">{{ unit }}</span>
+    </div>
     <div v-if="sub || $slots.sub" class="a-tile-sub"><slot name="sub">{{ sub }}</slot></div>
   </div>
 </template>
@@ -29,33 +43,56 @@ withDefaults(defineProps<{
 .a-tile {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 14px 16px;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 14px 16px 16px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  min-height: 92px;
+  min-height: 104px;
   min-width: 0;
 }
 
 .a-tile-label {
-  font-size: 12px;
+  font-size: var(--text-caption);
+  line-height: 1.3;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   color: var(--muted);
   font-weight: 600;
+  /* Two words of eyebrow must not push the number down a line on one tile and
+     not on its neighbour — the row of figures has to sit on one baseline. */
+  min-height: 32px;
 }
 
 .a-tile-value {
-  font-size: 30px;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-metric);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  line-height: 1.1;
-  letter-spacing: -0.01em;
+  font-feature-settings: "tnum" 1;
 }
 
+.a-tile-unit {
+  font-family: var(--font-sans);
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+/* `auto`, not a gap: the row of figures has to sit on one baseline whether or
+   not a given tile has a second line under it. */
 .a-tile-sub {
-  font-size: 13px;
+  margin-top: auto;
+  padding-top: 8px;
+  font-size: var(--text-micro);
+  line-height: 1.35;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
@@ -64,9 +101,19 @@ withDefaults(defineProps<{
 .t-warn .a-tile-value { color: var(--warn); }
 .t-bad .a-tile-value { color: var(--danger); }
 
-/* On a phone the tiles stack two-up and the number can come down a size. */
+/* A tile that is only a slot ("Ko radi") holds a strip of names, not a figure,
+   so it drops the display face and the metric size. */
+.a-tile-value.is-slot {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: 1.4;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+
 @media (max-width: 1023px) {
-  .a-tile { min-height: 84px; padding: 12px 14px; }
-  .a-tile-value { font-size: 26px; }
+  .a-tile { min-height: 96px; padding: 12px 14px 14px; }
+  .a-tile-label { min-height: 30px; }
 }
 </style>
