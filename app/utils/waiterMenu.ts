@@ -53,6 +53,6 @@ export const WAITER_MENU: WaiterMenuItem[] = [
   // their screens land — WP1 flips `chat`, WP2 flips `roster`, one line each,
   // and nothing else in this file moves.
   { id: 'chat', label: 'Razgovor', to: '/k/razgovor', toBartender: '/s/razgovor', roles: ['waiter', 'bartender'], ready: false, soon: 'stiže uskoro' },
-  { id: 'roster', label: 'Raspored', to: '/k/raspored', toBartender: '/s/raspored', roles: ['waiter', 'bartender'], ready: false, soon: 'stiže uskoro' },
+  { id: 'roster', label: 'Raspored', to: '/k/raspored', toBartender: '/s/raspored', roles: ['waiter', 'bartender'], ready: true },
   { id: 'logout', label: 'Odjavi se', action: 'logout', roles: ['waiter', 'bartender', 'admin'], ready: true },
 ]
