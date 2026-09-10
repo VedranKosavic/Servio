@@ -145,7 +145,7 @@ export function matchesFilter(row: StanjeRow, filter: StanjeFilter): boolean {
 
 <script setup lang="ts">
 // A component is auto-imported; the type it exports is not, so the column shape
-// comes in by hand. The same line appears on every table under `/a/roba`.
+// comes in by hand. The same line appears on every table under `/admin/roba`.
 import type { UiColumn } from '~/components/ui/UiTable.vue'
 
 defineProps<{
@@ -187,7 +187,7 @@ function lastLine(row: StanjeRow): string {
     <UiTable :columns="COLUMNS" :loading="loading">
       <tr v-for="row in rows" :key="row.id">
         <td>
-          <NuxtLink :to="`/a/roba/artikal/${row.id}`" class="a-roba-link">{{ row.name }}</NuxtLink>
+          <NuxtLink :to="`/admin/roba/artikal/${row.id}`" class="a-roba-link">{{ row.name }}</NuxtLink>
           <span v-if="row.no_recipe" class="a-roba-note">bez normativa</span>
           <span v-else-if="row.late_sync" class="a-roba-note">kasno sinhronizovano</span>
         </td>

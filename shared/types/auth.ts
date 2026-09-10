@@ -102,7 +102,7 @@ export interface MeContext {
 
 // `POST /api/auth/admin/login` had an envelope of its own — `AdminLoginResult
 // { user, venue, expires_at }`. Phase 2 deleted it: the owner's laptop answers
-// the same `MeContext` as `GET /api/me`, so `/a/login.vue` hands the answer to
+// the same `MeContext` as `GET /api/me`, so `/admin/login.vue` hands the answer to
 // `useMe().refreshAfterLogin()` rather than assembling a context by hand.
 
 /** `POST /api/auth/pin` — the staff session. */
@@ -129,7 +129,7 @@ export interface EnrolCodeResult {
   uses_left: number
 }
 
-/** One row of the *Uređaji* list in `/a`. */
+/** One row of the *Uređaji* list in `/admin`. */
 export interface DeviceAdmin {
   id: string
   label: string

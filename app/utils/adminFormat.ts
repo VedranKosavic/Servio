@@ -1,8 +1,8 @@
 /**
- * How `/a` writes a number, a date and a length of time.
+ * How `/admin` writes a number, a date and a length of time.
  *
  * Files in `app/utils/` are auto-imported by Nuxt exactly like composables, so
- * no page or component under `/a` writes an `import` line for any of this — and
+ * no page or component under `/admin` writes an `import` line for any of this — and
  * because there is one place to get a formatted amount, there is no second
  * place where somebody reaches for `toFixed(2)`.
  *
@@ -40,7 +40,7 @@ const MINUS = '−'
  * `"2026-09-08T22:41:00Z"` → `"09.09.2026."`, and a business date
  * (`"2026-09-08"`) → `"08.09.2026."` unchanged by any zone.
  *
- * Both shapes arrive on `/a`: `at` fields are UTC instants, `business_date` is
+ * Both shapes arrive on `/admin`: `at` fields are UTC instants, `business_date` is
  * already the café's own day and must never be pushed through a timezone twice.
  */
 export function dateBs(value: string | null | undefined): string {

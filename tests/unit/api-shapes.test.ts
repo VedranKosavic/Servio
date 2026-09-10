@@ -453,7 +453,7 @@ describe('no response carries a secret', () => {
  * WP7 the way this file's header says each package extends it.
  *
  * Every field is asserted **by name**, because *Puls* is the one screen where a
- * quietly renamed key would not break a build: `/a` reads it with optional
+ * quietly renamed key would not break a build: `/admin` reads it with optional
  * chaining and a missing number renders as an empty tile the owner reads as "a
  * quiet night". The shape check is the only thing standing between that and a
  * wrong answer on a busy one.

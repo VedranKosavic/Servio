@@ -60,7 +60,7 @@ describe('deny by default', () => {
   })
 
   it('is not ours to guard when the path is not /api/', () => {
-    expect(ask('/k/sto/3', 'GET').ok).toBe(true)
+    expect(ask('/konobar/sto/3', 'GET').ok).toBe(true)
     expect(ask('/', 'GET').ok).toBe(true)
   })
 

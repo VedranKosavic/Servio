@@ -111,7 +111,7 @@ const MAX_LINE_PAGES = 30
 // ===========================================================================
 
 /**
- * `GET /api/owner/live` — the whole first screen of `/a`, in one read.
+ * `GET /api/owner/live` — the whole first screen of `/admin`, in one read.
  *
  * **Which shift the numbers describe.** `shift` is the *open* one and is `null`
  * once the night is closed, because that strip is what draws *Zatvori smjenu*.
@@ -231,9 +231,9 @@ function countAttention(c: PendingCount): AttentionItem {
  * The route one button on an attention row posts to, with the ids filled in.
  *
  * The logic moved to `shared/attention.ts` in Phase 2, because `UiAttentionRow`
- * in `/a` fills the same paths in the browser and one rule must not exist twice.
- * It is re-exported here so every server caller — and `owner-live.test.ts` —
- * keeps importing it from the file that owns *Puls*.
+ * in `/admin` fills the same paths in the browser and one rule must not exist
+ * twice. It is re-exported here so every server caller — and
+ * `owner-live.test.ts` — keeps importing it from the file that owns *Puls*.
  */
 export { attentionTarget } from '#shared/attention'
 

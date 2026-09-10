@@ -359,7 +359,7 @@ export function confirmCount(
  * The count is handed over the same way the drawer is: the person taking the
  * shelf on looks at what the person leaving counted and taps once, on that same
  * phone. It writes **no movement and no adjustment** — only the ledger's owner
- * does that, on `/a`, with *Primijeni*. What it records is that two people saw
+ * does that, on `/admin`, with *Primijeni*. What it records is that two people saw
  * the same shelf, which is the whole of what makes a variance attributable.
  *
  * Three refusals and no more:

@@ -8,9 +8,9 @@
  * here: the `online` event, the tab coming back into view, the 10 s tick, and
  * the one-time `navigator.storage.persist()` request.
  *
- * Call it once per screen that can queue anything (`/k`, `/s`). Calling it
- * twice is harmless — the store is a singleton and the listeners are torn down
- * with the component that opened them.
+ * Call it once per screen that can queue anything (`/konobar`, `/sanker`).
+ * Calling it twice is harmless — the store is a singleton and the listeners are
+ * torn down with the component that opened them.
  */
 import { useDocumentVisibility, useEventListener, useIntervalFn, useLocalStorage } from '@vueuse/core'
 import { useOutboxStore, type EnqueueInput } from '~/stores/outbox'

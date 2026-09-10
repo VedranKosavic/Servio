@@ -81,7 +81,7 @@ async function loginPin(context: BrowserContext, who = 'Amar', pin = AMAR_PIN) {
     data: { user_id: person.id, pin },
   })).ok()).toBe(true)
 
-  // A published Pravila version stands in front of every /k screen (S12), and
+  // A published Pravila version stands in front of every /konobar screen (S12), and
   // phase4-pravila publishes one before this file runs. Clear it here so the
   // spec does not depend on where it sits in the alphabet.
   await ackRules(context.request)
@@ -172,7 +172,7 @@ test.describe('WP4 — Moja smjena', () => {
     expect(body.counts.rounds).toBeGreaterThanOrEqual(2)
 
     // -- 2. and neither does the screen ------------------------------------
-    await page.goto('/k/moja-smjena')
+    await page.goto('/konobar/moja-smjena')
     await expect(page.getByRole('heading', { name: 'Večeras' })).toBeVisible()
 
     const tonight = page.locator('section').filter({ hasText: 'Večeras' }).first()
@@ -205,7 +205,7 @@ test.describe('WP4 — Moja smjena', () => {
 
     // -- 4. the drill-down, still blind ------------------------------------
     await page.getByRole('link', { name: /Kafa/ }).first().click()
-    await expect(page).toHaveURL(/\/k\/moja-smjena\/stavke\?kat=/)
+    await expect(page).toHaveURL(/\/konobar\/moja-smjena\/stavke\?kat=/)
     await expect(page.getByText('Kafa').first()).toBeVisible()
     await expect(page.getByText(/Zbir vidiš kad predaš pazar/)).toBeVisible()
     await expect(page.getByText('Naplaćeno', { exact: true })).toHaveCount(0)
@@ -218,7 +218,7 @@ test.describe('WP4 — Moja smjena', () => {
     await expect(page.getByText('Tolerancija pazara')).toBeVisible()
     await expect(page.getByText(/vlasnik ima pristup toj datoteci/i)).toBeVisible()
 
-    await page.goto('/k/moja-smjena')
+    await page.goto('/konobar/moja-smjena')
 
     // -- 6. settle, then the money -----------------------------------------
     const shift = await (await context.request.get('/api/me/shift')).json() as
@@ -273,7 +273,7 @@ test.describe('WP4 — Moja smjena', () => {
     })).ok()).toBe(true)
     // Read it back first. `shared_device_idle_s` lives in `venues.settings_json`,
     // so it outlives this browser context and this file: left at two seconds it
-    // relocks every later /k spec two seconds after login, against the same
+    // relocks every later /konobar spec two seconds after login, against the same
     // data/verify.db. The `finally` below is what makes the suite re-runnable.
     const before = await (await admin.request.get('/api/admin/settings'))
       .json() as { shared_device_idle_s: number }
@@ -306,7 +306,7 @@ test.describe('WP4 — Moja smjena', () => {
       for (const digit of AMAR_PIN) {
         await page.getByRole('button', { name: digit, exact: true }).click()
       }
-      await expect(page).toHaveURL(/\/k$/)
+      await expect(page).toHaveURL(/\/konobar$/)
 
       // -- the tablet goes idle ----------------------------------------------
       await expect(page).toHaveURL(/\/$/, { timeout: 15_000 })
@@ -325,7 +325,7 @@ test.describe('WP4 — Moja smjena', () => {
       for (const digit of AMAR_PIN) {
         await page.getByRole('button', { name: digit, exact: true }).click()
       }
-      await expect(page).toHaveURL(/\/k$/, { timeout: 15_000 })
+      await expect(page).toHaveURL(/\/konobar$/, { timeout: 15_000 })
 
       await context.setOffline(false)
     } finally {

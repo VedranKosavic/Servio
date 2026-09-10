@@ -1,9 +1,9 @@
 /**
  * `POST /api/dev/enrol` — one tap and this browser is an enrolled device.
  *
- * Without it, testing any screen on a laptop means minting a code in `/a` first,
- * which means already having an admin session, which means the start screen is
- * never the thing you are testing.
+ * Without it, testing any screen on a laptop means minting a code in `/admin`
+ * first, which means already having an admin session, which means the start
+ * screen is never the thing you are testing.
  *
  * **It is gated on a positive opt-in and nothing else.** `SANK_DEV_ENROL` must be
  * exactly `'1'`, and `/opt/sank/.env` does not set it, so on the VPS this route

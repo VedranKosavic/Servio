@@ -99,7 +99,7 @@ function diffLabel(fen: number): string {
       <NuxtLink
         v-for="category in summary.by_category"
         :key="category.category_id"
-        :to="`/k/moja-smjena/stavke?kat=${category.category_id}`"
+        :to="`/konobar/moja-smjena/stavke?kat=${category.category_id}`"
         class="flex min-h-12 items-center justify-between gap-3 text-[17px]"
       >
         <span class="text-text-2">{{ category.name ?? categoryNames.get(category.category_id) ?? '—' }}</span>

@@ -2,9 +2,10 @@
 /**
  * **S17 *Raspored*** — the waiter's and the bartender's week. Dark kit.
  *
- * One component, two routes (`/k/raspored`, `/s/raspored`): the šanker's back
- * arrow returns to the ticket queue and the waiter's to the floor plan, and
- * that is the only difference between them — the `/s/popis` precedent.
+ * One component, two routes (`/konobar/raspored`, `/sanker/raspored`): the
+ * šanker's back arrow returns to the ticket queue and the waiter's to the floor
+ * plan, and that is the only difference between them — the `/sanker/popis`
+ * precedent.
  *
  * **The screen opens offline, and every write is online-only.** The last answer
  * is cached in IndexedDB (`roster:last`) so a phone in the cellar still shows
@@ -22,7 +23,7 @@ import { useOnline } from '@vueuse/core'
 import type { LoginUser, MyRoster, RosterWeekView, SwapRequestView, Assignment } from '#shared/types'
 
 const props = defineProps<{
-  /** Where the back arrow goes: `/k` for a waiter, `/s` for the šanker. */
+  /** Where the back arrow goes: `/konobar` for a waiter, `/sanker` for the šanker. */
   backTo: string
 }>()
 

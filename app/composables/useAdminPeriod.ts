@@ -1,5 +1,5 @@
 /**
- * *Period* — the range every report on `/a` is read over, kept in the URL.
+ * *Period* — the range every report on `/admin` is read over, kept in the URL.
  *
  * It lives in the route query and not in a `ref` for two reasons the owner will
  * actually notice: a tab he leaves open and reloads comes back on the same

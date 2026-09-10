@@ -56,7 +56,7 @@ async function loginAsAmar(context: BrowserContext, page: Page): Promise<Map<str
     data: { user_id: amar.id, pin: AMAR_PIN },
   })).ok()).toBe(true)
 
-  // A published Pravila version stands in front of every /k screen (S12), and
+  // A published Pravila version stands in front of every /konobar screen (S12), and
   // phase4-pravila publishes one before this file runs. Clear it here so the
   // spec does not depend on where it sits in the alphabet.
   await ackRules(context.request)
@@ -64,7 +64,7 @@ async function loginAsAmar(context: BrowserContext, page: Page): Promise<Map<str
   const boot = await (await context.request.get('/api/bootstrap')).json() as
     { tables: BootTable[] }
 
-  await page.goto('/k')
+  await page.goto('/konobar')
   await expect(page.getByText('Stolovi')).toBeVisible()
   await page.evaluate(() => navigator.serviceWorker.ready)
   return new Map(boot.tables.map(t => [t.name, t.id]))
@@ -147,7 +147,7 @@ async function freshPage(): Promise<Page> {
   for (const open of context.pages()) await open.close()
 
   const page = await context.newPage()
-  await page.goto('/k')
+  await page.goto('/konobar')
   // `idb-keyval` keeps everything in one store, so emptying it is enough — and
   // it is safer than `deleteDatabase`, which blocks while any connection is
   // open and then leaves the next write hanging.

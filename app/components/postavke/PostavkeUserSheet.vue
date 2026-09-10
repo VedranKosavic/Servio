@@ -7,7 +7,7 @@
  * sheet can do with one is set a new one, and only when the person is being
  * created. Afterwards it is *Novi PIN*, which is its own route.
  *
- * `email` belongs to an admin alone — it is the laptop door into `/a`, and a
+ * `email` belongs to an admin alone — it is the laptop door into `/admin`, and a
  * waiter has no use for one.
  */
 import type { Role, UserAdmin } from '#shared/types'

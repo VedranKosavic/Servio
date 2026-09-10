@@ -9,9 +9,10 @@
  * actually filled and emptied, and that a settlement shows both the difference
  * at the moment of the handover and the one that stands now.
  *
- * The two file-level rules `admin-ui.test.ts` keeps over `app/components/ui` and
- * `app/pages/a` are repeated here over `app/components/smjena`, which that suite
- * does not walk: no hex value and no emoji anywhere on this page either.
+ * The two file-level rules `admin-ui.test.ts` keeps over `app/components/ui`
+ * and `app/pages/admin` are repeated here over `app/components/smjena`, which
+ * that suite does not walk: no hex value and no emoji anywhere on this page
+ * either.
  */
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'

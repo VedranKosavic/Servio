@@ -236,10 +236,10 @@ describe('Sati', () => {
 /** Every file this package owns. */
 function rosterFiles(): string[] {
   const roots = [
-    'app/components/raspored', 'app/pages/a/raspored',
-    'app/pages/k/raspored', 'app/pages/s/raspored',
+    'app/components/raspored', 'app/pages/admin/raspored',
+    'app/pages/konobar/raspored', 'app/pages/sanker/raspored',
   ]
-  const found = ['app/composables/useRoster.ts', 'app/pages/a/postavke/sabloni.vue']
+  const found = ['app/composables/useRoster.ts', 'app/pages/admin/postavke/sabloni.vue']
 
   function walk(dir: string) {
     for (const name of readdirSync(dir)) {
@@ -261,9 +261,9 @@ describe('the house rules hold on the roster screens', () => {
   })
 
   /**
-   * The two themes never meet. `/a` reads its palette from
-   * `[data-theme='light']` and `/k` from `main.css`; a hex in either is a colour
-   * nobody can change from the palette file.
+   * The two themes never meet. `/admin` reads its palette from
+   * `[data-theme='light']` and `/konobar` from `main.css`; a hex in either is a
+   * colour nobody can change from the palette file.
    */
   it('no file writes a hex value', () => {
     const offenders: string[] = []

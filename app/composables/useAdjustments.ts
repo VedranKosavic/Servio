@@ -3,7 +3,7 @@
  *
  * One composable behind three sheets and one screen: `AdjVoidSheet` asks for a
  * void, `AdjCompSheet` asks for a gratis, `AdjPinSheet` collects an approver's
- * PIN on the requester's own phone, and `/s/cekanje` is where a bartender
+ * PIN on the requester's own phone, and `/sanker/cekanje` is where a bartender
  * answers what is waiting.
  *
  * ## The ladder, as the phone sees it
@@ -356,7 +356,7 @@ export function useAdjustments() {
    * *Odobri* / *Odbij*. Online only: the bartender's window is measured at the
    * moment of the decision, so a queued one would be an authority he no longer
    * has. `restock` is left to the server, which already knows what the reason
-   * implied — the sheet on `/a` is where an owner flips it.
+   * implied — the sheet on `/admin` is where an owner flips it.
    */
   async function decide(id: string, outcome: 'applied' | 'rejected'): Promise<void> {
     if (deciding.value) return

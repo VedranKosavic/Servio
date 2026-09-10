@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * The top of `/a/smjena/:id`: which night this is, and what has been done to it.
+ * The top of `/admin/smjena/:id`: which night this is, and what has been done
+ * to it.
  *
  * The sentence under the title is the mockup's, in the order it reads there —
  * *pet 11.09.2026. · otvorena 18:03 · zatvorena 00:42 · Emir* — because that is
@@ -86,7 +87,7 @@ const noteModel = computed({
 
 /** *Izvoz*, pre-filtered to this night. */
 const exportLink = computed(() => ({
-  path: '/a/izvoz',
+  path: '/admin/izvoz',
   query: {
     smjena: props.shift.id,
     from: props.shift.business_date,

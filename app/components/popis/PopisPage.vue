@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * *Brzi popis* (F9) — the whole screen, rendered by both `/k/popis` and
- * `/s/popis` so a waiter and a šanker each reach it from their own nav without
+ * *Brzi popis* (F9) — the whole screen, rendered by both `/konobar/popis` and
+ * `/sanker/popis` so a waiter and a šanker each reach it from their own nav without
  * two copies of it existing.
  *
  * Four things this screen is careful about:
@@ -20,16 +20,16 @@
  *
  * **The draft lives in memory, on purpose.** `useState` keeps it while the app
  * stays open — walking to *Stanje šanka* and back loses nothing — but the phone
- * writes no storage of its own: IndexedDB in `/k` belongs to the outbox and the
- * cart (PHASE3 §2), and a count that survived a reload but not the shift's
- * clock would be a reading of an instant that has passed. Under five minutes,
- * in one go, is how F9 is meant to be walked.
+ * writes no storage of its own: IndexedDB in `/konobar` belongs to the outbox
+ * and the cart (PHASE3 §2), and a count that survived a reload but not the
+ * shift's clock would be a reading of an instant that has passed. Under five
+ * minutes, in one go, is how F9 is meant to be walked.
  */
 import type { CountView, StaleDevice, StockItem, SubmitCountBody, User } from '#shared/types'
 import { ApiSideError } from '~/composables/useApi'
 
 const props = defineProps<{
-  /** Where the back arrow goes: `/k` for a waiter, `/s` for a šanker. */
+  /** Where the back arrow goes: `/konobar` for a waiter, `/sanker` for a šanker. */
   backTo: string
 }>()
 
@@ -37,7 +37,7 @@ const me = useMe()
 const counts = useCounts()
 const { data: boot } = useBootstrapData()
 // The bartender queues stock from here too (an otpis mid-count), so this screen
-// runs the same flush timers every other `/k` and `/s` screen runs.
+// runs the same flush timers every other `/konobar` and `/sanker` screen runs.
 useOutbox()
 const { pending, blockedText } = useSync()
 

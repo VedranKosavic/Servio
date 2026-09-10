@@ -257,7 +257,7 @@ export function splitTitle(titleBs: string): { head: string, rest: string } {
 }
 
 /**
- * The body fields `/a/dnevnik/:id` prints under the sentence, with the Bosnian
+ * The body fields `/admin/dnevnik/:id` prints under the sentence, with the Bosnian
  * label each one gets.
  *
  * It is a **whitelist**, and that is deliberate twice over. A body is

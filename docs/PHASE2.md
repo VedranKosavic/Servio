@@ -1,13 +1,13 @@
-# Šank — Phase 2 build spec: the admin dashboard `/a`
+# Šank — Phase 2 build spec: the admin dashboard `/admin`
 
 **Status:** the build order for Phase 2 as defined in `docs/PHASES.md` §1, re-cut for the way the project actually runs today. Where this file and `docs/PHASES.md` disagree about *who builds what*, this file wins (the two-developer split is suspended — one team builds everything — but its folder conventions are kept, because they are what makes six work packages mergeable in parallel). Where it disagrees with `PLAN.md` about *what a feature does*, `PLAN.md` wins. Where it disagrees with `docs/BACKEND.md` §7 about *what a route is called*, the code on disk wins, and this document has been written against the code on disk.
 
-Phase 1 is complete on `main`: 724 vitest tests, every route in BACKEND §7 present and declared in `ROUTE_ROLES`, the waiter (`/k`), bartender (`/s`) and stock (`/stanje`) screens running against it. **`/a` does not exist.** That is this phase.
+Phase 1 is complete on `main`: 724 vitest tests, every route in BACKEND §7 present and declared in `ROUTE_ROLES`, the waiter (`/konobar`), bartender (`/sanker`) and stock (`/stanje`) screens running against it. **`/admin` does not exist.** That is this phase.
 
 Two decisions from 2026-09-09 that override older text anywhere in the repo:
 
 - **No notifications and no Telegram.** Nothing in Šank sends anything outward. The *Dnevnik* and the *Zahtijeva pažnju* list inside the app are the owner's only two channels; chat lives in the app and is Phase 4. PLAN §11's "Alerts (Telegram)" paragraph is void. Do not build a sender, a digest, a mute, or a web-push registration.
-- **The admin dashboard is light.** `/k` and `/s` stay dark. `/a` is its own theme, scoped, and the two never share a stylesheet rule.
+- **The admin dashboard is light.** `/konobar` and `/sanker` stay dark. `/admin` is its own theme, scoped, and the two never share a stylesheet rule.
 
 ---
 
@@ -16,7 +16,7 @@ Two decisions from 2026-09-09 that override older text anywhere in the repo:
 1. `CLAUDE.md` — the house rules. Bosnian on screen, English in identifiers, money as integer feninga, one poll, sessions not `user_id` in a body.
 2. `PLAN.md` §11 (the eight owner pages), §12 (the Bosnian glossary — reuse its labels **verbatim**), §10 S9/S11/S18 for the waiter-side flows the admin drills into.
 3. `docs/BACKEND.md` §6.10 (`OwnerLive`, `AttentionItem`, `Flag`, `ATTENTION_ROUTES`) and §7 (the route table).
-4. `shared/types/*.ts` — `owner.ts`, `shifts.ts`, `stock.ts`, `admin.ts`, `auth.ts`, `sync.ts`, `money.ts`. These are the contract; every `/a` screen is typed off them and nothing is retyped by hand.
+4. `shared/types/*.ts` — `owner.ts`, `shifts.ts`, `stock.ts`, `admin.ts`, `auth.ts`, `sync.ts`, `money.ts`. These are the contract; every `/admin` screen is typed off them and nothing is retyped by hand.
 5. `shared/routeRoles.ts` — the complete list of routes that exist. **A route not in that file does not exist.** If a page needs one, it is a backend addition and it belongs in the WP that is allowed to make it (below), with a `ROUTE_ROLES` entry, or it does not get built.
 6. The mockups: `design/{Puls,Smjena,Dnevnik,Roba,Izvjestaji,RasporedVlasnik}.dc.html` and `design/KIT.md`. The desktop CSS block in `KIT.md` is the source of the class names and the exact pixel values used below.
 
@@ -34,7 +34,7 @@ export default defineEventHandler(event => guard(() =>
   getTablesState(useDb(), event.context.venueId, event.context.actor)))
 ```
 
-`GET /api/changes` is the only route wrapped in `withEtag`. On `/a` this matters more than on a phone: the dashboard opens four or five reads per page and the laptop keeps them open all evening. Fix: wrap each of the three in `withEtag(event, <tag>, () => …)`, with the tag built the way `changeTag` builds its — `MAX(seq)` for the venue, plus the role, plus the first eight characters of the user id, because `TablesStateResponse` carries `my_settled` / `my_open_tabs` and `Bootstrap` carries `me`. `server/utils/etag.ts` already exports `withEtag`; only the three route files and a tag helper per service change.
+`GET /api/changes` is the only route wrapped in `withEtag`. On `/admin` this matters more than on a phone: the dashboard opens four or five reads per page and the laptop keeps them open all evening. Fix: wrap each of the three in `withEtag(event, <tag>, () => …)`, with the tag built the way `changeTag` builds its — `MAX(seq)` for the venue, plus the role, plus the first eight characters of the user id, because `TablesStateResponse` carries `my_settled` / `my_open_tabs` and `Bootstrap` carries `me`. `server/utils/etag.ts` already exports `withEtag`; only the three route files and a tag helper per service change.
 
 **1.2 `GET /api/changes` attaches a placeholder shift and never attaches `me`.** `shared/types/sync.ts` still carries WP2's and WP1's forward references as local aliases:
 
@@ -45,11 +45,11 @@ export type MeSnapshot = Record<string, unknown>                           // �
 
 `ShiftBrief` (`shared/types/shifts.ts`) landed with `closing`, `closer_name`, `my_settled` and `my_open_tabs` on it — the four fields the shift strip actually needs — and `getChanges` still builds the four-field snapshot. `me` is typed on `ChangesResult` and never sent; `useChanges` compensates by watching for a `user`/`device` row in `changes[]` and re-reading `/api/me`. Fix: point `ShiftSnapshot` at `ShiftBrief` and `MeSnapshot` at `MeContext`, widen `shiftSnapshot()` in `server/services/changes.ts` to return the brief, and attach `me: getMe(...)` when the `user` or `device` entity moved and the answer is not `full`. Then delete the compensating comment and the `changes[]` sniff in `useChanges` — `handlers.me` fires off `result.me` instead.
 
-**1.3 `POST /api/auth/admin/login` returns the wrong envelope.** It answers `AdminLoginResult { user, venue, expires_at }`; every other door answers something the screen can hand straight to `useMe`. `/a/login.vue` would otherwise have to assemble a `MeContext` by hand — exactly what `useMe.refreshAfterLogin()` exists to prevent. Fix: `adminLogin()` returns `MeContext` (it already has the session row and the venue; `device` is `null` for a laptop), `AdminLoginResult` is deleted from `shared/types/auth.ts`, `tests/unit/auth.test.ts` and `tests/unit/api-shapes.test.ts` follow.
+**1.3 `POST /api/auth/admin/login` returns the wrong envelope.** It answers `AdminLoginResult { user, venue, expires_at }`; every other door answers something the screen can hand straight to `useMe`. `/admin/login.vue` would otherwise have to assemble a `MeContext` by hand — exactly what `useMe.refreshAfterLogin()` exists to prevent. Fix: `adminLogin()` returns `MeContext` (it already has the session row and the venue; `device` is `null` for a laptop), `AdminLoginResult` is deleted from `shared/types/auth.ts`, `tests/unit/auth.test.ts` and `tests/unit/api-shapes.test.ts` follow.
 
 **1.4 CSV export routes do not exist.** `ROUTE_ROLES` has no `/api/owner/export/*` key and `server/api/owner/` has no `export/` folder. PLAN §11 page 5 names eight files; Phase 2 ships four (§3, WP5) and the rest wait for Phase 3b.
 
-**1.5 A shift review route exists; a Pravila route does not.** `POST /api/shifts/:id/review` is on disk and takes `{ card_total_fen?, closing_note? }` — that one route is **both** the card-total input and the *Pregledano* button on the Smjena page, and no second route is needed for either. There is no rules/Pravila table, type or route anywhere in the repo. **Phase 2 does not build the Pravila editor** that PLAN §11 page 4 mentions; it is a Phase 4 item alongside acknowledgements, and `/a/postavke` links to nothing for it.
+**1.5 A shift review route exists; a Pravila route does not.** `POST /api/shifts/:id/review` is on disk and takes `{ card_total_fen?, closing_note? }` — that one route is **both** the card-total input and the *Pregledano* button on the Smjena page, and no second route is needed for either. There is no rules/Pravila table, type or route anywhere in the repo. **Phase 2 does not build the Pravila editor** that PLAN §11 page 4 mentions; it is a Phase 4 item alongside acknowledgements, and `/admin/postavke` links to nothing for it.
 
 **1.6 There is no count-lines route.** PLAN's *Popisi* flow reads as create → add lines → submit → confirm. The backend has two routes: `POST /api/stock/counts` takes the whole count **with its lines in the body** and submits it in one call, and `POST /api/stock/counts/:id/confirm` confirms it. The draft lives on the client until *Pošalji popis*, exactly as on the phone (BACKEND §14.5). Build the form that way; do not invent `PUT /counts/:id/lines`.
 
@@ -63,7 +63,7 @@ Everything in this section is WP0. Nothing else can start until it merges.
 
 ### 2.1 `app/layouts/admin.vue`
 
-The layout root carries `data-theme="light"` and every `/a` token is defined **under that attribute selector**, never on `:root`:
+The layout root carries `data-theme="light"` and every `/admin` token is defined **under that attribute selector**, never on `:root`:
 
 ```vue
 <template>
@@ -83,45 +83,45 @@ The layout root carries `data-theme="light"` and every `/a` token is defined **u
 </style>
 ```
 
-`app/assets/css/main.css` keeps the dark `@theme` block untouched — `/k` must not shift by one pixel. The admin tokens live in the layout's own `<style>` (not scoped, so the kit components inside can read them) and nowhere else in the app. Nothing under `/a` writes a hex value; nothing outside `/a` reads these names.
+`app/assets/css/main.css` keeps the dark `@theme` block untouched — `/konobar` must not shift by one pixel. The admin tokens live in the layout's own `<style>` (not scoped, so the kit components inside can read them) and nowhere else in the app. Nothing under `/admin` writes a hex value; nothing outside `/admin` reads these names.
 
 **Two navigations, one breakpoint at 1024 px.**
 
 - **≥ 1024 px** — the left nav from the mockup: 220 px, `background: var(--nav)`, the Bricolage wordmark "Šank" over the eyebrow "Kontrolna ploča", then six items — **Puls · Smjena · Roba · Meni i postavke · Dnevnik · Izvoz** — each 44 px, radius 10, the active one on copper with `--accent-ink` text. Badge on the right of an item (`.n` in the kit: 22 px pill, `--danger`, white). The foot carries the venue chip ("Lounge") and "Haris · vlasnik" with *Odjavi se*.
-- **< 1024 px** — bottom tabs **Puls · Smjena · Roba · Više**, 56 px tall, safe-area padding below, targets ≥ 44 px. *Više* is `/a/vise`, a card list linking to Meni i postavke, Dnevnik and Izvoz, and its tab shows the **maximum** of its children's badges as a single red dot.
+- **< 1024 px** — bottom tabs **Puls · Smjena · Roba · Više**, 56 px tall, safe-area padding below, targets ≥ 44 px. *Više* is `/admin/vise`, a card list linking to Meni i postavke, Dnevnik and Izvoz, and its tab shows the **maximum** of its children's badges as a single red dot.
 
 Both navs read their badge numbers from one place: `useAdminChanges()`. The Dnevnik badge is `log_max_at > users.log_seen_at`; the Puls badge is `attention.length`.
 
 Icons are inline SVG, copied from `KIT.md` §"Icon set" (`pulse`, `money`, `box`, `list`, `users`, `calendar`). No icon font, no icon package, no emoji.
 
-### 2.2 `app/pages/a/login.vue`
+### 2.2 `app/pages/admin/login.vue`
 
-Email + password, `layout: false` (the login screen has no nav), the light tokens applied to its own root. One form, two fields, one button *Prijavi se*; on submit it calls `POST /api/auth/admin/login`, then `useMe().refreshAfterLogin()`, then `navigateTo('/a')`. A 401 renders the Bosnian sentence from `shared/errors.ts` through `apiErrorText()` — "Pogrešan email ili lozinka" — and never says which half was wrong. A 429 renders the rate-limit sentence with its seconds filled in. `autocomplete="email"` and `autocomplete="current-password"` so a password manager works; no "remember me" checkbox (the session cookie already lasts).
+Email + password, `layout: false` (the login screen has no nav), the light tokens applied to its own root. One form, two fields, one button *Prijavi se*; on submit it calls `POST /api/auth/admin/login`, then `useMe().refreshAfterLogin()`, then `navigateTo('/admin')`. A 401 renders the Bosnian sentence from `shared/errors.ts` through `apiErrorText()` — "Pogrešan email ili lozinka" — and never says which half was wrong. A 429 renders the rate-limit sentence with its seconds filled in. `autocomplete="email"` and `autocomplete="current-password"` so a password manager works; no "remember me" checkbox (the session cookie already lasts).
 
 ### 2.3 `app/middleware/admin.ts`
 
-Route middleware, applied by every `/a` page except `login` via `definePageMeta({ middleware: 'admin', layout: 'admin' })`:
+Route middleware, applied by every `/admin` page except `login` via `definePageMeta({ middleware: 'admin', layout: 'admin' })`:
 
 ```ts
 export default defineNuxtRouteMiddleware(async () => {
   const me = useMe()
   const state = me.me.value ? me.status.value : await me.load()
-  if (state !== 'ready') return navigateTo('/a/login')
+  if (state !== 'ready') return navigateTo('/admin/login')
   if (me.user.value?.role !== 'admin') return navigateTo(me.home.value)
 })
 ```
 
-Client-side only in practice — the session is a httpOnly cookie the *server* reads, and `useMe` already documents why a server-render guard would bounce everybody. A waiter who somehow lands on `/a` goes to `/k`, not to the login screen: he is logged in, just not welcome here. `homeFor()` in `app/composables/useMe.ts` returns `/k` for admins today and must return `/a` after WP0 — that one line is the only edit WP0 makes to a waiter-owned composable besides §2.5.
+Client-side only in practice — the session is a httpOnly cookie the *server* reads, and `useMe` already documents why a server-render guard would bounce everybody. A waiter who somehow lands on `/admin` goes to `/konobar`, not to the login screen: he is logged in, just not welcome here. `homeFor()` in `app/composables/useMe.ts` returns `/konobar` for admins today and must return `/admin` after WP0 — that one line is the only edit WP0 makes to a waiter-owned composable besides §2.5.
 
 ### 2.4 `app/composables/useAdminApi.ts`
 
-The single place `/a` knows a URL, built exactly like `useApi.ts`: one `request<T>()` helper with `credentials: 'include'`, `cache: 'default'` on ETagged GETs, errors unwrapped into `ApiSideError` (reuse the class exported from `useApi.ts` — do not define a second one). One method per route, each typed off `shared/types`, each with a one-line comment naming the Bosnian thing it powers. No fixture branch and no `NUXT_PUBLIC_MOCK` flag: the endpoints exist now, so `docs/PHASES.md` §3's fixture layer is obsolete and is not built.
+The single place `/admin` knows a URL, built exactly like `useApi.ts`: one `request<T>()` helper with `credentials: 'include'`, `cache: 'default'` on ETagged GETs, errors unwrapped into `ApiSideError` (reuse the class exported from `useApi.ts` — do not define a second one). One method per route, each typed off `shared/types`, each with a one-line comment naming the Bosnian thing it powers. No fixture branch and no `NUXT_PUBLIC_MOCK` flag: the endpoints exist now, so `docs/PHASES.md` §3's fixture layer is obsolete and is not built.
 
 Query-bearing reads take a typed argument, never a raw string: `getOwnerLog(q: LogQuery)`, `getShiftLines(id, { user, kat, cursor })`, `getCategories({ from, to })`, `getNargila(month)`, `getItemMovements(id, { before, limit })`.
 
 ### 2.5 `app/composables/useAdminChanges.ts`
 
-**One poll on `/a` too.** It wraps the existing `useChanges()` rather than opening a second timer. `useChanges` today exposes handlers for `tables`, `prep`, `stock`, `pending`, `menu` and `me` — none of which is what an owner page needs, and it does not surface `log_max_at`. WP0 appends **one** optional handler to `ChangeHandlers`:
+**One poll on `/admin` too.** It wraps the existing `useChanges()` rather than opening a second timer. `useChanges` today exposes handlers for `tables`, `prep`, `stock`, `pending`, `menu` and `me` — none of which is what an owner page needs, and it does not surface `log_max_at`. WP0 appends **one** optional handler to `ChangeHandlers`:
 
 ```ts
 /** The whole answer, for screens that key their refetches off entities. */
@@ -178,29 +178,29 @@ Every package: branch `phase-2/<wp>`, one PR, `npm run typecheck && npm run test
 
 **Files owned**
 
-- `app/layouts/admin.vue`, `app/pages/a/login.vue`, `app/pages/a/vise.vue`
+- `app/layouts/admin.vue`, `app/pages/admin/login.vue`, `app/pages/admin/vise.vue`
 - `app/middleware/admin.ts`
 - `app/composables/{useAdminApi,useAdminChanges,useAdminPeriod}.ts`
 - `app/components/ui/Ui*.vue` (the eleven above)
 - `app/utils/adminFormat.ts` — re-exports `formatKm` / `formatAmount` from `#shared/money` plus `dateBs()`, `dateTimeBs()`, `durationBs()`, so pages get them auto-imported
 - `shared/attention.ts` (new), `tests/unit/admin-ui.test.ts`
 - **Backend gaps only:** `server/api/{tables/state,prep/index,bootstrap}.get.ts` and one tag helper per service (§1.1); `shared/types/sync.ts` + `server/services/changes.ts` (§1.2); `server/api/auth/admin/login.post.ts`, `server/services/auth.ts` `adminLogin`, `shared/types/auth.ts` (§1.3)
-- Three surgical edits outside the prefix, named in the PR body: `homeFor()` in `app/composables/useMe.ts` returns `/a` for admins; the `raw` handler in `app/composables/useChanges.ts`; the deletion of the `changes[]` `me` sniff there.
+- Three surgical edits outside the prefix, named in the PR body: `homeFor()` in `app/composables/useMe.ts` returns `/admin` for admins; the `raw` handler in `app/composables/useChanges.ts`; the deletion of the `changes[]` `me` sniff there.
 - Tests to follow the backend changes: `tests/unit/{auth,api-shapes,etag,changes}.test.ts`
 
 **Routes used:** `POST /api/auth/admin/login`, `POST /api/auth/logout`, `GET /api/me`, `GET /api/changes?since=`.
 
 **Backend additions allowed:** exactly §1.1, §1.2 and §1.3. No new route, no new table, no migration.
 
-**Done when:** logging in at `/a/login` as `haris@lounge.ba / lounge` lands on an empty `/a` with the copper "Puls" item active in the left nav at 1440 px and the four bottom tabs at 390 px; a hard reload keeps the session; visiting `/a` as a waiter lands on `/k`; and `curl -I` on `/api/tables/state` shows an `ETag` header where it showed none.
+**Done when:** logging in at `/admin/login` as `haris@lounge.ba / lounge` lands on an empty `/admin` with the copper "Puls" item active in the left nav at 1440 px and the four bottom tabs at 390 px; a hard reload keeps the session; visiting `/admin` as a waiter lands on `/konobar`; and `curl -I` on `/api/tables/state` shows an `ETag` header where it showed none.
 
 ---
 
-### WP1 — Puls (`/a`)
+### WP1 — Puls (`/admin`)
 
 The live page, polled every 15 s. Everything on it comes from **one** read.
 
-**Files owned:** `app/pages/a/index.vue`; `app/components/puls/Puls*.vue` — `PulsTiles`, `PulsAttention`, `PulsFeed`, `PulsTableGrid`, `PulsFlags`, `PulsWhoStrip`.
+**Files owned:** `app/pages/admin/index.vue`; `app/components/puls/Puls*.vue` — `PulsTiles`, `PulsAttention`, `PulsFeed`, `PulsTableGrid`, `PulsFlags`, `PulsWhoStrip`.
 
 **Routes used**
 
@@ -221,9 +221,9 @@ Empty state, verbatim: **"Još nema narudžbi večeras — prvi sto se pojavi ov
 
 ---
 
-### WP2 — Smjena and Smjene (`/a/smjene`, `/a/smjena/:id`)
+### WP2 — Smjena and Smjene (`/admin/smjene`, `/admin/smjena/:id`)
 
-**Files owned:** `app/pages/a/smjene.vue`, `app/pages/a/smjena/[id]/index.vue`, `app/pages/a/smjena/[id]/stavke.vue`; `app/components/smjena/Smjena*.vue` — `SmjenaHeader`, `SmjenaWaiterStrip`, `SmjenaCashBox`, `SmjenaCounts`, `SmjenaAfterClose`, `SmjenaLines`, `SmjenaCategoryBar`.
+**Files owned:** `app/pages/admin/smjene.vue`, `app/pages/admin/smjena/[id]/index.vue`, `app/pages/admin/smjena/[id]/stavke.vue`; `app/components/smjena/Smjena*.vue` — `SmjenaHeader`, `SmjenaWaiterStrip`, `SmjenaCashBox`, `SmjenaCounts`, `SmjenaAfterClose`, `SmjenaLines`, `SmjenaCategoryBar`.
 
 **Routes used**
 
@@ -239,11 +239,11 @@ Empty state, verbatim: **"Još nema narudžbi večeras — prvi sto se pojavi ov
 | counts | `POST /api/stock/counts/:id/confirm` (the *Primijeni* button) |
 | attention | the same `ATTENTION_ROUTES` set as WP1 |
 
-**`/a/smjene`** is a `UiTable` under a `UiPeriod`: datum · status · promet · razlika · a chevron. Status through `UiPill` — *otvorena* accent, *zatvorena* neutral, *pregledano* good.
+**`/admin/smjene`** is a `UiTable` under a `UiPeriod`: datum · status · promet · razlika · a chevron. Status through `UiPill` — *otvorena* accent, *zatvorena* neutral, *pregledano* good.
 
-**`/a/smjena/:id`** follows the mockup top to bottom. Header: date, opened/closed times and the closer's name, a *pregledano · Haris 09:14* pill when `shift.status === 'reviewed'`, and *Izvoz* linking to `/a/izvoz` pre-filtered to this shift. Then five `UiTile`s — *Pazar*, *Gotovina / kartica*, *Gratis · storna*, *Razlika gotovine* with the tolerance word (`u toleranciji` / `van tolerancije`, from `settings.cash_tolerance_fen` and `cash_tolerance_pct`), *Manjak robe*, *Lule* with g/lulu and žar/lulu.
+**`/admin/smjena/:id`** follows the mockup top to bottom. Header: date, opened/closed times and the closer's name, a *pregledano · Haris 09:14* pill when `shift.status === 'reviewed'`, and *Izvoz* linking to `/admin/izvoz` pre-filtered to this shift. Then five `UiTile`s — *Pazar*, *Gotovina / kartica*, *Gratis · storna*, *Razlika gotovine* with the tolerance word (`u toleranciji` / `van tolerancije`, from `settings.cash_tolerance_fen` and `cash_tolerance_pct`), *Manjak robe*, *Lule* with g/lulu and žar/lulu.
 
-**Per-waiter strip** — a `UiTable` over `by_user: UserSummary[]`: konobar, promet, stolovi, storna (count and amount), sati, predao, očekivano, ocjena (the tolerance word — **"označeno za razgovor", never an accusation**), napomena. Every category chip and every number in a row links to `/a/smjena/:id/stavke?user=<id>&kat=<slug>`, which renders `LinesPage.rows` with times and statuses and pages on `next_cursor`.
+**Per-waiter strip** — a `UiTable` over `by_user: UserSummary[]`: konobar, promet, stolovi, storna (count and amount), sati, predao, očekivano, ocjena (the tolerance word — **"označeno za razgovor", never an accusation**), napomena. Every category chip and every number in a row links to `/admin/smjena/:id/stavke?user=<id>&kat=<slug>`, which renders `LinesPage.rows` with times and statuses and pages on `next_cursor`.
 
 **Kasa** — the cash box card: ostalo u kasi sinoć → početni polog → float in/out → payouts by status → refunds → expected → counted → diff, each row from `cash_movements[]`, pending ones carrying *Odobri / Odbij*. Settlements per waiter show the "u trenutku predaje −12,00 · sada −2,00" pair and *Prihvati* on self-sealed ones.
 
@@ -253,13 +253,13 @@ Empty state, verbatim: **"Još nema narudžbi večeras — prvi sto se pojavi ov
 
 **Backend additions allowed:** none.
 
-**Done when:** opening yesterday's closed shift shows a pazar that equals cash + card + unpaid from the same page's own rows, typing a card total and pressing *Pregledano* flips the header pill to *pregledano* and the row on `/a/smjene` with it, and clicking a waiter's *Nargila 34* chip lands on `/a/smjena/:id/stavke?user=…&kat=nargila` with 34 rows.
+**Done when:** opening yesterday's closed shift shows a pazar that equals cash + card + unpaid from the same page's own rows, typing a card total and pressing *Pregledano* flips the header pill to *pregledano* and the row on `/admin/smjene` with it, and clicking a waiter's *Nargila 34* chip lands on `/admin/smjena/:id/stavke?user=…&kat=nargila` with 34 rows.
 
 ---
 
-### WP3 — Roba (`/a/roba/*`)
+### WP3 — Roba (`/admin/roba/*`)
 
-**Files owned:** `app/pages/a/roba/index.vue`, `prijem.vue`, `popisi/index.vue`, `popisi/[id].vue`, `otpis.vue`, `artikal/[id].vue`, `nargila.vue`, `kategorije.vue`, `pocetno-stanje.vue`; `app/components/roba/Roba*.vue` — `RobaTabs`, `RobaStanjeTable`, `RobaPrijemForm`, `RobaPopisForm`, `RobaMovements`, `RobaReport`.
+**Files owned:** `app/pages/admin/roba/index.vue`, `prijem.vue`, `popisi/index.vue`, `popisi/[id].vue`, `otpis.vue`, `artikal/[id].vue`, `nargila.vue`, `kategorije.vue`, `pocetno-stanje.vue`; `app/components/roba/Roba*.vue` — `RobaTabs`, `RobaStanjeTable`, `RobaPrijemForm`, `RobaPopisForm`, `RobaMovements`, `RobaReport`.
 
 **Routes used**
 
@@ -286,13 +286,13 @@ Six tabs across the top, per the mockup: **Stanje šanka · Prijem robe · Popis
 
 **Backend additions allowed:** none.
 
-**Done when:** posting a delivery of 24 Red Bull moves that item's *Na stanju* by +24 without a reload, its movement ledger at `/a/roba/artikal/:id` shows the new `delivery` row at the top, and confirming a submitted count applies its variance and flips its pill to *potvrđeno*.
+**Done when:** posting a delivery of 24 Red Bull moves that item's *Na stanju* by +24 without a reload, its movement ledger at `/admin/roba/artikal/:id` shows the new `delivery` row at the top, and confirming a submitted count applies its variance and flips its pill to *potvrđeno*.
 
 ---
 
-### WP4 — Meni & Postavke (`/a/meni`, `/a/postavke/*`)
+### WP4 — Meni & Postavke (`/admin/meni`, `/admin/postavke/*`)
 
-**Files owned:** `app/pages/a/meni/index.vue`, `app/pages/a/postavke/index.vue`, `kategorije.vue`, `stolovi.vue`, `osoblje.vue`, `uredaji.vue`; `app/components/postavke/Postavke*.vue` — `PostavkeProductRow`, `PostavkeRecipeEditor`, `PostavkeTableGrid`, `PostavkeUserSheet`, `PostavkeDeviceRow`, `PostavkeSettingsForm`.
+**Files owned:** `app/pages/admin/meni/index.vue`, `app/pages/admin/postavke/index.vue`, `kategorije.vue`, `stolovi.vue`, `osoblje.vue`, `uredaji.vue`; `app/components/postavke/Postavke*.vue` — `PostavkeProductRow`, `PostavkeRecipeEditor`, `PostavkeTableGrid`, `PostavkeUserSheet`, `PostavkeDeviceRow`, `PostavkeSettingsForm`.
 
 **Routes used**
 
@@ -318,13 +318,13 @@ Six tabs across the top, per the mockup: **Stanje šanka · Prijem robe · Popis
 
 **Backend additions allowed:** none.
 
-**Done when:** changing a product's price to 4,50 KM and reloading `/k` shows the new price on the waiter's tile, and the change appears in `/a/dnevnik` as a `price_changed` entry with the old and new amounts.
+**Done when:** changing a product's price to 4,50 KM and reloading `/konobar` shows the new price on the waiter's tile, and the change appears in `/admin/dnevnik` as a `price_changed` entry with the old and new amounts.
 
 ---
 
-### WP5 — Dnevnik & Izvoz (`/a/dnevnik`, `/a/izvoz`)
+### WP5 — Dnevnik & Izvoz (`/admin/dnevnik`, `/admin/izvoz`)
 
-**Files owned:** `app/pages/a/dnevnik/index.vue`, `app/pages/a/dnevnik/[id].vue`, `app/pages/a/izvoz.vue`; `app/components/dnevnik/Dnevnik*.vue`, `app/components/izvoz/Izvoz*.vue`; **and the export backend** — `server/api/owner/export/{smjene,dnevni-pazar,stavke,popis}.get.ts`, `server/services/export.ts`, `shared/types/export.ts`, the four `ROUTE_ROLES` entries, `tests/unit/export.test.ts`.
+**Files owned:** `app/pages/admin/dnevnik/index.vue`, `app/pages/admin/dnevnik/[id].vue`, `app/pages/admin/izvoz.vue`; `app/components/dnevnik/Dnevnik*.vue`, `app/components/izvoz/Izvoz*.vue`; **and the export backend** — `server/api/owner/export/{smjene,dnevni-pazar,stavke,popis}.get.ts`, `server/services/export.ts`, `shared/types/export.ts`, the four `ROUTE_ROLES` entries, `tests/unit/export.test.ts`.
 
 **Routes used**
 
@@ -336,7 +336,7 @@ Six tabs across the top, per the mockup: **Stanje šanka · Prijem robe · Popis
 | the filters' option lists | `GET /api/admin/users` (Osoba), `LOG_KINDS` from `#shared/logTemplates` (Vrsta) |
 | the exports | the four new `GET /api/owner/export/*` |
 
-**Dnevnik** is the who-did-what feed and is **owner-only** — nothing here ever appears in `/k`. Newest first, grouped by day and by shift, each row the `.entry` from the mockup: time, a 32 px icon tinted by kind (accent / good / bad), `title_bs` already rendered by the server, and the body's numbers as chips. A `UiSeg` toggles **Važno / Sve** (`important=1`); three filters — **Osoba · Vrsta · Period** — map to `actor`, `kind` and `from`/`to`. Paging is the keyset `before` cursor on scroll, never an offset. A *Završena smjena* card carries its category chips, and each one opens `/a/smjena/:id/stavke?user=&kat=`. A decision entry renders the request it resolved inline ("✔ Riješio Haris · 09:41") and vice versa, straight off `LogEntryDetail.request` / `.resolver`. Opening the page posts `log/seen`, which clears the nav badge.
+**Dnevnik** is the who-did-what feed and is **owner-only** — nothing here ever appears in `/konobar`. Newest first, grouped by day and by shift, each row the `.entry` from the mockup: time, a 32 px icon tinted by kind (accent / good / bad), `title_bs` already rendered by the server, and the body's numbers as chips. A `UiSeg` toggles **Važno / Sve** (`important=1`); three filters — **Osoba · Vrsta · Period** — map to `actor`, `kind` and `from`/`to`. Paging is the keyset `before` cursor on scroll, never an offset. A *Završena smjena* card carries its category chips, and each one opens `/admin/smjena/:id/stavke?user=&kat=`. A decision entry renders the request it resolved inline ("✔ Riješio Haris · 09:41") and vice versa, straight off `LogEntryDetail.request` / `.resolver`. Opening the page posts `log/seen`, which clears the nav badge.
 
 **Izvoz** is a card per file with a `UiPeriod` above them and a *Preuzmi* button each. Four files ship in Phase 2:
 
@@ -353,7 +353,7 @@ The four routes are **reads**: they take no body, mutate nothing, write no log e
 
 **Backend additions allowed:** `server/api/owner/export/**` and `server/services/export.ts` only. WP5 may **read** through existing owner/summary services; it may not add a column, a table or a migration.
 
-**Done when:** downloading `dnevni_pazar.csv` for *Ova sedmica* opens in a spreadsheet with correct diacritics and one row per day, its last row reads "interni izvještaj — nije fiskalni", and `/a/dnevnik` filtered to *Važno · Dino · Danas* shows only Dino's non-quiet entries from today.
+**Done when:** downloading `dnevni_pazar.csv` for *Ova sedmica* opens in a spreadsheet with correct diacritics and one row per day, its last row reads "interni izvještaj — nije fiskalni", and `/admin/dnevnik` filtered to *Važno · Dino · Danas* shows only Dino's non-quiet entries from today.
 
 ---
 
@@ -375,7 +375,7 @@ Every package obeys all of these; a PR that breaks one is not merged.
 
 **Accessibility and honesty.** Colour never carries meaning alone: a status is colour **and** a word. Loading states render a skeleton, not a spinner over stale numbers. An error renders `apiErrorText(err)`, which fills the placeholders from the error body. A screen that could not refresh says so rather than silently showing an old number.
 
-**Privacy.** Per-person money appears only inside `/a`, and only on the pages named here. Flags say "označeno za razgovor" and never accuse. There are no leaderboards and no rankings. `/a` never renders the *Konobari* channel or anything from it.
+**Privacy.** Per-person money appears only inside `/admin`, and only on the pages named here. Flags say "označeno za razgovor" and never accuse. There are no leaderboards and no rankings. `/admin` never renders the *Konobari* channel or anything from it.
 
 **Comments.** Vedran is a junior Vue dev: two lines wherever a non-Vue concept first appears (ETag, keyset cursor, business day, tabular numerals, BOM). Comments and identifiers in English; strings in Bosnian.
 
@@ -411,17 +411,17 @@ Plain `fetch` with a per-actor cookie jar, no test framework and no build step. 
 
 ### 5.2 The checks, page by page
 
-**`/a/login`** — wrong password shows a Bosnian sentence and no hint about which field; correct credentials land on `/a`; a reload keeps the session; `/a` in a private window redirects to `/a/login`.
+**`/admin/login`** — wrong password shows a Bosnian sentence and no hint about which field; correct credentials land on `/admin`; a reload keeps the session; `/admin` in a private window redirects to `/admin/login`.
 
-**`/a` (Puls)** — six tiles; *Promet danas* equals the sum of the twelve orders minus the comp; *Otvoreno* matches the tables still open; *Zahtijeva pažnju* holds exactly three rows (void, unpaid tab, payout) oldest first; *Odobri* on the payout clears it within one poll and decrements the nav badge; *Zadnje stavke* shows the last twenty in reverse time order with the void in red; the table grid colours by age and its legend matches; a stale device shows in *Neposlano*; no flag has a button. At 390 px the tiles stack two-up and the bottom tabs are reachable with a thumb.
+**`/admin` (Puls)** — six tiles; *Promet danas* equals the sum of the twelve orders minus the comp; *Otvoreno* matches the tables still open; *Zahtijeva pažnju* holds exactly three rows (void, unpaid tab, payout) oldest first; *Odobri* on the payout clears it within one poll and decrements the nav badge; *Zadnje stavke* shows the last twenty in reverse time order with the void in red; the table grid colours by age and its legend matches; a stale device shows in *Neposlano*; no flag has a button. At 390 px the tiles stack two-up and the bottom tabs are reachable with a thumb.
 
-**`/a/smjene` → `/a/smjena/:id`** — the open shift is listed as *otvorena*; the header numbers reconcile (pazar = gotovina + kartica + nenaplaćeno); the per-waiter strip shows Amar as *u toleranciji* with a −4,00 diff and Dino with no settlement yet; a category chip opens `/stavke` with the matching row count; the cash box lists the 60,00 payout as approved after the Puls action; the submitted count shows *Primijeni*, and pressing it confirms and flips the pill; entering a card total and pressing *Pregledano* flips the header to *pregledano*.
+**`/admin/smjene` → `/admin/smjena/:id`** — the open shift is listed as *otvorena*; the header numbers reconcile (pazar = gotovina + kartica + nenaplaćeno); the per-waiter strip shows Amar as *u toleranciji* with a −4,00 diff and Dino with no settlement yet; a category chip opens `/stavke` with the matching row count; the cash box lists the 60,00 payout as approved after the Puls action; the submitted count shows *Primijeni*, and pressing it confirms and flips the pill; entering a card total and pressing *Pregledano* flips the header to *pregledano*.
 
-**`/a/roba`** — *Stanje šanka* shows the delivery's items with their new on-hand; the four filter chips count correctly and filter; opening an item shows the movement ledger newest first with the `delivery` row on top; *Popisi* lists the confirmed count with its variance; *Nargila* for the current month shows g/bowl inside the band; *Kategorije* for *Ova sedmica* shows nabavka vs prodaja per category.
+**`/admin/roba`** — *Stanje šanka* shows the delivery's items with their new on-hand; the four filter chips count correctly and filter; opening an item shows the movement ledger newest first with the `delivery` row on top; *Popisi* lists the confirmed count with its variance; *Nargila* for the current month shows g/bowl inside the band; *Kategorije* for *Ova sedmica* shows nabavka vs prodaja per category.
 
-**`/a/meni` and `/a/postavke/*`** — an inline price change persists across a reload and appears in the Dnevnik; the recipe editor saves and reloads identically; a new enrol code renders six characters and an expiry; deactivating yourself is refused in Bosnian; a settings change to `cash_tolerance_fen` changes the tolerance word on the Smjena page.
+**`/admin/meni` and `/admin/postavke/*`** — an inline price change persists across a reload and appears in the Dnevnik; the recipe editor saves and reloads identically; a new enrol code renders six characters and an expiry; deactivating yourself is refused in Bosnian; a settings change to `cash_tolerance_fen` changes the tolerance word on the Smjena page.
 
-**`/a/dnevnik` and `/a/izvoz`** — the night's actions are all present, newest first, grouped by day; *Važno* hides the quiet kinds but keeps a decision that resolved one; the three filters compose; opening the page clears the badge and it stays cleared after a reload; the four CSVs download, open in a spreadsheet with correct diacritics and `;` columns, and each ends with the disclaimer row.
+**`/admin/dnevnik` and `/admin/izvoz`** — the night's actions are all present, newest first, grouped by day; *Važno* hides the quiet kinds but keeps a decision that resolved one; the three filters compose; opening the page clears the badge and it stays cleared after a reload; the four CSVs download, open in a spreadsheet with correct diacritics and `;` columns, and each ends with the disclaimer row.
 
 **Across all pages** — no English word anywhere; no emoji; every amount tabular and right-aligned; 390 px has no horizontal scroll except inside a table's own scroller; `npm run typecheck`, `npm run test` and `npm run build` green; the browser console clean.
 
@@ -429,6 +429,6 @@ Plain `fetch` with a per-actor cookie jar, no test framework and no build step. 
 
 ## 6. Phase 2 is done when
 
-All six work packages are merged to `main`, the walkthrough in §5 passes on a laptop and on a 390 px phone, the three backend gaps of §1.1–§1.3 are closed with their tests updated, the four export routes exist and are declared, and the owner has opened `/a` on his own laptop once and found last night's shift without being told where to click.
+All six work packages are merged to `main`, the walkthrough in §5 passes on a laptop and on a 390 px phone, the three backend gaps of §1.1–§1.3 are closed with their tests updated, the four export routes exist and are declared, and the owner has opened `/admin` on his own laptop once and found last night's shift without being told where to click.
 
 Phase 3 (the waiter and bartender completion) and Phase 4 (chat, roster, receipt scanning, the Dnevnik's laptop table) start from there.

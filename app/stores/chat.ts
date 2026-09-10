@@ -50,7 +50,7 @@ export interface PendingChat {
   attempts: number
 }
 
-/** What the store needs from the outside world. `/k` and `/a` pass different ones. */
+/** What the store needs from the outside world. `/konobar` and `/admin` pass different ones. */
 export interface ChatTransport {
   since: (cursor?: number) => Promise<ChatSince>
   history: (channel: ChannelKind, beforeSeq?: number, limit?: number) => Promise<ChatPage>

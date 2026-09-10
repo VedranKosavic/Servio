@@ -54,7 +54,7 @@ function hoursText(hours: number): string {
       <NuxtLink
         v-for="category in counts.by_category"
         :key="category.category_id"
-        :to="`/k/moja-smjena/stavke?kat=${category.category_id}`"
+        :to="`/konobar/moja-smjena/stavke?kat=${category.category_id}`"
         class="chip min-h-12 gap-2 px-3.5 text-base"
       >
         <span>{{ category.name }}</span>
@@ -67,7 +67,7 @@ function hoursText(hours: number): string {
 
     <div class="flex flex-col gap-1.5 border-t border-line pt-3 text-[17px]">
       <NuxtLink
-        to="/k/moja-smjena/stavke?kat=storno"
+        to="/konobar/moja-smjena/stavke?kat=storno"
         class="flex min-h-12 items-center justify-between gap-3"
       >
         <span class="text-text-2">Storna</span>

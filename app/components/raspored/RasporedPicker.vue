@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * The avatar picker — `/a`, light kit. **Two clicks per person, and it stays
+ * The avatar picker — `/admin`, light kit. **Two clicks per person, and it stays
  * open.**
  *
  * A Friday needs two waiters and a šanker. A picker that closed on the first
@@ -81,7 +81,7 @@ const anyone = computed(() => props.people.length > 0)
   display: flex;
   align-items: center;
   gap: 10px;
-  /* 44 px is the phone floor for every target on `/a`; the picker is used on
+  /* 44 px is the phone floor for every target on `/admin`; the picker is used on
      the phone at least as often as on the laptop. */
   min-height: 48px;
   padding: 6px 10px;

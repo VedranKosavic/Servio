@@ -5,7 +5,7 @@
  *
  * The phone never sends a price; it shows one, so the waiter can read a number
  * out to a guest, and it takes that number from the catalogue it downloaded at
- * boot. When the owner changes a price in `/a` mid-evening, that catalogue is a
+ * boot. When the owner changes a price in `/admin` mid-evening, that catalogue is a
  * few minutes stale and the guest was quoted the old number.
  *
  * The card exists so nobody discovers this at the till. It names the difference,

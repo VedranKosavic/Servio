@@ -96,7 +96,7 @@ export function publishRules(
 
     postSystem(tx, venueId, 'svi', 'rules_published',
       `Objavljena su nova Pravila (v${version})`,
-      { link: { label: 'Pravila →', route: '/k/pravila' }, version }, now)
+      { link: { label: 'Pravila →', route: '/konobar/pravila' }, version }, now)
 
     log(tx, venueId, {
       kind: 'rules_published',

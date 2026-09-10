@@ -1,5 +1,5 @@
 /**
- * The only place `/a` knows a URL.
+ * The only place `/admin` knows a URL.
  *
  * Built exactly like `useApi.ts`, which is the waiter side's version of the same
  * idea: one `request<T>()` with the cookies attached, one method per route, and
@@ -177,7 +177,7 @@ function qs(params: Record<string, string | number | boolean | undefined | null>
   return text ? `?${text}` : ''
 }
 
-/** A business-date range, the argument every report on `/a` takes. */
+/** A business-date range, the argument every report on `/admin` takes. */
 export interface Period {
   /** `YYYY-MM-DD`, inclusive. */
   from: string
@@ -190,7 +190,7 @@ export function useAdminApi() {
     // -- Prijava --------------------------------------------------------------
 
     /**
-     * `/a/login` — email and password. Answers the same `MeContext` as
+     * `/admin/login` — email and password. Answers the same `MeContext` as
      * `GET /api/me`, so the screen hands it to `useMe().refreshAfterLogin()`
      * instead of assembling a session envelope by hand.
      */
@@ -442,7 +442,7 @@ export function useAdminApi() {
 
     // -- Razgovor (Phase 4) --------------------------------------------------
     //
-    // `/a` sees *Svi* and *Admini* and **never *Konobari*** — not as an empty
+    // `/admin` sees *Svi* and *Admini* and **never *Konobari*** — not as an empty
     // row, not as a hidden tab. The server builds the answer from `canSee`, so
     // there is nothing here for a screen to remember to filter.
 

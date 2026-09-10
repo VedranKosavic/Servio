@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * *Sati* — planned against worked, one month, every person. `/a`, light kit.
+ * *Sati* — planned against worked, one month, every person. `/admin`, light kit.
  *
  * **"Prva akcija nije dolazak."** That sentence is printed on the page, not
  * hidden in a tooltip, and it is the whole ethic of this table (PLAN §8). The

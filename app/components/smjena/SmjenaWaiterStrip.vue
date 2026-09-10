@@ -72,7 +72,7 @@ const rows = computed(() => props.users.map((user) => {
 
 /** Where a number on this row drills to. `kat` is a category id or a preset. */
 function to(userId: string, kat: string) {
-  return { path: `/a/smjena/${props.shiftId}/stavke`, query: { user: userId, kat } }
+  return { path: `/admin/smjena/${props.shiftId}/stavke`, query: { user: userId, kat } }
 }
 </script>
 

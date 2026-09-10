@@ -404,11 +404,11 @@ const ROLE_LABEL: Record<string, string> = {
             Kontrolna tabla još nije spremna
           </p>
           <p class="text-[15px] text-text-2">
-            Vlasnički pregled (/a) stiže u drugoj fazi. Do tada koristiš isti
+            Vlasnički pregled (/admin) stiže u drugoj fazi. Do tada koristiš isti
             ekran kao konobari — stolovi, narudžbe i naplata rade normalno.
           </p>
         </div>
-        <button type="button" class="btn btn-accent h-14 text-lg" @click="navigateTo('/k')">
+        <button type="button" class="btn btn-accent h-14 text-lg" @click="navigateTo('/konobar')">
           Nastavi na stolove
         </button>
         <button type="button" class="btn btn-ghost" :disabled="busy" @click="changeUser">

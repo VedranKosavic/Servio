@@ -1,7 +1,7 @@
 /**
  * *Izvoz* — the four CSV files Phase 2 ships, described once for both sides.
  *
- * The server builds the file and the `/a/izvoz` page draws a card and a
+ * The server builds the file and the `/admin/izvoz` page draws a card and a
  * *Preuzmi* link for each one, and both read the table below rather than
  * spelling a path out twice. A download is a plain navigation and not a
  * `$fetch`, so it never goes through `useAdminApi` — the browser has to follow
@@ -26,7 +26,7 @@ export interface ExportSpec {
   path: string
   /** What the browser saves it as — underscores, per PLAN §11. */
   filename: string
-  /** The card's title on `/a/izvoz`. Bosnian, like everything on screen. */
+  /** The card's title on `/admin/izvoz`. Bosnian, like everything on screen. */
   title_bs: string
   /** One line under it: what one row of the file is. */
   sub_bs: string

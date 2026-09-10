@@ -1,5 +1,5 @@
 /**
- * The `/a` kit: the logic behind it, and the two house rules the light theme
+ * The `/admin` kit: the logic behind it, and the two house rules the light theme
  * rests on.
  *
  * There is no DOM in this suite (`environment: 'node'`), and deliberately so —
@@ -13,7 +13,7 @@
  * - the formatters that every amount, date and duration on the dashboard goes
  *   through, including the real minus sign.
  * - the period presets, which are business dates and not calendar dates.
- * - **no hex value and no emoji anywhere under `/a`.** The palette lives in one
+ * - **no hex value and no emoji anywhere under `/admin`.** The palette lives in one
  *   file; a stray `#fbfaf7` in a component is how a theme starts drifting, and
  *   an emoji is a house rule (`CLAUDE.md`) with no exceptions.
  */
@@ -167,7 +167,7 @@ describe('the period presets', () => {
 
 /** Every file that makes up the dashboard's surface. */
 function adminFiles(): string[] {
-  const roots = ['app/components/ui', 'app/pages/a']
+  const roots = ['app/components/ui', 'app/pages/admin']
   const found: string[] = ['app/layouts/admin.vue']
 
   function walk(dir: string) {
@@ -191,7 +191,7 @@ describe('the light theme is one palette', () => {
    * The one exception is `theme-color`, the meta tag that paints the browser's
    * own chrome — it takes a literal colour and cannot read a CSS variable.
    */
-  it('no file under /a writes a hex value', () => {
+  it('no file under /admin writes a hex value', () => {
     const offenders: string[] = []
 
     for (const path of adminFiles()) {
@@ -223,7 +223,7 @@ describe('the light theme is one palette', () => {
   })
 
   /** `CLAUDE.md`: no emoji in a label, a log title or a commit message. */
-  it('no emoji anywhere under /a', () => {
+  it('no emoji anywhere under /admin', () => {
     const emoji = /\p{Extended_Pictographic}/u
     const offenders = adminFiles()
       .filter(path => emoji.test(readFileSync(path, 'utf8')))

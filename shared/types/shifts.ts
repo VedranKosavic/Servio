@@ -343,7 +343,7 @@ export interface LinesPage {
  * One category of his night, as a **count** — no money in it (PHASE3 §1.5).
  *
  * `category_id` is here so the chip can open the drill-down
- * (`/k/moja-smjena/stavke?kat=`), which filters on exactly this id.
+ * (`/konobar/moja-smjena/stavke?kat=`), which filters on exactly this id.
  */
 export interface MyShiftCategoryCount {
   category_id: string

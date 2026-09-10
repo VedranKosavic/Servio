@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * An amount, everywhere on `/a`.
+ * An amount, everywhere on `/admin`.
  *
  * **Money is an integer number of feninga**, never a float: `12.30` has no exact
  * binary representation, so a column of floats that each look right sums to

@@ -363,7 +363,7 @@ describe('requestSwap and decideSwap', () => {
 })
 
 /**
- * *Bolovanje*. The word appears on `/a` *Zamjene* and in *Dnevnik*, and
+ * *Bolovanje*. The word appears on `/admin` *Zamjene* and in *Dnevnik*, and
  * **nowhere else** — the *Svi* line an accepted sick-cover posts is byte for byte
  * the line a plain `zamjena` posts, because a distinct wording would itself be
  * the reason (PLAN §8, PHASE4 §2.5).

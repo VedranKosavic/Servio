@@ -1,5 +1,5 @@
 /**
- * The `/a` palette — the owner dashboard's light theme.
+ * The `/admin` palette — the owner dashboard's light theme.
  *
  * **Defined under `[data-theme='light']`, never on `:root`.** The waiter app's
  * dark tokens in `main.css` own `:root`, and the two themes must never meet: a
@@ -7,7 +7,7 @@
  * waiter's floor plan white in a dark room.
  *
  * It lives in its own file rather than inside `layouts/admin.vue` for one
- * practical reason: `/a/login` renders with `layout: false` — a login screen has
+ * practical reason: `/admin/login` renders with `layout: false` — a login screen has
  * no nav — so it cannot rely on the layout's stylesheet being loaded. Both
  * import this one file, and it is still the only place in the app where these
  * names are defined.
@@ -34,7 +34,7 @@
   --danger-soft: #f4dcda;
 
   /* The few surfaces the mockup names that are not one of the tokens above.
-     They live here so that no other file under `/a` writes a hex value. */
+     They live here so that no other file under `/admin` writes a hex value. */
   --nav-item: #b9b3a8;
   --nav-well: #2c3437;
   --on-accent: #ffffff;
@@ -50,7 +50,7 @@
  * The waiter app paints `html` and `body` dark and sets an 18 px body — read at
  * arm's length in a dark room. The dashboard is read at a desk: light, 15 px.
  * The attribute is put on `<html>` by `useHead` in the layout and the login
- * page, and taken off again when either unmounts, so `/k` is never touched.
+ * page, and taken off again when either unmounts, so `/konobar` is never touched.
  */
 html[data-theme='light'],
 html[data-theme='light'] body {

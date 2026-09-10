@@ -224,7 +224,7 @@ const CALLS: Record<string, () => void | Promise<void>> = {
   },
 
   // *Potvrđujem stanje* writes no movement, and still bumps: the count's own
-  // card on `/a` and the *Puls* attention line both change the moment it lands.
+  // card on `/admin` and the *Puls* attention line both change the moment it lands.
   [join('stock', 'counts', '[id]', 'witness.post.ts')]: () => {
     const count = submitCount(f.db, f.venueId, f.actor('Emir'), {
       kind: 'full', phase: 'adhoc',

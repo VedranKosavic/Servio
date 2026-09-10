@@ -13,7 +13,7 @@
  *   a server render would have to ask `/api/me` without it and bounce everyone.
  *   `import.meta.client` is the first line for that reason (`useMe()` has the
  *   same note).
- * - **Nothing on `/a`.** The gate belongs in front of the floor plan and the
+ * - **Nothing on `/admin`.** The gate belongs in front of the floor plan and the
  *   ticket queue; the owner's dashboard has its own screen for this.
  * - **Nothing offline.** A phone with no signal cannot read `/api/rules`, and a
  *   waiter who is already working must not be walled off by a check that cannot
@@ -25,9 +25,10 @@ export default defineNuxtRouteMiddleware(async (to) => {
   if (!import.meta.client) return
 
   const path = to.path
-  const dark = path === '/k' || path.startsWith('/k/') || path === '/s' || path.startsWith('/s/')
+  const dark = path === '/konobar' || path.startsWith('/konobar/')
+    || path === '/sanker' || path.startsWith('/sanker/')
   // The one screen the gate sends people to cannot itself be gated.
-  if (!dark || path === '/k/pravila') return
+  if (!dark || path === '/konobar/pravila') return
 
   if (!navigator.onLine) return
 
@@ -40,5 +41,5 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
   const rules = useRules()
   await rules.ensure()
-  if (rules.gateActive.value) return navigateTo('/k/pravila')
+  if (rules.gateActive.value) return navigateTo('/konobar/pravila')
 })

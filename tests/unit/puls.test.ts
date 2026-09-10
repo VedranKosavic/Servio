@@ -259,7 +259,7 @@ describe('the Bosnian words', () => {
 // ===========================================================================
 
 /**
- * `admin-ui.test.ts` walks `app/components/ui` and `app/pages/a` for the two
+ * `admin-ui.test.ts` walks `app/components/ui` and `app/pages/admin` for the two
  * house rules; *Puls*' own components live in a third folder, so they get the
  * same two checks here rather than escaping them by being somewhere else.
  */

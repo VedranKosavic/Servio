@@ -3,7 +3,7 @@
  *
  * Own rows only. There is no `?user=` and there will not be one: a waiter
  * reading a colleague's sessions would be surveillance, and the owner already
- * has *Uređaji* on `/a` for the device side of the same question.
+ * has *Uređaji* on `/admin` for the device side of the same question.
  */
 import { useDb } from '../../utils/db'
 import { guard } from '../../utils/http'

@@ -90,7 +90,7 @@ export const users = sqliteTable('users', {
    * bumping this and re-hashing at the next successful login (§5.3).
    */
   pinPepperV: integer('pin_pepper_v').notNull().default(1),
-  /** Admins only: email + password is the one way into `/a` on a laptop. */
+  /** Admins only: email + password is the one way into `/admin` on a laptop. */
   passwordHash: text('password_hash'),
   /** Lowercase, trimmed. */
   email: text('email'),
@@ -304,7 +304,7 @@ export const devices = sqliteTable('devices', {
   index('devices_bound_idx').on(t.venueId, t.boundUserId),
 ])
 
-/** A 6-character code an admin mints in `/a` so a phone can enrol itself. */
+/** A 6-character code an admin mints in `/admin` so a phone can enrol itself. */
 export const enrolCodes = sqliteTable('enrol_codes', {
   id: text('id').primaryKey(),
   venueId: text('venue_id').notNull().references(() => venues.id),

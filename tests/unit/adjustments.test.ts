@@ -746,7 +746,7 @@ describe('a void on a comped line', () => {
 // ===========================================================================
 //
 // No component is mounted here. Rendering a sheet to assert that a button says
-// *Odobri* tests Vue, not Šank (`admin-ui.test.ts` says the same about `/a`).
+// *Odobri* tests Vue, not Šank (`admin-ui.test.ts` says the same about `/admin`).
 // What is worth pinning is the one way these files can silently go wrong: the
 // chips a waiter taps drifting away from the reasons the server accepts, and an
 // English word or an emoji reaching a screen.
@@ -754,7 +754,7 @@ describe('a void on a comped line', () => {
 describe('the storno and gratis sheets', () => {
   const uiFiles = [
     'app/composables/useAdjustments.ts',
-    'app/pages/s/cekanje.vue',
+    'app/pages/sanker/cekanje.vue',
     ...readdirSync('app/components/adjust').map(name => join('app/components/adjust', name)),
   ]
 

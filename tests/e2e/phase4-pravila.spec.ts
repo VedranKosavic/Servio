@@ -4,13 +4,13 @@
  *
  * What is proved here:
  *
- *   1. Haris writes *Pravila* on `/a/postavke/pravila`, the confirm sheet names
+ *   1. Haris writes *Pravila* on `/admin/postavke/pravila`, the confirm sheet names
  *      the version, and publishing produces a version with an acknowledgement
  *      list on which nobody has confirmed anything yet.
  *   2. Amar's next login puts S12 in front of S1: every dark route lands on
  *      *Pravila*, and *Potvrđujem* is disabled until the text has been
  *      scrolled to the end. After confirming he reaches the floor plan.
- *   3. The acknowledgement shows up on `/a` with his name and the time.
+ *   3. The acknowledgement shows up on `/admin` with his name and the time.
  *   4. A threshold changed in *Podešavanja* changes the number inside the
  *      published text on the phone **without** a new version — the whole point
  *      of the `{{…}}` tokens.
@@ -121,7 +121,7 @@ test.describe('Phase 4 — Pravila', () => {
   test('Haris writes and publishes a version, on a laptop', async () => {
     const page = await laptop.newPage()
     await page.setViewportSize({ width: 1440, height: 900 })
-    await page.goto('/a/postavke/pravila')
+    await page.goto('/admin/postavke/pravila')
 
     await expect(page.getByRole('heading', { name: 'Pravila' })).toBeVisible()
     await expect(page.getByText('Nije objavljeno')).toBeVisible()
@@ -152,8 +152,8 @@ test.describe('Phase 4 — Pravila', () => {
     const page = await phone.newPage()
 
     // He is heading for the floor plan and lands on the rules instead.
-    await page.goto('/k')
-    await expect(page).toHaveURL(/\/k\/pravila$/)
+    await page.goto('/konobar')
+    await expect(page).toHaveURL(/\/konobar\/pravila$/)
     await expect(page.getByText('Nova verzija Pravila')).toBeVisible()
     await expect(page.getByText('Potvrdi da nastaviš')).toBeVisible()
 
@@ -171,8 +171,8 @@ test.describe('Phase 4 — Pravila', () => {
       document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false)
 
     // There is no way out but through: another dark route comes straight back.
-    await page.goto('/k/moja-smjena')
-    await expect(page).toHaveURL(/\/k\/pravila$/)
+    await page.goto('/konobar/moja-smjena')
+    await expect(page).toHaveURL(/\/konobar\/pravila$/)
 
     // The honesty note about the database file, word for word (PLAN F12 a).
     await expect(page.getByText(/bazu mogu otvoriti vlasnik i Vedran/)).toBeVisible()
@@ -183,8 +183,8 @@ test.describe('Phase 4 — Pravila', () => {
     await button.click()
 
     // Straight to work, and the gate is gone for good.
-    await expect(page).toHaveURL(/\/k$/)
-    await page.goto('/k/pravila')
+    await expect(page).toHaveURL(/\/konobar$/)
+    await page.goto('/konobar/pravila')
     await expect(page.getByText(/Potvrđena verzija v1/)).toBeVisible()
 
     await page.close()
@@ -193,7 +193,7 @@ test.describe('Phase 4 — Pravila', () => {
   test('the acknowledgement reaches the owner, with the time', async () => {
     const page = await laptop.newPage()
     await page.setViewportSize({ width: 1440, height: 900 })
-    await page.goto('/a/postavke/pravila')
+    await page.goto('/admin/postavke/pravila')
 
     const acks = page.locator('section').filter({ hasText: 'Potvrde · v1' }).first()
     const row = acks.locator('tr').filter({ hasText: 'Amar' }).first()
@@ -209,7 +209,7 @@ test.describe('Phase 4 — Pravila', () => {
     })).ok()).toBe(true)
 
     const page = await phone.newPage()
-    await page.goto('/k/pravila')
+    await page.goto('/konobar/pravila')
 
     // The same version, a different number — which is why the rules are
     // published with tokens rather than typed as text.
@@ -238,7 +238,7 @@ test.describe('Phase 4 — Pravila', () => {
    * goes through `shared/collate.ts` now; this is the assertion that keeps it
    * there.
    */
-  test('/a/dnevnik loads with nothing in the console', async () => {
+  test('/admin/dnevnik loads with nothing in the console', async () => {
     const page = await laptop.newPage()
     await page.setViewportSize({ width: 1440, height: 900 })
 
@@ -246,7 +246,7 @@ test.describe('Phase 4 — Pravila', () => {
     page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()) })
     page.on('pageerror', err => errors.push(String(err)))
 
-    await page.goto('/a/dnevnik')
+    await page.goto('/admin/dnevnik')
     await expect(page.getByRole('heading', { name: 'Dnevnik' })).toBeVisible()
     // Vue reports a hydration mismatch after the whole tree is patched, which is
     // a tick or two after the heading is on screen.

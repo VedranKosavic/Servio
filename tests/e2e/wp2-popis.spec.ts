@@ -99,7 +99,7 @@ async function loginAs(context: BrowserContext, name: string): Promise<User> {
   })
   expect(pin.ok(), await pin.text()).toBe(true)
 
-  // A published Pravila version stands in front of every /k screen (S12), and
+  // A published Pravila version stands in front of every /konobar screen (S12), and
   // phase4-pravila publishes one before this file runs. Clear it here so the
   // spec does not depend on where it sits in the alphabet.
   await ackRules(context.request)
@@ -156,7 +156,7 @@ test.describe('WP2 — Brzi popis, Potvrđujem stanje, Otpis', () => {
       { items: { id: string, on_hand: number }[] }
     const onHand = new Map(stock.items.map(i => [i.id, i.on_hand]))
 
-    await barPage.goto('/s/popis')
+    await barPage.goto('/sanker/popis')
     await expect(barPage.getByRole('heading', { name: 'Stavke za popis' })).toBeVisible()
 
     // The expected quantity is not on this screen. Whatever Coca-Cola's on-hand
@@ -226,7 +226,7 @@ test.describe('WP2 — Brzi popis, Potvrđujem stanje, Otpis', () => {
       { items: { id: string, on_hand: number }[] }
     const onHand = new Map(stock.items.map(i => [i.id, i.on_hand]))
 
-    await barPage.goto('/s/popis')
+    await barPage.goto('/sanker/popis')
     await expect(barPage.getByRole('heading', { name: 'Stavke za popis' })).toBeVisible()
 
     // *Dopuni smjenu*: change out of the drawer and into Amar's hands, which is
@@ -263,7 +263,7 @@ test.describe('WP2 — Brzi popis, Potvrđujem stanje, Otpis', () => {
   test('a 12 KM bottle asks for a PIN, a 2 KM one does not', async () => {
     const page = await floor.newPage()
 
-    await page.goto('/k/otpis')
+    await page.goto('/konobar/otpis')
     await expect(page.getByRole('heading', { name: 'Šta se otpisuje' })).toBeVisible()
 
     // Red Bull costs 2,00 KM on the seed — under the 10 KM threshold.

@@ -3,16 +3,16 @@
  * The owner dashboard's shell: the light theme, the left nav on a laptop and the
  * bottom tabs on a phone.
  *
- * **`/a` is light and `/k` is dark, and the two never share a rule.** Every
- * token below is defined under `[data-theme='light']`, never on `:root`, so the
- * waiter's dark theme in `app/assets/css/main.css` is untouched and cannot shift
- * by a pixel. Nothing under `/a` writes a hex value; nothing outside `/a` reads
- * these names.
+ * **`/admin` is light and `/konobar` is dark, and the two never share a rule.**
+ * Every token below is defined under `[data-theme='light']`, never on `:root`,
+ * so the waiter's dark theme in `app/assets/css/main.css` is untouched and
+ * cannot shift by a pixel. Nothing under `/admin` writes a hex value; nothing
+ * outside `/admin` reads these names.
  *
  * `useHead` puts the attribute on `<html>` rather than only on the div below,
  * because the browser paints the page background from the root element — without
  * it the light page would sit on a dark strip when the list overscrolls.
- * `useHead` is scoped to this component, so leaving `/a` takes it away again.
+ * `useHead` is scoped to this component, so leaving `/admin` takes it away again.
  *
  * One breakpoint, 1024 px: above it the 220 px nav from the mockup, below it
  * four bottom tabs, with *Više* holding the three pages that do not fit.
@@ -49,19 +49,19 @@ const dot: Record<string, () => boolean> = {
 const moreItems = computed(() => adminMore())
 
 function isActive(to: string): boolean {
-  // `/a` is the exact page; everything else owns its whole subtree.
-  return to === '/a' ? route.path === '/a' : route.path.startsWith(to)
+  // `/admin` is the exact page; everything else owns its whole subtree.
+  return to === '/admin' ? route.path === '/admin' : route.path.startsWith(to)
 }
 
 /** *Više* is active for any of its children, and carries their badges as one dot. */
 const moreActive = computed(() =>
-  route.path === '/a/vise' || moreItems.value.some(item => isActive(item.to)))
+  route.path === '/admin/vise' || moreItems.value.some(item => isActive(item.to)))
 
 const moreDot = computed(() => moreItems.value.some(item => dot[item.id]?.() ?? false))
 
 async function signOut() {
   await me.logout()
-  await navigateTo('/a/login')
+  await navigateTo('/admin/login')
 }
 </script>
 
@@ -69,7 +69,7 @@ async function signOut() {
   <div class="admin" data-theme="light">
     <!-- The laptop nav. Hidden below 1024 px, where the tab bar takes over. -->
     <nav class="a-nav" aria-label="Glavna navigacija">
-      <NuxtLink to="/a" class="a-brand">
+      <NuxtLink to="/admin" class="a-brand">
         Šank
         <small>Kontrolna ploča</small>
       </NuxtLink>
@@ -106,7 +106,7 @@ async function signOut() {
         <div class="a-who">
           <!-- The session is a httpOnly cookie the client-only `admin` middleware
                resolves, so SSR has no user and the client does. Rendering half
-               the sentence on the server is a hydration mismatch on every /a
+               the sentence on the server is a hydration mismatch on every /admin
                page; ClientOnly keeps the whole line off the server render. -->
           <ClientOnly>
             <span>{{ me.user.value?.name }} · vlasnik</span>
@@ -139,7 +139,7 @@ async function signOut() {
       </NuxtLink>
 
       <NuxtLink
-        to="/a/vise"
+        to="/admin/vise"
         class="a-tab"
         :class="{ on: moreActive }"
         :aria-current="moreActive ? 'page' : undefined"

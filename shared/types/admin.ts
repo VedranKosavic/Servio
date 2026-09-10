@@ -118,7 +118,7 @@ export interface Health {
 }
 
 // ===========================================================================
-// The `/a` catalogue screens (WP6 — `docs/BACKEND.md` §6.10, §7 *admin*)
+// The `/admin` catalogue screens (WP6 — `docs/BACKEND.md` §6.10, §7 *admin*)
 // ===========================================================================
 //
 // **Why these are `*Admin` supersets and not the four shapes above.** §7 names

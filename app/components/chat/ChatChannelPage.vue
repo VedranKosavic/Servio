@@ -30,7 +30,7 @@ import { IMAGE_ERROR, CHAT_IMAGE, downscale } from '~/utils/image'
 import type { ChatMessage } from '#shared/types'
 
 const props = defineProps<{
-  /** Where the back arrow lands: `/k/razgovor` or `/s/razgovor`. */
+  /** Where the back arrow lands: `/konobar/razgovor` or `/sanker/razgovor`. */
   backTo: string
 }>()
 

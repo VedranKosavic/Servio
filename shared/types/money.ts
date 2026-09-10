@@ -76,7 +76,7 @@ export interface TablesStateResponse {
    *
    * They are their own list rather than extra rows in `tables`, because the
    * floor plan draws one circle per table and there is no circle for these:
-   * `/k` renders them as cards above the plan (S1). Every row has
+   * `/konobar` renders them as cards above the plan (S1). Every row has
    * `table_id: null` and a `tab_id`.
    */
   loose_tabs: TableState[]

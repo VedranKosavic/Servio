@@ -1,9 +1,9 @@
 /**
- * Every row of the `/a` navigation, listed once — the light twin of
+ * Every row of the `/admin` navigation, listed once — the light twin of
  * `app/utils/waiterMenu.ts`.
  *
  * It exists for exactly the reason that file does: `app/layouts/admin.vue` (the
- * left nav and the bottom tabs) and `app/pages/a/vise.vue` (the phone's *Više*
+ * left nav and the bottom tabs) and `app/pages/admin/vise.vue` (the phone's *Više*
  * list) each used to carry their own inline array, so a Phase 4 package adding
  * *Razgovor* would have had to edit two files two other packages also own. Now
  * both read this, WP0 writes every row on day one, and a package's only change
@@ -39,16 +39,16 @@ export interface AdminNavItem {
 }
 
 export const ADMIN_NAV: AdminNavItem[] = [
-  { id: 'puls', to: '/a', label: 'Puls', icon: 'pulse', sub: 'Večeras, uživo', tab: true, ready: true },
-  { id: 'smjene', to: '/a/smjene', label: 'Smjena', icon: 'money', sub: 'Noći, pazar i predaje', tab: true, ready: true },
-  { id: 'roba', to: '/a/roba', label: 'Roba', icon: 'box', sub: 'Stanje, prijem, popisi, otpis', tab: true, ready: true },
+  { id: 'puls', to: '/admin', label: 'Puls', icon: 'pulse', sub: 'Večeras, uživo', tab: true, ready: true },
+  { id: 'smjene', to: '/admin/smjene', label: 'Smjena', icon: 'money', sub: 'Noći, pazar i predaje', tab: true, ready: true },
+  { id: 'roba', to: '/admin/roba', label: 'Roba', icon: 'box', sub: 'Stanje, prijem, popisi, otpis', tab: true, ready: true },
   // Phase 4 — WP1 flips `ready`, and that is the only line it touches here.
-  { id: 'razgovor', to: '/a/razgovor', label: 'Razgovor', icon: 'chat', sub: 'Svi i Admini', ready: true },
+  { id: 'razgovor', to: '/admin/razgovor', label: 'Razgovor', icon: 'chat', sub: 'Svi i Admini', ready: true },
   // Phase 4 — WP2 flips `ready`.
-  { id: 'raspored', to: '/a/raspored', label: 'Raspored', icon: 'calendar', sub: 'Sedmica, zamjene i sati', ready: true },
-  { id: 'postavke', to: '/a/postavke', label: 'Meni i postavke', icon: 'users', sub: 'Cijene, normativi, stolovi, osoblje, uređaji', ready: true },
-  { id: 'dnevnik', to: '/a/dnevnik', label: 'Dnevnik', icon: 'list', sub: 'Ko je šta uradio, po danima', ready: true },
-  { id: 'izvoz', to: '/a/izvoz', label: 'Izvoz', icon: 'calendar', sub: 'CSV fajlovi za period', ready: true },
+  { id: 'raspored', to: '/admin/raspored', label: 'Raspored', icon: 'calendar', sub: 'Sedmica, zamjene i sati', ready: true },
+  { id: 'postavke', to: '/admin/postavke', label: 'Meni i postavke', icon: 'users', sub: 'Cijene, normativi, stolovi, osoblje, uređaji', ready: true },
+  { id: 'dnevnik', to: '/admin/dnevnik', label: 'Dnevnik', icon: 'list', sub: 'Ko je šta uradio, po danima', ready: true },
+  { id: 'izvoz', to: '/admin/izvoz', label: 'Izvoz', icon: 'calendar', sub: 'CSV fajlovi za period', ready: true },
 ]
 
 /** The rows the phone's bottom bar shows. Four targets, and *Više* is the fifth. */

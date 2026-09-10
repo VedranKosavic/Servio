@@ -7,7 +7,7 @@
  * "no money in a body": what a *phone* may never send is the value of a thing
  * the catalogue already prices (`unit_price_fen`, a line total, a promet). The
  * catalogue itself has to be typed in by somebody, and that somebody is the
- * admin standing in `/a` — so `price_fen` and `last_cost_mfen` arrive here and
+ * admin standing in `/admin` — so `price_fen` and `last_cost_mfen` arrive here and
  * nowhere else, on routes `ROUTE_ROLES` gives to `['admin']` alone.
  *
  * Every body is `.strict()`: an unknown key in a *Postavke* form is a typo or a
@@ -169,7 +169,7 @@ export const createUserBody = z.object({
   initials: z.string().trim().min(1).max(3),
   role,
   pin,
-  /** Admins only: email + password is the one way into `/a` on a laptop. */
+  /** Admins only: email + password is the one way into `/admin` on a laptop. */
   email: z.email().max(120).trim().toLowerCase().nullish(),
 }).strict()
 

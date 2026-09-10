@@ -5,9 +5,9 @@
 **Vedran's decision, which overrides every design where they differ:** there are exactly **three roles** — `admin`, `waiter`, `bartender`.
 
 - `admin` — special permissions: the owner dashboard and every live read, approvals (voids, comps, unpaid write-offs, payouts, settlements), catalogue and prices, deliveries and stock corrections, users/devices/settings, the Dnevnik.
-- `waiter` and `bartender` — **identical permissions on the floor**: orders, prep tickets, own shift settlement, stock view, waste below the thresholds, counts as custodian. The default screen differs (`/k` for a waiter, `/s` for a bartender) and one thing more: **the bartender is a default approver**. `DEFAULT_SETTINGS.approver_roles = ['admin','bartender']`, so seven routes in §7 are `A B` and not `A W B` — `/shifts/:id/closing`, `/shifts/:id/close`, `/shifts/:id/float`, `/cash-movements/:id/decide`, `/adjustments/:id/decide`, `/shifts/:id/settlements/:sid/accept`, `/stock/waste/:id/approve`. That is the whole of the difference: a waiter never decides anybody's money. It is a **setting**, not a hard-coded role rule — an owner who drops `bartender` from `approver_roles` gets a bartender who is exactly a waiter, and the `A B` routes then refuse him at the service's `role ∈ settings.approver_roles` check even though `ROUTE_ROLES` let him through. `ROUTE_ROLES` is the coarse gate; the setting is the fine one.
+- `waiter` and `bartender` — **identical permissions on the floor**: orders, prep tickets, own shift settlement, stock view, waste below the thresholds, counts as custodian. The default screen differs (`/konobar` for a waiter, `/sanker` for a bartender) and one thing more: **the bartender is a default approver**. `DEFAULT_SETTINGS.approver_roles = ['admin','bartender']`, so seven routes in §7 are `A B` and not `A W B` — `/shifts/:id/closing`, `/shifts/:id/close`, `/shifts/:id/float`, `/cash-movements/:id/decide`, `/adjustments/:id/decide`, `/shifts/:id/settlements/:sid/accept`, `/stock/waste/:id/approve`. That is the whole of the difference: a waiter never decides anybody's money. It is a **setting**, not a hard-coded role rule — an owner who drops `bartender` from `approver_roles` gets a bartender who is exactly a waiter, and the `A B` routes then refuse him at the service's `role ∈ settings.approver_roles` check even though `ROUTE_ROLES` let him through. `ROUTE_ROLES` is the coarse gate; the setting is the fine one.
 - Korak 1's role value `'owner'` is renamed to `'admin'` everywhere, with `UPDATE users SET role = 'admin' WHERE role = 'owner'` inside the Korak 2 migration. There is no `manager` role and there never was one.
-- Every person has an account with a PIN. Admins additionally have email + password (that is the only way into `/a` on a laptop).
+- Every person has an account with a PIN. Admins additionally have email + password (that is the only way into `/admin` on a laptop).
 
 Route paths keep the word `owner` (`/api/owner/live`, `/api/owner/log`) because they name the *owner dashboard* screens of PLAN §11 — the **role** guarding them is `admin`. Do not rename the paths; do not accept `'owner'` as a role value anywhere.
 
@@ -330,7 +330,7 @@ export const DEFAULT_SETTINGS = {
 }
 ```
 
-The dev seed writes `{"bartender_can_receive_goods": true}` so the existing `/s` delivery screen keeps working; production keeps the default `false`.
+The dev seed writes `{"bartender_can_receive_goods": true}` so the existing `/sanker` delivery screen keeps working; production keeps the default `false`.
 
 ---
 
@@ -436,11 +436,11 @@ One transaction: `UPDATE devices SET pending_count, oldest_pending_at, last_seen
 
 | Client | Every | Call |
 |---|---|---|
-| `/k` waiter | 15 s while visible, on open, on `visibilitychange` | `GET /api/changes?since=<seq>` — one call; `tables_state`, `shift` and `menu_version` arrive inside it |
-| `/s` bartender | 15 s | the same call; uses `prep`, `pending`, `stock` |
+| `/konobar` waiter | 15 s while visible, on open, on `visibilitychange` | `GET /api/changes?since=<seq>` — one call; `tables_state`, `shift` and `menu_version` arrive inside it |
+| `/sanker` bartender | 15 s | the same call; uses `prep`, `pending`, `stock` |
 | any device | 60 s | `POST /api/devices/heartbeat` (its own timer, no ETag) |
-| `/a` Puls | 15 s | `GET /api/owner/live` with `If-None-Match`; when `log_max_at` moves past the cursor, one `GET /api/owner/log?after=` |
-| `/a` other pages | on open | their own read route, ETagged |
+| `/admin` Puls | 15 s | `GET /api/owner/live` with `If-None-Match`; when `log_max_at` moves past the cursor, one `GET /api/owner/log?after=` |
+| `/admin` other pages | on open | their own read route, ETagged |
 
 There is no second timer anywhere. `GET /api/bootstrap` is fetched once at boot and again only when `menu_version` moves.
 
@@ -450,9 +450,9 @@ There is no second timer anywhere. `GET /api/bootstrap` is fetched once at boot 
 
 ### 5.1 Flows
 
-**Admin, laptop (`/a`).** `POST /api/auth/admin/login { email, password }` → **`verifyMetered(kind: 'password')`** → `sessions(kind='admin', device_id NULL, expires_at = now + 30 d)` → `Set-Cookie sank_s`. Sliding: extended to `now + 30 d` at most once per 24 h. A wrong email and a wrong password both answer 401 `INVALID_CREDENTIALS` after a constant-time dummy verify — but both also leave a committed `auth_attempts` row, and five of them lock the pair for 60 s. An email+password login is the one door with no device cookie in front of it, so it is the one that must count its failures.
+**Admin, laptop (`/admin`).** `POST /api/auth/admin/login { email, password }` → **`verifyMetered(kind: 'password')`** → `sessions(kind='admin', device_id NULL, expires_at = now + 30 d)` → `Set-Cookie sank_s`. Sliding: extended to `now + 30 d` at most once per 24 h. A wrong email and a wrong password both answer 401 `INVALID_CREDENTIALS` after a constant-time dummy verify — but both also leave a committed `auth_attempts` row, and five of them lock the pair for 60 s. An email+password login is the one door with no device cookie in front of it, so it is the one that must count its failures.
 
-**Device enrolment.** An admin mints a code in `/a` (`POST /api/admin/enrol-codes`); the phone posts it to `POST /api/devices/enrol { code, label?, app_version? }` → **`verifyMetered(kind: 'enrol')`** → `uses_left − 1` → a `devices` row (mode, `bound_user_id` and label come from the code) → `Set-Cookie sank_d` (365 d). The response carries the venue and the list of active staff so the lock screen has names before any session exists. A 6-character code from a 32-letter alphabet is 10⁹ candidates, which is plenty — but only while somebody is counting the guesses, and `uses_left` counts successes, not failures.
+**Device enrolment.** An admin mints a code in `/admin` (`POST /api/admin/enrol-codes`); the phone posts it to `POST /api/devices/enrol { code, label?, app_version? }` → **`verifyMetered(kind: 'enrol')`** → `uses_left − 1` → a `devices` row (mode, `bound_user_id` and label come from the code) → `Set-Cookie sank_d` (365 d). The response carries the venue and the list of active staff so the lock screen has names before any session exists. A 6-character code from a 32-letter alphabet is 10⁹ candidates, which is plenty — but only while somebody is counting the guesses, and `uses_left` counts successes, not failures.
 
 **A path with no `auth_attempts` row is a path with no lockout.** That is why all three doors go through one verifier below, and why `auth.test.ts` asserts a committed row for each of them.
 
@@ -605,7 +605,7 @@ export interface MeContext {
 
 `POST /api/dev/enrol` — finds or creates the venue's `label='dev'` shared device, mints a fresh token, sets `sank_d`, and returns the staff list. It is gated on a **positive opt-in**: `if (process.env.SANK_DEV_ENROL !== '1') throw apiError(404, 'NOT_FOUND', 'not found')`. It is a POST, it is in `ROUTE_ROLES` as `'public'`, and it never exists on the VPS because `/opt/sank/.env` does not set the variable. (The earlier "404 when `NODE_ENV==='production'`" design would have handed an enrolled device cookie to the internet, because the systemd unit never set `NODE_ENV`.)
 
-Seed (dev and tests): admin `haris@lounge.ba` / password `lounge`; PINs Amar 1111, Lejla 2222, Dino 3333, Tarik 4444, Emir 123456, Haris 123456 (`pin_len` 6 for Emir and Haris). `seed(db, { devSecrets: boolean })` is an explicit argument — `seed-cli.ts` passes `process.env.NODE_ENV !== 'production'`, the fixture passes `true`. With `devSecrets: false` users are inserted with `pin_hash NULL` and the CLI prints "postavi PIN-ove u /a". No device is ever seeded; a token in the database file is a key.
+Seed (dev and tests): admin `haris@lounge.ba` / password `lounge`; PINs Amar 1111, Lejla 2222, Dino 3333, Tarik 4444, Emir 123456, Haris 123456 (`pin_len` 6 for Emir and Haris). `seed(db, { devSecrets: boolean })` is an explicit argument — `seed-cli.ts` passes `process.env.NODE_ENV !== 'production'`, the fixture passes `true`. With `devSecrets: false` users are inserted with `pin_hash NULL` and the CLI prints "postavi PIN-ove u /admin". No device is ever seeded; a token in the database file is a key.
 
 ### 5.7 How the existing routes change
 
@@ -1122,7 +1122,7 @@ export function queueAlert(tx: Tx, venueId, a: { ruleKey, ref: { type, id }, pay
 export function sendAfter(rule: AlertRuleKey, at: string, tz: string): string
 ```
 
-`queueAlert` is `INSERT OR IGNORE` on the unique key (a second call for the same object is a no-op), with `send_after = now`, or the next 10:00 local when the local time is 03:00–10:00 and the rule is not `shift_closed`, `cash_variance` or `health`. It is synchronous and writes inside the caller's transaction, like `log` and `bump`. **There is no drainer and no sender** — nothing in Šank sends anything outward (§9); `alert_events` is the in-app attention list's own table and `/a` reads it directly, filtering on `send_after <= now`.
+`queueAlert` is `INSERT OR IGNORE` on the unique key (a second call for the same object is a no-op), with `send_after = now`, or the next 10:00 local when the local time is 03:00–10:00 and the rule is not `shift_closed`, `cash_variance` or `health`. It is synchronous and writes inside the caller's transaction, like `log` and `bump`. **There is no drainer and no sender** — nothing in Šank sends anything outward (§9); `alert_events` is the in-app attention list's own table and `/admin` reads it directly, filtering on `send_after <= now`.
 
 `admin.ts` — one exported function per route, every write one transaction with `log()` + `bump()`: `listProducts/createProduct/updateProduct` (a `price_fen` change closes the open `price_history` row and inserts a new one, `log('price_changed')`, `bump('menu')`), `setRecipe` (delete + insert, atomic), category / table / stock-item CRUD (`base_unit` immutable once a movement exists → 409 `UNIT_FROZEN`; creating a stock item requires `last_cost_mfen > 0`), `createUser`/`updateUser` (an admin cannot deactivate himself → 400 `SELF_DEACTIVATE`; PIN length 4 or 6 checked against nothing but the body — both are legal for every role, 6 is recommended for admins), `getSettings`/`updateSettings` (one `settings_changed` entry per changed key). Admin never deletes: `active = 0`, `available = 0`, `revoked_at`. Devices and PIN reset live in the auth package's `devices.ts`, not here.
 
@@ -1337,11 +1337,11 @@ Every route: `readValidatedJson(event, schema)` → `guard(() => service(useDb()
 
 **Nothing is sent anywhere. There is no Telegram, no e-mail, no push, no web hook and no bot.** The *Dnevnik* and the in-app attention list on *Puls* are the only two channels the owner has, and both live behind his own login. This is a product decision, not a missing feature: the owner reads the app, the app does not chase him.
 
-What survives is `alert_events` + `queueAlert` — the **in-app *obavijesti* record**. It is the subset of Dnevnik entries worth surfacing at the top of *Puls* rather than leaving in the stream: already deduped on the object, already time-gated, already carrying the `log_id` that `/a/dnevnik/:id` opens. `/a` (Phase 2) reads the table directly with `sent_at` ignored and `send_after <= now`.
+What survives is `alert_events` + `queueAlert` — the **in-app *obavijesti* record**. It is the subset of Dnevnik entries worth surfacing at the top of *Puls* rather than leaving in the stream: already deduped on the object, already time-gated, already carrying the `log_id` that `/admin/dnevnik/:id` opens. `/admin` (Phase 2) reads the table directly with `sent_at` ignored and `send_after <= now`.
 
 Removed with the sending: `AlertSender` and both implementations, `drainAlerts`, `server/tasks/alerts.ts`, `server/plugins/alerts.ts`, `TELEGRAM_BOT_TOKEN`, and `users.telegram_chat_id` (dropped by migration `0002_no_telegram.sql` — a plain SQLite `DROP COLUMN`, safe because no index, trigger or view named the column). `alert_events.sent_at`, `attempts` and `last_error` stay in the schema as unwritten leftovers rather than costing a table rebuild; a reader must not treat `sent_at IS NULL` as "not yet delivered", because nothing delivers.
 
-Rule keys (v1), frozen in `shared/constants.ts` as `ALERT_RULE_KEYS`: `shift_closed`, `shift_forced`, `cash_variance` (a `waiter_finished` outside tolerance — the tolerance word and `declared_fen`, never the diff), `settlement_late`, `void_after_payment` (`void_decided` with `was_paid` or `foreign_device`), `payment_reversed`, `comp_large`, `late_after_settle`, `late_after_close`, `stock_variance` (`count_confirmed` over `variance_alert_fen`), `payout_pending`, `device_lockout`, `health` (a backup or nightly task failure). Dedupe on `(venue_id, rule_key, ref_type, ref_id)` with `INSERT OR IGNORE`; quiet hours 03:00–10:00 local via `send_after`, with `shift_closed`, `cash_variance` and `health` exempt — an item queued at 04:00 is written and kept, it simply does not head the list before 10:00. Every payload carries `title_bs` and `log_id`, so a row on *Puls* links to `/a/dnevnik/<log_id>`. The hourly cap, the digest and in-app acknowledgement are Korak 3.
+Rule keys (v1), frozen in `shared/constants.ts` as `ALERT_RULE_KEYS`: `shift_closed`, `shift_forced`, `cash_variance` (a `waiter_finished` outside tolerance — the tolerance word and `declared_fen`, never the diff), `settlement_late`, `void_after_payment` (`void_decided` with `was_paid` or `foreign_device`), `payment_reversed`, `comp_large`, `late_after_settle`, `late_after_close`, `stock_variance` (`count_confirmed` over `variance_alert_fen`), `payout_pending`, `device_lockout`, `health` (a backup or nightly task failure). Dedupe on `(venue_id, rule_key, ref_type, ref_id)` with `INSERT OR IGNORE`; quiet hours 03:00–10:00 local via `send_after`, with `shift_closed`, `cash_variance` and `health` exempt — an item queued at 04:00 is written and kept, it simply does not head the list before 10:00. Every payload carries `title_bs` and `log_id`, so a row on *Puls* links to `/admin/dnevnik/<log_id>`. The hourly cap, the digest and in-app acknowledgement are Korak 3.
 
 **§8's ✔ column and this list are one set, checked by a test.** `queueAlert` needs a `rule_key`, so a kind marked ✔ with no key here is a kind that would throw at 03:10 on a shift close. `alerts.test.ts` asserts both directions: every `LOG[kind].alert.rule` is in `ALERT_RULE_KEYS`, and every key in `ALERT_RULE_KEYS` is either produced by some `LOG[kind].alert` or by a named non-log caller (`health` from `server/tasks/*`, `clock_skew` from the heartbeat's own composed key, §4.3). That is why `shift_opened` and `payout_decided` lost their ✔ — an item for every shift opening is noise, and telling the owner about the decision he just made is noise — and why `settlement_late`, `payment_reversed` and `late_after_close` gained keys.
 

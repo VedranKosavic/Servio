@@ -3,7 +3,7 @@
  *
  * **Initials unless the owner says otherwise.** `full_names=1` is the explicit
  * opt-in; anything else, a missing parameter included, exports "A.H." Per-person
- * money is allowed to exist on `/a` and is not allowed to walk out of it by
+ * money is allowed to exist on `/admin` and is not allowed to walk out of it by
  * default (CLAUDE.md, "accountability, not surveillance").
  */
 import { useDb } from '../../../utils/db'

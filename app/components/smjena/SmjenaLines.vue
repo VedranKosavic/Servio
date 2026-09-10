@@ -2,7 +2,7 @@
 /**
  * *Stavke* — the rows behind a number.
  *
- * This is the component that makes every other figure on `/a` checkable: a
+ * This is the component that makes every other figure on `/admin` checkable: a
  * promet the owner does not recognise is one tap from the twenty rounds that
  * made it, with the time each was rung up, who rang it and what happened to it
  * afterwards.

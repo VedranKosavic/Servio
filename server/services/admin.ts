@@ -920,9 +920,9 @@ export function createUser(
  * admin's e-mail.
  *
  * **An admin cannot deactivate himself** (400 `SELF_DEACTIVATE`). It is not
- * paternalism: the admin session is the only door into `/a` that does not need a
- * device, and the venue has one admin. Locking it from the inside would need a
- * shell on the VPS to undo.
+ * paternalism: the admin session is the only door into `/admin` that does not
+ * need a device, and the venue has one admin. Locking it from the inside would
+ * need a shell on the VPS to undo.
  *
  * Deactivating is how somebody leaves. Nothing is deleted — his name still
  * renders on February's rounds, and `active = 0` is what `GET /api/auth/users`

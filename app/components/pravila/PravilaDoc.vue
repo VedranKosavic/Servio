@@ -7,8 +7,8 @@
  * construction — so the one document in the app that one person types and
  * everybody else's phone renders cannot carry a tag, a script or a link out.
  *
- * It writes **no colour**. `/k` is dark and `/a` is light and the two never
- * share a rule (PHASE4 §1), so everything here inherits its colour from
+ * It writes **no colour**. `/konobar` is dark and `/admin` is light and the two
+ * never share a rule (PHASE4 §1), so everything here inherits its colour from
  * whichever page it sits in and only sets size, weight and rhythm.
  */
 import type { Block } from '~/utils/markdownish'

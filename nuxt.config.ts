@@ -35,7 +35,7 @@ export default defineNuxtConfig({
       orientation: 'portrait',
       // Not '/': the lock screen sends everybody to their own home anyway, and
       // starting at the waiter app is right for the phones that install this.
-      start_url: '/k',
+      start_url: '/konobar',
       scope: '/',
       background_color: '#0e0e12',
       theme_color: '#0e0e12',
@@ -52,7 +52,7 @@ export default defineNuxtConfig({
       // `html` is on this list for one reason: `navigateFallback` can only
       // serve a page the worker actually has, and this app is server-rendered,
       // so the only HTML in `.output/public` is what `nitro.prerender` below
-      // put there — `/k`, the shell.
+      // put there — `/konobar`, the shell.
       globPatterns: ['**/*.{js,css,html,woff2,svg,png,webmanifest}'],
       /**
        * Workbox's own navigation fallback is **switched off**, on purpose.
@@ -60,9 +60,9 @@ export default defineNuxtConfig({
        * `navigateFallback` registers a route that answers *every* navigation
        * out of the precache — online included. That is right for a pure SPA and
        * wrong here: this app is server-rendered, so a waiter opening
-       * `/k/instalacija` would be handed the `/k` shell and stay looking at the
-       * floor plan. (That is not hypothetical; it is what the first run of
-       * `tests/e2e/wp0-offline.spec.ts` caught.)
+       * `/konobar/instalacija` would be handed the `/konobar` shell and stay
+       * looking at the floor plan. (That is not hypothetical; it is what the
+       * first run of `tests/e2e/wp0-offline.spec.ts` caught.)
        *
        * The module insists on registering the route, so it is pointed at a URL
        * that really is precached and given an **empty allowlist**, which means
@@ -70,7 +70,7 @@ export default defineNuxtConfig({
        * the same job properly: network first, the shell only when the network
        * is not there.
        */
-      navigateFallback: '/k',
+      navigateFallback: '/konobar',
       navigateFallbackAllowlist: [],
       runtimeCaching: [
         {
@@ -78,13 +78,13 @@ export default defineNuxtConfig({
            * A whole page load (a cold start, or a reload). Online it goes to
            * the server, because the HTML is rendered per request. Offline the
            * copy from the last visit answers, and if there is no copy — a table
-           * this phone has not opened tonight — the precached `/k` shell does,
-           * and Vue Router resolves the real route on the phone.
+           * this phone has not opened tonight — the precached `/konobar` shell
+           * does, and Vue Router resolves the real route on the phone.
            */
           urlPattern: ({ request, url }: { request: Request, url: URL }) =>
             request.mode === 'navigate'
             && !url.pathname.startsWith('/api/')
-            && !url.pathname.startsWith('/a'),
+            && !url.pathname.startsWith('/admin'),
           handler: 'NetworkFirst',
           options: {
             cacheName: 'sank-shell',
@@ -92,7 +92,7 @@ export default defineNuxtConfig({
             plugins: [{
               // `ignoreSearch`, because a precached entry is stored under its
               // URL plus a `__WB_REVISION__` query the app never asks for.
-              handlerDidError: async () => caches.match('/k', { ignoreSearch: true }),
+              handlerDidError: async () => caches.match('/konobar', { ignoreSearch: true }),
             }],
           },
         },
@@ -134,6 +134,35 @@ export default defineNuxtConfig({
       enabled: false,
       type: 'module',
     },
+  },
+
+  /**
+   * The old one-letter prefixes, kept alive as redirects.
+   *
+   * The pages moved to `/konobar`, `/sanker` and `/admin`, but a phone that
+   * installed the app before the move still has `/k` in its home-screen
+   * shortcut, and every bookmark and pasted link out there is still short.
+   *
+   * **What a route rule is.** A table Nitro consults *before* any page or API
+   * handler runs, matched on the path. `redirect` answers with a 307 and a
+   * `Location:` header, so the browser asks again for the new address — the
+   * user sees the new URL and nothing in the app has to know about the old one.
+   *
+   * `'/k/**'` means "`/k` and everything under it"; the `'/konobar/**'` target
+   * pastes the rest of the path back on, so `/k/sto/3?kat=4` lands on
+   * `/konobar/sto/3?kat=4`. The plain `'/k'` rule beside it is not redundant:
+   * the exact match wins over the wildcard and keeps the query string without
+   * the trailing slash the splat would leave behind.
+   *
+   * Only whole first segments match, so `/api/**` and `/stanje` are untouched.
+   */
+  routeRules: {
+    '/k': { redirect: '/konobar' },
+    '/k/**': { redirect: '/konobar/**' },
+    '/s': { redirect: '/sanker' },
+    '/s/**': { redirect: '/sanker/**' },
+    '/a': { redirect: '/admin' },
+    '/a/**': { redirect: '/admin/**' },
   },
 
   css: ['~/assets/css/main.css'],
@@ -198,7 +227,8 @@ export default defineNuxtConfig({
     externals: { external: ['better-sqlite3'] },
 
     /**
-     * One page is built to a static file at build time: `/k`, the waiter shell.
+     * One page is built to a static file at build time: `/konobar`, the waiter
+     * shell.
      *
      * It costs nothing — everything on that screen is inside `<ClientOnly>` and
      * depends on a session cookie the build has no way to see, so the rendered
@@ -207,7 +237,7 @@ export default defineNuxtConfig({
      * offline navigation with a page it already holds, and a server-rendered
      * route is not a page it holds.
      */
-    prerender: { routes: ['/k'] },
+    prerender: { routes: ['/konobar'] },
 
     // Nitro's cron runner is still behind a flag.
     experimental: { tasks: true },

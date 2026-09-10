@@ -225,7 +225,7 @@ DB_PATH=$APP_DIR/data/sank.db
 # script does NOT touch it.
 #
 # CHANGING THIS LINE INVALIDATES EVERY STORED PIN. Nobody can log in until the
-# owner sets all of them again in /a. Copy it somewhere safe (a password
+# owner sets all of them again in /admin. Copy it somewhere safe (a password
 # manager) along with the backups, and never regenerate it casually. If you ever
 # have to, generate it with:
 #   openssl rand -hex 32
@@ -430,7 +430,7 @@ Next, in this order (details in deploy/README-DEPLOY.md):
   2. Put a database in $APP_DIR/data/sank.db, from the Mac. The seeding
      script needs the source tree, which is not on this server, so the file is
      made on the Mac and copied up. NODE_ENV=production is what leaves the six
-     people with NO PIN - the owner sets them in /a - instead of the dev PINs:
+     people with NO PIN - the owner sets them in /admin - instead of the dev PINs:
        rm -f /tmp/sank-prod.db
        DB_PATH=/tmp/sank-prod.db NODE_ENV=production npm run db:seed
        scp /tmp/sank-prod.db $APP_USER@<this-server>:$APP_DIR/data/sank.db

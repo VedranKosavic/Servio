@@ -9,7 +9,7 @@
  * this list may quote the same numbers with `{{cash_tolerance_fen}}`, which is
  * the same value through the same formatter.
  *
- * Dark theme: this is a `/k` component and writes no `/a` token.
+ * Dark theme: this is a `/konobar` component and writes no `/admin` token.
  */
 import type { Settings } from '#shared/settings'
 

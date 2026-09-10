@@ -1,5 +1,5 @@
 /**
- * `GET /api/admin/devices` — the *Uređaji* list in `/a`.
+ * `GET /api/admin/devices` — the *Uređaji* list in `/admin`.
  *
  * Every phone that has ever enrolled, with the two numbers that matter on a
  * Saturday night: how many rounds its outbox still holds, and how far its clock

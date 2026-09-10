@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * *Zamjene* — every swap request, by status. `/a`, light kit.
+ * *Zamjene* — every swap request, by status. `/admin`, light kit.
  *
  * **This is the one screen besides *Dnevnik* where "bolest" is a word.** The
  * *Svi* line a taken swap posts is identical whether the reason was *zamjena* or

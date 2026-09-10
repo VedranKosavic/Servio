@@ -92,7 +92,7 @@ async function enrolAndLogin(context: BrowserContext, who: string): Promise<void
   })
   expect(login.ok(), await login.text()).toBe(true)
 
-  // A published Pravila version stands in front of every /k screen (S12), and
+  // A published Pravila version stands in front of every /konobar screen (S12), and
   // phase4-pravila publishes one before this file runs. Clear it here so the
   // spec does not depend on where it sits in the alphabet.
   await ackRules(context.request)
@@ -149,13 +149,13 @@ test('a draft week is the owner\'s alone, and publishing it is two taps', async 
   await roster(addDays(nextWeek, 4), 'Večernja', 'Amar')
 
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto('/a/login')
+  await page.goto('/admin/login')
   await page.getByLabel('E-mail').or(page.locator('input[type="email"]')).first().fill(ADMIN.email)
   await page.locator('input[type="password"]').first().fill(ADMIN.password)
   await page.getByRole('button', { name: 'Prijavi se' }).click()
-  await page.waitForURL(/\/a(\?|$)/)
+  await page.waitForURL(/\/admin(\?|$)/)
 
-  await page.goto(`/a/raspored?w=${nextWeek}`)
+  await page.goto(`/admin/raspored?w=${nextWeek}`)
   await expect(page.getByText('nacrt', { exact: true })).toBeVisible()
 
   // The waiter cannot see a draft at all — a different query, not a filter.
@@ -176,13 +176,13 @@ test('a draft week is the owner\'s alone, and publishing it is two taps', async 
 
 test('kopiraj prošlu sedmicu fills the next one in one tap', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto('/a/login')
+  await page.goto('/admin/login')
   await page.locator('input[type="email"]').first().fill(ADMIN.email)
   await page.locator('input[type="password"]').first().fill(ADMIN.password)
   await page.getByRole('button', { name: 'Prijavi se' }).click()
-  await page.waitForURL(/\/a(\?|$)/)
+  await page.waitForURL(/\/admin(\?|$)/)
 
-  await page.goto(`/a/raspored?w=${weekAfter}`)
+  await page.goto(`/admin/raspored?w=${weekAfter}`)
   /**
    * *Kopiraj* is disabled until the week has loaded **and** come back empty — a
    * `null` view is not an empty week, and offering the button before the answer
@@ -207,7 +207,7 @@ test('a swap crosses two phones and says nothing about the reason', async () => 
   await admin.post('/api/roster/weeks/publish', { data: { week_start: nextWeek } })
 
   const dino: Page = await dinoCtx.newPage()
-  await dino.goto('/k/raspored')
+  await dino.goto('/konobar/raspored')
   await dino.getByRole('button', { name: 'Sljedeća' }).click()
 
   // His own row is the only tappable one on the screen.
@@ -243,7 +243,7 @@ test('a swap crosses two phones and says nothing about the reason', async () => 
   expect(ownerSwaps.find(s => s.from_user_name === 'Dino')!.reason).toBe('bolest')
 
   const amar: Page = await amarCtx.newPage()
-  await amar.goto('/k/raspored')
+  await amar.goto('/konobar/raspored')
   await expect(amar.getByText('Traži se zamjena')).toBeVisible({ timeout: 15_000 })
   await amar.getByRole('button', { name: 'Preuzimam' }).first().click()
   await amar.getByRole('button', { name: 'Preuzimam', exact: true }).last().click()
@@ -309,13 +309,13 @@ test('Sati prints the caveat and the person who was there without a plan', async
   expect(order.ok(), await order.text()).toBe(true)
 
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto('/a/login')
+  await page.goto('/admin/login')
   await page.locator('input[type="email"]').first().fill(ADMIN.email)
   await page.locator('input[type="password"]').first().fill(ADMIN.password)
   await page.getByRole('button', { name: 'Prijavi se' }).click()
-  await page.waitForURL(/\/a(\?|$)/)
+  await page.waitForURL(/\/admin(\?|$)/)
 
-  await page.goto('/a/raspored?tab=sati')
+  await page.goto('/admin/raspored?tab=sati')
 
   // Printed on the page, never in a tooltip (PLAN §8).
   await expect(page.getByText('Prva akcija nije dolazak.')).toBeVisible({ timeout: 10_000 })
@@ -326,7 +326,7 @@ test('Sati prints the caveat and the person who was there without a plan', async
 
 test('S17 opens on a phone, in Bosnian, with no sideways scroll', async () => {
   const amar: Page = await amarCtx.newPage()
-  await amar.goto('/k/raspored')
+  await amar.goto('/konobar/raspored')
   await expect(amar.getByText('Raspored').first()).toBeVisible()
 
   // The rule the whole screen rests on: nothing here queues.

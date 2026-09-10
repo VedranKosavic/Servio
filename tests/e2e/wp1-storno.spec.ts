@@ -85,7 +85,7 @@ async function enrolAndLogin(context: BrowserContext, who: string): Promise<void
   })
   expect(login.ok(), await login.text()).toBe(true)
 
-  // A published Pravila version stands in front of every /k screen (S12), and
+  // A published Pravila version stands in front of every /konobar screen (S12), and
   // phase4-pravila publishes one before this file runs. Clear it here so the
   // spec does not depend on where it sits in the alphabet.
   await ackRules(context.request)
@@ -148,7 +148,7 @@ async function requestVoid(
 
 /** Open Emir's queue and wait for it to have painted. */
 async function openQueue(page: Page) {
-  await page.goto('/s/cekanje')
+  await page.goto('/sanker/cekanje')
   await expect(page.getByRole('heading', { name: 'Na čekanju' })).toBeVisible()
 }
 
@@ -157,7 +157,7 @@ const stornoCard = (page: Page) => page.locator('article').filter({ hasText: 'St
 /** Amar's phone, on the floor plan, as a waiter actually holds it. */
 async function amarsPhone(): Promise<Page> {
   const page = await amarCtx.newPage()
-  await page.goto('/k')
+  await page.goto('/konobar')
   await expect(page.getByText('Stolovi')).toBeVisible({ timeout: 20_000 })
   return page
 }
@@ -371,7 +371,7 @@ test.describe('WP1 — storno, gratis and the approval queue', () => {
       const round = await lockRound(amarCtx.request, 'Sto 23')
       await new Promise(resolve => setTimeout(resolve, 1500))
 
-      await page.goto(`/k/sto/${table.id}`)
+      await page.goto(`/konobar/sto/${table.id}`)
       // The rounds are collapsed to their headers; open the one we just locked.
       await page.getByRole('button', { name: /^Tura 1/ }).click()
       await page.getByRole('button', { name: /Kafa/ }).first().click()
@@ -428,7 +428,7 @@ test.describe('WP1 — storno, gratis and the approval queue', () => {
 
       /** Long-press a tile and open the comp sheet on it. */
       async function openComp(product: string) {
-        await page.goto(`/k/dodaj/${table.id}`)
+        await page.goto(`/konobar/dodaj/${table.id}`)
         await expect(page.getByText('Dodir = +1 · dugi dodir = napomena')).toBeVisible()
         await longPress(page, tile(page, product))
         await expect(page.getByRole('dialog', { name: 'Napomena' })).toBeVisible()

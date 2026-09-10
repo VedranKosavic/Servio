@@ -120,7 +120,7 @@ export function waiterVerdict(user: UserSummary, settings: Settings): Verdict {
 // The shift's own words
 // ---------------------------------------------------------------------------
 
-/** The pill on `/a/smjene` and in the page header. */
+/** The pill on `/admin/smjene` and in the page header. */
 export function shiftStatusPill(status: ShiftStatus): Verdict {
   switch (status) {
     case 'open': return { word: 'otvorena', tone: 'accent' }
@@ -236,7 +236,7 @@ const STATUS_WORDS: Record<CashMovement['status'], string> = {
  * prebrojano → razlika.
  *
  * **What is not here and why.** *Ostalo u kasi sinoć* is the previous close's
- * counted cash minus what the owner took out of it. No read on `/a` carries it
+ * counted cash minus what the owner took out of it. No read on `/admin` carries it
  * and the drawer's own expectation is folded into `summary.expected_cash_fen`
  * together with the waiters who have settled, so it cannot be recovered
  * arithmetically either. Rather than print a number this page cannot stand

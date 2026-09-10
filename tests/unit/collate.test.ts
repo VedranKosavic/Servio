@@ -2,7 +2,7 @@
  * `shared/collate.ts` — the sort order that does not change between runtimes.
  *
  * The two pairs asserted first are not decoration: they are the exact two
- * option pairs whose SSR/client DOM diff made `/a/dnevnik` log a Vue hydration
+ * option pairs whose SSR/client DOM diff made `/admin/dnevnik` log a Vue hydration
  * mismatch on every load. `localeCompare(…, 'bs')` gives one answer on Node
  * (full ICU, real Bosnian collation) and the opposite in Chromium (no 'bs'
  * data, falls back to en-US), so the *Vrsta* dropdown rendered in one order and
@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest'
 import { bsCompare, bsKey } from '#shared/collate'
 
 describe('bsCompare', () => {
-  it('orders the two pairs that made /a/dnevnik mismatch', () => {
+  it('orders the two pairs that made /admin/dnevnik mismatch', () => {
     expect(bsCompare('Slika uklonjena', 'Šablon smjene promijenjen')).toBeLessThan(0)
     expect(bsCompare('Popis potvrđen', 'Popis potvrdio svjedok')).toBeGreaterThan(0)
   })

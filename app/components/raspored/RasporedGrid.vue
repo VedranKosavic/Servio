@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * The laptop grid — templates down, days across. `/a`, light kit.
+ * The laptop grid — templates down, days across. `/admin`, light kit.
  *
  * Sticky on two edges: the day header stays while the templates scroll, and the
  * template column stays while the week scrolls sideways. Without both, a café

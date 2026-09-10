@@ -3,7 +3,7 @@
  * The part of *Pravila* that is not a number: the fairness contract.
  *
  * These sections are **not** part of the published document and cannot be
- * edited away from `/a`. They are the promises the app itself makes — what a
+ * edited away from `/admin`. They are the promises the app itself makes — what a
  * flag means, what is recorded, who can see what — and PLAN §8 and F12 put them
  * in *Pravila* precisely so that they are not the owner's to soften. The
  * honesty note about the database file is quoted word for word from F12 (a).
@@ -13,7 +13,7 @@
  * server deleted at 60 would be the exact dishonesty the note exists to
  * prevent. With the default 90 the sentence reads exactly as PLAN writes it.
  *
- * Dark theme: a `/k` component, no `/a` token anywhere in it.
+ * Dark theme: a `/konobar` component, no `/admin` token anywhere in it.
  */
 import type { Settings } from '#shared/settings'
 

@@ -1,7 +1,8 @@
 /**
  * What the phone tells the person about its own honesty.
  *
- * One chip in every `/k` and `/s` header, three states, and each one is colour
+ * One chip in every `/konobar` and `/sanker` header, three states, and each one
+ * is colour
  * **and** word — a chip that only changed colour would be invisible to the
  * waiter who is colour-blind and useless in the dark corner of the terrace
  * (PHASE3 §4: "State is colour and icon and text").

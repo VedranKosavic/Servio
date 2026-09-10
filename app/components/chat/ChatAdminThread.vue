@@ -2,11 +2,12 @@
 /**
  * The thread, in the light kit — a re-implementation, not a re-skin (PHASE4 §1).
  *
- * `/k` is dark and `/a` is light and the two never share a rule: every colour
- * below is a `--` token from `app/assets/css/admin.css`, and nothing in this
- * file is a Tailwind class from the waiter app. The behaviour is the same
- * behaviour — own on the right, system lines centred, images with their size
- * reserved, a removed bubble that says who and when and never the text.
+ * `/konobar` is dark and `/admin` is light and the two never share a rule:
+ * every colour below is a `--` token from `app/assets/css/admin.css`, and
+ * nothing in this file is a Tailwind class from the waiter app. The behaviour
+ * is the same behaviour — own on the right, system lines centred, images with
+ * their size reserved, a removed bubble that says who and when and never the
+ * text.
  */
 import { localTime } from '#shared/dates'
 import type { ChatMessage } from '#shared/types'

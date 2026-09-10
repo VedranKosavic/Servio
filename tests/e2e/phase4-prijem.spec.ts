@@ -1,7 +1,7 @@
 /**
- * WP3's done-when — *Prijem sa slike* on `/a/roba/prijem` (PHASE4 §3, check 6).
+ * WP3's done-when — *Prijem sa slike* on `/admin/roba/prijem` (PHASE4 §3, check 6).
  *
- * Haris is an **admin session**: `haris@lounge.ba / lounge` at `/a/login`, no
+ * Haris is an **admin session**: `haris@lounge.ba / lounge` at `/admin/login`, no
  * device and no PIN. Amar gets an enrolled phone, because one of the five checks
  * is that a waiter cannot upload a delivery photo at all.
  *
@@ -94,7 +94,7 @@ async function shootOtpremnica(page: Page): Promise<void> {
 
 /** Open *Prijem* and switch to *Sa slike*. */
 async function openScan(page: Page): Promise<void> {
-  await page.goto('/a/roba/prijem')
+  await page.goto('/admin/roba/prijem')
   await expect(page.getByRole('button', { name: 'Sa slike' })).toBeVisible()
   await page.getByRole('button', { name: 'Sa slike' }).click()
   await expect(page.getByRole('button', { name: 'Slikaj otpremnicu' })).toBeVisible()
@@ -127,7 +127,7 @@ test.beforeAll(async ({ browser }) => {
   expect(enrolled.ok(), await enrolled.text()).toBe(true)
   const pin = await amar.post('/api/auth/pin', { data: { user_id: user.id, pin: '1111' } })
   expect(pin.ok(), await pin.text()).toBe(true)
-  // S12 stands in front of every /k screen once phase4-pravila has published.
+  // S12 stands in front of every /konobar screen once phase4-pravila has published.
   await ackRules(amar)
 })
 

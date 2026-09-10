@@ -23,7 +23,7 @@
  * `admin` has the special permissions: the dashboard, every live read, the
  * approvals, the catalogue, users and settings, the Dnevnik. `waiter` and
  * `bartender` have **identical permissions on the floor**; the default screen
- * differs (`/k` vs `/s`) and one thing more — the bartender is a default
+ * differs (`/konobar` vs `/sanker`) and one thing more — the bartender is a default
  * approver, which is a *setting* (`approver_roles`) and not a hard-coded rule.
  *
  * Korak 1's `'owner'` is gone: the migration renames the value, and the paths

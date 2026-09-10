@@ -30,8 +30,8 @@ The end state:
    npm run build   ──rsync──▶   /opt/sank/releases/20260909-181500/
                                  /opt/sank/current ──▶ (that one)
                                  systemd runs: node .output/server/index.mjs
-                                   ├── the waiters' phones on /k
-                                   └── the owner's dashboard on /a
+                                   ├── the waiters' phones on /konobar
+                                   └── the owner's dashboard on /admin
                                  nginx on 443 ──▶ 127.0.0.1:3100
                                  /opt/sank/data/sank.db     ← the till
                                  /opt/sank/backups/         ← hourly + nightly
@@ -207,7 +207,7 @@ including the four variables that must **not** appear in it. Read it once.
 >
 > **Changing that line invalidates every stored PIN.** Not "logs everybody out"
 > — invalidates: no PIN in the database verifies any more, and nobody can get
-> in until the owner sets all of them again in `/a`. Copy the line into a
+> in until the owner sets all of them again in `/admin`. Copy the line into a
 > password manager now, next to wherever you keep the backups, and leave it
 > alone.
 >
@@ -249,7 +249,7 @@ runs as.
 > **`NODE_ENV=production` is the important half of that command.** Without it,
 > the seed installs the development PINs — Amar 1111, Lejla 2222, and an admin
 > password of `lounge`. With it, the six people are created with **no PIN at
-> all** and the script prints `postavi PIN-ove u /a`: nobody can log in until
+> all** and the script prints `postavi PIN-ove u /admin`: nobody can log in until
 > the owner sets each PIN himself, on the real server. That is the only way a
 > default PIN never reaches a café.
 >
@@ -817,7 +817,7 @@ lost.** The rounds get typed in afterwards. That sentence is the whole of
 | `triggers.sql not found` in the log | the release is missing `server/database/triggers.sql`. Deploy again — the script checks for it now. Do **not** work around it by editing the app; a release without triggers is a release with editable books. |
 | deploy warns `the database has NO products` | the database is empty — step 5 was skipped, or `DB_PATH` points at a different file from the one you copied up. The app is running; nobody can order on it. |
 | Service restarts in a loop | `journalctl -u sank -n 50`. Usually `/opt/sank/.env` (a bad value), or `/opt/sank/data/sank.db` missing or unreadable. |
-| Nobody can log in with their PIN, and it worked yesterday | `PIN_PEPPER` in `/opt/sank/.env` changed or was filled in after the PINs were set. If you have the old value, put it back and restart. If you do not, the owner sets every PIN again in `/a`. |
+| Nobody can log in with their PIN, and it worked yesterday | `PIN_PEPPER` in `/opt/sank/.env` changed or was filled in after the PINs were set. If you have the old value, put it back and restart. If you do not, the owner sets every PIN again in `/admin`. |
 | Everyone is rate-limited or locked out at once | the app is seeing one caller for the whole world: nginx is not setting the two headers, or `TRUST_PROXY=1` is missing from `.env`. Both, or neither. |
 | Sign-in seems to work and then does nothing | you are on plain http. The session cookie is `secure` and is never sent over http. Finish the domain and certificate step. |
 | `413 Request Entity Too Large` on an upload | `client_max_body_size` in `nginx.conf`. |

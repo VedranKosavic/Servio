@@ -1,5 +1,5 @@
 /**
- * The guard on every `/a` page except the login screen.
+ * The guard on every `/admin` page except the login screen.
  *
  * A page opts in with `definePageMeta({ middleware: 'admin', layout: 'admin' })`
  * — Nuxt route middleware, which runs before the page renders.
@@ -12,10 +12,10 @@
  *
  * The two outcomes are deliberately different:
  *
- * - **nobody is logged in** → `/a/login`, where he can log in.
- * - **a waiter is logged in** → `/k`, his own screen. He is not an intruder, he
- *   is in the wrong room; sending him to a login form he has already passed
- *   would just look broken.
+ * - **nobody is logged in** → `/admin/login`, where he can log in.
+ * - **a waiter is logged in** → `/konobar`, his own screen. He is not an
+ *   intruder, he is in the wrong room; sending him to a login form he has
+ *   already passed would just look broken.
  */
 export default defineNuxtRouteMiddleware(async () => {
   // On the server there is no answer to give. `useMe().load()` calls
@@ -27,6 +27,6 @@ export default defineNuxtRouteMiddleware(async () => {
   const me = useMe()
   const state = me.me.value ? me.status.value : await me.load()
 
-  if (state !== 'ready') return navigateTo('/a/login')
+  if (state !== 'ready') return navigateTo('/admin/login')
   if (me.user.value?.role !== 'admin') return navigateTo(me.home.value)
 })

@@ -2,9 +2,9 @@
  * The outbox — every piece of money or stock this phone owes the server.
  *
  * A café has one wifi router, a fridge between it and the terrace, and eight
- * hours of Saturday night. Before this store, `Pošalji šankeru` called
- * `POST /api/orders` and hoped; a dead spot lost the round, or worse, sent it
- * twice. Now nothing on `/k` or `/s` posts money directly. A screen calls
+ * hours of Saturday night. Before this store, `Pošalji šankeru` called `POST
+ * /api/orders` and hoped; a dead spot lost the round, or worse, sent it twice.
+ * Now nothing on `/konobar` or `/sanker` posts money directly. A screen calls
  * `enqueue(kind, body)`, gets the local truth back immediately, and this store
  * takes on the job of getting it to the server — eventually, in order, exactly
  * once.

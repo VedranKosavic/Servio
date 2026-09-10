@@ -29,12 +29,13 @@ export type MeStatus = 'unknown' | 'ready' | 'anon' | 'nodevice' | 'offline'
  * Where each role lives. Waiters get the floor plan, bartenders the ticket
  * queue, and since Phase 2 the admin gets the dashboard he logs in for.
  *
- * This is also the redirect a waiter who lands on `/a` follows: he is logged in,
- * just not welcome there, so he goes to `/k` rather than back to a login screen.
+ * This is also the redirect a waiter who lands on `/admin` follows: he is
+ * logged in, just not welcome there, so he goes to `/konobar` rather than back
+ * to a login screen.
  */
 export function homeFor(role: Role | undefined): string {
-  if (role === 'admin') return '/a'
-  return role === 'bartender' ? '/s' : '/k'
+  if (role === 'admin') return '/admin'
+  return role === 'bartender' ? '/sanker' : '/konobar'
 }
 
 /** Everything this phone remembers on its own. Wiped when the device is revoked. */

@@ -12,8 +12,8 @@
  * on (dev, tests) the six people get the PINs listed below and Haris gets an
  * email and a password, so a fresh clone can log in. With it off the users are
  * inserted with `pin_hash NULL` — which means "cannot log in" — and the CLI
- * prints a line telling whoever is installing to set the PINs in `/a`. A default
- * PIN that reaches a real café is a PIN nobody ever changes.
+ * prints a line telling whoever is installing to set the PINs in `/admin`. A
+ * default PIN that reaches a real café is a PIN nobody ever changes.
  */
 import { sql } from 'drizzle-orm'
 import type { Db } from './client'
@@ -104,8 +104,8 @@ export function seed(db: Db, opts: SeedOptions = {}): void {
       id: venueId,
       name: 'Lounge',
       slug: 'lounge',
-      // The one override the dev venue needs: the existing `/s` delivery screen
-      // is the bartender's, and the production default is `false`.
+      // The one override the dev venue needs: the existing `/sanker` delivery
+      // screen is the bartender's, and the production default is `false`.
       settingsJson: devSecrets ? '{"bartender_can_receive_goods":true}' : '{}',
       createdAt: now,
     }).run()
@@ -142,7 +142,7 @@ export function seed(db: Db, opts: SeedOptions = {}): void {
         pinLen: DEV_PIN_OVERRIDE ? (DEV_PIN_OVERRIDE.length === 6 ? 6 : 4) : person.pinLen,
         pinSetAt: devSecrets ? now : null,
         pinPepperV: 1,
-        // Email + password is the only way into `/a` on a laptop, and only an
+        // Email + password is the only way into `/admin` on a laptop, and only an
         // admin has one.
         passwordHash: devSecrets && isAdmin ? memoHash(DEV_PIN_OVERRIDE ?? DEV_ADMIN_PASSWORD, userId) : null,
         email: devSecrets && isAdmin ? DEV_ADMIN_EMAIL : null,

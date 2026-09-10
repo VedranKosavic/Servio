@@ -7,8 +7,9 @@
  * when one of them is obviously the answer is a tap nobody should have to make.
  * The last channel is remembered in IndexedDB, so it survives a reload.
  *
- * The waiter and the bartender share this component and differ only in where the
- * back arrow goes — `/k` for one, `/s` for the other, the `/s/popis` precedent.
+ * The waiter and the bartender share this component and differ only in where
+ * the back arrow goes — `/konobar` for one, `/sanker` for the other, the
+ * `/sanker/popis` precedent.
  */
 import { localTime } from '#shared/dates'
 import type { ChannelKind } from '#shared/chat'
@@ -16,7 +17,7 @@ import type { ChannelKind } from '#shared/chat'
 const props = defineProps<{
   /** Where the back arrow lands: the floor plan, or the ticket queue. */
   backTo: string
-  /** `/k/razgovor` or `/s/razgovor` — the prefix a channel row navigates to. */
+  /** `/konobar/razgovor` or `/sanker/razgovor` — the prefix a channel row navigates to. */
   base: string
 }>()
 

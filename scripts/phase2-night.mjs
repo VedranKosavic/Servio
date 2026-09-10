@@ -1,7 +1,7 @@
 /**
  * The simulated night behind `docs/PHASE2.md` §5 — one evening's worth of real
  * rows, written through the API rather than into the database, so every screen
- * on `/a` has something true to show.
+ * on `/admin` has something true to show.
  *
  * Plain `fetch` and one cookie jar per actor. No test framework: this is not a
  * test, it is the fixture a person walks the dashboard against.

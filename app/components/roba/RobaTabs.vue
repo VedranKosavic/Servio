@@ -18,12 +18,12 @@ interface Tab {
 }
 
 const TABS: Tab[] = [
-  { to: '/a/roba', label: 'Stanje šanka', owns: ['/a/roba/artikal', '/a/roba/pocetno-stanje'] },
-  { to: '/a/roba/prijem', label: 'Prijem robe' },
-  { to: '/a/roba/popisi', label: 'Popisi' },
-  { to: '/a/roba/otpis', label: 'Otpis' },
-  { to: '/a/roba/nargila', label: 'Nargila' },
-  { to: '/a/roba/kategorije', label: 'Kategorije' },
+  { to: '/admin/roba', label: 'Stanje šanka', owns: ['/admin/roba/artikal', '/admin/roba/pocetno-stanje'] },
+  { to: '/admin/roba/prijem', label: 'Prijem robe' },
+  { to: '/admin/roba/popisi', label: 'Popisi' },
+  { to: '/admin/roba/otpis', label: 'Otpis' },
+  { to: '/admin/roba/nargila', label: 'Nargila' },
+  { to: '/admin/roba/kategorije', label: 'Kategorije' },
 ]
 
 defineProps<{
@@ -34,8 +34,8 @@ defineProps<{
 const route = useRoute()
 
 function isActive(tab: Tab): boolean {
-  if (tab.to === '/a/roba') {
-    return route.path === '/a/roba'
+  if (tab.to === '/admin/roba') {
+    return route.path === '/admin/roba'
       || (tab.owns ?? []).some(prefix => route.path.startsWith(prefix))
   }
   return route.path.startsWith(tab.to)

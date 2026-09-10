@@ -10,7 +10,7 @@
  * confirming costs nothing, and a confirmed one is an append-only correction to
  * the ledger.
  *
- * The lines behind a count live on `/a/roba/popisi/:id`, which is WP3's; this
+ * The lines behind a count live on `/admin/roba/popisi/:id`, which is WP3's; this
  * card links there rather than fetching a second read of its own.
  */
 import { COUNT_KIND_WORDS, COUNT_PHASE_WORDS, countPill } from './smjenaLogic'
@@ -49,7 +49,7 @@ const emit = defineEmits<{ confirm: [countId: string] }>()
 
       <UiPill :tone="countPill(count).tone">{{ countPill(count).word }}</UiPill>
 
-      <NuxtLink class="s-count-link" :to="`/a/roba/popisi/${count.id}`">Stavke</NuxtLink>
+      <NuxtLink class="s-count-link" :to="`/admin/roba/popisi/${count.id}`">Stavke</NuxtLink>
 
       <UiButton
         v-if="count.status === 'submitted'"

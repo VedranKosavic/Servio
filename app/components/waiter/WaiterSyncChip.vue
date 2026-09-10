@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * The one chip in every `/k` and `/s` header. Always visible, never a spinner.
+ * The one chip in every `/konobar` and `/sanker` header. Always visible, never
+ * a spinner.
  *
  * Colour **and** icon **and** word, because a chip that only changed colour is
  * no chip at all in a dark corner of the terrace. Red says the network is gone

@@ -8,10 +8,10 @@
  * carries this line.
  *
  * It is rendered from the dark layout rather than from a header, because it has
- * to be true on *every* `/k` and `/s` screen for the *whole* session — a round
- * locked on Emir's phone under Amar's name is exactly the thing that must be
- * visible while it is happening, not in the morning. It renders nothing at all
- * on an ordinary session.
+ * to be true on *every* `/konobar` and `/sanker` screen for the *whole* session
+ * — a round locked on Emir's phone under Amar's name is exactly the thing that
+ * must be visible while it is happening, not in the morning. It renders nothing
+ * at all on an ordinary session.
  */
 const me = useMe()
 </script>

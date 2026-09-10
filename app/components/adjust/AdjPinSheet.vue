@@ -2,8 +2,8 @@
 /**
  * *Odobri PIN-om* — an approver's PIN, typed on the requester's own phone.
  *
- * This is the one place in `/k` where somebody who is not holding the phone puts
- * his digits into it, and it is deliberately narrow:
+ * This is the one place in `/konobar` where somebody who is not holding the
+ * phone puts his digits into it, and it is deliberately narrow:
  *
  * - **Only the people who may actually approve are listed.** The filter is the
  *   venue's `approver_roles`, never yourself, and never the owner unless this is

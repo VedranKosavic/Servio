@@ -194,7 +194,7 @@ describe('the seed', () => {
     expect(amar.pinHash).toMatch(/^scrypt\$\d+\$\d+\$\d+\$[0-9a-f]+\$[0-9a-f]+$/)
     expect(amar.pinHash).not.toContain('1111')
 
-    // Only the admin has a way into `/a` on a laptop.
+    // Only the admin has a way into `/admin` on a laptop.
     const haris = f.db.select().from(schema.users).all().find(u => u.name === 'Haris')!
     expect(haris.email).toBe('haris@lounge.ba')
     expect(haris.passwordHash).not.toBeNull()

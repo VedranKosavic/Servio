@@ -20,7 +20,7 @@ import { lookOf, pillsOf, splitTitle } from './dnevnikKinds'
 
 const props = defineProps<{
   entry: LogEntryDetail
-  /** On `/a/dnevnik/:id` the headline is the page's own; do not link it again. */
+  /** On `/admin/dnevnik/:id` the headline is the page's own; do not link it again. */
   linked?: boolean
 }>()
 
@@ -48,11 +48,11 @@ const chips = computed(() => {
     : undefined
 
   return [
-    { label: 'Smjena', to: `/a/smjena/${shiftId}` },
+    { label: 'Smjena', to: `/admin/smjena/${shiftId}` },
     {
       label: 'Stavke',
       to: {
-        path: `/a/smjena/${shiftId}/stavke`,
+        path: `/admin/smjena/${shiftId}/stavke`,
         query: { ...(user ? { user } : {}), ...(kat ? { kat } : {}) },
       },
     },
@@ -70,7 +70,7 @@ const chips = computed(() => {
 
     <div class="d-body">
       <div class="d-head">
-        <NuxtLink v-if="linked" :to="`/a/dnevnik/${entry.id}`" class="d-h">{{ title.head }}</NuxtLink>
+        <NuxtLink v-if="linked" :to="`/admin/dnevnik/${entry.id}`" class="d-h">{{ title.head }}</NuxtLink>
         <span v-else class="d-h">{{ title.head }}</span>
         <span v-if="title.rest" class="d-rest">{{ title.rest }}</span>
         <UiPill v-for="pill in pills" :key="pill.text" :tone="pill.tone">{{ pill.text }}</UiPill>

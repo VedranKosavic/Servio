@@ -57,7 +57,7 @@ async function loginAsAmar(context: BrowserContext, page: Page): Promise<Map<str
     data: { user_id: amar.id, pin: AMAR_PIN },
   })).ok()).toBe(true)
 
-  // A published Pravila version stands in front of every /k screen (S12), and
+  // A published Pravila version stands in front of every /konobar screen (S12), and
   // phase4-pravila publishes one before this file runs. Clear it here so the
   // spec does not depend on where it sits in the alphabet.
   await ackRules(context.request)
@@ -65,7 +65,7 @@ async function loginAsAmar(context: BrowserContext, page: Page): Promise<Map<str
   const boot = await (await context.request.get('/api/bootstrap')).json() as
     { tables: BootTable[] }
 
-  await page.goto('/k')
+  await page.goto('/konobar')
   await expect(page.getByText('Stolovi')).toBeVisible()
 
   // The worker installs on the first load and takes over on the next one. Both
@@ -84,9 +84,10 @@ async function loginAsAmar(context: BrowserContext, page: Page): Promise<Map<str
  * Open a table by tapping its circle, the way a waiter does.
  *
  * Deliberately not `page.goto`: a full page load offline is answered by the
- * service worker with the `/k` shell (see `nuxt.config.ts`), which is the right
- * behaviour for a cold start and the wrong way to test the screen. Tapping is
- * client-side routing and needs no network at all — which is the point.
+ * service worker with the `/konobar` shell (see `nuxt.config.ts`), which is the
+ * right behaviour for a cold start and the wrong way to test the screen.
+ * Tapping is client-side routing and needs no network at all — which is the
+ * point.
  */
 async function openTable(page: Page, name: string) {
   const number = name.replace(/^Sto /, '')
@@ -164,7 +165,7 @@ async function freshPage(): Promise<Page> {
   for (const open of context.pages()) await open.close()
 
   const page = await context.newPage()
-  await page.goto('/k')
+  await page.goto('/konobar')
   // `idb-keyval` keeps everything in one store, so emptying it is enough — and
   // it is safer than `deleteDatabase`, which blocks while any connection is
   // open and then leaves the next write hanging.
@@ -389,7 +390,7 @@ test.describe('WP0 — the offline outbox', () => {
     expect(manifest.status()).toBe(200)
     const body = await manifest.json()
     expect(body.name).toBe('Šank')
-    expect(body.start_url).toBe('/k')
+    expect(body.start_url).toBe('/konobar')
     expect(body.display).toBe('standalone')
     expect(body.lang).toBe('bs')
     expect((body.icons as { sizes: string }[]).map(i => i.sizes)).toContain('192x192')
@@ -403,7 +404,7 @@ test.describe('WP0 — the offline outbox', () => {
     const page = await freshPage()
 
     // The install guide is reachable and says the sentence that matters.
-    await page.goto('/k/instalacija', { waitUntil: 'networkidle' })
+    await page.goto('/konobar/instalacija', { waitUntil: 'networkidle' })
     await expect(page.getByText(/Dodaj na početni ekran/)).toBeVisible()
     await expect(page.getByText(/Safari i aplikacija s početnog ekrana ne dijele prijavu/)).toBeVisible()
 
@@ -436,7 +437,7 @@ test.describe('WP0 — the offline outbox', () => {
         else await route.continue()
       })
 
-      await page.goto('/k')
+      await page.goto('/konobar')
       // Honest, not hopeful: the sentence, and the way back (PHASE3 §4).
       await expect(page.getByText('Nema veze — meni nije učitan.')).toBeVisible({ timeout: 20_000 })
       const retry = page.getByRole('button', { name: 'Pokušaj ponovo' })

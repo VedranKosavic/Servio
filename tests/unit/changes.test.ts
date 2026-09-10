@@ -194,7 +194,7 @@ describe('menuVersion and pendingCounts', () => {
     expect(menuVersion(f.db, f.venueId)).toBe(seq)
   })
 
-  // The badge in the /a nav is this sum, so a queue missing here is a badge
+  // The badge in the /admin nav is this sum, so a queue missing here is a badge
   // smaller than the attention list it counts.
   it('counts every queue the attention list assembles', () => {
     const shiftId = f.openShift({ members: ['Amar', 'Emir'] })

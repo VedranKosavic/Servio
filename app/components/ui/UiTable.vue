@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * The dense table `/a` is mostly made of.
+ * The dense table `/admin` is mostly made of.
  *
  * Three things it takes care of so no page has to:
  *

@@ -18,13 +18,13 @@ Everything in `docs/BACKEND.md`: work packages **WP0 → WP8**. Auth (admin emai
 
 **WP9 (the UI rewire) is deliberately not in Phase 1** — it edits `app/**`, which belongs to the other developer while Phase 1 runs. It becomes the first work package of Phase 3.
 
-### Phase 2 — Admin dashboard `/a` and the shared UI kit (Harun)
+### Phase 2 — Admin dashboard `/admin` and the shared UI kit (Harun)
 
-The owner dashboard of PLAN §11, built against the Phase 1 types **before the endpoints exist**, using a typed fixture layer (§3). In scope: page 1 *Uživo / Puls*, page 2 *Smjena / Pregled dana* with the per-waiter strip and the `/a/smjena/:id/stavke` drill-down, page 4 *Meni & Postavke* (products with inline price, recipes, categories, tables and zones, staff, devices, enrol codes, venue settings), page 6 *Dnevnik* as a read-only list over `GET /api/owner/log`, the admin login screen, the phone bottom tabs (`Puls · Smjena · Roba · Više`) and the laptop left nav with badges. Page 3 *Roba* ships as a read-only stock list plus the count-confirm and delivery forms; pages 5, 7 and 8 (*Izvoz*, *Razgovor*, *Raspored*) are stubs with the Bosnian empty state.
+The owner dashboard of PLAN §11, built against the Phase 1 types **before the endpoints exist**, using a typed fixture layer (§3). In scope: page 1 *Uživo / Puls*, page 2 *Smjena / Pregled dana* with the per-waiter strip and the `/admin/smjena/:id/stavke` drill-down, page 4 *Meni & Postavke* (products with inline price, recipes, categories, tables and zones, staff, devices, enrol codes, venue settings), page 6 *Dnevnik* as a read-only list over `GET /api/owner/log`, the admin login screen, the phone bottom tabs (`Puls · Smjena · Roba · Više`) and the laptop left nav with badges. Page 3 *Roba* ships as a read-only stock list plus the count-confirm and delivery forms; pages 5, 7 and 8 (*Izvoz*, *Razgovor*, *Raspored*) are stubs with the Bosnian empty state.
 
-Plus the **shared UI kit** in `app/components/ui/**`: button, card, sheet, numpad, money and time formatters as components, table, tab bar, badge, empty state, chip, stepper — dark theme, ≥ 48 px targets, Bosnian labels, every one usable from both `/a` and `/k`. The kit is new code; Phase 2 does **not** refactor the existing `/k` components into it (Phase 3 does that, and only if it is worth the diff).
+Plus the **shared UI kit** in `app/components/ui/**`: button, card, sheet, numpad, money and time formatters as components, table, tab bar, badge, empty state, chip, stepper — dark theme, ≥ 48 px targets, Bosnian labels, every one usable from both `/admin` and `/konobar`. The kit is new code; Phase 2 does **not** refactor the existing `/konobar` components into it (Phase 3 does that, and only if it is worth the diff).
 
-**Done when:** with `NUXT_PUBLIC_MOCK=1` every `/a` page renders from fixtures on a 390 px viewport and on a laptop, with no English word on any screen; with the flag off and Phase 1 merged, the same pages render from the real API with no component change other than deleting the fixture branch in the composable; `npm run typecheck` proves every fixture satisfies the type from `shared/types.ts`.
+**Done when:** with `NUXT_PUBLIC_MOCK=1` every `/admin` page renders from fixtures on a 390 px viewport and on a laptop, with no English word on any screen; with the flag off and Phase 1 merged, the same pages render from the real API with no component change other than deleting the fixture branch in the composable; `npm run typecheck` proves every fixture satisfies the type from `shared/types.ts`.
 
 ### Phase 3 — Waiter and bartender completion (Vedran)
 
@@ -46,8 +46,8 @@ Onboarding evening with the owner, one week with the paper blok in parallel, the
 
 | Together | Vedran | Harun | Why they do not collide |
 |---|---|---|---|
-| Block A (now) | Phase 1 | Phase 2 | Server vs `/a` UI — disjoint folders; Harun compiles against types, not endpoints |
-| Block B | Phase 3 | Phase 4 | Waiter `/k` + `/s` vs chat/roster backend + `/a` pages 6–8 |
+| Block A (now) | Phase 1 | Phase 2 | Server vs `/admin` UI — disjoint folders; Harun compiles against types, not endpoints |
+| Block B | Phase 3 | Phase 4 | Waiter `/konobar` + `/sanker` vs chat/roster backend + `/admin` pages 6–8 |
 | Block C | Phase 5 | Phase 5 | Pilot, shared queue |
 
 **Phase 2 does not wait for Phase 1 to finish, but it does wait one day for WP0.** WP0 lands the schema and the `shared/types.ts` barrel; the day after it merges, Phase 1 ships a **types-only PR** (`phase-1/contract-types`) that fills `shared/types/{owner,admin,shifts,stock,sync}.ts` with the response shapes named in BACKEND §7 — no implementation, just interfaces. That PR is the starting gun for Phase 2.
@@ -67,7 +67,7 @@ Onboarding evening with the owner, one week with the paper blok in parallel, the
 | `tests/**` except `tests/unit/admin-ui*.test.ts` | Phase 1 |
 | `deploy/**`, `server/database/migrations/**`, `drizzle.config.ts` | Phase 1 |
 | `docs/BACKEND.md`, `PLAN.md`, `README.md`, `CLAUDE.md` | Phase 1 |
-| `app/pages/a/**` | Phase 2 |
+| `app/pages/admin/**` | Phase 2 |
 | `app/components/Admin*/**` and `app/components/ui/**` | Phase 2 |
 | `app/composables/useAdmin*.ts`, `app/composables/useFixtures.ts` | Phase 2 |
 | `app/fixtures/**` | Phase 2 |
@@ -92,7 +92,7 @@ If a request PR sits unmerged for more than a day, Harun is unblocked, not stuck
 | `app/pages/{index,k,s}/**`, the waiter components, `app/stores/{session,cart,outbox}.ts`, `public/sw.js`, `public/manifest.webmanifest` | Phase 3 |
 | `server/services/{orders,payments,tabs,adjustments,shifts,cash,stock,counts}.ts` and their routes | Phase 3 |
 | `server/services/{chat,roster,uploads,scan}.ts`, `server/api/{chat,roster,uploads}/**` | Phase 4 |
-| `app/pages/a/**`, `app/pages/k/razgovor/**`, `app/pages/k/raspored/**` | Phase 4 |
+| `app/pages/admin/**`, `app/pages/konobar/razgovor/**`, `app/pages/konobar/raspored/**` | Phase 4 |
 | `app/components/ui/**` | Phase 4 (still Harun's; Phase 3 requests) |
 | the schema and its one migration for the block | **Phase 4** — Korak 3 tables are all his |
 
@@ -104,7 +104,7 @@ Migrations are the one place where "one owner" is not a preference but a hard re
 
 Harun builds screens for endpoints that Vedran has not written. The trick is that he builds against the **types**, which exist from day two, and feeds them with fixtures until the endpoints land.
 
-**One layer, two sources.** Every `/a` page calls a composable in `app/composables/useAdminApi.ts`. That composable has one branch, at the top, and nowhere else:
+**One layer, two sources.** Every `/admin` page calls a composable in `app/composables/useAdminApi.ts`. That composable has one branch, at the top, and nowhere else:
 
 ```ts
 // app/composables/useAdminApi.ts
@@ -191,4 +191,4 @@ Two conventions that keep the agents out of each other's way in a shared repo: *
 
 ## 7. The short version
 
-Vedran builds the backend contract; Harun builds the admin dashboard against its types with fixtures behind `NUXT_PUBLIC_MOCK=1`. Server, shared and tests are Vedran's; `/a`, the UI kit and the fixtures are Harun's; the waiter screens are frozen until Phase 3. Shared files change through 20-line request PRs merged the same day. `main` is protected, CI is the gate, branches are `phase-N/<topic>`, everyone rebases daily, and the agents are told in writing which folders they may not touch.
+Vedran builds the backend contract; Harun builds the admin dashboard against its types with fixtures behind `NUXT_PUBLIC_MOCK=1`. Server, shared and tests are Vedran's; `/admin`, the UI kit and the fixtures are Harun's; the waiter screens are frozen until Phase 3. Shared files change through 20-line request PRs merged the same day. `main` is protected, CI is the gate, branches are `phase-N/<topic>`, everyone rebases daily, and the agents are told in writing which folders they may not touch.

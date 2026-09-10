@@ -850,7 +850,7 @@ function staffDrinksUsed(
  * always the actor's own row (no body names a user — CLAUDE.md), and it must be
  * a shift he was actually on, so a curious phone cannot leave a note on a night
  * it never worked. It bumps `shift` because the owner's per-waiter strip on
- * `/a` renders the note; a note written and never seen is not the feature.
+ * `/admin` renders the note; a note written and never seen is not the feature.
  */
 export function putStaffNote(
   db: Db, venueId: string, userId: string, shiftId: string, body: string,

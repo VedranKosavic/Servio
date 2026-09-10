@@ -100,7 +100,7 @@ describe('admin login', () => {
 
   /**
    * Phase 2 (WP0): the laptop door answers the same envelope as `GET /api/me`,
-   * so `/a/login.vue` hands it to `useMe().refreshAfterLogin()` rather than
+   * so `/admin/login.vue` hands it to `useMe().refreshAfterLogin()` rather than
    * assembling a `MeContext` by hand — which is what that function exists to
    * prevent. `AdminLoginResult` is gone.
    */

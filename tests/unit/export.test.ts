@@ -10,7 +10,7 @@
  * a correct export is indistinguishable from a broken one.
  *
  * **The file agrees with the screen.** A CSV is a second rendering of numbers
- * the owner has already read on `/a`, so the day in `dnevni_pazar.csv` is
+ * the owner has already read on `/admin`, so the day in `dnevni_pazar.csv` is
  * asserted to equal the sum of that day's rows in `smjene.csv`, and both are
  * asserted against `ownerShiftSummary` — the function *Smjena* itself reads.
  * A file that quietly disagreed with the page would be the worst possible bug

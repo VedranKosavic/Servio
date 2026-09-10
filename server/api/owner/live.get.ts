@@ -1,5 +1,5 @@
 /**
- * `GET /api/owner/live` — *Puls*, the first screen of `/a`, polled every 15 s
+ * `GET /api/owner/live` — *Puls*, the first screen of `/admin`, polled every 15 s
  * with an `If-None-Match` (§4.4).
  *
  * **Why the tag carries a minute.** The default `changeTag` is

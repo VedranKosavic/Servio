@@ -4,9 +4,9 @@
  * What is proved here:
  *
  *   1. A text and a photo sent by Amar in *Svi* reach Emir's phone and Haris's
- *      `/a` — and the photo's `GET /api/uploads/:id` answers 200 for all three.
+ *      `/admin` — and the photo's `GET /api/uploads/:id` answers 200 for all three.
  *   2. *Konobari* is private: Haris's session gets **403** on the channel and
- *      **404** on a photo posted only there, and his `/a` draws no such row.
+ *      **404** on a photo posted only there, and his `/admin` draws no such row.
  *   3. "predao 612,50 KM" in *Svi* opens the money sheet; *Ipak pošalji* sends.
  *   4. A photo taken with the network down is queued, survives a reload, and
  *      appears **exactly once** after reconnecting.
@@ -62,7 +62,7 @@ async function loginPin(phone: BrowserContext, who: string, pin: string) {
   expect(person, `${who} is on the lock screen`).toBeTruthy()
   const ok = await phone.request.post('/api/auth/pin', { data: { user_id: person!.id, pin } })
   expect(ok.ok()).toBe(true)
-  // S12 stands in front of every /k screen once phase4-pravila has published.
+  // S12 stands in front of every /konobar screen once phase4-pravila has published.
   await ackRules(phone.request)
   return person!
 }
@@ -122,7 +122,7 @@ test.describe('Razgovor', () => {
     await loginPin(emir, 'Emir', EMIR_PIN)
 
     const scratch = await amar.newPage()
-    await scratch.goto('/k/razgovor/svi')
+    await scratch.goto('/konobar/razgovor/svi')
     photo = await jpegBuffer(scratch)
     await scratch.close()
   })
@@ -133,7 +133,7 @@ test.describe('Razgovor', () => {
 
   test('1 · a message and a photo cross the room', async () => {
     const page = await amar.newPage()
-    await page.goto('/k/razgovor/svi')
+    await page.goto('/konobar/razgovor/svi')
     await expect(page.getByLabel('Poruka')).toBeVisible()
 
     await sendText(page, 'nema leda')
@@ -149,7 +149,7 @@ test.describe('Razgovor', () => {
 
     // Emir's phone, on its own device cookie.
     const emirPage = await emir.newPage()
-    await emirPage.goto('/k/razgovor/svi')
+    await emirPage.goto('/konobar/razgovor/svi')
     await expect(emirPage.getByText('nema leda')).toBeVisible({ timeout: 20_000 })
     const src = await emirPage.locator('img[src^="/api/uploads/"]').first().getAttribute('src')
     expect(src).toContain('/api/uploads/')
@@ -157,7 +157,7 @@ test.describe('Razgovor', () => {
 
     // And the owner's desk.
     const harisPage = await haris.newPage()
-    await harisPage.goto('/a/razgovor')
+    await harisPage.goto('/admin/razgovor')
     await harisPage.getByRole('button', { name: /^Svi/ }).click()
     // Scoped to the thread: the channel list carries the same line as a preview.
     await expect(harisPage.locator('.a-pane').getByText('nema leda').last())
@@ -169,7 +169,7 @@ test.describe('Razgovor', () => {
 
   test('2 · Konobari is private, and a forward is the only way in', async () => {
     const emirPage = await emir.newPage()
-    await emirPage.goto('/k/razgovor/konobari')
+    await emirPage.goto('/konobar/razgovor/konobari')
     await sendText(emirPage, 'fali sirup od nane')
     await expect(emirPage.getByText('čeka slanje')).toHaveCount(0, { timeout: 20_000 })
     await emirPage.locator('input[capture]').setInputFiles({
@@ -180,7 +180,7 @@ test.describe('Razgovor', () => {
 
     // A colleague reads it…
     const amarPage = await amar.newPage()
-    await amarPage.goto('/k/razgovor/konobari')
+    await amarPage.goto('/konobar/razgovor/konobari')
     await expect(amarPage.getByText('fali sirup od nane')).toBeVisible({ timeout: 20_000 })
 
     // …and the owner cannot, by any door.
@@ -188,7 +188,7 @@ test.describe('Razgovor', () => {
     expect((await haris.request.get(src)).status()).toBe(404)
 
     const harisPage = await haris.newPage()
-    await harisPage.goto('/a/razgovor')
+    await harisPage.goto('/admin/razgovor')
     await expect(harisPage.getByText('Konobari', { exact: true })).toHaveCount(0)
 
     // *Prijavi vlasniku* is the one staff → Admini path, and it takes the photo.
@@ -210,7 +210,7 @@ test.describe('Razgovor', () => {
 
   test('3 · money-looking text opens the sheet', async () => {
     const page = await amar.newPage()
-    await page.goto('/k/razgovor/svi')
+    await page.goto('/konobar/razgovor/svi')
     await page.getByLabel('Poruka').fill('predao 612,50 KM')
     await page.getByRole('button', { name: 'Pošalji' }).click()
 
@@ -225,7 +225,7 @@ test.describe('Razgovor', () => {
 
   test('4 · a photo taken with the network off appears exactly once', async () => {
     const page = await amar.newPage()
-    await page.goto('/k/razgovor/svi')
+    await page.goto('/konobar/razgovor/svi')
     await expect(page.getByLabel('Poruka')).toBeVisible()
 
     await page.context().setOffline(true)
@@ -253,7 +253,7 @@ test.describe('Razgovor', () => {
 
   test('5 · Dodaj u "Za naručiti" is two taps', async () => {
     const page = await amar.newPage()
-    await page.goto('/k/razgovor/svi')
+    await page.goto('/konobar/razgovor/svi')
     await sendText(page, 'treba ugalj')
     await expect(page.getByText('treba ugalj')).toBeVisible()
     // A queued bubble is a placeholder with no actions; wait for the real row.
@@ -269,14 +269,14 @@ test.describe('Razgovor', () => {
 
   test('6 · a queued message never blocks the money', async () => {
     const page = await amar.newPage()
-    await page.goto('/k/razgovor/svi')
+    await page.goto('/konobar/razgovor/svi')
     await page.context().setOffline(true)
     await sendText(page, 'javi kad stigne pivo')
     await expect(page.getByText('čeka slanje')).toBeVisible({ timeout: 15_000 })
     await page.context().setOffline(false)
 
     // The logout gate counts money and stock, never chat.
-    await page.goto('/k')
+    await page.goto('/konobar')
     await page.getByRole('button', { name: 'Korisnik' }).click()
     await expect(page.getByRole('button', { name: 'Razgovor' })).toBeVisible()
     const logout = page.getByRole('button', { name: 'Odjavi se' })

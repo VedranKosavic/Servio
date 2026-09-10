@@ -1,5 +1,5 @@
 /**
- * **One poll on `/a` too.**
+ * **One poll on `/admin` too.**
  *
  * The waiter app has exactly one timer (`useChanges`) and the dashboard does not
  * get to open a second one: an owner page that set its own `setInterval` would
@@ -109,8 +109,9 @@ export function useAdminChanges(handlers: AdminChangeHandlers = {}) {
 
   /**
    * The first caller on a screen opens the timer and owns it; when that
-   * component is torn down (leaving `/a` for `/k`, say) the slot is freed, so
-   * the next visit opens a live poll rather than inheriting a dead one.
+   * component is torn down (leaving `/admin` for `/konobar`, say) the slot is
+   * freed, so the next visit opens a live poll rather than inheriting a dead
+   * one.
    */
   if (!registry.refresh) {
     const poll = useChanges({

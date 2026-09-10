@@ -42,7 +42,7 @@ export const ADMIN_ERRORS = {
   /** One line per item in a normativ; two lines for the same item is a typo. */
   RECIPE_DUPLICATE: 'Ista roba je dva puta u normativu.',
 
-  /** An admin who deactivates himself locks the only door into `/a`. */
+  /** An admin who deactivates himself locks the only door into `/admin`. */
   SELF_DEACTIVATE: 'Ne možeš deaktivirati sam sebe.',
 
   EMAIL_TAKEN: 'Ta e-mail adresa je već zauzeta.',

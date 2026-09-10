@@ -5,7 +5,7 @@
  * PLAN §5 wants a waiter able to notice a login on a phone that is not his.
  * That is the whole feature: no revoke button, no device management, just the
  * list and one honest sentence about what to do with it. Revoking is the
- * owner's, on `/a` → *Uređaji*, because a waiter who could revoke sessions
+ * owner's, on `/admin` → *Uređaji*, because a waiter who could revoke sessions
  * could revoke a colleague's mid-shift.
  *
  * The list is twenty rows at most and the current session is marked, so "that

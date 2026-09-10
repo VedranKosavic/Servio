@@ -32,13 +32,13 @@ export async function resetLimits(request: APIRequestContext): Promise<void> {
 /**
  * Clear the *Pravila* gate for whoever just PIN-logged in on this context.
  *
- * S12 stands in front of every `/k` screen the moment a version is published,
- * and that is the product behaviour `phase4-pravila` asserts. But Playwright
- * runs files alphabetically, so `phase4-pravila` publishes v1 before every
- * other `/k` spec in the directory — and any file that navigates to `/k/...`
- * afterwards lands on the acknowledgement screen instead of the page it means
- * to test. Acknowledging in the login helper makes each file independent of
- * where it happens to sit in the alphabet.
+ * S12 stands in front of every `/konobar` screen the moment a version is
+ * published, and that is the product behaviour `phase4-pravila` asserts. But
+ * Playwright runs files alphabetically, so `phase4-pravila` publishes v1 before
+ * every other `/konobar` spec in the directory — and any file that navigates to
+ * `/konobar/...` afterwards lands on the acknowledgement screen instead of the
+ * page it means to test. Acknowledging in the login helper makes each file
+ * independent of where it happens to sit in the alphabet.
  *
  * Call it **after** the PIN login: `must_ack` is answered for the session's
  * actor, and there is no actor before the login.

@@ -3,7 +3,7 @@
  * The bartender's whole navigation: three pills, always in reach of a thumb.
  *
  * All three are listed from day one; *Na čekanju* rendered greyed out with
- * *stiže uskoro* until WP1 built `/s/cekanje` — a nav that grows a tab every
+ * *stiže uskoro* until WP1 built `/sanker/cekanje` — a nav that grows a tab every
  * week teaches nobody where anything is. The one line WP1 changes here is the
  * flag below, which WP0 left for it.
  *
@@ -12,7 +12,7 @@
  */
 defineProps<{ active: 'narudzbe' | 'cekanje' | 'stanje' }>()
 
-/** Flipped by the PR that landed `/s/cekanje` (WP1). */
+/** Flipped by the PR that landed `/sanker/cekanje` (WP1). */
 const CEKANJE_READY = true
 
 const PILL = 'flex min-h-12 flex-1 items-center justify-center rounded-full border text-base font-semibold'
@@ -23,13 +23,13 @@ const DISABLED = 'bg-surface-2 text-muted border-line'
 
 <template>
   <nav class="sticky bottom-0 -mx-4 mt-2 flex gap-2 border-t border-line bg-bg px-4 pb-4 pt-3">
-    <NuxtLink to="/s" :class="[PILL, active === 'narudzbe' ? ON : OFF]">
+    <NuxtLink to="/sanker" :class="[PILL, active === 'narudzbe' ? ON : OFF]">
       Narudžbe
     </NuxtLink>
 
     <NuxtLink
       v-if="CEKANJE_READY"
-      to="/s/cekanje"
+      to="/sanker/cekanje"
       :class="[PILL, active === 'cekanje' ? ON : OFF]"
     >
       Na čekanju

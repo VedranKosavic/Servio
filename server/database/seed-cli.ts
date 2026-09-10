@@ -21,7 +21,8 @@ if (!isEmpty(db)) {
   // Dev secrets — the PINs and the admin password of `docs/BACKEND.md` §5.6 —
   // are an explicit decision, never an environment guess. On a production
   // install the six people arrive with no PIN and cannot log in until the owner
-  // sets them in `/a`, which is the only way a default PIN never reaches a café.
+  // sets them in `/admin`, which is the only way a default PIN never reaches a
+  // café.
   const devSecrets = process.env.NODE_ENV !== 'production'
   seed(db, { devSecrets })
   // Counted, not written down: the line said "14 products" for as long as the
@@ -31,7 +32,7 @@ if (!isEmpty(db)) {
   console.info(
     `[sank] seeded ${file}: venue "Lounge", ${tables} tables, ${products} products, ${items} stock items.`,
   )
-  if (!devSecrets) console.info('[sank] postavi PIN-ove u /a')
+  if (!devSecrets) console.info('[sank] postavi PIN-ove u /admin')
 }
 
 sqlite.close()

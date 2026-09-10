@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * What the owner can do to one person in one cell — `/a`, light kit.
+ * What the owner can do to one person in one cell — `/admin`, light kit.
  *
  * **The past and the future are different sheets behind one title**, and that is
  * the point of the file. Before the day, a cell is a plan: a name can come off

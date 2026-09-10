@@ -130,7 +130,7 @@ describe('changeTag', () => {
 
 /**
  * The three heavy reads BACKEND §7 marks "(ETag)" and Phase 1 shipped without
- * one. On `/a` this is what keeps a laptop that has four or five reads open all
+ * one. On `/admin` this is what keeps a laptop that has four or five reads open all
  * evening down to a `MAX(seq)` per poll.
  */
 describe('the three read tags', () => {

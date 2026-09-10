@@ -57,7 +57,7 @@ describe('publishRules', () => {
     const line = f.db.select().from(schema.chatMessages).all()
       .find(m => m.systemKey === 'rules_published')!
     expect(line.body).toBe('Objavljena su nova Pravila (v1)')
-    expect(JSON.parse(line.systemPayloadJson!).link.route).toBe('/k/pravila')
+    expect(JSON.parse(line.systemPayloadJson!).link.route).toBe('/konobar/pravila')
 
     expect(f.db.select().from(schema.logEntries).all()
       .some(e => e.kind === 'rules_published')).toBe(true)

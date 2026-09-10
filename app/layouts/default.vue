@@ -10,7 +10,8 @@
  * The one exception is `MineBorrowedBar`, which renders nothing at all unless
  * somebody has PIN'd into a colleague's personal phone. It sits here rather
  * than in a header because it has to be true on every dark screen for the whole
- * borrowed session (PHASE3 §3, WP4), and `/k` and `/s` do not share a header.
+ * borrowed session (PHASE3 §3, WP4), and `/konobar` and `/sanker` do not share
+ * a header.
  */
 </script>
 

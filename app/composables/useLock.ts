@@ -147,9 +147,10 @@ export function useLock() {
   /**
    * Start watching for idleness on a shared device.
    *
-   * Called from `useMe().requireSession()`, which every `/k` and `/s` screen
-   * runs in `onMounted` — so it covers exactly the dark screens and never the
-   * owner's dashboard, and no other package has to remember to call anything.
+   * Called from `useMe().requireSession()`, which every `/konobar` and
+   * `/sanker` screen runs in `onMounted` — so it covers exactly the dark
+   * screens and never the owner's dashboard, and no other package has to
+   * remember to call anything.
    */
   function arm(): void {
     if (!import.meta.client || armed.value) return

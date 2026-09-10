@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * The phone's week — one card per day, one row per template. `/a`, light kit.
+ * The phone's week — one card per day, one row per template. `/admin`, light kit.
  *
  * Same data as `RasporedGrid`, same `weekCells()` behind it, different shape:
  * a seven-column grid on a 390 px screen is a sideways scroll and a mis-tap, so

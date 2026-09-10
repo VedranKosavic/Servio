@@ -443,7 +443,7 @@ function newSession(db: Db, e: {
  * has already been enrolled.
  *
  * It answers a full `MeContext`, the same envelope `GET /api/me` returns, so
- * `/a/login.vue` hands the answer straight to `useMe().refreshAfterLogin()`
+ * `/admin/login.vue` hands the answer straight to `useMe().refreshAfterLogin()`
  * instead of assembling a context by hand. `device` is `null`: a laptop is not
  * an enrolled phone and never becomes one.
  */

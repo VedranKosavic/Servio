@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * One person in one cell — `/a`, light kit.
+ * One person in one cell — `/admin`, light kit.
  *
  * The whole chip is the button, because on a phone the target is the chip and
  * not a caret hidden inside it. What it draws is only ever four things:

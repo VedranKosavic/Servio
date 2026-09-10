@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * The container everything on `/a` sits in: `--surface`, a 1 px `--line`,
+ * The container everything on `/admin` sits in: `--surface`, a 1 px `--line`,
  * radius 12, and **no shadow** — the light theme separates things with a rule,
  * not with a drop shadow.
  *

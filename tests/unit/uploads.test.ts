@@ -68,7 +68,7 @@ describe('createUpload', () => {
     )
 
     // The dev seed turns `bartender_can_receive_goods` on, which is what the
-    // existing `/s` delivery screen needs — so the šanker is allowed here.
+    // existing `/sanker` delivery screen needs — so the šanker is allowed here.
     expect(() => createUpload(
       f.db, f.venueId, f.actor('Emir'), { bytes: jpegBytes() }, 'delivery',
     )).not.toThrow()

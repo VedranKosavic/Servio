@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * *Sedmica* — the owner's week. `/a`, light kit.
+ * *Sedmica* — the owner's week. `/admin`, light kit.
  *
  * **A typical week is three taps**: *Kopiraj prošlu sedmicu*, a glance, *Objavi
  * raspored*. Four fixes on top of that is eight to twelve. Everything in this
@@ -15,7 +15,7 @@
  *   Asked once, in a sheet, and the retry carries `force_double`.
  *
  * The week refetches on `roster` moving in the change feed and on nothing else:
- * there is one poll on `/a` and this subscribes to it (`useAdminChanges`).
+ * there is one poll on `/admin` and this subscribes to it (`useAdminChanges`).
  */
 import { weekCells, alreadyThatDay } from '~/composables/useRoster'
 import type { ApiSideError } from '~/composables/useApi'

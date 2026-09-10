@@ -195,7 +195,7 @@ export function publishWeek(
     const span = `${shortDateBs(target)}–${shortDateBs(addDays(target, 6))}`
     postSystem(tx, venueId, 'svi', 'roster_published',
       `Raspored za ${span} je objavljen`,
-      { link: { label: 'Raspored →', route: '/k/raspored' }, week_start: target }, now)
+      { link: { label: 'Raspored →', route: '/konobar/raspored' }, week_start: target }, now)
 
     log(tx, venueId, {
       kind: 'roster_published',
@@ -414,7 +414,7 @@ export function requestSwap(
         .set({ status: 'sick', swapRequestId: requestId, updatedBy: actor.userId, updatedAt: now })
         .where(eq(schema.rosterAssignments.id, row.id))
         .run()
-      // An attention row for the owner. The reason is on `/a` *Zamjene* and in
+      // An attention row for the owner. The reason is on `/admin` *Zamjene* and in
       // *Dnevnik*, never in chat.
       log(tx, venueId, {
         kind: 'roster_sick',
@@ -436,7 +436,7 @@ export function requestSwap(
     postSystem(tx, venueId, 'konobari', 'swap_requested',
       `${who} traži zamjenu · ${weekdayBs(row.workDate)} ${shortDateBs(row.workDate)}`
       + ` ${template.name} ${hhmm(row.startTime)}–${hhmm(row.endTime)}`,
-      { link: { label: 'Raspored →', route: '/k/raspored' }, swap_request_id: requestId }, now)
+      { link: { label: 'Raspored →', route: '/konobar/raspored' }, swap_request_id: requestId }, now)
 
     log(tx, venueId, {
       kind: 'swap_requested',
@@ -630,7 +630,7 @@ export function decideSwap(
     postSystem(tx, venueId, 'svi', 'swap_accepted',
       `Zamjena · ${weekdayBs(giver.workDate)} ${shortDateBs(giver.workDate)} ${template.name}`
       + ` — ${nameOf(tx, takerId)} umjesto ${genitiveBs(nameOf(tx, request.fromUserId))}`,
-      { link: { label: 'Raspored →', route: '/k/raspored' }, work_date: giver.workDate }, now)
+      { link: { label: 'Raspored →', route: '/konobar/raspored' }, work_date: giver.workDate }, now)
 
     bump(tx, venueId, 'roster', giver.id)
     bump(tx, venueId, 'chat')
@@ -1069,7 +1069,7 @@ function afterEdit(
 
     if (!already) {
       postSystem(tx, venueId, 'svi', 'roster_changed', 'Raspored je izmijenjen',
-        { link: { label: 'Raspored →', route: '/k/raspored' }, by: actor.userId }, now)
+        { link: { label: 'Raspored →', route: '/konobar/raspored' }, by: actor.userId }, now)
       bump(tx, venueId, 'chat')
     }
   }

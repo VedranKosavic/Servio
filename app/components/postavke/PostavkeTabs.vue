@@ -10,19 +10,19 @@
 const route = useRoute()
 
 const tabs = [
-  { to: '/a/meni', label: 'Meni' },
-  { to: '/a/postavke/kategorije', label: 'Kategorije' },
-  { to: '/a/postavke/stolovi', label: 'Stolovi' },
-  { to: '/a/postavke/osoblje', label: 'Osoblje' },
-  { to: '/a/postavke/uredaji', label: 'Uređaji' },
+  { to: '/admin/meni', label: 'Meni' },
+  { to: '/admin/postavke/kategorije', label: 'Kategorije' },
+  { to: '/admin/postavke/stolovi', label: 'Stolovi' },
+  { to: '/admin/postavke/osoblje', label: 'Osoblje' },
+  { to: '/admin/postavke/uredaji', label: 'Uređaji' },
   // Phase 4, WP2. Reachability: without a chip here the page has no way in.
-  { to: '/a/postavke/sabloni', label: 'Šabloni' },
-  { to: '/a/postavke', label: 'Podešavanja' },
-  { to: '/a/postavke/pravila', label: 'Pravila' },
+  { to: '/admin/postavke/sabloni', label: 'Šabloni' },
+  { to: '/admin/postavke', label: 'Podešavanja' },
+  { to: '/admin/postavke/pravila', label: 'Pravila' },
 ]
 
-// Exact match, not `startsWith`: `/a/postavke` is *Podešavanja* itself and must
-// not light up while `/a/postavke/stolovi` is open.
+// Exact match, not `startsWith`: `/admin/postavke` is *Podešavanja* itself and must
+// not light up while `/admin/postavke/stolovi` is open.
 const isOn = (to: string) => route.path === to
 </script>
 

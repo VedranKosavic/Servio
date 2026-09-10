@@ -3,7 +3,7 @@
  * e-mail an admin logs in with.
  *
  * An admin deactivating himself is 400 `SELF_DEACTIVATE`: the admin session is
- * the only door into `/a` that needs no device.
+ * the only door into `/admin` that needs no device.
  */
 import { updateUserBody } from '#shared/schemas'
 import { useDb } from '../../../../utils/db'

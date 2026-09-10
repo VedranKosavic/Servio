@@ -45,7 +45,7 @@ export interface ChangeHandlers {
   /**
    * The whole answer, for screens that key their refetches off entities.
    *
-   * `/a` reads this one: an owner page has no fixed snapshot in the feed, it
+   * `/admin` reads this one: an owner page has no fixed snapshot in the feed, it
    * has a read of its own that goes stale when a particular entity moves, so it
    * wants `changes[]` rather than any single attached object. See
    * `useAdminChanges.ts`.

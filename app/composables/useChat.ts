@@ -9,10 +9,11 @@
  * events, no interval. A second poll for chat would be a second clock on the
  * same café wifi for a feature nobody stares at.
  *
- * `/k` and `/a` differ only in which api object fills the transport: the waiter
- * app's `useApi()` sets its timeouts for a phone in an apron, and the
- * dashboard's `useAdminApi()` is a laptop's. The screens differ far more, which
- * is why the light kit re-implements them rather than re-skinning the dark ones.
+ * `/konobar` and `/admin` differ only in which api object fills the transport:
+ * the waiter app's `useApi()` sets its timeouts for a phone in an apron, and
+ * the dashboard's `useAdminApi()` is a laptop's. The screens differ far more,
+ * which is why the light kit re-implements them rather than re-skinning the
+ * dark ones.
  */
 import { useChatStore, type ChatTransport } from '~/stores/chat'
 import { useOutboxStore } from '~/stores/outbox'
@@ -20,7 +21,7 @@ import type { ChannelKind } from '#shared/chat'
 import type { SetPinBody } from '#shared/schemas'
 
 export interface UseChatOptions {
-  /** `/a` posts through `useAdminApi()` and has no money outbox to follow. */
+  /** `/admin` posts through `useAdminApi()` and has no money outbox to follow. */
   admin?: boolean
 }
 

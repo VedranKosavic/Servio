@@ -175,8 +175,8 @@ export const ALERT_RULE_KEYS = [
   /**
    * Phase 4. A *Traži zamjenu* nobody has taken and the shift is upon us, and a
    * waiter who reported sick. Both surface **inside the app**, on the *Puls*
-   * attention list, and the reason is on `/a` *Zamjene* and in *Dnevnik* — never
-   * in chat (PLAN §8: "Bolovanje vidi samo vlasnik").
+   * attention list, and the reason is on `/admin` *Zamjene* and in *Dnevnik* —
+   * never in chat (PLAN §8: "Bolovanje vidi samo vlasnik").
    */
   'swap_unfilled',
   'roster_sick',

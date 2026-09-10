@@ -21,7 +21,7 @@ const props = defineProps<{
 const slices = computed(() => categoryMix(props.categories))
 
 function to(kat: string) {
-  return { path: `/a/smjena/${props.shiftId}/stavke`, query: { kat } }
+  return { path: `/admin/smjena/${props.shiftId}/stavke`, query: { kat } }
 }
 </script>
 
@@ -67,7 +67,7 @@ function to(kat: string) {
 .s-seg { display: block; min-width: 2px; }
 
 /* Five steps of the palette, reused round-robin. They are tints of the tokens
-   and not new colours, so the bar cannot drift away from the rest of `/a`. */
+   and not new colours, so the bar cannot drift away from the rest of `/admin`. */
 .n0, .s-dot.n0 { background: var(--accent); }
 .n1, .s-dot.n1 { background: var(--good); }
 .n2, .s-dot.n2 { background: var(--warn); }
