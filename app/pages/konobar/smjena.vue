@@ -72,7 +72,11 @@ const myOpenTabs = computed(() => brief.value?.my_open_tabs ?? 0)
 const checklist = computed(() => [
   {
     ok: myOpenTabs.value === 0,
-    label: 'Svi tvoji stolovi naplaćeni',
+    // The label states what is actually true, never the happy case beside an
+    // amber marker: colour must not be the only thing carrying the meaning.
+    label: myOpenTabs.value === 0
+      ? 'Svi tvoji stolovi naplaćeni'
+      : `Nenaplaćenih stolova: ${myOpenTabs.value}`,
     detail: myOpenTabs.value === 0
       ? 'Nema otvorenih stolova kod tebe.'
       : `Otvorenih kod tebe: ${myOpenTabs.value}. Naplati ih prije predaje.`,
@@ -84,6 +88,8 @@ const checklist = computed(() => [
     ok: true,
     label: 'Sve narudžbe poslane',
     detail: 'Ništa ne čeka na slanje s ovog telefona.',
+    // When the outbox lands, this row states the count the same way the one
+    // above does: `Čeka na slanje: n`.
   },
 ])
 

@@ -142,39 +142,10 @@ const totals = computed(() => report.value?.totals ?? null)
 
 .a-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
 
-.a-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-
-/* The same chip as `UiPeriod`'s: a filter is a filter everywhere in the app,
-   and the copper *fill* stays reserved for the one primary button on a page. */
-.a-chip {
-  height: 32px;
-  padding: 0 14px;
-  border-radius: var(--radius-chip);
-  border: 1px solid var(--line);
-  background: var(--surface);
-  font: inherit;
-  font-size: var(--text-label);
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-2);
-  cursor: pointer;
-  transition:
-    background var(--dur-fast) var(--ease-standard),
-    border-color var(--dur-fast) var(--ease-standard);
-}
-
-.a-chip:hover { border-color: var(--muted); color: var(--ink); }
-
-.a-chip.on {
-  background: var(--accent-soft);
-  border-color: var(--accent-line);
-  color: var(--accent-text);
-  font-weight: 600;
-}
+/* `.a-chips` and `.a-chip` are one definition in `admin.css`. */
 
 @media (max-width: 1023px) {
-  /* Tiles two-up, and every chip a thumb's target. */
+  /* Tiles two-up; the chips take their own phone size from `admin.css`. */
   .a-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .a-chip { height: 44px; padding: 0 16px; font-size: var(--text-body); }
 }
 </style>

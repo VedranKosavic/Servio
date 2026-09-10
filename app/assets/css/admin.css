@@ -174,11 +174,73 @@
  * The attribute is put on `<html>` by `useHead` in the layout and the login
  * page, and taken off again when either unmounts, so `/konobar` is never touched.
  */
-html[data-theme='light'],
+html[data-theme='light'] {
+  background: var(--bg);
+  color-scheme: light;
+}
+
+/* The body carries the type scale, never `html`: a root font-size in `rem`
+   re-scales every other `rem` in the app (15/16 = a 6.25 % shrink), which put
+   the whole dashboard a quarter-pixel under every step in DESIGN §8 and
+   dropped phone inputs under 16 px, where iOS zooms the page on focus. */
 html[data-theme='light'] body {
   background: var(--bg);
   color: var(--ink);
-  color-scheme: light;
   font-size: var(--text-body);
   line-height: 1.4;
+}
+
+/**
+ * `.a-chip` — "pick one of a set" on the dashboard: a period, a category filter.
+ * It lives here rather than in a component's scoped block because two files
+ * needed it, the copies had already drifted apart (one grew tabular figures,
+ * the other `nowrap`), and a filter must look the same on every admin page.
+ * The copper *fill* stays reserved for the one primary button on a page, so the
+ * chosen chip is a tint.
+ */
+.a-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.a-chip {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--radius-chip);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font: inherit;
+  font-size: var(--text-label);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard);
+}
+
+.a-chip:hover {
+  border-color: var(--muted);
+  color: var(--ink);
+}
+
+.a-chip.on {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+/* Every chip a thumb's target on a phone. */
+@media (max-width: 1023px) {
+  .a-chip {
+    height: 44px;
+    padding: 0 16px;
+    font-size: var(--text-body);
+  }
+
+  .a-chips { gap: 8px; }
 }

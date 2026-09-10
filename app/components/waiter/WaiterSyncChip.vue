@@ -15,18 +15,37 @@
  * sentence stays on the screen's `aria-label` and on *Stolovi*, where the
  * waiter starts and ends every round.
  */
-withDefaults(defineProps<{ compact?: boolean }>(), { compact: false })
+const props = withDefaults(defineProps<{ compact?: boolean }>(), { compact: false })
 
 const { state, label, pending } = useSync()
+
+/**
+ * The short form of the same sentence. Compact still says a word whenever it
+ * has something to say — a coloured pill with nothing but an icon in it is a
+ * blob, and colour is never allowed to carry the meaning on its own (DESIGN §2).
+ * The settled state has nothing to say, so it drops the fill as well and sits
+ * as a quiet check; the full sentence stays on `aria-label` in every state.
+ */
+const compactLabel = computed(() => {
+  if (state.value === 'offline') {
+    return pending.value > 0 ? `Nema veze (${pending.value})` : 'Nema veze'
+  }
+  if (state.value === 'waiting') return `Čeka (${pending.value})`
+  return ''
+})
+
+/** Compact + synced + nothing queued is the only state without a fill. */
+const quiet = computed(() => props.compact && state.value === 'ok')
 </script>
 
 <template>
   <span
     class="chip"
     :class="{
-      'chip-good': state === 'ok',
+      'chip-good': state === 'ok' && !quiet,
       'chip-warn': state === 'waiting',
       'chip-danger': state === 'offline',
+      'chip-quiet': quiet,
     }"
     :aria-label="label"
   >
@@ -55,6 +74,17 @@ const { state, label, pending } = useSync()
       <path d="M3 3l18 18" />
     </svg>
     <span v-if="!compact" class="truncate">{{ label }}</span>
-    <span v-else-if="pending > 0" class="num">{{ pending }}</span>
+    <span v-else-if="compactLabel" class="truncate">{{ compactLabel }}</span>
   </span>
 </template>
+
+<style scoped>
+/* No fill, no colour: the state where everything is in order says so by being
+   the quietest thing in the header, not by being a green blob. */
+.chip-quiet {
+  background: transparent;
+  color: var(--muted);
+  padding-left: 0;
+  padding-right: 0;
+}
+</style>

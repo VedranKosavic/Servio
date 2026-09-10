@@ -48,7 +48,11 @@ const me = useMe()
         aria-label="Korisnik i meni"
         @click="emit('menu')"
       >
-        {{ me.user.value?.initials ?? '?' }}
+        <!-- `me` only resolves on the client, so a fallback here is rendered
+             into the server's HTML and then replaced — a literal "?" on screen
+             until hydration, and a hydration mismatch in the console. Render
+             nothing on the server instead. -->
+        <ClientOnly>{{ me.user.value?.initials ?? '' }}</ClientOnly>
       </button>
     </template>
   </WaiterHeader>

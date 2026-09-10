@@ -553,8 +553,12 @@ const ROLE_LABEL: Record<string, string> = {
           <!-- …and everybody else, one tap away. Not a grey slab: a row with a
                chevron, which is what the rest of the app uses for "there is
                more behind this". -->
+          <!-- `faces.length` guards it too: on a phone nobody has signed in on
+               yet there are no faces, `listed` falls back to the whole venue and
+               the list below is already open, so this row would offer to reveal
+               people who are on screen. -->
           <button
-            v-if="rest.length && !showAll"
+            v-if="faces.length && rest.length && !showAll"
             type="button"
             class="more"
             @click="showAll = true"

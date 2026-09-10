@@ -197,8 +197,21 @@ function onClick() {
 
 .table-tile.offered .tile-no { color: var(--accent-text); }
 
-/* Still on the phone: the same dash that means "not committed" everywhere. */
+/* Still on the phone: the same dash that means "not committed" everywhere.
+   `.mine` paints a filled copper tile with a transparent edge, so a dashed
+   border alone drew nothing — a draft looked exactly like a locked, live tab.
+   An unsent round therefore takes the not-committed material `.offered` uses,
+   which is also what `.key-draft` in the legend draws. */
 .table-tile.draft { border-style: dashed; }
+
+.table-tile.mine.draft {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent-text);
+}
+
+.table-tile.mine.draft .tile-no,
+.table-tile.mine.draft .tile-sub { color: var(--accent-text); }
 
 /* Somebody has to look at this one. A ring, so the fill still says whose it is. */
 .table-tile.attention {

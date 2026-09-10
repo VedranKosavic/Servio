@@ -476,9 +476,25 @@ button,
     font-size: var(--text-label);
   }
 
+  /* A disabled button is restated as quiet material rather than faded: fading
+     a filled primary composites both the copper and its dark ink against the
+     page and lands at 2.5:1, while it is still the loudest thing on screen.
+     Copper is reserved for a button that can actually be pressed. */
   .btn:disabled {
-    opacity: 0.45;
     cursor: default;
+  }
+
+  .btn-secondary:disabled,
+  .btn-ghost:disabled {
+    opacity: 0.5;
+  }
+
+  .btn-primary:disabled,
+  .btn-accent:disabled {
+    background: var(--surface-2);
+    color: var(--muted);
+    border-color: var(--line);
+    box-shadow: none;
   }
 
   /**
