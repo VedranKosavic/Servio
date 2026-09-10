@@ -18,6 +18,7 @@ const tabs = [
   // Phase 4, WP2. Reachability: without a chip here the page has no way in.
   { to: '/a/postavke/sabloni', label: 'Šabloni' },
   { to: '/a/postavke', label: 'Podešavanja' },
+  { to: '/a/postavke/pravila', label: 'Pravila' },
 ]
 
 // Exact match, not `startsWith`: `/a/postavke` is *Podešavanja* itself and must
