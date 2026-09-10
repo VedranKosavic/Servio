@@ -65,7 +65,7 @@ function saveText() {
     >
       <span class="mx-auto h-1 w-10 shrink-0 rounded-full bg-line" />
 
-      <h2 class="text-lg font-bold">
+      <h2 class="section-title">
         {{ title }}
       </h2>
 
@@ -74,7 +74,7 @@ function saveText() {
           v-for="chip in chips"
           :key="chip"
           type="button"
-          class="flex min-h-12 items-center rounded-3xl border-[1.5px] border-line bg-surface-2 px-4 text-base font-semibold"
+          class="pill h-12"
           @click="pick(chip)"
         >
           {{ chip }}
@@ -82,19 +82,19 @@ function saveText() {
       </div>
 
       <label class="flex flex-col gap-1.5">
-        <span class="text-sm text-text-2">Ili napiši</span>
+        <span class="text-label text-text-2">Ili napiši</span>
         <input
           ref="field"
           v-model="text"
           type="text"
           maxlength="120"
           placeholder="npr. bez leda"
-          class="card-2 h-14 px-3.5 text-[17px] outline-none placeholder:text-muted"
+          class="card-2 h-14 px-3.5 text-body outline-none placeholder:text-muted"
           @keyup.enter="saveText"
         >
       </label>
 
-      <button type="button" class="btn btn-accent h-14 text-lg" @click="saveText">
+      <button type="button" class="btn btn-primary btn-lg" @click="saveText">
         Sačuvaj napomenu
       </button>
 
@@ -102,7 +102,7 @@ function saveText() {
         Na račun kuće
       </button>
 
-      <button type="button" class="btn btn-ghost h-12" @click="emit('close')">
+      <button type="button" class="btn btn-ghost" @click="emit('close')">
         Otkaži
       </button>
     </div>

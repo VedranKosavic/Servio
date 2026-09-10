@@ -95,126 +95,172 @@ const UNPAID_REASONS = [
 
 <template>
   <div class="fixed inset-0 z-50">
-    <div class="absolute inset-0 bg-black/55" @click="emit('close')" />
+    <div class="sheet-scrim" @click="emit('close')" />
 
-    <div
-      class="absolute inset-x-0 bottom-0 mx-auto flex max-h-[92dvh] w-full max-w-3xl flex-col gap-3 overflow-y-auto rounded-t-[20px] border-t border-line bg-surface px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-3"
-      role="dialog"
-      aria-label="Naplata"
-    >
-      <span class="mx-auto h-1 w-10 shrink-0 rounded-full bg-line" />
+    <div class="absolute inset-x-0 bottom-0 mx-auto w-full max-w-3xl">
+      <div
+        class="sheet-panel flex max-h-[92dvh] flex-col gap-3 overflow-y-auto px-4 pb-5 pt-3"
+        role="dialog"
+        aria-label="Naplata"
+      >
+        <span class="mx-auto h-1 w-10 shrink-0 rounded-chip bg-line" aria-hidden="true" />
 
-      <div class="flex items-baseline gap-2">
-        <h2 class="flex-1 truncate text-xl font-bold">
-          {{ tableName }}
-        </h2>
-        <span class="num text-2xl font-bold">{{ formatKm(remainingFen) }}</span>
-      </div>
-      <p v-if="remainingFen !== totalFen" class="-mt-2 text-sm text-text-2">
-        Od ukupno <span class="num">{{ formatKm(totalFen) }}</span> — ostatak duga.
-      </p>
+        <!-- What the sheet is about, at the size the sheet is about it. -->
+        <header class="flex flex-col gap-1 pb-1">
+          <p class="eyebrow truncate">
+            {{ tableName }}
+          </p>
+          <p class="metric num">
+            {{ formatKm(remainingFen) }}
+          </p>
+          <p v-if="remainingFen !== totalFen" class="num text-label text-text-2">
+            Od ukupno {{ formatKm(totalFen) }} — ostatak duga.
+          </p>
+        </header>
 
-      <p v-if="error" class="rounded-xl bg-danger-soft px-3 py-2 text-[15px] text-danger" role="alert">
-        {{ error }}
-      </p>
+        <p v-if="error" class="note note-danger" role="alert">
+          {{ error }}
+        </p>
 
-      <!-- The notes people actually pay with -->
-      <template v-if="mode === 'main'">
-        <button type="button" class="btn btn-accent h-14 text-lg" :disabled="busy" @click="payExact">
-          Tačno · <span class="num">{{ formatKm(remainingFen) }}</span>
-        </button>
-
-        <div v-if="notes.length" class="grid grid-cols-3 gap-2">
-          <button
-            v-for="note in notes"
-            :key="note"
-            type="button"
-            class="btn h-14 flex-col gap-0 text-lg"
-            :disabled="busy"
-            @click="payCash(note)"
-          >
-            <span class="num">{{ formatKm(note) }}</span>
-            <small class="num text-xs font-normal text-text-2">
-              vrati {{ formatKm(note - remainingFen) }}
-            </small>
+        <!-- The notes people actually pay with -->
+        <template v-if="mode === 'main'">
+          <button type="button" class="btn btn-primary btn-lg" :disabled="busy" @click="payExact">
+            Tačno · <span class="num">{{ formatKm(remainingFen) }}</span>
           </button>
-        </div>
 
-        <button type="button" class="btn h-12" :disabled="busy" @click="mode = 'custom'">
-          Drugi iznos
-        </button>
-
-        <button
-          v-if="cardAllowed"
-          type="button"
-          class="btn h-12"
-          :disabled="busy"
-          @click="payCard"
-        >
-          Kartica
-        </button>
-
-        <div class="mt-1 flex flex-col gap-2 border-t border-line pt-3">
-          <button type="button" class="btn btn-ghost h-12" :disabled="busy" @click="mode = 'unpaid'">
-            Nije plaćeno
-          </button>
-          <button type="button" class="btn btn-ghost h-12" @click="emit('close')">
-            Otkaži
-          </button>
-        </div>
-      </template>
-
-      <!-- Drugi iznos: what the guest handed over -->
-      <template v-else-if="mode === 'custom'">
-        <label class="flex flex-col gap-1.5">
-          <span class="text-sm text-text-2">Koliko je gost dao?</span>
-          <div class="card-2 flex h-16 items-center gap-2 px-3.5">
-            <input
-              v-model="receivedRaw"
-              type="text"
-              inputmode="decimal"
-              placeholder="0,00"
-              class="num min-w-0 flex-1 bg-transparent text-3xl font-semibold outline-none placeholder:text-muted"
+          <div v-if="notes.length" class="grid grid-cols-3 gap-2.5">
+            <button
+              v-for="note in notes"
+              :key="note"
+              type="button"
+              class="note-btn"
+              :disabled="busy"
+              @click="payCash(note)"
             >
-            <span class="shrink-0 text-text-2">KM</span>
+              <span class="num note-value">{{ formatKm(note) }}</span>
+              <small class="num note-change">vrati {{ formatKm(note - remainingFen) }}</small>
+            </button>
           </div>
-        </label>
 
-        <p v-if="customChange !== null" class="num text-center text-lg">
-          <span class="text-text-2">Vrati:</span> {{ formatKm(customChange) }}
-        </p>
-        <p v-if="received !== null && received < remainingFen" class="text-center text-[15px] text-warn">
-          Manje od duga — sto ostaje otvoren za
-          <span class="num">{{ formatKm(remainingFen - received) }}</span>.
-        </p>
+          <div class="flex flex-col gap-2.5">
+            <button type="button" class="btn btn-secondary" :disabled="busy" @click="mode = 'custom'">
+              Drugi iznos
+            </button>
 
-        <button type="button" class="btn btn-accent h-14 text-lg" :disabled="!customReady" @click="payCustom">
-          {{ busy ? 'Naplaćujem…' : 'Naplati' }}
-        </button>
-        <button type="button" class="btn btn-ghost h-12" :disabled="busy" @click="mode = 'main'">
-          Nazad
-        </button>
-      </template>
+            <button
+              v-if="cardAllowed"
+              type="button"
+              class="btn btn-secondary"
+              :disabled="busy"
+              @click="payCard"
+            >
+              Kartica
+            </button>
+          </div>
 
-      <!-- Nije plaćeno: why -->
-      <template v-else>
-        <p class="text-[15px] text-text-2">
-          Sto ostaje na tebi dok vlasnik ne odluči. Reci šta se desilo.
-        </p>
-        <button
-          v-for="reason in UNPAID_REASONS"
-          :key="reason.id"
-          type="button"
-          class="btn h-14 text-lg"
-          :disabled="busy"
-          @click="emit('unpaid', reason.id)"
-        >
-          {{ reason.label }}
-        </button>
-        <button type="button" class="btn btn-ghost h-12" :disabled="busy" @click="mode = 'main'">
-          Nazad
-        </button>
-      </template>
+          <div class="mt-1 flex flex-col gap-2.5 border-t border-line-soft pt-3">
+            <button type="button" class="btn btn-ghost" :disabled="busy" @click="mode = 'unpaid'">
+              Nije plaćeno
+            </button>
+            <button type="button" class="btn btn-ghost" @click="emit('close')">
+              Otkaži
+            </button>
+          </div>
+        </template>
+
+        <!-- Drugi iznos: what the guest handed over -->
+        <template v-else-if="mode === 'custom'">
+          <label class="flex flex-col gap-2">
+            <span class="eyebrow">Koliko je gost dao</span>
+            <span class="input input-num flex items-center gap-2 px-4">
+              <input
+                v-model="receivedRaw"
+                type="text"
+                inputmode="decimal"
+                placeholder="0,00"
+                aria-label="Koliko je gost dao"
+                class="num min-w-0 flex-1 bg-transparent text-right text-title font-semibold outline-none placeholder:text-muted"
+              >
+              <span class="shrink-0 text-label font-normal text-text-2">KM</span>
+            </span>
+          </label>
+
+          <p v-if="customChange !== null" class="note text-center">
+            <span class="text-text-2">Vrati</span>
+            <span class="num ml-1 font-semibold text-text">{{ formatKm(customChange) }}</span>
+          </p>
+          <p v-if="received !== null && received < remainingFen" class="note note-warn">
+            Manje od duga — sto ostaje otvoren za
+            <span class="num font-semibold">{{ formatKm(remainingFen - received) }}</span>.
+          </p>
+
+          <button type="button" class="btn btn-primary btn-lg" :disabled="!customReady" @click="payCustom">
+            {{ busy ? 'Naplaćujem…' : 'Naplati' }}
+          </button>
+          <button type="button" class="btn btn-ghost" :disabled="busy" @click="mode = 'main'">
+            Nazad
+          </button>
+        </template>
+
+        <!-- Nije plaćeno: why -->
+        <template v-else>
+          <p class="note">
+            Sto ostaje na tebi dok vlasnik ne odluči. Reci šta se desilo.
+          </p>
+          <button
+            v-for="reason in UNPAID_REASONS"
+            :key="reason.id"
+            type="button"
+            class="btn btn-secondary btn-lg justify-start"
+            :disabled="busy"
+            @click="emit('unpaid', reason.id)"
+          >
+            {{ reason.label }}
+          </button>
+          <button type="button" class="btn btn-ghost" :disabled="busy" @click="mode = 'main'">
+            Nazad
+          </button>
+        </template>
+      </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+/**
+ * A note button is not a plain `.btn`: it carries two lines — what the guest
+ * hands over, and what goes back — and the change is the line that stops a
+ * waiter doing arithmetic in his head at one in the morning.
+ */
+.note-btn {
+  display: flex;
+  min-height: 64px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 6px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-standard),
+    transform var(--dur-tap) var(--ease-standard);
+}
+
+.note-btn:active:not(:disabled) { transform: scale(0.97); }
+.note-btn:disabled { opacity: 0.45; cursor: default; }
+
+.note-value {
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.note-change {
+  font-size: var(--text-caption);
+  letter-spacing: 0.01em;
+  color: var(--muted);
+}
+</style>

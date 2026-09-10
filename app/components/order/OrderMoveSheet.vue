@@ -68,26 +68,26 @@ const zoneLabel = (zone: VenueTable['zone']) => (zone === 'basta' ? 'Bašta' : '
           ] as const)"
           :key="option.id"
           type="button"
-          class="flex h-12 flex-1 items-center justify-center rounded-3xl border-[1.5px] px-2 text-[15px] font-semibold"
-          :class="mode === option.id ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-transparent text-text-2'"
+          class="pill h-12 flex-1 justify-center"
+          :class="mode === option.id ? 'pill-on' : ''"
           @click="mode = option.id"
         >
           {{ option.label }}
         </button>
       </div>
 
-      <p v-if="offline" class="rounded-xl bg-warn-soft px-3 py-2 text-[15px] text-warn">
+      <p v-if="offline" class="note note-warn">
         Nema veze — ovo traži internet. Sto ostaje kod tebe.
       </p>
-      <p v-else-if="error" class="rounded-xl bg-danger-soft px-3 py-2 text-[15px] text-danger" role="alert">
+      <p v-else-if="error" class="note note-danger" role="alert">
         {{ error }}
       </p>
 
       <template v-if="mode === 'move'">
-        <p class="text-[15px] text-text-2">
+        <p class="text-label text-text-2">
           Gosti su sjeli za drugi sto. Sve dosadašnje ture idu s njima.
         </p>
-        <p v-if="freeTables.length === 0" class="py-4 text-center text-[15px] text-text-2">
+        <p v-if="freeTables.length === 0" class="py-4 text-center text-label text-text-2">
           Nema slobodnog stola.
         </p>
         <div v-else class="grid grid-cols-3 gap-2">
@@ -99,14 +99,14 @@ const zoneLabel = (zone: VenueTable['zone']) => (zone === 'basta' ? 'Bašta' : '
             :disabled="busy || offline"
             @click="emit('move', table.id)"
           >
-            <span class="text-[17px] font-semibold">{{ table.name }}</span>
+            <span class="text-body font-semibold">{{ table.name }}</span>
             <small class="text-xs font-normal text-text-2">{{ zoneLabel(table.zone) }}</small>
           </button>
         </div>
       </template>
 
       <template v-else>
-        <p class="text-[15px] text-text-2">
+        <p class="text-label text-text-2">
           Kolega mora prihvatiti sto na svom telefonu. Tvoje ture ostaju tvoje —
           mijenja se samo ko dalje vodi sto.
         </p>
@@ -114,7 +114,7 @@ const zoneLabel = (zone: VenueTable['zone']) => (zone === 'basta' ? 'Bašta' : '
           v-for="person in colleagues"
           :key="person.id"
           type="button"
-          class="btn h-14 justify-start text-lg"
+          class="btn btn-secondary btn-lg justify-start"
           :disabled="busy || offline"
           @click="emit('hand', person.id)"
         >
@@ -123,12 +123,12 @@ const zoneLabel = (zone: VenueTable['zone']) => (zone === 'basta' ? 'Bašta' : '
           </span>
           {{ person.name }}
         </button>
-        <p v-if="colleagues.length === 0" class="py-4 text-center text-[15px] text-text-2">
+        <p v-if="colleagues.length === 0" class="py-4 text-center text-label text-text-2">
           Niko drugi nije na spisku.
         </p>
       </template>
 
-      <button type="button" class="btn btn-ghost h-12" :disabled="busy" @click="emit('close')">
+      <button type="button" class="btn btn-ghost" :disabled="busy" @click="emit('close')">
         Otkaži
       </button>
     </div>

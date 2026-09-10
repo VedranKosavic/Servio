@@ -203,7 +203,7 @@ const colleagues = computed(() =>
           <!-- The cards that need an answer come first: an offer for me, and my
                own live request. Everything below is just the week. -->
           <section v-if="data?.offers.length" class="flex flex-col gap-2">
-            <h2 class="text-base font-semibold text-text-2">Traži se zamjena</h2>
+            <h2 class="text-body font-semibold text-text-2">Traži se zamjena</h2>
             <article
               v-for="offer in data.offers"
               :key="offer.id"
@@ -212,13 +212,13 @@ const colleagues = computed(() =>
               <div class="font-semibold">
                 {{ offer.from_user_name }} · {{ dayLabelBs(offer.work_date) }}
               </div>
-              <div class="text-[15px] text-text-2">
+              <div class="text-label text-text-2">
                 {{ offer.template_name }} {{ timeSpanBs(offer.start_time, offer.end_time) }}
                 <span v-if="offer.to_user_name"> · tebi</span>
               </div>
               <div class="flex gap-2">
                 <button
-                  type="button" class="btn btn-accent grow"
+                  type="button" class="btn btn-primary grow"
                   :disabled="!online || busy"
                   @click="openTake(offer)"
                 >
@@ -237,7 +237,7 @@ const colleagues = computed(() =>
           </section>
 
           <section v-if="data?.mine.length" class="flex flex-col gap-2">
-            <h2 class="text-base font-semibold text-text-2">Moji zahtjevi</h2>
+            <h2 class="text-body font-semibold text-text-2">Moji zahtjevi</h2>
             <article
               v-for="row in data.mine"
               :key="row.id"
@@ -246,7 +246,7 @@ const colleagues = computed(() =>
               <div class="font-semibold">
                 Traži se zamjena · {{ dayLabelBs(row.work_date) }}
               </div>
-              <div class="text-[15px] text-text-2">
+              <div class="text-label text-text-2">
                 {{ row.template_name }} {{ timeSpanBs(row.start_time, row.end_time) }}
                 <span v-if="row.to_user_name"> · {{ row.to_user_name }}</span>
               </div>
@@ -260,36 +260,29 @@ const colleagues = computed(() =>
             </article>
           </section>
 
-          <div class="flex gap-2">
-            <button
-              v-for="segment in SEGMENTS"
-              :key="segment.id"
-              type="button"
-              class="flex min-h-12 flex-1 items-center justify-center rounded-3xl border-[1.5px] text-[15px] font-semibold"
-              :class="which === segment.id
-                ? 'border-accent bg-accent text-accent-ink'
-                : 'border-line bg-transparent text-text-2'"
-              @click="which = segment.id"
-            >
-              {{ segment.label }}
-            </button>
-          </div>
+          <!-- Which week. A control, not two primary actions. -->
+          <WaiterSeg
+            label="Sedmica"
+            :options="SEGMENTS"
+            :model-value="which"
+            @update:model-value="which = $event as typeof which"
+          />
 
           <p v-if="!online" class="chip chip-warn self-start">
             Nema veze — zamjene traže internet
           </p>
-          <p v-if="actionError" class="rounded-xl bg-danger-soft px-3 py-2 text-[15px] text-danger" role="alert">
+          <p v-if="actionError" class="note note-danger" role="alert">
             {{ actionError }}
           </p>
 
-          <p v-if="unpublished" class="card p-4 text-center text-[15px] text-text-2">
+          <p v-if="unpublished" class="empty">
             {{ which === 'sljedeca'
               ? 'Raspored za sljedeću sedmicu još nije objavljen.'
               : 'Raspored za ovu sedmicu još nije objavljen.' }}
           </p>
 
           <template v-else>
-            <p class="text-[15px] text-text-2">
+            <p class="text-label text-text-2">
               {{ which === 'ova' ? 'Moje smjene ove sedmice' : 'Moje smjene sljedeće sedmice' }}:
               <strong class="num text-text">{{ mine.length }}</strong>
             </p>
@@ -299,15 +292,15 @@ const colleagues = computed(() =>
               :key="day.work_date"
               class="card flex flex-col gap-2 p-3"
             >
-              <h3 class="text-[15px] font-semibold text-text-2">{{ dayLabelBs(day.work_date) }}</h3>
+              <h3 class="text-label font-semibold text-text-2">{{ dayLabelBs(day.work_date) }}</h3>
 
-              <p v-if="!day.rows.length" class="text-[15px] text-muted">Niko nije na rasporedu.</p>
+              <p v-if="!day.rows.length" class="text-label text-muted">Niko nije na rasporedu.</p>
 
               <button
                 v-for="person in day.rows"
                 :key="person.id"
                 type="button"
-                class="flex min-h-12 items-center gap-3 rounded-xl px-2 text-left"
+                class="flex min-h-12 items-center gap-3 rounded-control px-2 text-left"
                 :class="person.user_id === myId
                   ? 'bg-accent/15 text-text'
                   : 'text-text-2'"
@@ -325,10 +318,10 @@ const colleagues = computed(() =>
                   <span :class="{ 'line-through': person.status === 'sick' || person.status === 'absent' }">
                     {{ person.user_name }}
                   </span>
-                  <small class="block text-sm text-muted">{{ person.template_name }}</small>
+                  <small class="block text-caption tracking-normal text-muted">{{ person.template_name }}</small>
                 </span>
 
-                <span v-if="person.user_id === myId" class="num shrink-0 text-[15px] font-semibold">
+                <span v-if="person.user_id === myId" class="num shrink-0 text-label font-semibold">
                   {{ timeSpanBs(person.start_time, person.end_time) }}
                 </span>
                 <span v-if="person.swap_pending" class="chip chip-warn shrink-0">zamjena</span>
@@ -363,21 +356,21 @@ const colleagues = computed(() =>
           aria-label="Preuzimanje smjene"
         >
           <span class="mx-auto h-1 w-10 shrink-0 rounded-full bg-line" />
-          <h2 class="text-lg font-semibold">
+          <h2 class="section-title">
             {{ doubleAsk ? 'Dupla smjena' : 'Preuzimaš smjenu' }}
           </h2>
-          <p class="text-[15px] text-text-2">
+          <p class="text-label text-text-2">
             {{ dayLabelBs(taking.work_date) }} · {{ taking.template_name }}
             {{ timeSpanBs(taking.start_time, taking.end_time) }}
             <template v-if="doubleAsk">
               — tog dana već imaš jednu smjenu.
             </template>
           </p>
-          <p v-if="actionError" class="rounded-xl bg-danger-soft px-3 py-2 text-[15px] text-danger" role="alert">
+          <p v-if="actionError" class="note note-danger" role="alert">
             {{ actionError }}
           </p>
           <button
-            type="button" class="btn btn-accent"
+            type="button" class="btn btn-primary"
             :disabled="!online || busy"
             @click="accept(doubleAsk)"
           >

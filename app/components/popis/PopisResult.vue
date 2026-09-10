@@ -53,7 +53,7 @@ function qty(value: number, unit: CountView['lines'][number]['base_unit']): stri
 <template>
   <div class="flex flex-col gap-4">
     <div class="card flex flex-col gap-2 p-4">
-      <h2 class="text-xl font-bold">
+      <h2 class="section-title">
         Popis predan
       </h2>
       <div class="flex flex-wrap items-center gap-2">
@@ -65,7 +65,7 @@ function qty(value: number, unit: CountView['lines'][number]['base_unit']): stri
           {{ varianceWord }}
         </span>
       </div>
-      <p class="text-[15px] text-text-2">
+      <p class="text-label text-text-2">
         Stanje se ne mijenja odmah — vlasnik potvrđuje popis i tek tada se roba
         koriguje.
       </p>
@@ -78,7 +78,7 @@ function qty(value: number, unit: CountView['lines'][number]['base_unit']): stri
         class="flex flex-col gap-1 px-4 py-3"
       >
         <div class="flex items-baseline justify-between gap-2">
-          <span class="text-[17px]">{{ row.item_name }}</span>
+          <span class="text-body">{{ row.item_name }}</span>
           <span
             class="num shrink-0 font-bold"
             :class="row.out_of_tolerance ? (row.variance_qty < 0 ? 'text-danger' : 'text-warn') : 'text-text-2'"
@@ -86,51 +86,51 @@ function qty(value: number, unit: CountView['lines'][number]['base_unit']): stri
             {{ row.variance_qty === 0 ? 'tačno' : qty(row.variance_qty, row.base_unit) }}
           </span>
         </div>
-        <div class="num flex flex-wrap gap-x-3 text-sm text-text-2">
+        <div class="num flex flex-wrap gap-x-3 text-label text-text-2">
           <span>popisano {{ formatStockQty(row.counted_qty, row.base_unit) }}</span>
           <span>očekivano {{ formatStockQty(row.theoretical_qty, row.base_unit) }}</span>
           <span v-if="row.variance_fen !== 0">
             {{ formatKm(row.variance_fen) }}<template v-if="row.estimated"> · procijenjeno</template>
           </span>
         </div>
-        <p v-if="row.note" class="text-sm text-text-2">
+        <p v-if="row.note" class="text-label text-text-2">
           {{ row.note }}
         </p>
       </div>
     </div>
 
     <div class="card flex flex-col gap-3 p-4">
-      <h3 class="text-lg font-semibold">
+      <h3 class="section-title">
         Potvrda stanja
       </h3>
 
-      <p v-if="count.witnessed_by" class="text-[17px] text-good">
+      <p v-if="count.witnessed_by" class="text-body text-good">
         Stanje potvrdio: {{ count.witnessed_by_name }}
       </p>
       <template v-else>
-        <p class="text-[15px] text-text-2">
+        <p class="text-label text-text-2">
           Kolega koji preuzima šank potvrđuje stanje na ovom telefonu. Popis bez
           potvrde vrijedi — vlasnik samo vidi da potvrde nema.
         </p>
         <button
           type="button"
-          class="btn btn-accent min-h-14 text-lg"
+          class="btn btn-primary btn-lg"
           :disabled="!canWitness || busy"
           @click="$emit('witness')"
         >
           Potvrđujem stanje
         </button>
-        <p v-if="!canWitness && meId === count.counted_by" class="text-sm text-text-2">
+        <p v-if="!canWitness && meId === count.counted_by" class="text-label text-text-2">
           Ti si popisivao — potvrđuje neko drugi, sa svoje prijave.
         </p>
       </template>
 
-      <p v-if="error" class="text-[15px] text-danger">
+      <p v-if="error" class="text-label text-danger">
         {{ error }}
       </p>
     </div>
 
-    <button type="button" class="btn btn-ghost min-h-14 text-lg" @click="$emit('done')">
+    <button type="button" class="btn btn-ghost btn-lg" @click="$emit('done')">
       Gotovo
     </button>
   </div>

@@ -36,39 +36,39 @@ const shown = computed(() => {
 
 <template>
   <section class="flex flex-col gap-3">
-    <h2 class="text-lg font-semibold">
+    <h2 class="section-title">
       Šta se otpisuje
     </h2>
 
     <input
       v-model="query"
-      class="min-h-13 rounded-xl border border-line bg-surface-2 px-3 text-base outline-none"
+      class="input"
       placeholder="Traži robu"
       autocomplete="off"
       aria-label="Traži robu"
     >
 
-    <div class="flex flex-col gap-2">
+    <!-- One card, rows inside it. Twenty items each boxed in its own card is a
+         spreadsheet; a list of rules under a single edge is a list. -->
+    <div v-if="shown.length" class="card px-4">
       <button
         v-for="item in shown"
         :key="item.id"
         type="button"
-        class="flex min-h-13 items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left"
-        :class="selectedId === item.id
-          ? 'border-accent bg-accent text-accent-ink'
-          : 'border-line bg-surface'"
+        class="row w-full gap-3"
+        :class="selectedId === item.id ? 'text-accent-text' : ''"
         @click="$emit('select', item)"
       >
-        <span class="text-[17px]">{{ item.name }}</span>
-        <span
-          class="num shrink-0 text-sm"
-          :class="selectedId === item.id ? 'text-accent-ink' : 'text-text-2'"
-        >{{ item.base_unit }}</span>
+        <span class="grow text-body" :class="selectedId === item.id ? 'font-semibold' : ''">{{ item.name }}</span>
+        <span class="num shrink-0 text-label text-muted">{{ item.base_unit }}</span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 text-muted" aria-hidden="true">
+          <path d="M9 6l6 6-6 6" />
+        </svg>
       </button>
-
-      <p v-if="shown.length === 0" class="card px-4 py-6 text-center text-text-2">
-        Nema takve robe.
-      </p>
     </div>
+
+    <p v-else class="empty">
+      Nema takve robe.
+    </p>
   </section>
 </template>

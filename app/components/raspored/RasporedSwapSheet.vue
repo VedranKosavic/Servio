@@ -58,20 +58,20 @@ function send() {
       <span class="mx-auto h-1 w-10 shrink-0 rounded-full bg-line" />
 
       <div>
-        <h2 class="text-lg font-semibold">{{ dayLabelBs(person.work_date) }}</h2>
-        <p class="num text-[15px] text-text-2">{{ span }}</p>
+        <h2 class="section-title">{{ dayLabelBs(person.work_date) }}</h2>
+        <p class="num text-label text-text-2">{{ span }}</p>
       </div>
 
-      <p v-if="offline" class="rounded-xl bg-warn-soft px-3 py-2 text-[15px] text-warn">
+      <p v-if="offline" class="note note-warn">
         Nema veze — zamjena traži internet. Smjena ostaje tvoja.
       </p>
-      <p v-else-if="error" class="rounded-xl bg-danger-soft px-3 py-2 text-[15px] text-danger" role="alert">
+      <p v-else-if="error" class="note note-danger" role="alert">
         {{ error }}
       </p>
 
       <template v-if="step === 'shift'">
         <button
-          type="button" class="btn btn-accent"
+          type="button" class="btn btn-primary"
           :disabled="offline || busy"
           @click="step = 'form'"
         >
@@ -82,11 +82,11 @@ function send() {
 
       <template v-else>
         <div class="flex flex-col gap-2">
-          <span class="text-[15px] text-text-2">Kome (nije obavezno)</span>
+          <span class="text-label text-text-2">Kome (nije obavezno)</span>
           <div class="flex flex-wrap gap-2">
             <button
               type="button"
-              class="flex min-h-12 items-center rounded-3xl border-[1.5px] px-4 text-[15px] font-semibold"
+              class="flex min-h-12 items-center rounded-chip border-[1.5px] px-4 text-label font-semibold"
               :class="to === '' ? 'border-accent bg-accent text-accent-ink' : 'border-line text-text-2'"
               @click="to = ''"
             >
@@ -96,7 +96,7 @@ function send() {
               v-for="person2 in colleagues"
               :key="person2.id"
               type="button"
-              class="flex min-h-12 items-center rounded-3xl border-[1.5px] px-4 text-[15px] font-semibold"
+              class="flex min-h-12 items-center rounded-chip border-[1.5px] px-4 text-label font-semibold"
               :class="to === person2.id ? 'border-accent bg-accent text-accent-ink' : 'border-line text-text-2'"
               @click="to = person2.id"
             >
@@ -106,7 +106,7 @@ function send() {
         </div>
 
         <div class="flex flex-col gap-2">
-          <span class="text-[15px] text-text-2">Razlog</span>
+          <span class="text-label text-text-2">Razlog</span>
           <div class="flex gap-2">
             <button
               v-for="option in ([
@@ -115,30 +115,30 @@ function send() {
               ] as const)"
               :key="option.id"
               type="button"
-              class="flex min-h-12 flex-1 items-center justify-center rounded-3xl border-[1.5px] text-[15px] font-semibold"
+              class="flex min-h-12 flex-1 items-center justify-center rounded-chip border-[1.5px] text-label font-semibold"
               :class="reason === option.id ? 'border-accent bg-accent text-accent-ink' : 'border-line text-text-2'"
               @click="reason = option.id"
             >
               {{ option.label }}
             </button>
           </div>
-          <p class="text-sm text-muted">
+          <p class="text-caption tracking-normal text-muted">
             Kolege vide istu poruku za oba razloga. Bolovanje vidi samo vlasnik.
           </p>
         </div>
 
         <label class="flex flex-col gap-2">
-          <span class="text-[15px] text-text-2">Napomena (nije obavezno)</span>
+          <span class="text-label text-text-2">Napomena (nije obavezno)</span>
           <textarea
             v-model="note"
-            class="card-2 min-h-20 resize-none rounded-xl px-3 py-2 text-[17px] text-text"
+            class="card-2 min-h-20 resize-none rounded-control px-3 py-2 text-body text-text"
             maxlength="200"
             rows="2"
           />
         </label>
 
         <button
-          type="button" class="btn btn-accent"
+          type="button" class="btn btn-primary"
           :disabled="offline || busy"
           @click="send"
         >

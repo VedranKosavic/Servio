@@ -53,13 +53,13 @@ const src = computed(() => props.localSrc ?? props.message.image?.url ?? null)
 <template>
   <!-- A system line: centred, grey, and never a badge. -->
   <div v-if="message.kind === 'system'" class="flex flex-col items-center gap-2 py-1">
-    <p class="max-w-[85%] text-center text-sm text-text-2">
+    <p class="max-w-[85%] text-center text-label text-text-2">
       {{ message.body }}
     </p>
     <button
       v-if="link"
       type="button"
-      class="btn btn-ghost min-h-12 text-base"
+      class="btn btn-ghost min-h-12 text-body"
       @click="emit('link', link.route)"
     >
       {{ link.label }}
@@ -68,14 +68,14 @@ const src = computed(() => props.localSrc ?? props.message.image?.url ?? null)
 
   <div v-else class="flex" :class="mine ? 'justify-end' : 'justify-start'">
     <div class="flex max-w-[85%] flex-col gap-1">
-      <span v-if="!mine && message.author_name" class="px-1 text-sm text-text-2">
+      <span v-if="!mine && message.author_name" class="px-1 text-label text-text-2">
         {{ message.author_name }}
       </span>
 
       <button
         type="button"
-        class="flex flex-col gap-1.5 rounded-2xl border px-3 py-2 text-left"
-        :class="mine ? 'border-accent bg-surface-2 text-text' : 'border-line bg-surface text-text'"
+        class="flex flex-col gap-1.5 rounded-card border px-3 py-2 text-left"
+        :class="mine ? 'border-accent-line bg-surface-2 text-text' : 'border-line bg-surface text-text'"
         @click="emit('open', message)"
       >
         <template v-if="message.deleted_at">
@@ -86,7 +86,7 @@ const src = computed(() => props.localSrc ?? props.message.image?.url ?? null)
           <!-- The quoted first line of what this answers. Never the whole message. -->
           <span
             v-if="message.reply_preview"
-            class="block border-l-2 border-accent pl-2 text-sm text-text-2"
+            class="block border-l-2 border-accent-line pl-2 text-label text-text-2"
           >
             {{ message.reply_preview }}
           </span>
@@ -94,7 +94,7 @@ const src = computed(() => props.localSrc ?? props.message.image?.url ?? null)
           <template v-if="message.kind === 'image'">
             <span
               v-if="message.image && message.image.expired"
-              class="flex h-24 w-[320px] max-w-full items-center justify-center rounded-xl bg-surface-2 text-text-2"
+              class="flex h-24 w-[320px] max-w-full items-center justify-center rounded-control bg-surface-2 text-text-2"
             >
               Slika istekla
             </span>
@@ -104,7 +104,7 @@ const src = computed(() => props.localSrc ?? props.message.image?.url ?? null)
               :width="(message.image && message.image.width) || 320"
               :height="(message.image && message.image.height) || 240"
               alt="Slika"
-              class="h-auto w-[320px] max-w-full rounded-xl bg-surface-2"
+              class="h-auto w-[320px] max-w-full rounded-control bg-surface-2"
               @click.stop="emit('image', { message, src })"
             >
           </template>

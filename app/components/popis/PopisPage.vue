@@ -297,22 +297,16 @@ const staleOnCount = computed(() => result.value?.stale_devices ?? [])
       />
 
       <template v-else>
-        <div class="flex gap-2">
-          <button
-            v-for="option in PHASES"
-            :key="option.key"
-            type="button"
-            class="min-h-12 flex-1 rounded-full border text-[15px] font-semibold"
-            :class="phase === option.key
-              ? 'border-accent bg-accent text-accent-ink'
-              : 'border-line bg-surface-2 text-text-2'"
-            @click="phase = option.key"
-          >
-            {{ option.label }}
-          </button>
-        </div>
+        <!-- Which count this is. A segmented control, not three copper
+             buttons: choosing a phase is not a primary action. -->
+        <WaiterSeg
+          label="Vrsta popisa"
+          :options="PHASES.map(p => ({ id: p.key, label: p.label }))"
+          :model-value="phase"
+          @update:model-value="phase = $event as Phase"
+        />
 
-        <p v-if="phase === 'open' && hasOpenCount === false" class="card border-warn px-4 py-3 text-[15px] text-warn">
+        <p v-if="phase === 'open' && hasOpenCount === false" class="note note-warn">
           Ova smjena još nema početni popis. Smjena bez njega ne može se
           zatvoriti bez vlasnika.
         </p>
@@ -333,17 +327,17 @@ const staleOnCount = computed(() => result.value?.stale_devices ?? [])
           @retry="submit"
         />
 
-        <p v-if="pending > 0" class="card border-warn px-4 py-3 text-[15px] text-warn">
+        <p v-if="pending > 0" class="note note-warn">
           {{ blockedText }} s ovog telefona. Pošalji ih prije popisa — inače će
           se prikazati kao manjak.
         </p>
 
         <section class="flex flex-col gap-3">
           <div class="flex items-baseline justify-between gap-2">
-            <h2 class="text-lg font-semibold">
+            <h2 class="section-title">
               Stavke za popis
             </h2>
-            <span class="num text-[15px] text-text-2">{{ counted }} / {{ spot.length }}</span>
+            <span class="num text-label text-text-2">{{ counted }} / {{ spot.length }}</span>
           </div>
 
           <PopisItemRow
@@ -364,11 +358,11 @@ const staleOnCount = computed(() => result.value?.stale_devices ?? [])
           </p>
         </section>
 
-        <p v-if="submitError" class="card border-danger px-4 py-3 text-[15px] text-danger">
+        <p v-if="submitError" class="note note-danger" role="alert">
           {{ submitError }}
         </p>
 
-        <p class="pb-24 text-center text-sm text-muted">
+        <p class="pb-24 text-center text-caption tracking-normal text-muted">
           Popis se predaje odjednom, s vezom. Ono što se očekuje na polici vidiš
           tek nakon predaje.
         </p>
@@ -382,18 +376,18 @@ const staleOnCount = computed(() => result.value?.stale_devices ?? [])
     >
       <button
         type="button"
-        class="btn btn-accent min-h-14 w-full text-lg"
+        class="btn btn-primary btn-lg w-full"
         :disabled="!canSubmit"
         @click="submit"
       >
         {{ submitting ? 'Šaljem…' : 'Predaj popis' }}
       </button>
-      <p v-if="remaining > 0" class="num pt-2 text-center text-sm text-text-2">
+      <p v-if="remaining > 0" class="num pt-2 text-center text-label text-text-2">
         Ostalo još {{ remaining }} — upiši i nulu ako police nema ništa.
       </p>
     </div>
 
-    <div v-if="staleOnCount.length > 0" class="pb-4 text-sm text-text-2">
+    <div v-if="staleOnCount.length > 0" class="pb-4 text-label text-text-2">
       Ugašeni telefoni u ovoj smjeni:
       {{ staleOnCount.map(d => d.label).join(', ') }} — ako se jave kasno, ture
       ulaze u ovaj popis.

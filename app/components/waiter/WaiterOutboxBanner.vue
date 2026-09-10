@@ -14,7 +14,7 @@ const { banner } = useSync()
 <template>
   <p
     v-if="banner"
-    class="-mx-4 flex items-start gap-2 border-b border-line bg-warn-soft px-4 py-2.5 text-[15px] text-warn"
+    class="-mx-4 flex items-start gap-2 border-b border-line bg-warn-soft px-4 py-2.5 text-label text-warn"
     role="status"
   >
     <svg

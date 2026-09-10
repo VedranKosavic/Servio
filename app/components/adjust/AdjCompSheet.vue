@@ -157,11 +157,11 @@ async function confirm() {
         </h2>
         <span class="num shrink-0 text-2xl font-bold">{{ formatKm(line.amount_fen) }}</span>
       </div>
-      <p class="-mt-2 text-[15px] text-text-2">
+      <p class="-mt-2 text-label text-text-2">
         {{ tableName }} · {{ line.qty }}× {{ line.name }}
       </p>
 
-      <p v-if="error" class="rounded-xl bg-danger-soft px-3 py-2 text-[15px] text-danger" role="alert">
+      <p v-if="error" class="note note-danger" role="alert">
         {{ error }}
       </p>
 
@@ -170,10 +170,10 @@ async function confirm() {
           v-for="chip in reasons"
           :key="chip.id"
           type="button"
-          class="flex min-h-12 items-center rounded-3xl border px-4 text-[17px] font-semibold"
+          class="pill h-12"
           :class="reason === chip.id
-            ? 'border-accent bg-accent text-accent-ink'
-            : 'border-line bg-surface-2 text-text'"
+            ? 'pill-on'
+            : ''"
           @click="reason = chip.id"
         >
           {{ chip.label }}
@@ -181,16 +181,16 @@ async function confirm() {
       </div>
 
       <!-- The published rule, always on screen, not only when it refuses -->
-      <p class="num rounded-xl bg-surface-2 px-3 py-2 text-[15px] text-text-2">
+      <p class="note num">
         {{ staffCounter }}
       </p>
-      <p v-if="staffRefusal" class="rounded-xl bg-warn-soft px-3 py-2 text-[15px] text-warn">
+      <p v-if="staffRefusal" class="note note-warn">
         {{ staffRefusal }}
       </p>
 
       <p
         v-if="outlook"
-        class="rounded-xl px-3 py-2 text-[15px]"
+        class="rounded-control px-3 py-2 text-label"
         :class="outlook.tone === 'good' ? 'bg-good-soft text-good' : 'bg-warn-soft text-warn'"
       >
         {{ outlook.text }}
@@ -198,13 +198,13 @@ async function confirm() {
 
       <button
         type="button"
-        class="btn btn-accent h-14 text-lg"
+        class="btn btn-primary btn-lg"
         :disabled="!reason || busy"
         @click="confirm"
       >
         {{ busy ? 'Šaljem…' : 'Kuća časti' }}
       </button>
-      <button type="button" class="btn btn-ghost h-12" :disabled="busy" @click="emit('close')">
+      <button type="button" class="btn btn-ghost" :disabled="busy" @click="emit('close')">
         Otkaži
       </button>
     </div>

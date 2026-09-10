@@ -35,7 +35,7 @@ defineEmits<{ close: [] }>()
       <span class="grow text-xl font-bold">Pregled narudžbe</span>
       <button
         type="button"
-        class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
+        class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control"
         aria-label="Zatvori"
         @click="$emit('close')"
       >
@@ -84,10 +84,10 @@ defineEmits<{ close: [] }>()
         <span class="grow text-xl font-semibold">Za platiti</span>
         <span class="num text-4xl font-bold">{{ formatKm(tab.money.remaining_fen) }}</span>
       </div>
-      <p v-if="tab.money.paid_fen > 0" class="num mt-1 text-right text-sm text-text-2">
+      <p v-if="tab.money.paid_fen > 0" class="num mt-1 text-right text-label text-text-2">
         Već plaćeno {{ formatKm(tab.money.paid_fen) }} od {{ formatKm(tab.money.total_fen) }}
       </p>
-      <p class="mt-3 text-center text-sm text-text-2">
+      <p class="mt-3 text-center text-label text-text-2">
         Interni pregled — nije fiskalni račun.
       </p>
     </div>

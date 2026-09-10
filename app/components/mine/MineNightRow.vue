@@ -75,11 +75,11 @@ async function submit(close: boolean) {
 <template>
   <div class="flex flex-col gap-2 border-t border-line py-3 first:border-t-0 first:pt-0">
     <div class="flex items-baseline justify-between gap-3">
-      <span class="num text-[17px] font-semibold">{{ dateText(row.business_date) }}</span>
-      <span class="num text-[15px] text-text-2">{{ hoursText(row.hours) }}</span>
+      <span class="num text-body font-semibold">{{ dateText(row.business_date) }}</span>
+      <span class="num text-label text-text-2">{{ hoursText(row.hours) }}</span>
     </div>
 
-    <div class="flex items-baseline justify-between gap-3 text-[15px]">
+    <div class="flex items-baseline justify-between gap-3 text-label">
       <span class="text-text-2">
         <template v-if="row.declared_fen === null">Pazar nije predan</template>
         <template v-else>Predao {{ formatKm(row.declared_fen) }}</template>
@@ -95,7 +95,7 @@ async function submit(close: boolean) {
     <button
       v-if="!open"
       type="button"
-      class="flex min-h-12 items-start gap-2 rounded-xl px-1 text-left text-[15px]"
+      class="flex min-h-12 items-start gap-2 rounded-control px-1 text-left text-label"
       :class="row.note ? 'text-text' : 'text-text-2'"
       @click="open = true"
     >
@@ -115,7 +115,7 @@ async function submit(close: boolean) {
         rows="3"
         maxlength="500"
         placeholder="Npr. kasnio sam sat, dogovoreno."
-        class="card-2 w-full resize-none px-3.5 py-2.5 text-[17px] outline-none placeholder:text-muted"
+        class="card-2 w-full resize-none px-3.5 py-2.5 text-body outline-none placeholder:text-muted"
         aria-label="Napomena"
         @blur="submit(false)"
       />
@@ -128,7 +128,7 @@ async function submit(close: boolean) {
         -->
         <button
           type="button"
-          class="btn btn-accent grow"
+          class="btn btn-primary grow"
           @click="submit(true)"
         >
           {{ saving ? 'Čuvam…' : 'Sačuvaj' }}
@@ -141,7 +141,7 @@ async function submit(close: boolean) {
           Zatvori
         </button>
       </div>
-      <p class="text-sm text-text-2">
+      <p class="text-label text-text-2">
         Prazna napomena je briše. Vlasnik je vidi uz tvoj red u smjeni.
       </p>
     </div>

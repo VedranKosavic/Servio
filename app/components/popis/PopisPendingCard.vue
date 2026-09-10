@@ -39,26 +39,26 @@ function unsent(n: number): string {
 
 <template>
   <div class="card border-warn p-4">
-    <h3 class="flex items-center gap-2 text-lg font-semibold text-warn">
+    <h3 class="section-title flex items-center gap-2 text-warn">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
         <path d="M12 8v5M12 16.5v.01M10.3 3.9L2.6 17.2A1.6 1.6 0 004 19.6h16a1.6 1.6 0 001.4-2.4L13.7 3.9a1.6 1.6 0 00-2.8 0z" />
       </svg>
       Popis još ne može
     </h3>
 
-    <p class="mt-1 text-[15px] text-text-2">
+    <p class="mt-1 text-label text-text-2">
       Neko još ima neposlane ture na telefonu, pa bi popis pokazao manjak kojeg
       nema.
     </p>
 
-    <p v-for="device in devices" :key="device.device_id" class="mt-2 text-[17px]">
+    <p v-for="device in devices" :key="device.device_id" class="mt-2 text-body">
       {{ device.label }} · {{ lastSeen(device.last_seen_at) }},
       {{ unsent(device.pending_count) }}
     </p>
 
     <button
       type="button"
-      class="btn btn-accent mt-3 min-h-12 w-full"
+      class="btn btn-primary mt-3 min-h-12 w-full"
       :disabled="busy"
       @click="$emit('retry')"
     >

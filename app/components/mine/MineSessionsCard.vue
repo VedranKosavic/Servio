@@ -29,11 +29,11 @@ function when(iso: string | null): string {
 
 <template>
   <section class="card flex flex-col gap-2 p-4">
-    <h2 class="text-xl font-bold">
+    <h2 class="section-title">
       Moji podaci
     </h2>
 
-    <p class="text-[15px] text-text-2">
+    <p class="text-label text-text-2">
       Ovdje su sve tvoje prijave. Ako vidiš prijavu koju ne prepoznaješ, reci
       vlasniku — nije optužba ni za koga, nego stvar koju vrijedi provjeriti.
     </p>
@@ -46,15 +46,15 @@ function when(iso: string | null): string {
       >
         <div class="min-w-0">
           <div class="flex items-center gap-2">
-            <span class="truncate text-[17px]">{{ session.device_label }}</span>
+            <span class="truncate text-body">{{ session.device_label }}</span>
             <span v-if="session.current" class="chip chip-good shrink-0">ovaj telefon</span>
             <span v-else-if="session.borrowed" class="chip chip-warn shrink-0">posuđen</span>
           </div>
-          <div class="num text-sm text-text-2">
+          <div class="num text-label text-text-2">
             zadnji put {{ when(session.last_seen_at) }}
           </div>
         </div>
-        <span class="num shrink-0 text-[15px] text-text-2">{{ when(session.created_at) }}</span>
+        <span class="num shrink-0 text-label text-text-2">{{ when(session.created_at) }}</span>
       </div>
     </div>
 

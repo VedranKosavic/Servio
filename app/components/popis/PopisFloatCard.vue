@@ -41,19 +41,19 @@ function give(userId: string) {
 <template>
   <section class="card flex flex-col gap-3 p-4">
     <div>
-      <h2 class="text-lg font-semibold">
+      <h2 class="section-title">
         Dopuni smjenu
       </h2>
-      <p class="text-[15px] text-text-2">
+      <p class="text-label text-text-2">
         Sitno iz kase konobarima. Iznos ulazi u ono što taj konobar predaje na
         kraju smjene.
       </p>
     </div>
 
     <div v-for="waiter in waiters" :key="waiter.id" class="flex items-center gap-2">
-      <span class="w-24 shrink-0 truncate text-[17px]">{{ waiter.name }}</span>
+      <span class="w-24 shrink-0 truncate text-body">{{ waiter.name }}</span>
 
-      <div class="flex grow items-center gap-2 rounded-xl border border-line bg-surface-2 px-3">
+      <div class="flex grow items-center gap-2 rounded-control border border-line bg-surface-2 px-3">
         <input
           v-model="amounts[waiter.id]"
           class="num min-h-12 w-full bg-transparent text-lg font-semibold outline-none"
@@ -62,12 +62,12 @@ function give(userId: string) {
           placeholder="0,00"
           :aria-label="`Sitno za ${waiter.name}`"
         >
-        <span class="shrink-0 text-sm text-text-2">KM</span>
+        <span class="shrink-0 text-label text-text-2">KM</span>
       </div>
 
       <button
         type="button"
-        class="btn btn-accent min-h-12 shrink-0 px-4"
+        class="btn btn-primary min-h-12 shrink-0 px-4"
         :disabled="busy || parseKm(amounts[waiter.id] ?? '') === null"
         @click="give(waiter.id)"
       >
@@ -79,7 +79,7 @@ function give(userId: string) {
       Predano · {{ waiters.find(w => w.id === userId)?.name ?? '' }} · {{ formatKm(fen) }}
     </p>
 
-    <p v-if="error" class="text-[15px] text-danger">
+    <p v-if="error" class="text-label text-danger">
       {{ error }}
     </p>
   </section>

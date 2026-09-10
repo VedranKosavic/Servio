@@ -362,7 +362,7 @@ async function confirm() {
 <template>
   <ClientOnly>
     <div class="flex flex-1 flex-col">
-      <WaiterHeader :title="tableName" :back-to="`/konobar/sto/${route.params.id}`">
+      <WaiterHeader title="Dodaj" :back-to="`/konobar/sto/${route.params.id}`">
         <template #right>
           <WaiterSyncChip compact />
         </template>
@@ -370,56 +370,76 @@ async function confirm() {
 
       <WaiterOutboxBanner />
 
-      <div class="flex flex-1 flex-col gap-3 py-3">
+      <div class="flex flex-1 flex-col gap-4 py-4">
         <WaiterFailedCard />
 
-        <!-- The pill: which table this round is for, and one tap back to it. -->
-        <div class="flex items-center gap-2">
-          <NuxtLink :to="`/konobar/sto/${route.params.id}`" class="chip bg-line px-3 py-1.5 text-[15px] text-text">
-            {{ tableName }} · {{ zoneLabel }}
-          </NuxtLink>
-          <span v-if="outbox.pending > 0" class="chip chip-warn">čeka slanje ({{ outbox.pending }})</span>
+        <!--
+          Which table this round is for, and one tap back to it.
+
+          It is a row rather than the header's title because the title of this
+          screen is *Dodaj* — and because "am I adding to the right table?" is
+          the question a waiter asks with his thumb already moving, so it wants
+          a 56 px target with a chevron on it, not a 12 px caption.
+        -->
+        <NuxtLink
+          :to="`/konobar/sto/${route.params.id}`"
+          class="card-2 flex min-h-14 items-center gap-3 px-4 py-2"
+        >
+          <span class="grow truncate text-body font-semibold">{{ tableName }} · {{ zoneLabel }}</span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 text-muted" aria-hidden="true">
+            <path d="M9 6l6 6-6 6" />
+          </svg>
+        </NuxtLink>
+
+        <!-- The search, and the one chip that has to be true on this screen. -->
+        <div class="flex flex-col gap-3">
+          <label class="input flex items-center gap-2.5">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="shrink-0 text-muted" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="M20 20l-3.5-3.5" />
+            </svg>
+            <input
+              v-model="query"
+              type="text"
+              inputmode="search"
+              placeholder="Traži"
+              aria-label="Traži po meniju"
+              class="min-w-0 flex-1 bg-transparent text-body outline-none placeholder:text-muted"
+            >
+            <button
+              v-if="query"
+              type="button"
+              class="-mr-2 flex size-11 shrink-0 items-center justify-center rounded-field text-text-2"
+              aria-label="Obriši traženje"
+              @click="query = ''"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </label>
+
+          <p v-if="outbox.pending > 0" class="flex">
+            <span class="chip chip-warn">čeka slanje ({{ outbox.pending }})</span>
+          </p>
         </div>
 
-        <label class="card-2 flex h-12 items-center gap-2 px-3">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="shrink-0 text-text-2">
-            <circle cx="11" cy="11" r="7" />
-            <path d="M20 20l-3.5-3.5" />
-          </svg>
-          <input
-            v-model="query"
-            type="text"
-            inputmode="search"
-            placeholder="Traži"
-            class="min-w-0 flex-1 bg-transparent text-[17px] outline-none placeholder:text-muted"
-          >
-          <button
-            v-if="query"
-            type="button"
-            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-text-2"
-            aria-label="Obriši traženje"
-            @click="query = ''"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
-          </button>
-        </label>
-
-        <div v-if="!query" class="-mx-4 flex gap-1.5 overflow-x-auto px-4">
+        <!-- The categories. A scroller, bled to the edges so the last one is
+             visibly cut off rather than looking like the end of the list. -->
+        <div v-if="!query" class="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
           <button
             v-for="item in tabs"
             :key="item.id"
             type="button"
-            class="flex h-10 shrink-0 items-center rounded-3xl px-3.5 text-[15px] font-semibold"
-            :class="activeTab === item.id ? 'bg-line text-text' : 'bg-surface text-text-2'"
+            class="pill h-12 shrink-0"
+            :class="activeTab === item.id ? 'pill-on' : ''"
             @click="activeTab = item.id"
           >
             {{ item.name }}
           </button>
         </div>
 
-        <div v-if="boot" class="grid grid-cols-3 gap-2.5">
+        <div v-if="boot" class="grid grid-cols-3 gap-3">
           <ProductTile
             v-for="product in shown"
             :key="product.id"
@@ -437,29 +457,29 @@ async function confirm() {
           Učitavanje…
         </p>
 
-        <p v-if="boot && shown.length === 0" class="py-8 text-center text-text-2">
+        <p v-if="boot && shown.length === 0" class="empty">
           Ništa ne odgovara traženom.
         </p>
 
-        <p class="text-center text-sm text-text-2">
+        <p class="text-center text-caption tracking-normal text-muted">
           Dodir = +1 · dugi dodir = napomena
         </p>
       </div>
 
       <!-- The strip: what is on the round, and the two ways out of it. -->
-      <div class="sticky bottom-0 -mx-4 flex flex-col gap-2 border-t border-line bg-bg px-4 pb-5 pt-3">
-        <div v-if="sendError" class="flex items-center gap-3 rounded-xl bg-danger-soft px-3 py-2 text-danger">
-          <span class="grow text-[15px]">{{ sendError }}</span>
-        </div>
+      <div class="action-bar -mx-4 flex-col gap-2.5 border-t border-line px-4">
+        <p v-if="sendError" class="note note-danger" role="alert">
+          {{ sendError }}
+        </p>
 
-        <div class="flex items-baseline gap-2">
-          <span class="num grow text-[15px] text-text-2">
+        <div class="flex items-center gap-3">
+          <span class="num grow text-label text-text-2">
             <template v-if="count > 0">{{ stavke(count) }} · {{ formatKm(draftTotal) }}</template>
             <template v-else>Nema stavki</template>
           </span>
           <button
             type="button"
-            class="btn h-12"
+            class="btn btn-secondary btn-sm"
             :disabled="count === 0"
             @click="confirmOpen = true"
           >
@@ -469,15 +489,16 @@ async function confirm() {
 
         <button
           type="button"
-          class="btn btn-accent h-14 text-lg"
+          class="btn btn-primary btn-lg"
           :disabled="count === 0 || sending"
           @click="confirmOpen = true"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M5 13l4 4L19 7" />
           </svg>
-          <span v-if="count === 0">Zaključi</span>
-          <span v-else>Zaključi · <span class="num">{{ stavke(count) }} · {{ formatKm(draftTotal) }}</span></span>
+          <!-- The line above already says what the round comes to; the button
+               says what tapping it does, and gets the width to say it. -->
+          Zaključi
         </button>
       </div>
     </div>
@@ -532,10 +553,7 @@ async function confirm() {
       @note="noteLine"
     />
 
-    <div
-      v-if="toast"
-      class="fixed inset-x-0 bottom-28 z-50 mx-auto w-max max-w-[92vw] rounded-xl bg-good-soft px-4 py-3 text-center font-semibold text-good"
-    >
+    <div v-if="toast" class="toast" role="status">
       {{ toast }}
     </div>
 

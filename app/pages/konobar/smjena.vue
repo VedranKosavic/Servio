@@ -157,11 +157,11 @@ function diffLabel(fen: number): string {
           Učitavanje…
         </p>
 
-        <p v-else-if="loadError" class="card px-4 py-6 text-center text-danger">
+        <p v-else-if="loadError" class="note note-danger text-center" role="alert">
           {{ loadError }}
         </p>
 
-        <p v-else-if="!brief" class="card px-4 py-8 text-center text-text-2">
+        <p v-else-if="!brief" class="empty">
           Nema otvorene smjene. Smjena se otvara prvom zaključanom turom.
         </p>
 
@@ -172,10 +172,10 @@ function diffLabel(fen: number): string {
             class="card flex flex-col gap-3 p-4"
             :class="reveal.within_tolerance ? 'border-good' : 'border-warn'"
           >
-            <h2 class="text-xl font-bold">
+            <h2 class="section-title">
               Predano
             </h2>
-            <div class="flex flex-col gap-1.5 text-[17px]">
+            <div class="flex flex-col gap-1.5 text-body">
               <div class="flex justify-between gap-3">
                 <span class="text-text-2">Ti si predao</span>
                 <span class="num font-semibold">{{ formatKm(reveal.declared_fen) }}</span>
@@ -184,7 +184,7 @@ function diffLabel(fen: number): string {
                 <span class="text-text-2">Očekivano</span>
                 <span class="num font-semibold">{{ formatKm(reveal.expected_fen) }}</span>
               </div>
-              <div class="flex justify-between gap-3 border-t border-line pt-1.5">
+              <div class="flex justify-between gap-3 border-t border-line-soft pt-2">
                 <span class="text-text-2">Razlika</span>
                 <span
                   class="num font-bold"
@@ -193,7 +193,7 @@ function diffLabel(fen: number): string {
               </div>
             </div>
 
-            <p class="text-[15px]" :class="reveal.within_tolerance ? 'text-good' : 'text-warn'">
+            <p class="text-label" :class="reveal.within_tolerance ? 'text-good' : 'text-warn'">
               <template v-if="reveal.within_tolerance">
                 Unutar tolerancije ({{ formatKm(reveal.tolerance_fen) }}). Sve je u redu.
               </template>
@@ -204,7 +204,7 @@ function diffLabel(fen: number): string {
             </p>
 
             <!-- Where the expected number came from -->
-            <div class="flex flex-col gap-1 border-t border-line pt-2 text-[15px] text-text-2">
+            <div class="flex flex-col gap-1.5 border-t border-line-soft pt-3 text-label text-text-2">
               <div class="flex justify-between gap-3">
                 <span>Gotovina koju si naplatio</span>
                 <span class="num">{{ formatKm(reveal.breakdown.cash_fen) }}</span>
@@ -223,41 +223,41 @@ function diffLabel(fen: number): string {
               </div>
             </div>
 
-            <p v-if="reveal.self_sealed" class="text-sm text-text-2">
+            <p v-if="reveal.self_sealed" class="text-label text-text-2">
               Predao si sam, bez kolege. Vlasnik potvrđuje kasnije.
             </p>
 
-            <div v-if="reveal.stale_devices.length" class="rounded-xl bg-warn-soft px-3 py-2 text-[15px] text-warn">
+            <div v-if="reveal.stale_devices.length" class="note note-warn">
               Telefon koji se nije javio:
               {{ reveal.stale_devices.map(d => d.label).join(', ') }}.
             </div>
 
-            <NuxtLink to="/konobar" class="btn btn-accent h-14 text-lg">
+            <NuxtLink to="/konobar" class="btn btn-primary btn-lg">
               Gotovo
             </NuxtLink>
           </div>
 
           <!-- Already settled tonight (a reload after the reveal) -->
           <div v-else-if="settled && settlement" class="card flex flex-col gap-2 p-4">
-            <h2 class="text-xl font-bold">
+            <h2 class="section-title">
               Pazar je predan
             </h2>
-            <div class="flex justify-between gap-3 text-[17px]">
+            <div class="flex justify-between gap-3 text-body">
               <span class="text-text-2">Predao</span>
               <span class="num font-semibold">{{ formatKm(settlement.declared_fen) }}</span>
             </div>
-            <div class="flex justify-between gap-3 text-[17px]">
+            <div class="flex justify-between gap-3 text-body">
               <span class="text-text-2">Razlika</span>
               <span class="num font-semibold">{{ diffLabel(settlement.diff_fen) }}</span>
             </div>
-            <p v-if="settlement.accepted_by_name" class="text-[15px] text-text-2">
+            <p v-if="settlement.accepted_by_name" class="text-label text-text-2">
               Primio: {{ settlement.accepted_by_name }}
             </p>
-            <p v-else class="text-[15px] text-text-2">
+            <p v-else class="text-label text-text-2">
               Predao si sam; vlasnik potvrđuje kasnije.
             </p>
 
-            <div v-if="summary" class="mt-1 flex flex-col gap-1 border-t border-line pt-2 text-[15px] text-text-2">
+            <div v-if="summary" class="mt-1 flex flex-col gap-1.5 border-t border-line-soft pt-3 text-label text-text-2">
               <div class="flex justify-between gap-3">
                 <span>Promet</span><span class="num">{{ formatKm(summary.promet_fen) }}</span>
               </div>
@@ -274,23 +274,23 @@ function diffLabel(fen: number): string {
           <!-- The declaration -->
           <template v-else>
             <div class="card flex flex-col gap-2 p-4">
-              <h2 class="text-lg font-semibold">
+              <h2 class="section-title">
                 Prije predaje
               </h2>
               <div
                 v-for="item in checklist"
                 :key="item.label"
-                class="flex items-start gap-2.5 border-t border-line pt-2 first:border-t-0 first:pt-0"
+                class="flex items-start gap-3 border-t border-line-soft pt-3 first:border-t-0 first:pt-0"
               >
                 <span
-                  class="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full text-sm font-bold"
+                  class="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-chip text-caption font-bold tracking-normal"
                   :class="item.ok ? 'bg-good-soft text-good' : 'bg-warn-soft text-warn'"
                 >{{ item.ok ? '✓' : '!' }}</span>
                 <div class="min-w-0">
                   <div class="font-semibold">
                     {{ item.label }}
                   </div>
-                  <div class="text-[15px] text-text-2">
+                  <div class="text-label text-text-2">
                     {{ item.detail }}
                   </div>
                 </div>
@@ -302,36 +302,38 @@ function diffLabel(fen: number): string {
 
             <div class="card flex flex-col gap-3 p-4">
               <div>
-                <h2 class="text-lg font-semibold">
+                <h2 class="section-title">
                   Koliko imaš kod sebe?
                 </h2>
-                <p class="text-[15px] text-text-2">
+                <p class="text-label text-text-2">
                   Prebroj pazar i upiši iznos. Očekivani iznos vidiš tek nakon predaje —
                   upisani i očekivani se zapisuju zajedno.
                 </p>
               </div>
 
-              <div class="card-2 flex h-16 items-center gap-2 px-3.5">
+              <!-- The one number this screen asks for, in the system's numeric
+                   field: 60 px, tabular, and large enough to check twice. -->
+              <span class="input input-num flex items-center gap-2 px-4">
                 <input
                   v-model="declaredRaw"
                   type="text"
                   inputmode="decimal"
                   placeholder="0,00"
-                  class="num min-w-0 flex-1 bg-transparent text-3xl font-semibold outline-none placeholder:text-muted"
+                  class="num min-w-0 flex-1 bg-transparent text-right text-title font-semibold outline-none placeholder:text-muted"
                   aria-label="Predani iznos"
                 >
-                <span class="shrink-0 text-text-2">KM</span>
-              </div>
+                <span class="shrink-0 text-label font-normal text-text-2">KM</span>
+              </span>
 
               <!-- The same sentence the server would send back, said first. -->
-              <p v-if="blocked" class="rounded-xl bg-warn-soft px-3 py-2 text-[15px] text-warn" role="status">
+              <p v-if="blocked" class="note note-warn" role="status">
                 {{ blockedText }} — smjena se ne može završiti dok ne odu.
               </p>
 
-              <p v-if="settleError" class="rounded-xl bg-danger-soft px-3 py-2 text-[15px] text-danger" role="alert">
+              <p v-if="settleError" class="note note-danger" role="alert">
                 {{ settleError }}
               </p>
-              <ul v-if="stuckDevices.length" class="rounded-xl bg-warn-soft px-3 py-2 text-[15px] text-warn">
+              <ul v-if="stuckDevices.length" class="note note-warn">
                 <li v-for="device in stuckDevices" :key="device.label">
                   {{ device.label }}: {{ device.pending_count }} neposlanih
                 </li>
@@ -339,7 +341,7 @@ function diffLabel(fen: number): string {
 
               <button
                 type="button"
-                class="btn btn-accent h-14 text-lg"
+                class="btn btn-primary btn-lg"
                 :disabled="!canSettle"
                 @click="settle"
               >

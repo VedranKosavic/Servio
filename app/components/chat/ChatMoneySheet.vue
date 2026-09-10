@@ -27,7 +27,7 @@ const emit = defineEmits<{ close: [], send: [], admini: [] }>()
     role="dialog"
     aria-label="Iznosi u kanalu"
   >
-    <p class="text-lg font-semibold">
+    <p class="section-title">
       Iznosi kolega ne idu u Svi — pošalji u Admini?
     </p>
     <p class="text-text-2">
@@ -37,16 +37,16 @@ const emit = defineEmits<{ close: [], send: [], admini: [] }>()
     <button
       v-if="canAdmini"
       type="button"
-      class="btn btn-accent min-h-14 text-base"
+      class="btn btn-primary min-h-14 text-body"
       :disabled="busy"
       @click="emit('admini')"
     >
       Pošalji u Admini
     </button>
-    <button type="button" class="btn min-h-14 text-base" :disabled="busy" @click="emit('send')">
+    <button type="button" class="btn min-h-14 text-body" :disabled="busy" @click="emit('send')">
       Ipak pošalji
     </button>
-    <button type="button" class="btn btn-ghost min-h-12 text-base" @click="emit('close')">
+    <button type="button" class="btn btn-ghost min-h-12 text-body" @click="emit('close')">
       Odustani
     </button>
   </div>

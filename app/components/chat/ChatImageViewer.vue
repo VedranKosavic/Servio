@@ -20,7 +20,7 @@ const emit = defineEmits<{ close: [], forward: [], remove: [] }>()
     <header class="flex min-h-14 items-center gap-2 px-3">
       <button
         type="button"
-        class="flex h-12 w-12 items-center justify-center rounded-xl text-text"
+        class="flex h-12 w-12 items-center justify-center rounded-control text-text"
         aria-label="Zatvori"
         @click="emit('close')"
       >
@@ -29,10 +29,10 @@ const emit = defineEmits<{ close: [], forward: [], remove: [] }>()
         </svg>
       </button>
       <span class="grow" />
-      <button v-if="canForward" type="button" class="btn btn-ghost min-h-12 px-3 text-base" @click="emit('forward')">
+      <button v-if="canForward" type="button" class="btn btn-ghost min-h-12 px-3 text-body" @click="emit('forward')">
         Proslijedi
       </button>
-      <button v-if="canRemove" type="button" class="btn btn-ghost min-h-12 px-3 text-base text-danger" @click="emit('remove')">
+      <button v-if="canRemove" type="button" class="btn btn-ghost min-h-12 px-3 text-body text-danger" @click="emit('remove')">
         Obriši
       </button>
     </header>

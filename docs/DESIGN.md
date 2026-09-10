@@ -296,3 +296,28 @@ used to be.
 7. Every animation goes through a `--dur-*` token, so reduced motion switches it
    off for free.
 8. Bosnian on screen, English in the code, no emoji, icons inline SVG.
+
+---
+
+## 9. Waiting to be consolidated
+
+Screens are allowed to build a primitive the system lacks, inside their own
+components folder, as long as it is written against the tokens and listed here.
+
+**`app/components/waiter/WaiterSeg.vue`** — a segmented control: one track, one
+thumb that slides, two or three choices. It came out of `/konobar` needing three
+of them (the zone on the floor plan, the phase on *Brzi popis*, the week on
+*Raspored*), all of which had been drawn as two full-width copper buttons — and
+two primary-looking buttons are not a control, they are two actions competing
+with whatever they sit above. The thumb is **material, never copper**: choosing
+which half of the room to look at is neither a primary action nor the person's
+own state. Its segments stay plain `<button aria-pressed>` rather than
+`role="tab"`, because nothing here controls a tabpanel.
+
+It is the dark twin of `/admin`'s `UiSeg` and the two should become one class in
+`main.css` the next time either is touched.
+
+**Also worth folding in**, both currently scoped CSS inside their component: the
+floor-plan table tile (`FloorTable.vue`) and the menu tile (`ProductTile.vue`).
+Each is a card with a badge and a 44–48 px control hanging off a corner, and
+between them they are the whole of `/konobar`'s tap surface.

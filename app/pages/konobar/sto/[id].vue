@@ -27,7 +27,6 @@ import { formatKm } from '#shared/money'
 import type {
   PaymentMethod, Product, TabDetail, TabLine, TabOrder, TableState, User, VenueTable,
 } from '#shared/types'
-import { stavke } from '~/components/order/OrderText'
 import type { AdjustmentOutcome, CompReason } from '~/composables/useAdjustments'
 // Explicit, not auto-imported. Nuxt names a component after its folder plus its
 // file, so `adjust/AdjVoidSheet.vue` would be `<AdjustAdjVoidSheet>` — and an
@@ -709,11 +708,11 @@ function lateWasNotPaid(row: TableState) {
           <WaiterSyncChip compact />
           <button
             type="button"
-            class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface text-text"
+            class="flex size-12 shrink-0 items-center justify-center rounded-control bg-surface-2 text-text transition-colors active:bg-surface-3"
             aria-label="Više"
             @click="menuOpen = true"
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
               <path d="M5 12h.01M12 12h.01M19 12h.01" />
             </svg>
           </button>
@@ -722,7 +721,7 @@ function lateWasNotPaid(row: TableState) {
 
       <WaiterOutboxBanner />
 
-      <div class="flex flex-1 flex-col gap-3 py-3">
+      <div class="flex flex-1 flex-col gap-4 py-4">
         <WaiterFailedCard />
 
         <OrderLateCard
@@ -743,24 +742,29 @@ function lateWasNotPaid(row: TableState) {
           @close="dismissPriceCard"
         />
 
-        <!-- What is owed -->
-        <div v-if="hasTab" class="card flex flex-col gap-1 p-3">
-          <div class="flex flex-wrap items-center gap-2 text-sm text-text-2">
-            Zaključeno
+        <!-- What is owed. The one number this screen is about. -->
+        <div v-if="hasTab" class="card flex flex-col gap-2 p-4">
+          <p class="eyebrow">
+            Za naplatu
+          </p>
+          <p class="metric num">
+            {{ formatKm(localRemainingFen) }}
+          </p>
+          <p v-if="localRemainingFen !== localTotalFen" class="num text-label text-text-2">
+            od {{ formatKm(localTotalFen) }} ukupno
+          </p>
+          <div
+            v-if="payQueued || queuedOrdersFen > 0 || tabState?.pending_review || tabState?.late_sync"
+            class="flex flex-wrap items-center gap-2 pt-1"
+          >
             <span v-if="payQueued" class="chip chip-warn">naplata čeka slanje</span>
             <span v-else-if="queuedOrdersFen > 0" class="chip chip-warn">čeka slanje</span>
             <span v-else-if="tabState?.pending_review" class="chip chip-warn">naplata čeka</span>
             <span v-if="tabState?.late_sync" class="chip chip-warn">kasno</span>
           </div>
-          <div class="num text-3xl font-bold">
-            {{ formatKm(localRemainingFen) }}
-          </div>
-          <div v-if="localRemainingFen !== localTotalFen" class="num text-sm text-text-2">
-            od {{ formatKm(localTotalFen) }}
-          </div>
         </div>
 
-        <p v-if="detailError" class="rounded-xl bg-warn-soft px-3 py-2 text-[15px] text-warn">
+        <p v-if="detailError" class="note note-warn">
           {{ detailError }}
         </p>
 
@@ -772,32 +776,33 @@ function lateWasNotPaid(row: TableState) {
         >
           <button
             type="button"
-            class="flex w-full items-center gap-2 px-3 py-3 text-left"
+            class="flex min-h-14 w-full items-center gap-2.5 px-4 py-3 text-left"
             @click="toggleRound(round.id)"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="shrink-0 text-text-2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="shrink-0 text-muted" aria-hidden="true">
               <rect x="5" y="11" width="14" height="9" rx="2" />
               <path d="M8 11V8a4 4 0 0 1 8 0v3" />
             </svg>
-            <span class="grow text-[15px] font-semibold">
+            <span class="grow text-label font-semibold text-text-2">
               {{ roundLabel(index, round.at, round.locked_by_name) }}
             </span>
             <span v-if="round.late_sync" class="chip chip-warn">kasno</span>
-            <span class="num text-[15px] font-semibold">
+            <span class="num text-body font-semibold">
               {{ formatKm(round.lines.reduce((sum, l) => sum + l.charged_fen, 0)) }}
             </span>
             <svg
               width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
               stroke-width="1.8" stroke-linecap="round"
-              class="shrink-0 text-text-2 transition-transform"
+              class="shrink-0 text-muted transition-transform"
               :class="openRounds.has(round.id) ? 'rotate-180' : ''"
+              aria-hidden="true"
             >
               <path d="M6 9l6 6 6-6" />
             </svg>
           </button>
 
-          <ul v-if="openRounds.has(round.id)" class="flex flex-col gap-1 border-t border-line px-3 py-2">
-            <li v-for="row in round.lines" :key="row.id" class="flex flex-col gap-1.5 py-1">
+          <ul v-if="openRounds.has(round.id)" class="flex flex-col border-t border-line-soft px-4">
+            <li v-for="row in round.lines" :key="row.id" class="flex flex-col gap-2 border-b border-line-soft py-3 last:border-b-0">
               <!-- Struck, waiting, or still on this phone: colour, icon and a
                    sentence, never colour alone (PHASE3 §4). -->
               <AdjLineState
@@ -812,20 +817,20 @@ function lateWasNotPaid(row: TableState) {
               <button
                 v-else
                 type="button"
-                class="flex items-baseline gap-2 text-left"
+                class="flex items-baseline gap-3 text-left"
                 @click="lockedLine = {
                   line: row,
                   order: round,
                   label: roundLabel(index, round.at, round.locked_by_name),
                 }"
               >
-                <span class="min-w-0 grow text-[17px]">
+                <span class="min-w-0 grow text-body">
                   <span class="num font-semibold">{{ row.qty }}×</span> {{ row.name_snapshot }}
                 </span>
-                <span class="num shrink-0 text-[17px] font-semibold">{{ formatKm(row.charged_fen) }}</span>
+                <span class="num shrink-0 text-body font-semibold">{{ formatKm(row.charged_fen) }}</span>
               </button>
 
-              <div class="flex flex-wrap items-center gap-1.5">
+              <div v-if="row.flavour_names.length || (row.note && !adjState(row)) || isBowl(row)" class="flex flex-wrap items-center gap-2">
                 <span v-for="flavour in row.flavour_names" :key="flavour" class="chip">{{ flavour }}</span>
                 <span v-if="row.note && !adjState(row)" class="chip chip-warn">{{ row.note }}</span>
 
@@ -833,7 +838,7 @@ function lateWasNotPaid(row: TableState) {
                 <template v-if="isBowl(row)">
                   <button
                     type="button"
-                    class="chip min-h-12 border border-line bg-surface-2 px-4 text-[15px] font-semibold text-text"
+                    class="btn btn-secondary btn-sm"
                     :disabled="zarBusy"
                     @click="addZar(row.id)"
                   >
@@ -841,7 +846,7 @@ function lateWasNotPaid(row: TableState) {
                   </button>
                   <NuxtLink
                     :to="`/konobar/dodaj/${routeId}?kat=${products.find(p => p.name === row.name_snapshot)?.category_id ?? ''}`"
-                    class="chip min-h-12 border border-line bg-surface-2 px-4 text-[15px] font-semibold text-text"
+                    class="btn btn-secondary btn-sm"
                   >
                     Nova lula
                   </NuxtLink>
@@ -855,14 +860,14 @@ function lateWasNotPaid(row: TableState) {
         <div
           v-for="round in queuedRounds"
           :key="round.clientId"
-          class="card border-warn p-3"
+          class="card border-warn p-4"
         >
           <div class="flex items-center gap-2">
             <span class="chip chip-warn">Tura čeka slanje</span>
-            <span class="num grow text-right text-[15px] font-semibold">{{ formatKm(round.fen) }}</span>
+            <span class="num grow text-right text-body font-semibold">{{ formatKm(round.fen) }}</span>
           </div>
-          <ul class="mt-2 flex flex-col gap-1">
-            <li v-for="(row, i) in round.lines" :key="i" class="text-[15px]">
+          <ul class="mt-3 flex flex-col gap-1.5">
+            <li v-for="(row, i) in round.lines" :key="i" class="text-label">
               <span class="num font-semibold">{{ row.qty }}×</span> {{ row.name }}
               <small v-if="row.flavours.length" class="text-text-2">· {{ row.flavours.join(' + ') }}</small>
               <small v-if="row.note" class="text-warn">· {{ row.note }}</small>
@@ -871,14 +876,14 @@ function lateWasNotPaid(row: TableState) {
         </div>
 
         <!-- The draft: still only on this phone -->
-        <div v-if="count > 0" class="card border-dashed border-accent p-3">
+        <div v-if="count > 0" class="card border-dashed border-accent-line p-4">
           <div class="flex items-center gap-2">
-            <span class="chip">Nova tura — nije poslano</span>
-            <span class="num grow text-right text-[15px] font-semibold">{{ formatKm(draftTotal) }}</span>
+            <span class="chip chip-accent">Nova tura — nije poslano</span>
+            <span class="num grow text-right text-body font-semibold">{{ formatKm(draftTotal) }}</span>
           </div>
-          <ul class="mt-2 flex flex-col gap-1.5">
-            <li v-for="line in lines" :key="line.id" class="flex items-center gap-2">
-              <span class="min-w-0 grow text-[17px]">
+          <ul class="mt-2 flex flex-col">
+            <li v-for="line in lines" :key="line.id" class="flex items-center gap-2 border-b border-line-soft py-2 last:border-b-0">
+              <span class="min-w-0 grow text-body">
                 {{ nameById.get(line.product_id) ?? 'Stavka' }}
                 <small v-if="line.flavour_ids?.length" class="text-text-2">
                   · {{ line.flavour_ids.map(id => flavourNameById.get(id) ?? '—').join(' + ') }}
@@ -889,67 +894,77 @@ function lateWasNotPaid(row: TableState) {
               <!-- The ⋯ twin of the long press: napomena, and *Na račun kuće*. -->
               <button
                 type="button"
-                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-text-2"
+                class="flex size-11 shrink-0 items-center justify-center rounded-field bg-surface-2 text-text-2 transition-colors active:bg-surface-3"
                 :aria-label="`Napomena · ${nameById.get(line.product_id) ?? 'stavka'}`"
                 @click="noteLine(line.id)"
               >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                   <path d="M5 12h.01M12 12h.01M19 12h.01" />
                 </svg>
               </button>
               <button
                 type="button"
-                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-xl font-bold"
+                class="flex size-11 shrink-0 items-center justify-center rounded-field bg-surface-2 text-text transition-colors active:bg-surface-3"
                 :aria-label="`Skini jedan · ${nameById.get(line.product_id) ?? 'stavka'}`"
                 @click="removeOne(line.id)"
               >
-                −
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+                  <path d="M6 12h12" />
+                </svg>
               </button>
-              <span class="num w-6 text-center text-lg font-bold">{{ line.qty }}</span>
+              <span class="num w-6 shrink-0 text-center text-body font-bold">{{ line.qty }}</span>
               <button
                 type="button"
-                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-xl font-bold"
+                class="flex size-11 shrink-0 items-center justify-center rounded-field bg-surface-2 text-text transition-colors active:bg-surface-3"
                 :aria-label="`Dodaj jedan · ${nameById.get(line.product_id) ?? 'stavka'}`"
                 @click="addOne(line.id)"
               >
-                +
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+                  <path d="M12 6v12M6 12h12" />
+                </svg>
               </button>
             </li>
           </ul>
         </div>
 
-        <p v-if="!hasTab && count === 0" class="py-8 text-center text-text-2">
-          Ovdje još nema ništa. Dodirni <span class="font-semibold">+ Dodaj</span>.
+        <p v-if="!hasTab && count === 0" class="empty">
+          Ovdje još nema ništa.
+          <span>Dodirni <b class="font-semibold text-text-2">+ Dodaj</b> i tura počinje.</span>
         </p>
       </div>
 
       <!-- The bar: + Dodaj beside either Zaključi or Naplati, never both -->
-      <div class="sticky bottom-0 -mx-4 flex flex-col gap-2 border-t border-line bg-bg px-4 pb-5 pt-3">
-        <div v-if="sendError || zarError" class="rounded-xl bg-danger-soft px-3 py-2 text-[15px] text-danger">
+      <div class="action-bar -mx-4 flex-col gap-2.5 border-t border-line px-4">
+        <p v-if="sendError || zarError" class="note note-danger" role="alert">
           {{ sendError ?? zarError }}
-        </div>
+        </p>
 
-        <div class="flex gap-2">
-          <NuxtLink :to="`/konobar/dodaj/${routeId}`" class="btn h-14 flex-1 text-lg">
+        <!--
+          *+ Dodaj* keeps only the width its own label needs; the action the
+          screen is *about* — locking the round, or taking the money — grows
+          into the rest of the bar and carries the amount with it.
+        -->
+        <div class="flex gap-2.5">
+          <NuxtLink :to="`/konobar/dodaj/${routeId}`" class="btn btn-secondary btn-lg shrink-0 px-4">
             + Dodaj
           </NuxtLink>
 
           <button
             v-if="count > 0"
             type="button"
-            class="btn btn-accent h-14 flex-1 text-lg"
+            class="btn btn-primary btn-lg grow"
             :disabled="sending"
             @click="confirmOpen = true"
           >
-            Zaključi · <span class="num">{{ stavke(count) }} · {{ formatKm(draftTotal) }}</span>
+            Zaključi · <span class="num">{{ formatKm(draftTotal) }}</span>
           </button>
           <button
             v-else-if="hasTab"
             type="button"
-            class="btn btn-accent h-14 flex-1 text-lg"
+            class="btn btn-primary btn-lg grow"
             @click="openPay('main')"
           >
-            Naplati <span class="num">{{ formatKm(localRemainingFen) }}</span>
+            Naplati · <span class="num">{{ formatKm(localRemainingFen) }}</span>
           </button>
         </div>
       </div>
@@ -957,33 +972,37 @@ function lateWasNotPaid(row: TableState) {
 
     <!-- ⋯ -->
     <div v-if="menuOpen" class="fixed inset-0 z-50">
-      <div class="absolute inset-0 bg-black/55" @click="menuOpen = false" />
-      <div class="absolute inset-x-0 bottom-0 mx-auto flex w-full max-w-3xl flex-col gap-2 rounded-t-[20px] border-t border-line bg-surface px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-3">
-        <span class="mx-auto h-1 w-10 shrink-0 rounded-full bg-line" />
-        <span class="chip mb-1 self-start bg-line text-text">{{ tableName }}</span>
+      <div class="sheet-scrim" @click="menuOpen = false" />
+      <div class="absolute inset-x-0 bottom-0 mx-auto w-full max-w-3xl">
+        <div class="sheet-panel flex flex-col gap-2.5 px-4 pb-5 pt-3" role="dialog" :aria-label="tableName">
+          <span class="mx-auto h-1 w-10 shrink-0 rounded-chip bg-line" aria-hidden="true" />
+          <p class="section-title pb-1">
+            {{ tableName }}
+          </p>
 
-        <button type="button" class="btn h-14 justify-start text-lg" :disabled="!hasTab" @click="openPay('unpaid')">
-          Nije plaćeno
-        </button>
-        <button
-          type="button"
-          class="btn h-14 justify-start text-lg"
-          :disabled="!tabState?.tab_id"
-          @click="moveOpen = true; menuOpen = false"
-        >
-          Premjesti sto · Predaj sto kolegi
-        </button>
-        <button
-          type="button"
-          class="btn h-14 justify-start text-lg"
-          :disabled="!detail"
-          @click="guestOpen = true; menuOpen = false"
-        >
-          Pokaži narudžbu
-        </button>
-        <button type="button" class="btn btn-ghost h-12" @click="menuOpen = false">
-          Zatvori
-        </button>
+          <button type="button" class="btn btn-secondary btn-lg justify-start" :disabled="!hasTab" @click="openPay('unpaid')">
+            Nije plaćeno
+          </button>
+          <button
+            type="button"
+            class="btn btn-secondary btn-lg justify-start"
+            :disabled="!tabState?.tab_id"
+            @click="moveOpen = true; menuOpen = false"
+          >
+            Premjesti sto · Predaj sto kolegi
+          </button>
+          <button
+            type="button"
+            class="btn btn-secondary btn-lg justify-start"
+            :disabled="!detail"
+            @click="guestOpen = true; menuOpen = false"
+          >
+            Pokaži narudžbu
+          </button>
+          <button type="button" class="btn btn-ghost" @click="menuOpen = false">
+            Zatvori
+          </button>
+        </div>
       </div>
     </div>
 
@@ -1085,10 +1104,7 @@ function lateWasNotPaid(row: TableState) {
       @close="guestOpen = false"
     />
 
-    <div
-      v-if="toast"
-      class="fixed inset-x-0 bottom-28 z-50 mx-auto w-max max-w-[92vw] rounded-xl bg-good-soft px-4 py-3 text-center font-semibold text-good"
-    >
+    <div v-if="toast" class="toast" role="status">
       {{ toast }}
     </div>
 

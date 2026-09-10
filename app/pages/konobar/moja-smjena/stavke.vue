@@ -125,7 +125,7 @@ const STATUS_CLASS: Record<LineRow['status'], string> = {
             v-for="filter in filters"
             :key="filter.id"
             :to="`/konobar/moja-smjena/stavke?kat=${filter.id}`"
-            class="flex min-h-12 shrink-0 items-center rounded-full px-4 text-base font-medium"
+            class="flex min-h-12 shrink-0 items-center rounded-full px-4 text-body font-medium"
             :class="filter.id === kat
               ? 'bg-accent text-accent-ink'
               : 'bg-surface-2 text-text-2'"
@@ -159,20 +159,20 @@ const STATUS_CLASS: Record<LineRow['status'], string> = {
               <div class="min-w-0">
                 <div class="flex items-baseline gap-2">
                   <span v-if="row.qty !== 1" class="num shrink-0 font-semibold">{{ row.qty }}×</span>
-                  <span class="truncate text-[17px]">{{ row.name_snapshot }}</span>
+                  <span class="truncate text-body">{{ row.name_snapshot }}</span>
                 </div>
-                <div class="num text-sm text-text-2">
+                <div class="num text-label text-text-2">
                   {{ row.table_name }} · {{ clockHm(row.at) }}
                 </div>
-                <div v-if="row.flavour_names.length" class="truncate text-sm text-text-2">
+                <div v-if="row.flavour_names.length" class="truncate text-label text-text-2">
                   {{ row.flavour_names.join(' · ') }}
                 </div>
-                <div v-if="row.note" class="truncate text-sm text-text-2">
+                <div v-if="row.note" class="truncate text-label text-text-2">
                   {{ row.note }}
                 </div>
               </div>
               <div class="flex shrink-0 flex-col items-end gap-1">
-                <span class="num text-[17px] font-semibold">{{ formatKm(row.charged_fen) }}</span>
+                <span class="num text-body font-semibold">{{ formatKm(row.charged_fen) }}</span>
                 <span :class="STATUS_CLASS[row.status]">{{ STATUS_LABEL[row.status] }}</span>
               </div>
             </div>
@@ -193,7 +193,7 @@ const STATUS_CLASS: Record<LineRow['status'], string> = {
           </button>
 
           <!-- The footer is the blindness: null totals until he has settled. -->
-          <section v-if="totals" class="card flex flex-col gap-1 p-4 text-[17px]">
+          <section v-if="totals" class="card flex flex-col gap-1 p-4 text-body">
             <div class="flex justify-between gap-3">
               <span class="text-text-2">Stavki</span>
               <span class="num font-semibold">{{ totals.rows }} · {{ totals.qty }} kom</span>
@@ -212,7 +212,7 @@ const STATUS_CLASS: Record<LineRow['status'], string> = {
             </div>
           </section>
 
-          <p v-else-if="rows.length" class="px-1 text-[15px] text-text-2">
+          <p v-else-if="rows.length" class="px-1 text-label text-text-2">
             Zbir vidiš kad predaš pazar. Stavke su tu — cijene su na svakoj.
           </p>
         </template>

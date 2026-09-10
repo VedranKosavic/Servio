@@ -59,14 +59,14 @@ async function discard(entry: OutboxEntry) {
       </span>
     </div>
 
-    <p class="text-[15px] text-text-2">
+    <p class="text-label text-text-2">
       {{ entry.last_error ?? 'Server nije prihvatio ovo.' }}
     </p>
 
     <div class="flex gap-2">
       <button
         type="button"
-        class="btn btn-accent flex-1"
+        class="btn btn-primary flex-1"
         :disabled="busy === entry.client_id"
         @click="retry(entry)"
       >

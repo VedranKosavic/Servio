@@ -81,7 +81,7 @@ const fieldId = computed(() => `popis-${props.item.id}`)
     :class="needsNote ? 'border-warn' : 'border-line'"
   >
     <div class="flex items-baseline justify-between gap-2">
-      <span class="text-[17px] font-semibold">{{ item.name }}</span>
+      <span class="text-body font-semibold">{{ item.name }}</span>
       <!-- One chip, and it says the thing that matters most right now: whether
            this row still needs a number, and only then how it is measured. -->
       <span v-if="filled" class="chip chip-good shrink-0">popisano</span>
@@ -91,7 +91,7 @@ const fieldId = computed(() => `popis-${props.item.id}`)
 
     <div class="flex items-stretch gap-2">
       <label class="sr-only" :for="`${fieldId}-input`">{{ item.name }}</label>
-      <div class="flex grow items-center gap-2 rounded-xl border border-line bg-surface-2 px-3">
+      <div class="flex grow items-center gap-2 rounded-control border border-line bg-surface-2 px-3">
         <input
           :id="`${fieldId}-input`"
           class="num min-h-13 w-full bg-transparent text-2xl font-bold outline-none"
@@ -101,11 +101,11 @@ const fieldId = computed(() => `popis-${props.item.id}`)
           :value="value"
           @input="emit('update:value', ($event.target as HTMLInputElement).value)"
         >
-        <span class="shrink-0 text-base text-text-2">{{ suffix }}</span>
+        <span class="shrink-0 text-body text-text-2">{{ suffix }}</span>
       </div>
 
       <!-- The toggle exists only where a pack does: a bottle is a bottle. -->
-      <div v-if="packable" class="flex shrink-0 overflow-hidden rounded-xl border border-line">
+      <div v-if="packable" class="flex shrink-0 overflow-hidden rounded-control border border-line">
         <button
           type="button"
           class="min-h-13 px-3 text-sm font-semibold"
@@ -125,7 +125,7 @@ const fieldId = computed(() => `popis-${props.item.id}`)
       </div>
     </div>
 
-    <p v-if="hint" class="num text-sm text-text-2">
+    <p v-if="hint" class="num text-label text-text-2">
       {{ hint }}
     </p>
 
@@ -136,14 +136,14 @@ const fieldId = computed(() => `popis-${props.item.id}`)
     <button
       v-if="!noteOpen"
       type="button"
-      class="self-start text-sm text-text-2 underline underline-offset-2"
+      class="self-start text-label text-text-2 underline underline-offset-2"
       @click="noteOpen = true"
     >
       Napomena
     </button>
     <input
       v-else
-      class="min-h-13 rounded-xl border border-line bg-surface-2 px-3 text-base outline-none"
+      class="input"
       :placeholder="needsNote ? 'Obavezna napomena' : 'Napomena (nije obavezna)'"
       maxlength="200"
       :value="note"

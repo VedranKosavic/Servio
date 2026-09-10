@@ -388,6 +388,24 @@ function openTable(tableId: string) {
 
 const myOpenTabs = computed(() => shift.value?.my_open_tabs ?? 0)
 
+/**
+ * The header's second line. It carries the one fact the screen used to bury in
+ * a footnote under the plan: how many tables are still on me. Two words,
+ * because it shares the bar with the sync chip and the avatar — under the title
+ * *Stolovi* "5 otvorenih" needs no more.
+ */
+const openTabsLine = computed(() => {
+  const n = myOpenTabs.value
+  if (n === 0) return null
+  return `${n} ${n === 1 ? 'otvoren' : 'otvorenih'}`
+})
+
+/** The two halves of the room, as the segmented control reads them. */
+const ZONES = [
+  { id: 'unutra', label: 'Unutra' },
+  { id: 'basta', label: 'Bašta' },
+] as const
+
 /** *+ Bez stola*: this phone's own table-less tab, or a fresh one. */
 function openLoose() {
   navigateTo(draftCount(null) > 0 || looseTabs.value.length > 0
@@ -399,13 +417,13 @@ function openLoose() {
 <template>
   <ClientOnly>
     <div class="flex flex-1 flex-col">
-      <WaiterHeader title="Stolovi">
+      <WaiterHeader title="Stolovi" :sub="openTabsLine">
         <template #right>
           <WaiterSyncChip />
 
           <button
             type="button"
-            class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-base font-bold text-accent-ink"
+            class="avatar avatar-accent size-12"
             aria-label="Korisnik"
             @click="menuOpen = true"
           >
@@ -437,19 +455,19 @@ function openLoose() {
         <div
           v-for="offer in offers"
           :key="offer.state.tab_id!"
-          class="card flex items-center gap-3 border-accent p-3"
+          class="card flex items-center gap-3 border-accent-line p-4"
         >
           <div class="grow">
-            <div class="text-sm text-text-2">
-              Nudi ti
-            </div>
-            <div class="text-lg font-semibold">
+            <p class="eyebrow">
+              Nudi ti sto
+            </p>
+            <p class="section-title">
               {{ offer.name }}
-            </div>
+            </p>
           </div>
           <button
             type="button"
-            class="btn btn-accent"
+            class="btn btn-primary"
             :disabled="accepting === offer.state.tab_id"
             @click="acceptOffer(offer.state.tab_id!, offer.name)"
           >
@@ -457,7 +475,7 @@ function openLoose() {
           </button>
         </div>
 
-        <p v-if="banner" class="rounded-xl bg-good-soft px-3 py-2 text-center text-[15px] text-good">
+        <p v-if="banner" class="note note-good text-center">
           {{ banner }}
         </p>
 
@@ -465,27 +483,27 @@ function openLoose() {
         <div
           v-for="draft in staleDrafts"
           :key="draft.client_id"
-          class="card flex flex-col gap-2 border-warn p-3"
+          class="card flex flex-col gap-3 border-warn p-4"
         >
           <div class="flex items-center gap-2">
             <span class="chip chip-warn">Nacrt čeka</span>
-            <span class="grow text-[15px] font-semibold">{{ draftName(draft.table_id) }}</span>
-            <span class="num text-[15px]">{{ stavke(draftCount(draft.table_id)) }}</span>
+            <span class="grow section-title">{{ draftName(draft.table_id) }}</span>
+            <span class="num text-label text-text-2">{{ stavke(draftCount(draft.table_id)) }}</span>
           </div>
-          <p class="text-[15px] text-text-2">
+          <p class="text-label text-text-2">
             Nije poslano šankeru. Zaključi ga ili odbaci — smjena se ne može
             zatvoriti dok stoji.
           </p>
           <div class="flex gap-2">
             <NuxtLink
               :to="`/konobar/sto/${draft.table_id ?? 'bez-stola'}`"
-              class="btn btn-accent h-12 flex-1"
+              class="btn btn-primary flex-1"
             >
               Zaključi
             </NuxtLink>
             <button
               type="button"
-              class="btn h-12 flex-1"
+              class="btn btn-secondary flex-1"
               :disabled="discarding === draft.client_id"
               @click="discardDraft(draft.table_id)"
             >
@@ -497,13 +515,17 @@ function openLoose() {
         <!-- The shift is being closed: envelopes are being collected -->
         <div
           v-if="shift?.closing && !shift.my_settled"
-          class="card flex items-center gap-3 border-warn p-3"
+          class="card flex items-center gap-3 border-warn p-4"
         >
-          <div class="grow text-[15px]">
-            <span class="font-semibold">Smjena se zatvara.</span>
-            <span class="text-text-2"> Predaj pazar.</span>
+          <div class="grow">
+            <p class="section-title">
+              Smjena se zatvara
+            </p>
+            <p class="text-label text-text-2">
+              Predaj pazar.
+            </p>
           </div>
-          <NuxtLink to="/konobar/smjena" class="btn btn-accent shrink-0">
+          <NuxtLink to="/konobar/smjena" class="btn btn-primary shrink-0">
             Završi
           </NuxtLink>
         </div>
@@ -514,18 +536,18 @@ function openLoose() {
             v-for="row in looseTabs"
             :key="row.tab_id!"
             type="button"
-            class="card flex items-center gap-3 p-3 text-left"
-            :class="row.assigned_to === me.user.value?.id ? 'border-accent' : ''"
+            class="card flex items-center gap-3 p-4 text-left"
+            :class="row.assigned_to === me.user.value?.id ? 'border-accent-line' : ''"
             @click="navigateTo('/konobar/sto/bez-stola')"
           >
             <div class="grow">
-              <div class="text-sm text-text-2">
+              <p class="eyebrow">
                 Bez stola
                 <span v-if="row.assigned_to !== me.user.value?.id">· {{ row.assigned_to_initials }}</span>
-              </div>
-              <div class="num text-lg font-semibold">
+              </p>
+              <p class="metric num mt-1">
                 {{ formatKm(row.remaining_fen) }}
-              </div>
+              </p>
             </div>
             <span v-if="row.pending_review" class="chip chip-warn">čeka</span>
           </button>
@@ -533,32 +555,26 @@ function openLoose() {
           <button
             v-if="draftCount(null) > 0 && looseTabs.length === 0"
             type="button"
-            class="card flex items-center gap-3 border-dashed border-accent p-3 text-left"
+            class="card flex items-center gap-3 border-dashed border-accent-line p-4 text-left"
             @click="navigateTo('/konobar/sto/bez-stola')"
           >
             <div class="grow">
-              <div class="text-sm text-text-2">
+              <p class="eyebrow">
                 Bez stola · nacrt
-              </div>
-              <div class="num text-lg font-semibold">
+              </p>
+              <p class="section-title num mt-1">
                 {{ stavke(draftCount(null)) }}
-              </div>
+              </p>
             </div>
           </button>
         </div>
 
-        <div class="flex gap-2.5">
-          <button
-            v-for="option in ([{ id: 'unutra', label: 'Unutra' }, { id: 'basta', label: 'Bašta' }] as const)"
-            :key="option.id"
-            type="button"
-            class="flex h-12 flex-1 items-center justify-center rounded-3xl border-[1.5px] text-[17px] font-semibold"
-            :class="zone === option.id ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-transparent text-text-2'"
-            @click="zone = option.id"
-          >
-            {{ option.label }}
-          </button>
-        </div>
+        <WaiterSeg
+          label="Zona"
+          :options="ZONES"
+          :model-value="zone"
+          @update:model-value="zone = $event as Zone"
+        />
 
         <FloorPlan
           v-if="boot"
@@ -576,33 +592,37 @@ function openLoose() {
         </p>
         <!-- Honesty (PHASE3 §4): a screen that could not load says so and
              offers the way back, rather than showing *Učitavanje…* for ever. -->
-        <div v-else class="flex flex-col items-center gap-3 py-10 text-center">
-          <p class="text-text-2">
-            Nema veze — meni nije učitan.
-          </p>
-          <button type="button" class="btn h-12 px-5" @click="refreshBoot()">
+        <div v-else class="empty">
+          <p>Nema veze — meni nije učitan.</p>
+          <button type="button" class="btn btn-secondary mt-2" @click="refreshBoot()">
             Pokušaj ponovo
           </button>
         </div>
 
-        <!-- pb-20: the floating *+ Bez stola* button sits over this corner. -->
-        <p class="pb-20 text-center text-sm text-text-2">
+        <p class="text-center text-caption tracking-normal text-muted">
           Dodirni sto → narudžba · dugi dodir → žar
-          <template v-if="myOpenTabs > 0">
-            · <span class="num">{{ myOpenTabs }}</span> otvorenih kod tebe
-          </template>
         </p>
       </div>
-    </div>
 
-    <!-- The guests standing at the bar get a tab like anybody else. -->
-    <button
-      type="button"
-      class="btn btn-accent fixed bottom-6 right-4 z-40 h-14 px-5 text-lg shadow-lg"
-      @click="openLoose"
-    >
-      + Bez stola
-    </button>
+      <!--
+        The guests standing at the bar get a tab like anybody else.
+
+        It is anchored in the system's `.action-bar` rather than floated over
+        the room: a button floating free covered a different table at every
+        scroll position, and the plan is the one screen where a covered tile is
+        a table nobody serves. The bar is right-aligned because tapping a table
+        is what this screen is *for* — this is the second action, not the first.
+      -->
+      <div class="action-bar justify-end">
+        <button
+          type="button"
+          class="btn btn-primary btn-lg shadow-pop"
+          @click="openLoose"
+        >
+          + Bez stola
+        </button>
+      </div>
+    </div>
 
     <OrderZarSheet
       v-if="zarFor"
@@ -618,10 +638,7 @@ function openLoose() {
 
     <WaiterAvatarSheet v-if="menuOpen" @close="menuOpen = false" />
 
-    <div
-      v-if="toast"
-      class="fixed inset-x-0 bottom-28 z-50 mx-auto w-max max-w-[92vw] rounded-xl bg-good-soft px-4 py-3 text-center font-semibold text-good"
-    >
+    <div v-if="toast" class="toast" role="status">
       {{ toast }}
     </div>
 

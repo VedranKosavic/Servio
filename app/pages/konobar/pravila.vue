@@ -108,33 +108,33 @@ function stamp(iso: string | null): string {
           <h2 class="text-xl font-bold text-warn">
             Nova verzija Pravila
           </h2>
-          <p class="text-[15px] text-text-2">
+          <p class="text-label text-text-2">
             Objavljena je verzija v{{ view?.version }}. Pročitaj je do kraja i
             potvrdi — poslije toga ideš na svoj ekran. Ovo se pita jednom po
             verziji i nikad usred smjene.
           </p>
         </section>
 
-        <p v-if="error" class="card px-4 py-3 text-[15px] text-danger" role="alert">
+        <p v-if="error" class="card px-4 py-3 text-label text-danger" role="alert">
           {{ error }}
         </p>
 
-        <p class="text-[17px] text-text-2">
+        <p class="text-body text-text-2">
           Ovo su pravila po kojima se radi u ovom lokalu. Pišu ovdje zato što
           pravilo koje ne znaš unaprijed nije pravilo.
         </p>
 
         <section v-if="published" class="card flex flex-col gap-3 p-4">
           <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span class="text-xl font-bold">Pravila v{{ view?.version }}</span>
-            <span class="text-[13px] text-muted">
+            <span class="section-title">Pravila v{{ view?.version }}</span>
+            <span class="text-caption tracking-normal text-muted">
               objavio {{ view?.published_by_name }} · {{ stamp(view?.published_at ?? null) }}
             </span>
           </div>
-          <PravilaDoc :blocks="blocks" class="text-[15px] text-text-2" />
+          <PravilaDoc :blocks="blocks" class="text-label text-text-2" />
         </section>
 
-        <p v-else class="card px-4 py-6 text-center text-[15px] text-text-2">
+        <p v-else class="card px-4 py-6 text-center text-label text-text-2">
           Pisana pravila još nisu objavljena. Brojevi ispod vrijede i bez njih.
         </p>
 
@@ -147,7 +147,7 @@ function stamp(iso: string | null): string {
 
         <p
           v-if="view?.my_ack_version"
-          class="px-1 text-[13px] text-muted"
+          class="px-1 text-caption tracking-normal text-muted"
         >
           Potvrđena verzija v{{ view.my_ack_version }} · {{ stamp(view.my_ack_at) }}
         </p>
@@ -160,12 +160,12 @@ function stamp(iso: string | null): string {
         v-if="mustAck"
         class="sticky bottom-0 -mx-4 border-t border-line bg-bg px-4 pb-[env(safe-area-inset-bottom)] pt-3"
       >
-        <p v-if="!reachedEnd" class="pb-2 text-center text-[13px] text-muted">
+        <p v-if="!reachedEnd" class="pb-2 text-center text-caption tracking-normal text-muted">
           Pročitaj tekst do kraja.
         </p>
         <button
           type="button"
-          class="btn btn-accent h-14 w-full text-[17px]"
+          class="btn btn-primary h-14 w-full text-body"
           :disabled="!canAck"
           @click="confirm"
         >

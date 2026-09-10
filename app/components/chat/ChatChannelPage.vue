@@ -284,7 +284,7 @@ function asMessage(clientId: string, kindOf: 'text' | 'image', body: string | un
     </WaiterHeader>
 
     <!-- The room, said out loud: a channel is visible to the people in it. -->
-    <p v-if="channel && channel.members.length > 0" class="pt-2 text-sm text-text-2">
+    <p v-if="channel && channel.members.length > 0" class="pt-2 text-label text-text-2">
       Članovi {{ channel.members.length }} · {{ channel.members.join(', ') }}
     </p>
 
@@ -304,7 +304,7 @@ function asMessage(clientId: string, kindOf: 'text' | 'image', body: string | un
       <button
         v-if="chat.olderAvailable[kind]"
         type="button"
-        class="btn btn-ghost min-h-12 self-center px-4 text-base"
+        class="btn btn-ghost min-h-12 self-center px-4 text-body"
         @click="chat.loadOlder(kind)"
       >
         Učitaj starije
@@ -347,7 +347,7 @@ function asMessage(clientId: string, kindOf: 'text' | 'image', body: string | un
       <span class="grow truncate text-text-2">{{ replyTo.body }}</span>
       <button
         type="button"
-        class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-text-2"
+        class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control text-text-2"
         aria-label="Otkaži odgovor"
         @click="replyTo = null"
       >
