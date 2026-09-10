@@ -250,10 +250,11 @@ sheet that opens instantly.
 
 ---
 
-## 7. The lock screen, as the proof
+## 7. The login screen, as the proof
 
-`app/pages/index.vue` and `app/components/WaiterPinPad.vue` are the system used
-end to end. Screenshots: `docs/design-shots/`.
+`app/pages/index.vue`, `app/pages/ekran.vue` and
+`app/components/WaiterPinPad.vue` are the system used end to end. Screenshots:
+`docs/design-shots/` and `docs/design-shots/prijava/`.
 
 **One composition, two widths.** A centred column, 420 px wide at most: the mark,
 the wordmark at `--text-display`, an `.eyebrow` third line, one panel, and
@@ -264,30 +265,42 @@ in the middle for the eye to fall into.
 **Hierarchy in three steps.** 40 px wordmark → 12 px letterspaced caps → 19 px
 panel heading → 14 px muted sub. The third line is the venue's own name, in
 copper — the one thing on the screen that belongs to the café rather than to the
-product. Before the first sign-in the app genuinely does not know it
-(`GET /api/auth/users` deliberately carries nothing but the names), so the line
-says what the app is instead of leaving a hole where the hierarchy should be.
+product. Before the first sign-in this browser has no session, so the line says
+what the app is instead of leaving a hole where the hierarchy should be.
 
-**The profile chooser.** The last three people to sign in *on this device* are
-132 px tiles with a 56 px avatar, the name, and the role as a quiet uppercase
-caption — a thumb target that shows the role without letting it compete.
-Everybody else is behind one row with a chevron, and the panel's foot is a second
-row of the same shape (*Osvježi listu*), so the bottom of the panel is a rule and
-an action rather than a grey slab floating in space.
+**The panel is the pad, and there is nothing else in it.** No faces, no
+*Ostali profili*, no role buttons: **the PIN identifies the person**, so a
+screen that drew the staff list would hand a stranger holding an enrolled phone
+the one thing the pad refuses to ask. What used to be a list of 132 px profile
+tiles is gone, and with it *Nastavi kao …* — a live session is forwarded to its
+own screen rather than asked whether it meant it.
 
-**The pad.** 64 px keys in a 300 px block that sits inside a thumb's arc,
-`--surface-2` on `--surface`, pressing to `--surface-3` at 0.95 scale. *Nazad*
-and *Obriši* have no material behind them, so the nine digits read as one block.
-The dots fill copper and grow 15 %. The lockout is its own warn-toned strip with
-the seconds counting down in tabular figures, because a locked pad with no clock
-on it is indistinguishable from a broken one.
+**The pad.** 68 px keys (72 from 640 px up) in a 328 px block that sits inside a
+thumb's arc, `--surface-2` on `--surface`, pressing to `--surface-3` at 0.95
+scale. The two corner keys — *Obriši* and the backspace — have no material behind
+them, so the nine digits read as one block. The dots fill copper and grow 15 %,
+and there are four of them because every account in the café has four; a refused
+four grows the row to six and adds a *Potvrdi*, which is the only way a pad that
+cannot ask whose PIN it is may accept a six-digit one. The lockout is its own
+warn-toned strip with the seconds counting down in tabular figures, because a
+locked pad with no clock on it is indistinguishable from a broken one.
 
 **The enrol path** is two labelled fields and one primary button — the code field
-is `.input-num`, 60 px, centred and letterspaced — instead of the bare inputs it
-used to be.
+is `.input-num`, 60 px, centred and letterspaced. It is deliberately secondary:
+one quiet foot row (*Ovaj telefon nije prijavljen?*) and the place a `NO_DEVICE`
+from the pad lands, because it is the once-a-year case and the pad is the screen.
 
-**The landing rule is unchanged and lives in one place**: `homeFor()` in
-`useMe.ts`. An owner lands on `/admin`.
+**The chooser, `/ekran`.** *Na čemu si večeras?* — the second step, and the only
+one behind the PIN. The 56 px avatar, an `.eyebrow` greeting and a 24 px
+question, then two `--radius-card` tiles, 112 px stacked on a phone and 148 px
+side by side from 560 px, each carrying the screen's name at `--text-section` and
+one muted line of what is on it. The greeting is the point of the name: the pad
+asked nobody who he was, so this is the first place the session says whose it is,
+and *Nisam ja — odjavi se* is the foot row for when the answer is wrong.
+
+**The landing rule lives in one place**: `shared/landing.ts`, through `homeFor()`
+in `useMe.ts`. An owner lands on `/admin`; a worker lands on the screen he chose,
+and on the chooser when he has not chosen one.
 
 ---
 

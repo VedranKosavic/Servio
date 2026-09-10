@@ -44,22 +44,20 @@ let context: BrowserContext
 /**
  * Get the browser to the pad, whatever state the device was left in.
  *
+ * `/` is a pad only when nobody is signed in: with a live session it forwards
+ * to that session's own screen rather than asking a person who is already here
+ * to prove it again, and the old *Nastavi kao …* card went with the name list.
+ * So the session is ended first — every test in this file signs somebody in, and
+ * they share one context.
+ *
  * The screen is inside `<ClientOnly>`, so nothing exists until the page has
- * hydrated and `/api/me` has answered — and when somebody is still signed in on
- * this device it offers *Nastavi kao …* rather than the pad. Waiting for one of
- * the two shapes it can take is what makes the branch below meaningful.
+ * hydrated and `/api/me` has answered; waiting for the `1` key is waiting for
+ * exactly that.
  */
 async function openPad(page: Page) {
+  expect((await page.request.post('/api/auth/logout', { data: {} })).ok()).toBe(true)
   await page.goto('/')
-
-  const relock = page.getByRole('button', { name: /Promijeni korisnika/ })
-  const pad = page.getByRole('button', { name: '1', exact: true })
-
-  await expect(relock.or(pad).first()).toBeVisible()
-  if (await relock.count() > 0) {
-    await relock.click()
-    await expect(pad).toBeVisible()
-  }
+  await expect(page.getByRole('button', { name: '1', exact: true })).toBeVisible()
 }
 
 /**

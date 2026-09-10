@@ -1,54 +1,49 @@
 <script setup lang="ts">
 /**
- * The lock screen — the first thing anybody sees, and the proof of the design
- * system (docs/DESIGN.md).
+ * The login screen — a PIN pad, and nothing else.
  *
- * Nothing on this screen is trusted: the phone proves it is an enrolled device
- * (the `sank_d` cookie), a person proves he is himself (a PIN through the
- * metered verifier), and the server hands back a session cookie the browser
- * cannot read. Every screen after this one asks `GET /api/me` rather than
- * reading localStorage.
+ * **The PIN identifies the person** (CLAUDE.md, BACKEND §5). There is no list
+ * of names in front of it, no faces, no *Ostali profili* and no role buttons:
+ * the digits are the whole login, so a stranger holding an enrolled phone
+ * learns nothing from the screen he is holding. `POST /api/auth/pin` takes
+ * `{ pin }`, compares it against every active account of this device's venue,
+ * and answers 401 naming nobody.
  *
- * The views, in the order a phone meets them:
+ * The three states this screen can be in, and nothing else:
  *
- *   `boot`     asking the server who this is
- *   `enrol`    this phone is not enrolled — a six-character code from the owner
- *              (on a laptop with `SANK_DEV_ENROL=1` it enrols itself instead)
- *   `people`   the names on this device's venue: the last three who signed in
- *              **here** as faces, everybody else one tap away
- *   `pin`      the pad, which submits on the last digit
- *   `signed`   somebody is already logged in: one tap back into the shift
+ *   `boot`   asking the server who this is
+ *   `pin`    the pad — the ordinary state, and the one this file is about
+ *   `enrol`  this phone is not enrolled yet: a six-character code from the
+ *            owner. Kept quiet and secondary — a foot row, and the place a
+ *            `NO_DEVICE` from the pad lands. On a laptop with `SANK_DEV_ENROL=1`
+ *            it enrols itself instead.
+ *
+ * **Where a correct PIN goes** is `homeFor()` in `useMe`, which is
+ * `shared/landing.ts` with a route for its `null`: an admin lands on `/admin`,
+ * a worker who has already chosen a screen tonight lands on it, and a worker who
+ * has not lands on `/ekran` — *Na čemu si večeras?* — which is a second step
+ * behind the PIN and never in front of one.
  *
  * **The composition.** One centred column, 420 px wide at most, holding the
- * wordmark, one panel and one quiet foot line — so the screen is the same
- * composition on a 390 px phone (where the panel is the width of the screen)
- * and on a 1440 px laptop (where it is a card floating on the copper wash).
- * Nothing stretches, and there is no gap in the middle for the eye to fall
- * into. Every target on it clears 48 px.
+ * wordmark, one panel and one quiet foot line — the same composition on a 390 px
+ * phone (where the panel is the width of the screen) and on a 1440 px laptop
+ * (where it is a card floating on the copper wash). Nothing stretches, and every
+ * target on it clears 48 px.
  *
- * **Two things WP4 adds, and the difference between them matters.**
- *
- * *Re-lock* is a shared bar tablet going idle. It is a **screen over a session
- * that is still alive** — the `sank_s` cookie was never cleared — which is what
- * makes an offline unlock possible: the PIN is checked against a PBKDF2 hash
- * this phone cached the last time the *server* accepted it (`useLock`), the
- * screen re-opens, and the very next request revalidates the session anyway. If
- * that session has in fact expired, the screen says *"Nema veze — prijava traži
- * internet"* instead of pretending. It never invents a session.
- *
- * *Drugi konobar* is somebody else's phone. A `personal` device answers 403
- * `NOT_YOUR_DEVICE`; saying out loud that you are borrowing it turns that into
- * a two-hour `borrowed` session, and the app carries *"Amar · Emirov telefon"*
- * for the whole of it.
+ * **Re-lock, and why the pad can work offline.** A shared bar tablet going idle
+ * is a *screen over a session that is still alive* — the `sank_s` cookie was
+ * never cleared — so the PIN can be checked against a PBKDF2 hash this phone
+ * cached the last time the *server* accepted it (`useLock`), and only for the
+ * person the live session already belongs to. Nothing here can *create* a
+ * session, so a colleague, or a session that has really expired, gets
+ * *"Nema veze — prijava traži internet"* instead of a pretence.
  *
  * The lockout copy comes out of the error body and nowhere else: five wrong PINs
- * are 60 s, ten are 15 minutes, and the pad counts the seconds down on screen —
- * a waiter staring at "pogrešan PIN" with no idea whether to keep trying is how
- * a phone ends up face-down on the bar.
+ * are 60 s, ten are 15 minutes, and the pad counts the seconds down on screen in
+ * tabular figures — a waiter staring at "pogrešan PIN" with no idea whether to
+ * keep trying is how a phone ends up face-down on the bar.
  */
-import type { LoginUser } from '#shared/types'
 import { ApiSideError } from '~/composables/useApi'
-import { lastFaces } from '~/composables/useLock'
 
 useHead({ title: 'Prijava' })
 
@@ -56,22 +51,28 @@ const api = useApi()
 const me = useMe()
 const lock = useLock()
 
-type View = 'boot' | 'enrol' | 'people' | 'pin' | 'signed'
+type View = 'boot' | 'pin' | 'enrol'
 const view = ref<View>('boot')
 
-const people = ref<LoginUser[]>([])
-const chosen = ref<LoginUser | null>(null)
 const busy = ref(false)
 const message = ref<string | null>(null)
 
-/** Set by a 403 `NOT_YOUR_DEVICE`: this is a colleague's personal phone. */
-const borrowing = ref(false)
-
-/** *Ostali profili* — the faces are three, the list behind them is everybody. */
-const showAll = ref(false)
+/**
+ * How long a PIN this pad will accept.
+ *
+ * Four until four have been refused, because every account in the café has four
+ * and a pad that waited for a *Potvrdi* would cost every login a fifth tap. A
+ * refusal is the only evidence this screen can have that somebody's PIN is six
+ * digits long — the pad cannot ask whose it is — so that is when it grows the
+ * two extra dots and the confirm key (see `WaiterPinPad`).
+ */
+const maxLen = ref<4 | 6>(4)
 
 const enrolCode = ref('')
 const enrolLabel = ref('')
+
+/** Tried once per visit to the enrol view: it 404s anywhere but a dev machine. */
+const devEnrolTried = ref(false)
 
 // -- lockout countdown ------------------------------------------------------
 
@@ -81,18 +82,6 @@ const enrolLabel = ref('')
  */
 const lockedFor = ref(0)
 let lockTimer: ReturnType<typeof setInterval> | null = null
-
-/**
- * The lockout is the server's, and it is counted against `(device, user)` — so
- * it belongs to the person on the pad, not to the pad. Picking somebody else has
- * to clear it, or Dino's five wrong guesses would lock Amar out of his own shift
- * for a minute on a phone he never touched.
- */
-function clearLock() {
-  lockedFor.value = 0
-  if (lockTimer) clearInterval(lockTimer)
-  lockTimer = null
-}
 
 function startLock(seconds: number) {
   lockedFor.value = Math.max(0, Math.round(seconds))
@@ -118,121 +107,58 @@ onBeforeUnmount(() => {
  * Did the tablet re-lock itself, rather than somebody logging out?
  *
  * The difference is entirely about *this* screen: a re-lock still has a session
- * behind it, so it may unlock without the network and it says so.
+ * behind it, so it may unlock without the network.
  */
 const relocked = computed(() => lock.relocked.value)
 
 onMounted(async () => {
   const state = await me.load()
 
-  // A re-lock never shows *Nastavi kao …*: the point of it is that the person
-  // holding the tablet may not be the person the session belongs to.
+  // Somebody is signed in and this is not a re-lock: he typed the address, or
+  // came back to a tab. There is nothing for him to do on a pad — his screen is
+  // one `homeFor()` away, and the old *Nastavi kao …* card was a tap asking
+  // whether he meant it.
   if (state === 'ready' && !relocked.value) {
-    view.value = 'signed'
+    await navigateTo(me.home.value)
     return
   }
   if (state === 'nodevice') {
-    await enrolThisDevice()
+    await enrolPath()
     return
   }
   if (state === 'offline') {
-    // Offline and re-locked is the case this whole screen was rewritten for:
-    // the names are the ones this phone already knew, and the PIN is checked
-    // against the cache. Offline and *not* re-locked has nothing to work with.
+    // A re-lock has a cached PIN to work with; anything else needs the network,
+    // and the pad says so rather than swallowing the taps.
     message.value = relocked.value ? null : 'Nema veze sa serverom.'
-    view.value = 'people'
-    return
   }
-  await loadPeople()
+  view.value = 'pin'
 })
 
-/**
- * The names on this device's venue. `GET /api/auth/users` is the one response a
- * stranger holding an enrolled phone can read, so it carries no more than this
- * list draws — and people without a PIN are left out, because tapping them would
- * open a pad that can never be right.
- */
-async function loadPeople() {
-  busy.value = true
-  try {
-    people.value = (await api.getLoginUsers()).filter(u => u.active && u.has_pin)
-    view.value = 'people'
-    message.value = null
-  } catch (err) {
-    const e = err as ApiSideError
-    if (e.code === 'NO_DEVICE' || e.code === 'DEVICE_REVOKED') {
-      // This is where "is this phone enrolled?" is actually answered: `/api/me`
-      // says `NO_SESSION` whether or not a device cookie exists (the session is
-      // resolved first), so the device question only surfaces on the one route
-      // that needs a device and no session.
-      me.wipeLocalState()
-      await lock.wipe()
-      message.value = apiErrorText(err)
-      await enrolThisDevice()
-    } else {
-      // A re-locked tablet with no network keeps whatever names it has: an
-      // empty list would strand the person holding it.
-      if (!relocked.value || people.value.length === 0) {
-        message.value = apiErrorText(err, 'Nema veze sa serverom.')
-      }
-      view.value = 'people'
-    }
-  } finally {
-    busy.value = false
-  }
-}
-
-/**
- * On a laptop, `POST /api/dev/enrol` turns this browser into an enrolled device
- * with no code at all. It 404s everywhere `SANK_DEV_ENROL=1` is not set — which
- * is everywhere but a development machine (§5.6) — and that 404 is exactly how
- * this screen knows to ask for a real code instead.
- */
-async function enrolThisDevice() {
-  busy.value = true
-  try {
-    const result = await api.devEnrol()
-    // The enrol response has no per-device recency yet, which is honest: this
-    // phone has no history on it.
-    people.value = result.users
-      .filter(u => u.active && u.has_pin)
-      .map(u => ({ ...u, last_login_at: null }))
-    view.value = 'people'
-    message.value = null
-  } catch {
-    view.value = 'enrol'
-  } finally {
-    busy.value = false
-  }
-}
-
-// -- who is offered ---------------------------------------------------------
-
-/** The three most recent sign-ins **on this device**, and everybody else. */
-const split = computed(() => lastFaces(people.value))
-const faces = computed(() => split.value.faces)
-const rest = computed(() => split.value.rest)
-
-/** The list under *Ostali profili*, or the whole venue when there are no faces. */
-const listed = computed(() => (faces.value.length === 0 ? people.value : rest.value))
-
-/**
- * On a `personal` phone the rest of the list is not "everybody else", it is
- * *Drugi konobar* — the colleague whose battery died, who will be asked to
- * confirm that he is borrowing this phone (§5.1).
- */
-const restLabel = computed(() => (
-  me.device.value?.mode === 'personal'
-    ? 'Drugi konobar'
-    : `Ostali profili (${rest.value.length})`
-))
-
-/** The copper avatar is reserved for the person this device is signed in as. */
-function isMe(person: LoginUser): boolean {
-  return me.user.value?.id === person.id
-}
-
 // -- enrol ------------------------------------------------------------------
+
+/**
+ * The device door, and it is deliberately the quiet one.
+ *
+ * On a development machine `POST /api/dev/enrol` turns this browser into an
+ * enrolled device with no code at all. It 404s everywhere `SANK_DEV_ENROL=1` is
+ * not set — which is everywhere but a development machine (BACKEND §5.6) — and
+ * that 404 is exactly how this screen knows to ask for a real code instead.
+ */
+async function enrolPath() {
+  view.value = 'enrol'
+  if (devEnrolTried.value) return
+  devEnrolTried.value = true
+  busy.value = true
+  try {
+    await api.devEnrol()
+    message.value = null
+    view.value = 'pin'
+  } catch {
+    // No dev door: the six characters the owner reads out across the bar.
+  } finally {
+    busy.value = false
+  }
+}
 
 const codeReady = computed(() => enrolCode.value.trim().length === 6)
 
@@ -241,15 +167,12 @@ async function submitCode() {
   busy.value = true
   message.value = null
   try {
-    const result = await api.enrolDevice({
+    await api.enrolDevice({
       code: enrolCode.value.trim().toUpperCase(),
       label: enrolLabel.value.trim() || undefined,
     })
-    people.value = result.users
-      .filter(u => u.active && u.has_pin)
-      .map(u => ({ ...u, last_login_at: null }))
     enrolCode.value = ''
-    view.value = 'people'
+    view.value = 'pin'
   } catch (err) {
     message.value = apiErrorText(err)
   } finally {
@@ -257,71 +180,66 @@ async function submitCode() {
   }
 }
 
-// -- pin --------------------------------------------------------------------
-
-function pick(person: LoginUser) {
-  chosen.value = person
-  borrowing.value = false
+function backToPad() {
   message.value = null
-  clearLock()
   view.value = 'pin'
 }
 
-function backToPeople() {
-  chosen.value = null
-  borrowing.value = false
-  message.value = null
-  showAll.value = false
-  clearLock()
-  view.value = 'people'
-}
+// -- the pad ----------------------------------------------------------------
 
 /**
  * The one path a PIN can take without a network.
  *
- * Only for the person the live session already belongs to, and only against a
- * hash this phone cached after the *server* accepted the same PIN. Anything
- * else — a different colleague, nothing cached, no `crypto.subtle` — answers
- * `null` here and falls through to the server.
+ * Only over a live session — a re-lock — and only against a hash this phone
+ * cached after the *server* accepted the same PIN, for the person that session
+ * belongs to. Anything else answers `null` here and falls through to the server.
  */
-async function tryOfflineUnlock(person: LoginUser, pin: string): Promise<boolean | null> {
+async function tryOfflineUnlock(pin: string): Promise<boolean | null> {
   if (!relocked.value) return null
-  if (me.user.value?.id !== person.id) return null
-  return lock.verifyOffline(person.id, pin)
+  const userId = me.user.value?.id
+  if (!userId) return null
+  return lock.verifyOffline(userId, pin)
 }
 
+/**
+ * One tap of the last digit.
+ *
+ * `attempt()` answers *true* when the digits were fine and the **device** was
+ * the problem — on a development machine `enrolPath()` fixes that silently, and
+ * the same four digits are then worth sending again rather than being typed
+ * twice for a door nobody saw.
+ */
 async function submitPin(pin: string) {
-  const person = chosen.value
-  if (!person || busy.value || lockedFor.value > 0) return
+  if (await attempt(pin)) await attempt(pin)
+}
+
+async function attempt(pin: string): Promise<boolean> {
+  if (busy.value || lockedFor.value > 0) return false
 
   busy.value = true
   message.value = null
   try {
-    const offline = await tryOfflineUnlock(person, pin)
+    const offline = await tryOfflineUnlock(pin)
     if (offline === true) {
       lock.unlock()
       await afterLogin()
-      return
+      return false
     }
     if (offline === false) {
       // A wrong PIN against the cache. No `auth_attempts` row was written, so
       // this is not metered — which is why the cache expires in 14 h and holds
       // a 150 000-round hash rather than the PIN.
-      message.value = 'Pogrešan PIN.'
-      return
+      message.value = 'PIN nije prepoznat.'
+      return false
     }
 
-    await api.loginWithPin({
-      user_id: person.id,
-      pin,
-      ...(borrowing.value ? { borrow: true } : {}),
-    })
+    const result = await api.loginWithPin({ pin })
     // One parser: the login answers `{ user, session, device }` and `/api/me`
     // answers the venue and its settings with it, which every screen needs.
     await me.refreshAfterLogin()
     // The server said yes; only now is this PIN worth remembering for an
     // offline unlock of the same phone.
-    await lock.remember(person.id, pin)
+    await lock.remember(result.user.id, pin)
     lock.unlock()
     await afterLogin()
   } catch (err) {
@@ -330,12 +248,18 @@ async function submitPin(pin: string) {
       // The pad draws its own countdown from `lockedFor`, so the server's
       // sentence would be the same thing said twice.
       startLock(Number(e.data.retry_after_s ?? 60))
-    } else if (e.code === 'NOT_YOUR_DEVICE') {
-      // A colleague's personal phone. The 403 is not a refusal, it is a
-      // question: say out loud that you are borrowing it and the session is 2 h
-      // instead of 14 (§5.1).
-      borrowing.value = true
-      message.value = 'Ovo je tuđi telefon. Potvrdi da ga posuđuješ i unesi PIN ponovo.'
+    } else if (e.code === 'NO_DEVICE' || e.code === 'DEVICE_REVOKED') {
+      // Never enrolled, or thrown out since. Both end at the same door.
+      me.wipeLocalState()
+      await lock.wipe()
+      message.value = apiErrorText(err)
+      await enrolPath()
+      // `enrolPath()` leaves the view on the pad only when the dev door enrolled
+      // this browser, which is the one case where retrying makes sense.
+      if (view.value === 'pin') {
+        message.value = null
+        return true
+      }
     } else if (e.code === 'NETWORK') {
       // The honest half of the offline story: this screen can re-open over a
       // session that is still alive, but nothing on this phone can *create* a
@@ -343,47 +267,23 @@ async function submitPin(pin: string) {
       // expired, waits for the network rather than being let through.
       message.value = 'Nema veze — prijava traži internet.'
     } else {
+      if (e.code === 'INVALID_PIN') maxLen.value = 6
       message.value = apiErrorText(err)
     }
   } finally {
     busy.value = false
   }
+  return false
 }
 
 /**
- * The landing rule, and there is only one of it.
- *
- * The destination comes from the role and from nowhere else: `homeFor()` in
- * `useMe.ts` maps waiter → `/konobar`, šanker → `/sanker`, admin → `/admin`.
- * `/admin/login` calls `navigateTo('/admin')` after the same
+ * The landing rule, and there is only one of it: `shared/landing.ts`, through
+ * `homeFor()`. `/admin/login` calls `navigateTo('/admin')` after the same
  * `refreshAfterLogin()`, so an owner who signs in with a PIN on a phone and an
  * owner who signs in with a password on a laptop land on the same screen.
  */
 async function afterLogin() {
   await navigateTo(me.home.value)
-}
-
-async function changeUser() {
-  busy.value = true
-  try {
-    await api.logout()
-  } catch {
-    // Same as `useMe().logout()`: the lock screen is where this ends either way.
-  }
-  // *Promijeni korisnika* is a real sign-out, so the remembered PINs go too.
-  await lock.wipe()
-  lock.unlock()
-  me.me.value = null
-  me.status.value = 'anon'
-  busy.value = false
-  chosen.value = null
-  await loadPeople()
-}
-
-const ROLE_LABEL: Record<string, string> = {
-  waiter: 'konobar',
-  bartender: 'šanker',
-  admin: 'vlasnik',
 }
 </script>
 
@@ -414,10 +314,9 @@ const ROLE_LABEL: Record<string, string> = {
         <!--
           The venue's own name is the third line, in copper — it is the only
           thing on this screen that belongs to the café rather than to the
-          product. It is only known once this browser has a session
-          (`GET /api/auth/users` deliberately carries nothing but the names), so
-          before the first sign-in the line says what the app is instead of
-          leaving a hole where the hierarchy should be.
+          product. Before the first sign-in this browser has no session and no
+          venue to name, so the line says what the app is instead of leaving a
+          hole where the hierarchy should be.
         -->
         <ClientOnly>
           <p class="eyebrow brand-line" :class="{ venue: me.venue.value }">
@@ -433,26 +332,6 @@ const ROLE_LABEL: Record<string, string> = {
         <!-- Asking the server who this is -->
         <section v-if="view === 'boot'" class="stage stage-quiet">
           <p class="stage-sub">Učitavanje…</p>
-        </section>
-
-        <!-- Already logged in: one tap back into the shift -->
-        <section v-else-if="view === 'signed' && me.user.value" class="stage">
-          <div class="signed-who">
-            <span class="avatar avatar-lg avatar-accent">{{ me.user.value.initials }}</span>
-            <div class="signed-lines">
-              <p class="section-title signed-name">{{ me.user.value.name }}</p>
-              <p class="eyebrow">{{ ROLE_LABEL[me.user.value.role] }}</p>
-            </div>
-          </div>
-
-          <div class="stack">
-            <button type="button" class="btn btn-primary btn-lg" @click="afterLogin">
-              Nastavi kao {{ me.user.value.name }}
-            </button>
-            <button type="button" class="btn btn-ghost" :disabled="busy" @click="changeUser">
-              Promijeni korisnika
-            </button>
-          </div>
         </section>
 
         <!-- This phone is not enrolled -->
@@ -502,109 +381,41 @@ const ROLE_LABEL: Record<string, string> = {
           >
             {{ busy ? 'Prijavljujem uređaj…' : 'Prijavi uređaj' }}
           </button>
+
+          <button type="button" class="more quiet" :disabled="busy" @click="backToPad">
+            <span>Nazad na PIN</span>
+          </button>
         </section>
 
-        <!-- The PIN pad -->
-        <section v-else-if="view === 'pin' && chosen" class="stage">
+        <!-- The pad, and this is the screen -->
+        <section v-else class="stage">
+          <div class="stage-head">
+            <h2 class="section-title">Unesi PIN</h2>
+            <p class="stage-sub">
+              {{ relocked ? 'Telefon se zaključao sam. Unesi PIN da nastaviš.' : 'PIN te prijavljuje.' }}
+            </p>
+          </div>
+
           <WaiterPinPad
-            :name="chosen.name"
-            :initials="chosen.initials"
-            :role="ROLE_LABEL[chosen.role]"
-            :pin-len="chosen.pin_len"
+            :pin-len="4"
+            :max-len="maxLen"
+            size="screen"
+            corner="clear"
             :busy="busy"
             :error="message"
             :locked-for="lockedFor"
-            :note="borrowing ? 'Posuđuješ tuđi telefon — prijava traje 2 sata.' : null"
             @submit="submitPin"
-            @cancel="backToPeople"
           />
-        </section>
 
-        <!-- Pick a name -->
-        <section v-else class="stage">
-          <div class="stage-head">
-            <h2 class="section-title">Prijava</h2>
-            <p class="stage-sub">Odaberi svoj profil</p>
-          </div>
-
-          <p v-if="relocked" class="note">
-            Telefon se zaključao sam. Unesi PIN da nastaviš.
-          </p>
-
-          <p v-if="message" class="note note-danger">{{ message }}</p>
-
-          <!-- The last three who signed in on this phone, as faces. -->
-          <div v-if="faces.length" class="faces">
-            <button
-              v-for="person in faces"
-              :key="person.id"
-              type="button"
-              class="face"
-              @click="pick(person)"
-            >
-              <span class="avatar avatar-lg" :class="{ 'avatar-accent': isMe(person) }">
-                {{ person.initials }}
-              </span>
-              <span class="face-name">{{ person.name }}</span>
-              <span class="face-role">{{ ROLE_LABEL[person.role] }}</span>
-            </button>
-          </div>
-
-          <!-- …and everybody else, one tap away. Not a grey slab: a row with a
-               chevron, which is what the rest of the app uses for "there is
-               more behind this". -->
-          <!-- `faces.length` guards it too: on a phone nobody has signed in on
-               yet there are no faces, `listed` falls back to the whole venue and
-               the list below is already open, so this row would offer to reveal
-               people who are on screen. -->
-          <button
-            v-if="faces.length && rest.length && !showAll"
-            type="button"
-            class="more"
-            @click="showAll = true"
-          >
-            <span>{{ restLabel }}</span>
+          <!-- The device door. Quiet, and at the foot: it is the once-a-year
+               case, and the pad is the screen. -->
+          <button type="button" class="more quiet" :disabled="busy" @click="enrolPath">
+            <span>Ovaj telefon nije prijavljen?</span>
             <svg
               class="more-chev" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
               fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
               stroke-linejoin="round"
             ><path d="M9 6l6 6-6 6" /></svg>
-          </button>
-
-          <div v-if="showAll || faces.length === 0" class="stack">
-            <button
-              v-for="person in listed"
-              :key="person.id"
-              type="button"
-              class="person"
-              @click="pick(person)"
-            >
-              <span class="avatar" :class="{ 'avatar-accent': isMe(person) }">
-                {{ person.initials }}
-              </span>
-              <span class="person-name">{{ person.name }}</span>
-              <!-- The same quiet uppercase the face tiles use, not a chip: a
-                   chip on a `--surface-2` row is a chip nobody can see, and the
-                   role is a fact to be found rather than a status to be read. -->
-              <span class="face-role">{{ ROLE_LABEL[person.role] }}</span>
-            </button>
-          </div>
-
-          <p v-if="!busy && people.length === 0" class="empty">
-            Nema nikoga s postavljenim PIN-om.
-            <span>Vlasnik ih postavlja u kontrolnoj ploči.</span>
-          </p>
-
-          <!-- The panel's foot row. Same shape as *Ostali profili* above it, so
-               the bottom of the panel is a rule and an action rather than a
-               button floating in space. -->
-          <button type="button" class="more quiet" :disabled="busy" @click="loadPeople">
-            <span>Osvježi listu</span>
-            <svg
-              class="more-chev" viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"
-              fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
-              stroke-linejoin="round"
-            ><path d="M20 11.5A8 8 0 1 0 18 17M20 6v5.5h-5.5" /></svg>
           </button>
         </section>
 
@@ -736,61 +547,7 @@ const ROLE_LABEL: Record<string, string> = {
   gap: 10px;
 }
 
-.note { margin: 0; }
-
-/* ---- faces ------------------------------------------------------------- */
-
-.faces {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-/* One, two or three of them share the row evenly. */
-.faces:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
-.faces:has(> :nth-child(2):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-
-.face {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 132px;
-  padding: 14px 6px;
-  border-radius: var(--radius-card);
-  border: 1px solid var(--line-soft);
-  background: var(--surface-2);
-  color: var(--ink);
-  cursor: pointer;
-  transition:
-    background var(--dur-fast) var(--ease-standard),
-    transform var(--dur-tap) var(--ease-standard);
-}
-
-.face:active { background: var(--surface-3); transform: scale(0.97); }
-
-.face-name {
-  max-width: 100%;
-  font-size: var(--text-label);
-  font-weight: 600;
-  line-height: 1.2;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* The role is there to be found, not read: it never competes with the name. */
-.face-role {
-  flex-shrink: 0;
-  font-size: var(--text-caption);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-weight: 600;
-  color: var(--muted);
-}
-
-/* ---- everybody else ---------------------------------------------------- */
+/* ---- the foot rows ----------------------------------------------------- */
 
 .more {
   display: flex;
@@ -807,53 +564,11 @@ const ROLE_LABEL: Record<string, string> = {
   cursor: pointer;
 }
 
-/* Two foot rows in a row are one block, not two: the stage's 16 px gap is
-   cancelled between them so the rules read as a small list. */
-.more + .more { margin-top: -16px; }
-
 .more > span:first-child { flex-grow: 1; text-align: left; }
 .more-chev { flex-shrink: 0; color: var(--muted); }
 
-.person {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 64px;
-  padding: 8px 12px;
-  border-radius: var(--radius-card);
-  border: 1px solid var(--line-soft);
-  background: var(--surface-2);
-  color: var(--ink);
-  cursor: pointer;
-  transition:
-    background var(--dur-fast) var(--ease-standard),
-    transform var(--dur-tap) var(--ease-standard);
-}
-
-.person:active { background: var(--surface-3); transform: scale(0.98); }
-
-.person-name {
-  flex-grow: 1;
-  min-width: 0;
-  text-align: left;
-  font-size: var(--text-body);
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* ---- already signed in ------------------------------------------------- */
-
-.signed-who {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.signed-lines { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.signed-name { margin: 0; }
-.signed-lines p:last-child { margin: 0; }
+.quiet { color: var(--muted); }
+.quiet:disabled { opacity: 0.5; cursor: default; }
 
 /* ---- enrol ------------------------------------------------------------- */
 
@@ -869,13 +584,6 @@ const ROLE_LABEL: Record<string, string> = {
 }
 
 .code::placeholder { letter-spacing: 0.28em; text-transform: uppercase; }
-
-/* ---- the quiet foot ---------------------------------------------------- */
-
-.quiet { color: var(--muted); }
-.quiet:disabled { opacity: 0.5; cursor: default; }
-
-.empty span { display: block; }
 
 /* On a laptop the same composition simply breathes: more air above the
    wordmark and inside the panel, nothing stretched. */

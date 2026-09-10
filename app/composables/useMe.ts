@@ -16,7 +16,7 @@
  *
  *   `unknown`  — nobody has asked yet (the very first paint)
  *   `ready`    — there is a session; `me` is the person
- *   `anon`     — the device is enrolled, nobody is logged in → the name list
+ *   `anon`     — the device is enrolled, nobody is logged in → the PIN pad
  *   `nodevice` — no device cookie, or the owner revoked it → the enrol screen
  *   `offline`  — the server could not be reached; `me` is whatever we last knew
  */
@@ -187,6 +187,15 @@ export function useMe() {
     }
     if (roles && !roles.includes(me.value.user.role)) {
       await navigateTo(home.value)
+      return false
+    }
+    // A worker who has not said which screen he is on tonight has no business
+    // on one. The chooser is a step behind the PIN and not an optional one, so
+    // the guard every dark screen already calls is where it is enforced —
+    // typing `/konobar` into the address bar is not a way past it. An admin has
+    // no mode and never sees the question.
+    if (me.value.user.role !== 'admin' && !me.value.session.mode) {
+      await navigateTo(CHOOSER)
       return false
     }
     // A shared bar tablet re-locks after `shared_device_idle_s` of no touch

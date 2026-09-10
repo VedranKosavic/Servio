@@ -162,11 +162,17 @@ async function signOut() {
           </div>
         </ClientOnly>
 
-        <!-- The owner also serves tables. `/konobar` asks for a session and not
-             for a role (`requireSession()` with no argument), so this is the one
-             link he needs to cross over — and back, from the waiter menu. -->
+        <!-- The owner also serves tables, and stands behind the bar. Both staff
+             screens ask for a session and not for a role (`requireSession()`
+             with no argument), so these are the two links he needs to cross
+             over — and back, from the waiter menu. He never picks a `mode`: an
+             admin has none, and his landing is the dashboard either way. -->
         <NuxtLink to="/konobar" class="a-cross">
           <span>Konobarski ekran</span>
+          <UiIcon name="chevron-right" :size="18" />
+        </NuxtLink>
+        <NuxtLink to="/sanker" class="a-cross">
+          <span>Šankerski ekran</span>
           <UiIcon name="chevron-right" :size="18" />
         </NuxtLink>
 

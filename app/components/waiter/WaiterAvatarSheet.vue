@@ -12,10 +12,13 @@
  * all. So the row greys out and says how many rounds are waiting, and the queue
  * empties itself the moment there is a network.
  */
+import type { ScreenMode } from '#shared/types'
+
 const emit = defineEmits<{ close: [] }>()
 
 useSheetDismiss(() => emit('close'))
 
+const api = useApi()
 const me = useMe()
 const { blocked, blockedText } = useSync()
 const wakeLock = useWakeLock()
@@ -23,15 +26,56 @@ const wakeLock = useWakeLock()
 const role = computed(() => me.user.value?.role ?? 'radnik')
 const items = computed(() => WAITER_MENU.filter(item => item.roles.includes(role.value)))
 
+/** Set while `POST /api/auth/mode` is in flight, and after it fails. */
+const modeBusy = ref(false)
+const modeError = ref<string | null>(null)
+
+/** Where *Prebaci …* would take him: the screen he is **not** on. */
+const otherMode = computed<ScreenMode>(() => (me.mode.value === 'sanker' ? 'konobar' : 'sanker'))
+
+/**
+ * The row says where it goes, not what it is: *Prebaci na šank* on the floor
+ * and *Prebaci na konobara* behind the bar. Both screens are open to every
+ * worker, so this is a move and not a promotion.
+ */
+const MODE_ROW: Record<ScreenMode, string> = {
+  konobar: 'Prebaci na konobara',
+  sanker: 'Prebaci na šank',
+}
+
 async function onLogout() {
   if (blocked.value) return
   emit('close')
   await me.logout()
 }
 
+/**
+ * The switch, and the reason nobody signs out to change screens: the mode is a
+ * field on the session. The route answers the whole `MeContext`, so `home` is
+ * already the new screen by the time the navigation reads it.
+ */
+async function onMode() {
+  if (modeBusy.value) return
+  modeBusy.value = true
+  modeError.value = null
+  try {
+    me.me.value = await api.setMode({ mode: otherMode.value })
+    emit('close')
+    await navigateTo(me.home.value)
+  } catch (err) {
+    modeError.value = apiErrorText(err)
+  } finally {
+    modeBusy.value = false
+  }
+}
+
 function onItem(item: (typeof WAITER_MENU)[number]) {
   if (item.action === 'wakelock') {
     wakeLock.toggle()
+    return
+  }
+  if (item.action === 'mode') {
+    void onMode()
     return
   }
   if (item.action === 'logout') {
@@ -47,9 +91,14 @@ function onItem(item: (typeof WAITER_MENU)[number]) {
   void navigateTo(me.mode.value === 'sanker' && item.toBartender ? item.toBartender : item.to)
 }
 
+function labelFor(item: (typeof WAITER_MENU)[number]): string {
+  return item.action === 'mode' ? MODE_ROW[otherMode.value] : item.label
+}
+
 function disabledFor(item: (typeof WAITER_MENU)[number]): boolean {
   if (item.action === 'wakelock') return !wakeLock.supported.value
   if (item.action === 'logout') return blocked.value
+  if (item.action === 'mode') return modeBusy.value
   return !item.ready
 }
 
@@ -59,6 +108,7 @@ function noteFor(item: (typeof WAITER_MENU)[number]): string | null {
     return wakeLock.enabled.value ? 'uključeno' : 'isključeno'
   }
   if (item.action === 'logout') return blocked.value ? blockedText.value : null
+  if (item.action === 'mode') return modeError.value
   return item.ready ? null : (item.soon ?? null)
 }
 </script>
@@ -106,7 +156,7 @@ function noteFor(item: (typeof WAITER_MENU)[number]): string | null {
         :disabled="disabledFor(item)"
         @click="onItem(item)"
       >
-        <span class="grow">{{ item.label }}</span>
+        <span class="grow">{{ labelFor(item) }}</span>
         <span v-if="noteFor(item)" class="shrink-0 text-label text-text-2">
           {{ noteFor(item) }}
         </span>

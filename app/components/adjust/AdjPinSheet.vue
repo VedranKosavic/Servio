@@ -53,10 +53,15 @@ function submit(pin: string) {
   emit('submit', { user_id: picked.value.id, pin })
 }
 
+/**
+ * A person is a *radnik* or the *vlasnik*; *konobar* and *šanker* are screens,
+ * not account types, and this sheet names a person. `ROLE_LABELS` in
+ * `shared/landing.ts` is the same pair with capitals, for the screens that use
+ * it as a heading rather than as a line under a name.
+ */
 const ROLE_WORD: Record<string, string> = {
   admin: 'vlasnik',
-  bartender: 'šanker',
-  waiter: 'konobar',
+  radnik: 'radnik',
 }
 </script>
 

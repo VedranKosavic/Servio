@@ -39,9 +39,6 @@ const CACHE_MAX_AGE_MS = 14 * 60 * 60 * 1000
 /** OWASP's floor for PBKDF2-SHA-256 at the time of writing, and PHASE3 §3's number. */
 const PBKDF2_ITERATIONS = 150_000
 
-/** How many faces the lock screen offers before *Svi ostali*. */
-export const LAST_FACES = 3
-
 interface CacheEntry {
   user_id: string
   device_id: string
@@ -246,22 +243,4 @@ export function useLock() {
     relocked, arm, lock, unlock,
     remember, verifyOffline, canUnlockOffline, wipe,
   }
-}
-
-/**
- * The three faces the lock screen offers first (PHASE3 §1.8).
- *
- * Sorted by when each person last signed in **on this device**; anybody who
- * never has drops to the *Svi ostali* list. Exported as a plain function so the
- * ordering is testable without a browser.
- */
-export function lastFaces<T extends { last_login_at: string | null }>(
-  users: T[], howMany = LAST_FACES,
-): { faces: T[], rest: T[] } {
-  const seen = users
-    .filter(u => u.last_login_at)
-    .sort((a, b) => (b.last_login_at! < a.last_login_at! ? -1 : 1))
-  const faces = seen.slice(0, howMany)
-  const rest = users.filter(u => !faces.includes(u))
-  return { faces, rest }
 }

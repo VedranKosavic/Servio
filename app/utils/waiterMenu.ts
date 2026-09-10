@@ -27,7 +27,7 @@ export interface WaiterMenuItem {
    */
   toBartender?: string
   /** A row that does something instead of navigating. */
-  action?: 'logout' | 'wakelock'
+  action?: 'logout' | 'wakelock' | 'mode'
   /** Which roles see this row at all. */
   roles: ('radnik' | 'admin')[]
   /** Is the screen behind it built? A false renders the row greyed out. */
@@ -54,6 +54,11 @@ export const WAITER_MENU: WaiterMenuItem[] = [
   // and nothing else in this file moves.
   { id: 'chat', label: 'Razgovor', to: '/konobar/razgovor', toBartender: '/sanker/razgovor', roles: ['radnik'], ready: true },
   { id: 'roster', label: 'Raspored', to: '/konobar/raspored', toBartender: '/sanker/raspored', roles: ['radnik'], ready: true },
+  // The screen is a choice on the session, not a property of the account, so
+  // moving from the floor to the bar at midnight is one row and no sign-out.
+  // The label is the *other* screen's name and is written in the sheet, because
+  // it depends on where the person currently is.
+  { id: 'mode', label: 'Prebaci ekran', action: 'mode', roles: ['radnik'], ready: true },
   // The owner also serves tables, so he can be here — and this is his way back.
   // `/admin` is the only row he does not share with the waiters; the light
   // dashboard's own nav carries the mirror of it, *Konobarski ekran*.

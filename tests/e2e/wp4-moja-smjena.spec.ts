@@ -11,10 +11,10 @@
  *   3. A *Napomena* typed on a night survives a reload.
  *   4. After *Završi smjenu*, the same night reads in KM with the tolerance word.
  *   5. *Pravila* renders the venue's published thresholds and no English.
- *   6. The lock screen offers the people who signed in **on this device** as
- *      faces, and the re-lock unlocks with the right PIN **with the network
- *      off** and refuses the wrong one — while a colleague's PIN still needs
- *      the network, because nothing on the phone can create a session.
+ *   6. The re-lock is a screen over a session that is still alive, so the pad
+ *      re-opens it with the right PIN **with the network off** and refuses the
+ *      wrong one — while nothing on the phone can *create* a session, which is
+ *      why a real login still waits for the network.
  *
  * **One device per file, enrolled once** (§5.1): `authLimiter` allows ten auth
  * calls a minute per IP on a production build, so the enrolment and the first
@@ -46,24 +46,6 @@ interface Boot {
   flavours: { id: string, name: string }[]
 }
 
-interface LoginUser { id: string, name: string, last_login_at: string | null }
-
-/**
- * The device's own view of who may sign in, read **once**.
- *
- * `GET /api/auth/users` is an auth door like the PIN itself: ten a minute,
- * keyed by this device. Re-reading it before every login is how a file that
- * signs three people in walks into its own 429 (§5.1). The ids never change.
- */
-let loginUsers: LoginUser[] | null = null
-
-async function knownUsers(context: BrowserContext, fresh = false): Promise<LoginUser[]> {
-  if (fresh || !loginUsers) {
-    loginUsers = await (await context.request.get('/api/auth/users')).json() as LoginUser[]
-  }
-  return loginUsers
-}
-
 /**
  * The PIN door, for a browser that already holds a device cookie.
  *
@@ -71,21 +53,23 @@ async function knownUsers(context: BrowserContext, fresh = false): Promise<Login
  * file that is rate-limited **by IP** (before a device cookie exists the bucket
  * is `ip:…`, after it `d:…`), so it happens once, in `beforeAll`, and a login
  * that comes later costs the device's own bucket and nothing shared.
+ *
+ * `GET /api/auth/users` used to be read here, to find the id of the person about
+ * to be named in the login body. Nothing names anybody now: the digits are the
+ * whole login, and `helpers.PINS` is where a spec learns them.
  */
 async function loginPin(context: BrowserContext, who: Person = 'Amar') {
-  const person = (await knownUsers(context)).find(u => u.name === who)!
-  await pinLogin(context.request, who as Person, 'konobar')
+  await pinLogin(context.request, who, 'konobar')
 
   // A published Pravila version stands in front of every /konobar screen (S12), and
   // phase4-pravila publishes one before this file runs. Clear it here so the
   // spec does not depend on where it sits in the alphabet.
   await ackRules(context.request)
-  return person
 }
 
 async function enrolAndLogin(context: BrowserContext, who: Person = 'Amar') {
   expect((await context.request.post('/api/dev/enrol', { data: {} })).ok()).toBe(true)
-  return await loginPin(context, who)
+  await loginPin(context, who)
 }
 
 /** A night on this phone, written through the real routes. */
@@ -248,7 +232,7 @@ test.describe('WP4 — Moja smjena', () => {
     await expect(page.getByText('ovaj telefon')).toBeVisible()
   })
 
-  test('the lock screen offers this device’s faces and unlocks offline', async ({ browser }) => {
+  test('the re-locked pad unlocks offline, and refuses the wrong digits', async ({ browser }) => {
     // The re-lock is walked rather than waited out, but the whole flow — two
     // logins, a settings patch, an idle window and an offline unlock — is more
     // than the file's default minute.
@@ -277,20 +261,16 @@ test.describe('WP4 — Moja smjena', () => {
     })).ok()).toBe(true)
 
     try {
-      // Two people on the same device, so the lock screen has something to rank.
+      // Amar's *Pravila* acknowledgement, which S12 wants in front of every
+      // /konobar screen. The login below is the one that matters.
       await loginPin(context, 'Amar')
-      await loginPin(context, 'Emir')
 
-      // Signed in here, so ranked here; Dino never has.
-      const ranked = await knownUsers(context, true)
-      expect(ranked.find(u => u.name === 'Amar')?.last_login_at).toBeTruthy()
-      expect(ranked.find(u => u.name === 'Dino')?.last_login_at).toBeNull()
-
-      // Log in through the screen itself, so the PIN is cached for the re-lock.
-      // No face to tap on the way in any more: the pad asks for digits and the
-      // digits say who typed them.
+      // The offline unlock is checked against a PIN this phone cached when the
+      // **server** accepted it, so the login has to go through the screen. And
+      // the screen is only a pad when nobody is signed in: with a live session
+      // `/` forwards to that session's own screen instead of asking again.
+      expect((await context.request.post('/api/auth/logout', { data: {} })).ok()).toBe(true)
       await page.goto('/')
-      await page.getByRole('button', { name: /Promijeni korisnika/ }).click()
       await expect(page.getByRole('button', { name: '1', exact: true })).toBeVisible()
 
       const pad = async (digits: string) => {
@@ -299,12 +279,20 @@ test.describe('WP4 — Moja smjena', () => {
         }
       }
 
+      // No face to tap on the way in any more: the pad asks for digits and the
+      // digits say who typed them. A fresh session has chosen no screen yet, so
+      // the second step is where the four digits land.
       await pad(PINS.Amar)
+      await expect(page.getByText('Na čemu si večeras?')).toBeVisible()
+      await page.getByRole('button', { name: 'Konobar' }).click()
       await expect(page).toHaveURL(/\/konobar$/)
 
       // -- the tablet goes idle ----------------------------------------------
       await expect(page).toHaveURL(/\/$/, { timeout: 15_000 })
       await expect(page.getByText('Telefon se zaključao sam')).toBeVisible()
+      // A re-lock is a screen, not a sign-out: it never names the person it is
+      // locked over, so what is on it is a pad and nothing else.
+      await expect(page.getByText('Amar', { exact: true })).toHaveCount(0)
 
       // -- and unlocks with no network at all --------------------------------
       await context.setOffline(true)

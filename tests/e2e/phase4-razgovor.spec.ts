@@ -91,11 +91,19 @@ async function jpegBuffer(page: Page): Promise<Buffer> {
  */
 async function sendText(page: Page, text: string) {
   const field = page.getByLabel('Poruka')
+  const send = page.getByRole('button', { name: 'Pošalji' })
   await expect(async () => {
     await field.fill(text)
     await expect(field).toHaveValue(text)
+    // The value in the DOM is not the value Vue holds. A fill that landed a
+    // moment before hydration leaves the field *looking* filled while the model
+    // behind it is still empty — and since the model never changes, no later
+    // re-render clears the field either. *Pošalji* is the only thing on the
+    // screen that can tell the two apart, so the retry waits for it and fills
+    // again if it is still grey.
+    await expect(send).toBeEnabled({ timeout: 1_000 })
   }).toPass({ timeout: 15_000 })
-  await page.getByRole('button', { name: 'Pošalji' }).click()
+  await send.click()
 }
 
 test.describe('Razgovor', () => {
@@ -240,10 +248,18 @@ test.describe('Razgovor', () => {
 
     // Exactly once: the replay key is what makes a retry harmless. Two photos
     // by now — check 1's and this one — and a reload must not make it three.
-    const before = await page.locator('img[src^="/api/uploads/"]').count()
-    expect(before).toBeGreaterThanOrEqual(2)
+    //
+    // The wait is not decoration. *čeka slanje* disappearing means the **outbox**
+    // flushed; the row that carries the uploaded image arrives with the next
+    // `since` poll a moment later, so counting the instant the placeholder goes
+    // counts one photo and fails on a slow machine rather than on a bug.
+    const images = page.locator('img[src^="/api/uploads/"]')
+    await expect(async () => {
+      expect(await images.count()).toBeGreaterThanOrEqual(2)
+    }).toPass({ timeout: 30_000 })
+    const before = await images.count()
     await page.reload()
-    await expect(page.locator('img[src^="/api/uploads/"]')).toHaveCount(before, { timeout: 20_000 })
+    await expect(images).toHaveCount(before, { timeout: 20_000 })
 
     await page.close()
   })
