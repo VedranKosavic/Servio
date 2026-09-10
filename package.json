@@ -16,7 +16,8 @@
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "tsx server/database/seed-cli.ts"
+    "db:seed": "tsx server/database/seed-cli.ts",
+    "db:dev-pins": "tsx server/database/dev-pins.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",

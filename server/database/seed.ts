@@ -59,6 +59,16 @@ const DEV_PINS: Record<keyof typeof SEED_USER_IDS, string> = {
 const DEV_ADMIN_EMAIL = 'haris@lounge.ba'
 const DEV_ADMIN_PASSWORD = 'lounge'
 
+/**
+ * Testing-phase override: with `SANK_DEV_PIN=1111` in `.env` every seeded
+ * person gets that PIN (4 or 6 digits) and Haris gets it as his password too,
+ * so a whole team can test with one number. Unset it and the per-person dev
+ * PINs above apply. Never set on a production install.
+ */
+const DEV_PIN_OVERRIDE = /^\d{4}$|^\d{6}$/.test(process.env.SANK_DEV_PIN?.trim() ?? '')
+  ? process.env.SANK_DEV_PIN!.trim()
+  : null
+
 /** Module scope, so the whole test suite pays for each hash exactly once. */
 const hashCache = new Map<string, string>()
 function memoHash(plain: string, userId: string): string {
@@ -128,13 +138,13 @@ export function seed(db: Db, opts: SeedOptions = {}): void {
         initials: person.name.slice(0, 2).toUpperCase(),
         role: person.role,
         active: 1,
-        pinHash: devSecrets ? memoHash(DEV_PINS[person.name], userId) : null,
-        pinLen: person.pinLen,
+        pinHash: devSecrets ? memoHash(DEV_PIN_OVERRIDE ?? DEV_PINS[person.name], userId) : null,
+        pinLen: DEV_PIN_OVERRIDE ? (DEV_PIN_OVERRIDE.length === 6 ? 6 : 4) : person.pinLen,
         pinSetAt: devSecrets ? now : null,
         pinPepperV: 1,
         // Email + password is the only way into `/a` on a laptop, and only an
         // admin has one.
-        passwordHash: devSecrets && isAdmin ? memoHash(DEV_ADMIN_PASSWORD, userId) : null,
+        passwordHash: devSecrets && isAdmin ? memoHash(DEV_PIN_OVERRIDE ?? DEV_ADMIN_PASSWORD, userId) : null,
         email: devSecrets && isAdmin ? DEV_ADMIN_EMAIL : null,
         logSeenAt: null,
         createdAt: now,

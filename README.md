@@ -35,3 +35,5 @@ implementation contract — schema, routes, services, invariants — is in
 [docs/PHASES.md](docs/PHASES.md); the owner-facing plan in Bosnian is
 [docs/PLAN.bs.md](docs/PLAN.bs.md); research appendices in [docs/research/](docs/research/); the
 review log in [docs/reviews.md](docs/reviews.md). The app itself is Bosnian-only (no i18n layer).
+
+Testing phase: with `SANK_DEV_PIN=1111` in `.env` (see `.env.example`) every seeded person logs in with PIN 1111 and the admin (`haris@lounge.ba`) with password 1111; `npm run db:dev-pins` applies the same to an existing local database.
