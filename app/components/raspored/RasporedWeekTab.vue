@@ -187,7 +187,9 @@ const removeCell = () => cellRun(() => api.removeAssignment(cell.value!.id))
 
 <template>
   <div class="r-tab">
-    <UiCard>
+    <!-- `r-bar`: on a phone this card sheds its chrome and becomes the one
+         compact bar the week is steered from. See the style block. -->
+    <UiCard class="r-bar">
       <div class="r-head">
         <div class="r-nav">
           <UiButton variant="soft" aria-label="Prethodna sedmica" @click="week.go(-1)">‹</UiButton>
@@ -224,9 +226,12 @@ const removeCell = () => cellRun(() => api.removeAssignment(cell.value!.id))
       <p class="r-quiet">Učitavanje…</p>
     </UiCard>
 
+    <!-- The laptop grid first, the phone's week second, and that order matters:
+         only one of the two is ever on screen, and a locator looking for a name
+         should find the visible one. -->
     <template v-else-if="view">
       <RasporedGrid :week="view" :rows="rows" :today="today" @add="openPicker" @open="openCell" />
-      <RasporedDays :week="view" :rows="rows" :today="today" @add="openPicker" @open="openCell" />
+      <RasporedPhoneWeek :week="view" :rows="rows" :today="today" @add="openPicker" @open="openCell" />
     </template>
 
     <RasporedPicker
@@ -283,9 +288,62 @@ const removeCell = () => cellRun(() => api.removeAssignment(cell.value!.id))
 .r-error { margin: 0; color: var(--danger); font-weight: 500; }
 .r-ask { margin: 0; }
 
+/**
+ * The phone: one bar, not a card with a paragraph in it.
+ *
+ * The head used to cost the top third of a 390 px screen before a single day
+ * appeared — a card's border and 30 px of padding around a nav row, two
+ * full-width buttons stacked because their labels would not share a line, and a
+ * two-line explanation. Below the breakpoint the card sheds its chrome and the
+ * three parts become what they are: a week stepper in its own well, the two
+ * week-level actions on one line, and the explanation at caption size.
+ *
+ * Nothing is duplicated to do it and nothing is hidden: the same two buttons and
+ * the same sentence are on both layouts, so a locator finds exactly one of each.
+ */
 @media (max-width: 1023px) {
-  .r-acts { margin-left: 0; width: 100%; }
-  .r-acts :deep(.a-btn) { flex: 1; height: 48px; }
-  .r-nav { width: 100%; justify-content: space-between; }
+  /* `.a-card.r-bar` rather than `.r-bar` alone: one class more than `UiCard`'s
+     own rule, so the override does not depend on stylesheet order. */
+  .r-tab :deep(.a-card.r-bar) {
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+    padding: 0;
+  }
+
+  .r-tab :deep(.a-card.r-bar .a-card-body) { gap: 8px; }
+
+  .r-head { gap: 8px; }
+
+  /* The stepper is the one piece of furniture here, so it keeps a material of
+     its own: the ‹ and › sit at the ends and the week reads in the middle. */
+  .r-nav {
+    width: 100%;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    box-shadow: var(--shadow-card);
+  }
+
+  .r-when { flex-wrap: wrap; justify-content: center; }
+  .r-when strong { font-size: var(--text-section); }
+
+  /* *Kopiraj prošlu sedmicu* takes the width of its own label and *Objavi
+     raspored* takes the rest, which is what puts both on one 44 px line at
+     360 px and up. The tighter padding is what buys the last few pixels. */
+  .r-acts {
+    margin-left: 0;
+    width: 100%;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .r-acts :deep(.a-btn) { padding: 0 10px; min-width: 0; }
+
+  .r-quiet { font-size: var(--text-caption); line-height: 1.35; }
 }
 </style>

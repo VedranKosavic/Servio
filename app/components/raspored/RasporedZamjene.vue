@@ -142,22 +142,26 @@ const tone = (s: SwapStatus) =>
         Nema nijedne zamjene u ovom filteru.
       </p>
 
+      <!-- `data-l` is what lets the phone drop the header row and still say
+           which fact is which; see the style block. -->
       <UiTable v-else :columns="columns" :loading="loading">
         <tr v-for="row in rows" :key="row.id">
-          <td>
+          <td class="r-when">
             <strong>{{ dayLabelBs(row.work_date) }}</strong><br>
             <small class="r-quiet">
               {{ row.template_name }} {{ timeSpanBs(row.start_time, row.end_time) }}
             </small>
           </td>
-          <td>{{ row.from_user_name }}</td>
-          <td>{{ row.to_user_name ?? 'svima' }}</td>
-          <td>
-            {{ row.reason ?? '—' }}
-            <br v-if="row.note">
-            <small v-if="row.note" class="r-quiet">{{ row.note }}</small>
+          <td data-l="Traži">{{ row.from_user_name }}</td>
+          <td data-l="Kome">{{ row.to_user_name ?? 'svima' }}</td>
+          <td data-l="Razlog">
+            <span>
+              {{ row.reason ?? '—' }}
+              <br v-if="row.note">
+              <small v-if="row.note" class="r-quiet">{{ row.note }}</small>
+            </span>
           </td>
-          <td>
+          <td class="r-state">
             <UiPill :tone="tone(row.status)">{{ SWAP_STATUS_BS[row.status] }}</UiPill>
             <br v-if="row.decided_by_name">
             <small v-if="row.decided_by_name" class="r-quiet">
@@ -218,7 +222,72 @@ const tone = (s: SwapStatus) =>
 .r-act { white-space: nowrap; }
 .r-act :deep(.a-btn) + :deep(.a-btn) { margin-left: 6px; }
 
+/**
+ * The phone: a request is a card, not six columns.
+ *
+ * Six columns on a 358 px screen is a table that scrolls sideways under a
+ * thumb, and the column that goes over the edge is the one with the two
+ * buttons on it — so the owner could see a swap and not reach the decision.
+ * Below the breakpoint each `<tr>` becomes a two-column grid instead: the
+ * shift and its state on the first line, the three facts under it beside
+ * their own labels, and *Dodijeli* / *Odbij* across the foot.
+ *
+ * It is laid out, never duplicated. One `<tr>` in the DOM means one
+ * *Dodijeli* button on the page at any width, which is what keeps a locator
+ * (and a screen reader) honest.
+ */
 @media (max-width: 1023px) {
   .r-act :deep(.a-btn) { height: 44px; }
+
+  .r-tab :deep(.a-table thead) { display: none; }
+  .r-tab :deep(.a-table),
+  .r-tab :deep(.a-table tbody),
+  .r-tab :deep(.a-table td) { display: block; }
+
+  .r-tab :deep(.a-table tr) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    column-gap: 10px;
+    padding: 12px 0 14px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+
+  .r-tab :deep(.a-table tbody tr:last-child) { border-bottom: 0; }
+
+  .r-tab :deep(.a-table td) { border-bottom: 0; padding: 3px 0; }
+
+  /* `td.<class>` inside `:deep()`: one point more than the `td` rule above, so
+     the layout does not hang on which of the two the bundler emits first. */
+  .r-tab :deep(.a-table td.r-when) { grid-column: 1; grid-row: 1; }
+  .r-tab :deep(.a-table td.r-state) { grid-column: 2; grid-row: 1; text-align: right; }
+
+  .r-tab :deep(.a-table td[data-l]) {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .r-tab :deep(.a-table td[data-l])::before {
+    content: attr(data-l);
+    flex: 0 0 62px;
+    font-size: var(--text-caption);
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  .r-tab :deep(.a-table td.r-act) {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 8px;
+    white-space: normal;
+  }
+
+  .r-act :deep(.a-btn) { flex: 1; }
+  .r-act :deep(.a-btn) + :deep(.a-btn) { margin-left: 0; }
 }
 </style>

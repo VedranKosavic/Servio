@@ -12,6 +12,26 @@
  * at midnight does not move tonight's pazar — but it *does* move what the next
  * round costs, which is why the standing warning below says to do it before the
  * shift opens.
+ *
+ * **Two layouts, one page.** At a desk this is a table per category and it
+ * should be: seven columns of fourteen products, compared at a glance. In a
+ * hand the same table is a 390 px box the owner drags sideways past the name
+ * and the price to reach four switches he cannot see — so below 1024 px the
+ * table is gone and the catalogue is a list (`PostavkeMeniList`): the name and
+ * the price on the row, everything set once a season behind the chevron in
+ * `PostavkeMeniSheet`. Nothing on this screen scrolls sideways at any width.
+ *
+ * The switch is a media query rather than two trees with one of them hidden, so
+ * the page renders one price field per product and not two — one accessible
+ * name per control, and no second copy of every row to keep in step.
+ *
+ * **`useMounted` is not optional there.** `useMediaQuery` answers truthfully
+ * from the first client render, and the server — which has no viewport — always
+ * says the laptop. Without the gate the two renders disagree about the whole
+ * page and Vue throws the server's markup away with a hydration mismatch. So
+ * the first paint is the table at both widths, and the phone swaps to the list
+ * on mount, which happens before the first read lands: what the owner actually
+ * sees appear is the list.
  */
 import type { CategoryAdmin, ProductAdmin, StockItemAdmin } from '#shared/types'
 import type { CreateProductBody, UpdateProductBody } from '#shared/schemas'
@@ -25,6 +45,11 @@ const api = useAdminApi()
 /** The phone's *Omiljeno* tab holds twelve tiles; a thirteenth would not fit. */
 const FAVOURITE_CAP = 12
 
+/** The dashboard's own breakpoint — the width `admin.css` changes density at. */
+const mounted = useMounted()
+const narrow = useMediaQuery('(max-width: 1023px)')
+const isPhone = computed(() => mounted.value && narrow.value)
+
 const products = ref<ProductAdmin[]>([])
 const categories = ref<CategoryAdmin[]>([])
 const stockItems = ref<StockItemAdmin[]>([])
@@ -36,6 +61,13 @@ const busyId = ref<string | null>(null)
 
 const show = ref<'aktivni' | 'svi'>('aktivni')
 const search = ref('')
+
+/**
+ * The product whose sheet is open on a phone, **by id and not by object**: a
+ * write replaces the row in `products`, and a sheet holding the old object
+ * would go on drawing the switch the way it was before the server answered.
+ */
+const sheetId = ref<string | null>(null)
 
 const recipeFor = ref<ProductAdmin | null>(null)
 const recipePending = ref(false)
@@ -90,6 +122,10 @@ const groups = computed(() => categories.value
   }))
   .filter(group => group.rows.length > 0))
 
+/** The sheet's product, read fresh every render. Null closes the sheet. */
+const sheetProduct = computed(() =>
+  products.value.find(product => product.id === sheetId.value) ?? null)
+
 const columns = [
   { key: 'artikal', label: 'Artikal' },
   { key: 'cijena', label: 'Cijena', align: 'r' as const, width: '150px' },
@@ -115,6 +151,17 @@ async function patch(product: ProductAdmin, body: UpdateProductBody) {
   } finally {
     busyId.value = null
   }
+}
+
+/**
+ * The product sheet hands over to the recipe editor rather than stacking on top
+ * of it: two scrims on a phone is one scrim too many, and the editor is a
+ * different job with its own Save.
+ */
+function openRecipe(product: ProductAdmin) {
+  sheetId.value = null
+  recipeError.value = null
+  recipeFor.value = product
 }
 
 async function saveRecipe(lines: Array<{ stock_item_id: string, qty: number }>) {
@@ -154,60 +201,120 @@ async function createProduct(body: CreateProductBody) {
     sub="Cijene, omiljeno i normativi"
     :error="error"
   >
-    <template #actions>
+    <!-- On a phone the page's one copper button rides in the toolbar beside the
+         search, where it costs a row it shares instead of a row of its own. -->
+    <template v-if="!isPhone" #actions>
       <UiButton variant="primary" @click="newOpen = true">Novi artikal</UiButton>
     </template>
 
-    <p class="p-warn">
-      Mijenjaj cijene prije otvaranja smjene — već zaključene ture zadržavaju
-      cijenu po kojoj su naplaćene.
-    </p>
-
-    <div class="p-filters">
-      <UiSeg
-        :model-value="show"
-        label="Koji artikli"
-        :options="[{ value: 'aktivni', label: 'Aktivni' }, { value: 'svi', label: 'Svi' }]"
-        @update:model-value="value => show = value as 'aktivni' | 'svi'"
+    <!-- ---- the phone ------------------------------------------------- -->
+    <template v-if="isPhone">
+      <PostavkeMeniControls
+        :show="show"
+        :search="search"
+        :favourite-count="favouriteCount"
+        :favourite-cap="FAVOURITE_CAP"
+        @update:show="value => show = value"
+        @update:search="value => search = value"
+        @create="newOpen = true"
       />
-      <input
-        v-model="search"
-        class="p-search"
-        type="search"
-        placeholder="Traži artikal"
-        aria-label="Traži artikal"
-      >
-      <span class="p-fav-count">
-        Omiljeno {{ favouriteCount }} / {{ FAVOURITE_CAP }}
-      </span>
-    </div>
 
-    <UiCard v-if="loading" title="Meni">
-      <UiTable :columns="columns" loading />
-    </UiCard>
+      <!--
+        The standing caution, folded.
 
-    <UiCard
-      v-for="group in groups"
-      :key="group.category.id"
-      :title="group.category.name"
-      :count="`${group.rows.length}`"
-    >
-      <UiTable :columns="columns">
-        <PostavkeProductRow
-          v-for="product in group.rows"
-          :key="product.id"
-          :product="product"
-          :favourite-full="favouriteCount >= FAVOURITE_CAP"
-          :pending="busyId === product.id"
-          @patch="body => patch(product, body)"
-          @recipe="recipeFor = product; recipeError = null"
+        It is true all year and it is three lines, which on a phone is a banner
+        the owner scrolls past every time to reach the first product — and a
+        banner that is always there is a banner nobody reads. The instruction
+        itself stays on screen in one line; the reason is one tap behind it.
+        `<details>` and not a toggle in script, because the browser already
+        knows how to open and announce one.
+      -->
+      <details class="p-fold">
+        <summary>
+          <span class="p-fold-line">Cijenu mijenjaj prije otvaranja smjene</span>
+          <UiIcon class="p-fold-chev" name="chevron-right" :size="18" />
+        </summary>
+        <p class="p-fold-body">
+          Već zaključene ture zadržavaju cijenu po kojoj su naplaćene.
+        </p>
+      </details>
+
+      <PostavkeMeniList
+        :groups="groups"
+        :loading="loading"
+        :busy-id="busyId"
+        @patch="(product, body) => patch(product, body)"
+        @open="product => sheetId = product.id"
+      />
+    </template>
+
+    <!-- ---- the laptop ------------------------------------------------ -->
+    <template v-else>
+      <p class="p-warn">
+        Mijenjaj cijene prije otvaranja smjene — već zaključene ture zadržavaju
+        cijenu po kojoj su naplaćene.
+      </p>
+
+      <div class="p-filters">
+        <UiSeg
+          :model-value="show"
+          label="Koji artikli"
+          :options="[{ value: 'aktivni', label: 'Aktivni' }, { value: 'svi', label: 'Svi' }]"
+          @update:model-value="value => show = value as 'aktivni' | 'svi'"
         />
-      </UiTable>
-    </UiCard>
+        <input
+          v-model="search"
+          class="p-search"
+          type="search"
+          placeholder="Traži artikal"
+          aria-label="Traži artikal"
+        >
+        <span class="p-fav-count">
+          Omiljeno {{ favouriteCount }} / {{ FAVOURITE_CAP }}
+        </span>
+      </div>
 
-    <UiCard v-if="!loading && groups.length === 0">
-      <p class="p-empty">Nema artikala po ovoj pretrazi.</p>
-    </UiCard>
+      <UiCard v-if="loading" title="Meni">
+        <UiTable :columns="columns" loading />
+      </UiCard>
+
+      <UiCard
+        v-for="group in groups"
+        :key="group.category.id"
+        :title="group.category.name"
+        :count="`${group.rows.length}`"
+      >
+        <UiTable :columns="columns">
+          <PostavkeProductRow
+            v-for="product in group.rows"
+            :key="product.id"
+            :product="product"
+            :favourite-full="favouriteCount >= FAVOURITE_CAP"
+            :pending="busyId === product.id"
+            @patch="body => patch(product, body)"
+            @recipe="recipeFor = product; recipeError = null"
+          />
+        </UiTable>
+      </UiCard>
+
+      <UiCard v-if="!loading && groups.length === 0">
+        <p class="p-empty">Nema artikala po ovoj pretrazi.</p>
+      </UiCard>
+    </template>
+
+    <!-- Mounted before the recipe editor on purpose: both sheets lock the page
+         behind them, and when this one closes to hand over, the editor's lock
+         has to be the one that wins. -->
+    <PostavkeMeniSheet
+      :open="sheetProduct !== null"
+      :product="sheetProduct"
+      :favourite-full="favouriteCount >= FAVOURITE_CAP"
+      :favourite-cap="FAVOURITE_CAP"
+      :pending="busyId !== null && busyId === sheetId"
+      @close="sheetId = null"
+      @patch="body => sheetProduct && patch(sheetProduct, body)"
+      @recipe="sheetProduct && openRecipe(sheetProduct)"
+    />
 
     <PostavkeRecipeEditor
       :open="recipeFor !== null"
@@ -268,8 +375,43 @@ async function createProduct(body: CreateProductBody) {
 
 .p-empty { margin: 0; color: var(--muted); }
 
-@media (max-width: 1023px) {
-  .p-search { height: 44px; font-size: var(--text-section); max-width: none; }
-  .p-fav-count { margin-left: 0; font-size: var(--text-label); }
+/* ---- the folded caution (phone only) ----------------------------------- */
+
+.p-fold {
+  background: var(--warn-soft);
+  color: var(--warn);
+  border-radius: var(--radius-field);
+}
+
+.p-fold summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--tap);
+  padding: 0 12px;
+  cursor: pointer;
+  list-style: none;
+  font-size: var(--text-label);
+  font-weight: 600;
+}
+
+/* Safari draws its own triangle; the chevron is the disclosure here. */
+.p-fold summary::-webkit-details-marker { display: none; }
+.p-fold summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.p-fold-line { flex-grow: 1; min-width: 0; }
+
+.p-fold-chev {
+  flex-shrink: 0;
+  transition: transform var(--dur-fast) var(--ease-standard);
+}
+
+.p-fold[open] .p-fold-chev { transform: rotate(90deg); }
+
+.p-fold-body {
+  margin: 0;
+  padding: 0 12px 12px;
+  font-size: var(--text-micro);
+  font-weight: 500;
 }
 </style>

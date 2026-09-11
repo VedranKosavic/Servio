@@ -278,6 +278,15 @@ describe('the house rules hold on the roster screens', () => {
   /**
    * *Raspored* is reachable, and reachable is a boolean in two registries — the
    * whole reason WP0 wrote both files on day one.
+   *
+   * **The invariant that moved.** This used to assert a `razgovor` row in
+   * `ADMIN_NAV` as well. The invariant was never "chat has a nav row" — it was
+   * "*Razgovor* is reachable from every `/admin` screen", and the owner's call
+   * was that a nav row is the wrong shape for it: he answers a line while he is
+   * looking at a number, so chat is now `ChatDock`, the button in the corner of
+   * every `/admin` screen, mounted once on the layout. The row is gone on
+   * purpose and the reachability is asserted where it now lives. The waiter's
+   * `chat` row is untouched — `/konobar` still navigates to its threads.
    */
   it('flips the two nav rows this package owns and nothing else', () => {
     const waiterMenu = readFileSync('app/utils/waiterMenu.ts', 'utf8')
@@ -288,6 +297,14 @@ describe('the house rules hold on the roster screens', () => {
 
     const adminNav = readFileSync('app/utils/adminNav.ts', 'utf8')
     expect(adminNav).toMatch(/id: 'raspored'[^\n]*ready: true/)
-    expect(adminNav).toMatch(/id: 'razgovor'[^\n]*ready: true/)
+    expect(adminNav).not.toMatch(/id: 'razgovor'/)
+  })
+
+  /** …and this is where it landed: one mount on the shell, every screen. */
+  it('Razgovor is reachable from every /admin screen, as the dock', () => {
+    expect(readFileSync('app/layouts/admin.vue', 'utf8')).toContain('<ChatDock />')
+    const dock = readFileSync('app/components/chat/ChatDock.vue', 'utf8')
+    // …and never over the full-size page, which is the same conversation.
+    expect(dock).toContain('/admin/razgovor')
   })
 })

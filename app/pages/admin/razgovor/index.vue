@@ -17,6 +17,13 @@
  * naručiti* note. What he cannot do: send a photo out of his gallery — *Slikaj*
  * only, because a screenshot of `/admin` lives in a gallery and a camera photo of a
  * screen is a deliberate act.
+ *
+ * **This page is no longer the only way in.** `ChatDock` — the copper button in
+ * the corner of every other `/admin` screen — is the one the owner answers a
+ * line from while he is looking at a number, and it is deliberately absent
+ * here. This stays as the full-size read at a laptop: the channel list with its
+ * previews beside a wide thread, which a 380 px panel cannot show. The three
+ * sheets and the image viewer are shared components, so the two never drift.
  */
 import { useDebounceFn } from '@vueuse/core'
 import { CHANNEL_NAMES, looksLikeMoney, type ChannelKind } from '#shared/chat'
@@ -153,14 +160,6 @@ function pinLine(message: ChatMessage) {
   if (line) void run(() => actions.pin(active.value, { append: line }))
 }
 
-function forwardToAdmini(message: ChatMessage) {
-  void run(() => actions.forward(message.id, 'admini'))
-}
-
-function remove(message: ChatMessage) {
-  void run(() => actions.remove(message.id))
-}
-
 /**
  * *Utišaj*, as three plain choices rather than a time picker.
  *
@@ -182,6 +181,72 @@ function mute(userId: string, hours: number | null) {
 
 const pinnedLines = computed(() =>
   (channel.value?.pinned_text ?? '').split('\n').filter(line => line.length > 0))
+
+// -- the sheets ------------------------------------------------------------
+//
+// The rows are data rather than markup because `ChatAdminSheet` draws them —
+// the same component `ChatDock` opens, so a long press answers with one object
+// here and in the corner of every other `/admin` screen. A row the server
+// would refuse is not drawn.
+
+const messageRows = computed(() => {
+  const message = sheetFor.value
+  if (!message) return []
+  return [
+    ...(active.value === 'svi'
+      ? [{ id: 'forward', label: 'Proslijedi u Admini', disabled: busy.value }]
+      : []),
+    ...(message.body
+      ? [{ id: 'pin', label: 'Dodaj u "Za naručiti"', disabled: busy.value }]
+      : []),
+    ...(message.author_id
+      ? [{ id: 'mute', label: `Utišaj ${message.author_name ?? ''}`.trim(), disabled: busy.value }]
+      : []),
+    ...(message.deleted_at
+      ? []
+      : [{ id: 'remove', label: 'Obriši', disabled: busy.value, danger: true }]),
+    { id: 'close', label: 'Zatvori', muted: true },
+  ]
+})
+
+function onMessagePick(id: string) {
+  const message = sheetFor.value
+  if (!message) return
+  if (id === 'forward') void run(() => actions.forward(message.id, 'admini'))
+  else if (id === 'pin') pinLine(message)
+  else if (id === 'mute') { muteFor.value = message; sheetFor.value = null }
+  else if (id === 'remove') void run(() => actions.remove(message.id))
+  else sheetFor.value = null
+}
+
+const muteRows = computed(() => [
+  ...MUTES.map(option => ({ id: option.label, label: option.label, disabled: busy.value })),
+  { id: 'close', label: 'Zatvori', muted: true },
+])
+
+function onMutePick(id: string) {
+  const message = muteFor.value
+  if (!message?.author_id || id === 'close') {
+    muteFor.value = null
+    return
+  }
+  const option = MUTES.find(row => row.label === id)
+  if (option) mute(message.author_id, option.hours)
+}
+
+const moneyRows = computed(() => [
+  { id: 'admini', label: 'Pošalji u Admini' },
+  { id: 'send', label: 'Ipak pošalji', disabled: sending.value },
+  { id: 'close', label: 'Odustani', muted: true },
+])
+
+function onMoneyPick(id: string) {
+  // *Pošalji u Admini* moves the line he already typed into the other room
+  // rather than sending it — the send is still his, one tap later.
+  if (id === 'admini') { active.value = 'admini'; moneyOpen.value = false }
+  else if (id === 'send') void queue(draft.value.trim(), true)
+  else moneyOpen.value = false
+}
 </script>
 
 <template>
@@ -278,65 +343,36 @@ const pinnedLines = computed(() =>
       </section>
     </div>
 
-    <!-- What the owner can do to one message. -->
-    <div v-if="sheetFor" class="a-modal" @click.self="sheetFor = null">
-      <div class="a-sheet" role="dialog" aria-label="Poruka">
-        <button v-if="active === 'svi'" type="button" class="a-sheet-row" :disabled="busy" @click="forwardToAdmini(sheetFor)">
-          Proslijedi u Admini
-        </button>
-        <button v-if="sheetFor.body" type="button" class="a-sheet-row" :disabled="busy" @click="pinLine(sheetFor)">
-          Dodaj u "Za naručiti"
-        </button>
-        <button
-          v-if="sheetFor.author_id"
-          type="button"
-          class="a-sheet-row"
-          :disabled="busy"
-          @click="muteFor = sheetFor; sheetFor = null"
-        >
-          Utišaj {{ sheetFor.author_name }}
-        </button>
-        <button v-if="!sheetFor.deleted_at" type="button" class="a-sheet-row danger" :disabled="busy" @click="remove(sheetFor)">
-          Obriši
-        </button>
-        <button type="button" class="a-sheet-row muted" @click="sheetFor = null">Zatvori</button>
-      </div>
-    </div>
+    <!-- What the owner can do to one message. The three sheets and the viewer
+         are the same components `ChatDock` uses, so the page and the dock
+         answer a long press with one object rather than two that drift. -->
+    <ChatAdminSheet
+      v-if="sheetFor"
+      label="Poruka"
+      :options="messageRows"
+      @pick="onMessagePick"
+      @close="sheetFor = null"
+    />
 
-    <div v-if="muteFor" class="a-modal" @click.self="muteFor = null">
-      <div class="a-sheet" role="dialog" aria-label="Utišaj">
-        <p class="a-sheet-title">Utišaj {{ muteFor.author_name }}</p>
-        <button
-          v-for="option in MUTES"
-          :key="option.label"
-          type="button"
-          class="a-sheet-row"
-          :disabled="busy"
-          @click="mute(muteFor!.author_id!, option.hours)"
-        >
-          {{ option.label }}
-        </button>
-        <button type="button" class="a-sheet-row muted" @click="muteFor = null">Zatvori</button>
-      </div>
-    </div>
+    <ChatAdminSheet
+      v-if="muteFor"
+      label="Utišaj"
+      :title="`Utišaj ${muteFor.author_name ?? ''}`.trim()"
+      :options="muteRows"
+      @pick="onMutePick"
+      @close="muteFor = null"
+    />
 
-    <div v-if="viewing" class="a-viewer" @click.self="viewing = null">
-      <img :src="viewing" alt="Slika">
-      <button type="button" class="a-btn" @click="viewing = null">Zatvori</button>
-    </div>
+    <ChatAdminSheet
+      v-if="moneyOpen"
+      label="Iznosi u kanalu"
+      title="Iznosi kolega ne idu u Svi — pošalji u Admini?"
+      :options="moneyRows"
+      @pick="onMoneyPick"
+      @close="moneyOpen = false"
+    />
 
-    <div v-if="moneyOpen" class="a-modal" @click.self="moneyOpen = false">
-      <div class="a-sheet" role="dialog" aria-label="Iznosi u kanalu">
-        <p class="a-sheet-title">Iznosi kolega ne idu u Svi — pošalji u Admini?</p>
-        <button type="button" class="a-sheet-row" @click="active = 'admini'; moneyOpen = false">
-          Pošalji u Admini
-        </button>
-        <button type="button" class="a-sheet-row" :disabled="sending" @click="queue(draft.trim(), true)">
-          Ipak pošalji
-        </button>
-        <button type="button" class="a-sheet-row muted" @click="moneyOpen = false">Odustani</button>
-      </div>
-    </div>
+    <ChatAdminViewer v-if="viewing" :src="viewing" @close="viewing = null" />
   </div>
 </template>
 
@@ -491,64 +527,4 @@ const pinnedLines = computed(() =>
 
 .a-btn-accent { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .a-btn:disabled { opacity: 0.45; cursor: default; }
-
-.a-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  background: var(--scrim);
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-
-.a-sheet {
-  width: min(420px, 100%);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px;
-  padding-bottom: 24px;
-  border-radius: 16px 16px 0 0;
-  background: var(--surface);
-}
-
-.a-sheet-title { margin: 4px 8px 8px; font-weight: 700; }
-
-.a-sheet-row {
-  min-height: 52px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--ink);
-  font: inherit;
-  font-size: var(--text-section);
-  text-align: left;
-  cursor: pointer;
-}
-
-.a-sheet-row:hover { background: var(--surface-2); }
-.a-sheet-row.danger { color: var(--danger); }
-.a-sheet-row.muted { color: var(--muted); }
-
-.a-viewer {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  background: rgba(0, 0, 0, 0.9);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 16px;
-}
-
-.a-viewer img { max-width: 100%; max-height: 80vh; object-fit: contain; touch-action: pinch-zoom; }
-
-@media (min-width: 1024px) {
-  .a-sheet { border-radius: 16px; margin-bottom: 10vh; }
-  .a-modal { align-items: center; }
-}
 </style>

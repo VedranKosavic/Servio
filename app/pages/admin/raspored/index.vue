@@ -1,15 +1,22 @@
 <script setup lang="ts">
 /**
- * `/admin/raspored` — the owner's roster, in three tabs.
+ * `/admin/raspored` — the owner's roster: the week, and nothing else.
  *
- * *Sedmica* is the week itself, *Zamjene* every swap request, *Sati* the month
- * planned against worked. They are three reads of three different shapes, so
- * each tab owns its own load and its own subscription to the one `/admin` poll;
- * this file is the frame and the tab in the URL.
+ * **It used to be four tabs and is now one screen.** *Sati* (the month planned
+ * against worked) is gone; *Šabloni* lives at `/admin/postavke/sabloni` and the
+ * week's own empty state is what points at it, which is the only moment anybody
+ * needs it; *Zamjene* is at `/admin/raspored/zamjene` and is linked from the
+ * strip below — but **only while somebody is actually waiting on an answer**.
  *
- * The tab lives in `?tab=` rather than in a `ref` for the same reason the period
- * does on *Smjene*: a laptop tab left open on *Sati* and reloaded comes back on
- * *Sati*, and a link the owner sends himself opens where he meant it to.
+ * That last one is the only part of this worth explaining. A waiter can raise a
+ * swap from `/konobar/raspored`, and the owner is the only person who can assign
+ * or decline it (`POST /api/roster/swaps/:id/assign` is admin-only). The week
+ * *shows* a pending swap — the chip goes amber and says *zamjena* — but it
+ * cannot resolve one. So deleting the tab outright would have left a request a
+ * waiter raised with no screen in the app able to answer it, and an amber chip
+ * that never goes away. A line that appears when there is something to answer
+ * and is invisible the rest of the time keeps the screen to one view and keeps
+ * the flow whole.
  *
  * **`today` is a business date, not the laptop's.** The café's day starts at
  * 06:00 Europe/Sarajevo, so at 01:30 the owner is still working Friday and the
@@ -22,40 +29,52 @@ definePageMeta({ middleware: 'admin', layout: 'admin' })
 
 useHead({ title: 'Raspored' })
 
-const route = useRoute()
-const router = useRouter()
 const me = useMe()
-
-const TABS = [
-  { value: 'sedmica', label: 'Sedmica' },
-  { value: 'zamjene', label: 'Zamjene' },
-  { value: 'sati', label: 'Sati' },
-]
-
-const tab = computed({
-  get: () => (TABS.some(t => t.value === route.query.tab) ? String(route.query.tab) : 'sedmica'),
-  set: value => void router.replace({ query: { ...route.query, tab: value } }),
-})
+const api = useAdminApi()
 
 const today = computed(() => businessDate(
   new Date().toISOString(),
   me.settings.value?.timezone,
   me.settings.value?.business_day_start_hour,
 ))
+
+/**
+ * How many swap requests are waiting on the owner.
+ *
+ * One small read, and a silent failure on purpose: this is a signpost, not the
+ * screen's content. If it cannot load, the week still draws — the owner has lost
+ * a shortcut, not his roster.
+ */
+const pendingSwaps = ref(0)
+
+async function loadSwaps() {
+  try {
+    pendingSwaps.value = (await api.listSwaps('pending')).length
+  } catch {
+    pendingSwaps.value = 0
+  }
+}
+
+onMounted(loadSwaps)
+useAdminChanges({ onEntity: (entity) => { if (entity === 'roster') void loadSwaps() } })
 </script>
 
 <template>
   <div class="a-page">
-    <UiPageHead eyebrow="Ljudi" title="Raspored" sub="Sedmica, zamjene i sati" />
-
-    <UiSeg v-model="tab" :options="TABS" label="Dio rasporeda" />
+    <UiPageHead eyebrow="Ljudi" title="Raspored" sub="Sedmica po smjenama" />
 
     <!-- `ClientOnly`: the business date is resolved from the venue's settings,
          which only exist once the client-only session envelope has loaded. -->
     <ClientOnly>
-      <RasporedWeekTab v-if="tab === 'sedmica'" :today="today" />
-      <RasporedZamjene v-else-if="tab === 'zamjene'" />
-      <RasporedSati v-else :today="today" />
+      <NuxtLink v-if="pendingSwaps > 0" to="/admin/raspored/zamjene" class="r-swaps">
+        <span class="r-swaps-n">{{ pendingSwaps }}</span>
+        <span class="r-swaps-text">
+          {{ pendingSwaps === 1 ? 'zahtjev za zamjenu čeka odgovor' : 'zahtjeva za zamjenu čeka odgovor' }}
+        </span>
+        <UiIcon name="chevron-right" :size="18" />
+      </NuxtLink>
+
+      <RasporedWeekTab :today="today" />
     </ClientOnly>
   </div>
 </template>
@@ -63,11 +82,53 @@ const today = computed(() => businessDate(
 <style scoped>
 .a-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
-
-
 /* A wide table scrolls inside its own box; the page body never does. */
 .a-page :deep(.a-table-wrap) { contain: paint; }
 
+/**
+ * The one row that is allowed back onto this screen, and only when it has
+ * something to say. Amber rather than copper: it is the same state the week's
+ * own chips use for a pending swap, so the strip and the chip it will take you
+ * to are visibly the same fact.
+ */
+.r-swaps {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--tap);
+  padding: 0 14px;
+  border-radius: var(--radius-field);
+  background: var(--warn-soft);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.r-swaps-n {
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 12px;
+  background: var(--warn);
+  color: var(--on-accent);
+  font-size: var(--text-caption);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.r-swaps-text { flex-grow: 1; min-width: 0; font-size: var(--text-label); font-weight: 500; }
+
+/**
+ * The phone, where this screen is actually used.
+ *
+ * The sub line named the four tabs that were drawn two centimetres below it.
+ * The tabs are gone and so is the repetition, so all that is left here is the
+ * tighter gap a one-view screen wants.
+ */
 @media (max-width: 1023px) {
+  .a-page { gap: 14px; }
+  .a-page :deep(.a-head-sub) { display: none; }
 }
 </style>

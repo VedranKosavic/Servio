@@ -96,7 +96,8 @@ const days = computed(() => props.week.days.map(d => d.work_date))
 
         <tr v-if="!rows.length">
           <td :colspan="8" class="r-empty">
-            Nema nijednog šablona smjene. Napravi ga u Meni i postavke → Šabloni.
+            Nema nijednog šablona smjene.
+            <NuxtLink to="/admin/postavke/sabloni" class="r-empty-link">Napravi šablon</NuxtLink>
           </td>
         </tr>
       </tbody>
@@ -180,8 +181,18 @@ const days = computed(() => props.week.days.map(d => d.work_date))
 
 .r-empty { color: var(--muted); }
 
-/* The phone gets `RasporedDays` instead — one card per day, no sideways scroll. */
+/* The phone gets `RasporedPhoneWeek` instead — a day strip and one day open
+   under it, so a week fits a 390 px screen without a sideways scroll. */
 @media (max-width: 1023px) {
   .r-wrap { display: none; }
+}
+
+.r-empty-link {
+  display: inline-block;
+  margin-left: 4px;
+  color: var(--accent-ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 </style>
