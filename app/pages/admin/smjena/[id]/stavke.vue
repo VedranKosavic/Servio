@@ -132,11 +132,10 @@ const subtitle = computed(() => {
 
 <template>
   <div class="a-page">
-    <UiPageHead title="Stavke" :sub="subtitle">
-      <template #eyebrow>
-        <NuxtLink :to="`/admin/smjena/${shiftId}`" class="a-back">Nazad na smjenu</NuxtLink>
-      </template>
-    </UiPageHead>
+    <!-- No back link of this page's own: `UiPageHead` draws the way back on
+         every screen that is not a tab destination, and from here it climbs to
+         the shift these lines belong to. -->
+    <UiPageHead title="Stavke" :sub="subtitle" />
 
     <UiCard title="Filter">
       <div class="a-filters">
@@ -161,19 +160,6 @@ const subtitle = computed(() => {
 <style scoped>
 .a-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
-.a-back {
-  color: var(--accent-ink);
-  font-size: var(--text-micro);
-  font-weight: 600;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-}
-
-.a-back:hover { text-decoration: underline; }
-
-
 .a-error { margin: 0; color: var(--danger); }
 
 .a-filters {
@@ -184,6 +170,5 @@ const subtitle = computed(() => {
 
 @media (max-width: 1023px) {
   .a-filters { grid-template-columns: minmax(0, 1fr); }
-  .a-back { min-height: 44px; }
 }
 </style>

@@ -16,6 +16,18 @@
  * of the page you are holding and the server returns what comes after it. An
  * offset would re-read and re-skip rows every time a new round lands mid-scroll,
  * so a reader would see a row twice or not at all.
+ *
+ * **Two layouts, one page of rows.** Seven columns is right at a desk and
+ * impossible in a hand: below 1024 px this table used to keep its natural
+ * 620 px width and scroll sideways inside the card, which put the *Iznos*
+ * column over the edge on the one screen whose job is showing amounts. So the
+ * phone gets a list (`SmjenaLineRow`) instead, and nothing on the screen is
+ * wider than the screen.
+ *
+ * **`useMounted` is not optional.** `useMediaQuery` answers truthfully from the
+ * first client render, and the server — which has no viewport — always says the
+ * laptop; without the gate the two renders disagree and Vue throws the server's
+ * markup away with a hydration mismatch.
  */
 import { LINE_STATUS_WORDS, pluralBs } from './smjenaLogic'
 import type { LineRow, LineTotals } from '#shared/types'
@@ -30,6 +42,11 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{ more: [] }>()
+
+/** The dashboard's own breakpoint — the width `admin.css` changes density at. */
+const mounted = useMounted()
+const narrow = useMediaQuery('(max-width: 1023px)')
+const isPhone = computed(() => mounted.value && narrow.value)
 
 const columns = [
   { key: 'vrijeme', label: 'Vrijeme', width: '76px' },
@@ -62,7 +79,21 @@ const columns = [
       Za ovaj izbor nema nijedne stavke.
     </p>
 
-    <UiTable v-else class="s-wide-table" :columns="columns" :loading="loading">
+    <!-- ---- the phone ------------------------------------------------- -->
+    <div v-else-if="isPhone" class="s-rows">
+      <div v-if="loading" class="s-skel" aria-hidden="true">
+        <div v-for="n in 4" :key="n" class="s-skel-row">
+          <span class="s-skel-bar wide" />
+          <span class="s-skel-bar" />
+        </div>
+      </div>
+      <template v-else>
+        <SmjenaLineRow v-for="row in rows" :key="row.line_id" :row="row" />
+      </template>
+    </div>
+
+    <!-- ---- the laptop ------------------------------------------------ -->
+    <UiTable v-else :columns="columns" :loading="loading">
       <tr v-for="row in rows" :key="row.line_id">
         <td>{{ timeBs(row.at) }}</td>
         <td>{{ row.table_name }}</td>
@@ -108,14 +139,33 @@ td small.s-quiet { display: block; font-size: var(--text-caption); }
 
 td :deep(.a-pill + .a-pill) { margin-left: 6px; }
 
+/* ---- the phone list ----------------------------------------------------- */
+
+.s-rows { display: flex; flex-direction: column; min-width: 0; }
+
+/* Bars, not a spinner over stale rows — the same shape `UiTable` draws. */
+.s-skel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.s-skel-row:last-child { border-bottom: 0; }
+
+.s-skel-bar {
+  display: block;
+  height: 10px;
+  width: 72px;
+  border-radius: var(--radius-chip);
+  background: var(--surface-2);
+}
+
+.s-skel-bar.wide { width: 45%; }
+
 @media (max-width: 1023px) {
   .s-more :deep(.a-btn) { width: 100%; }
-
-  /* A seven-column table cannot shrink into 390 px and stay readable, so below
-     the breakpoint it keeps its natural width and `UiTable`'s own wrapper
-     scrolls sideways. The page body still does not. */
-  .s-wide-table :deep(.a-table) { min-width: 620px; }
-  .s-wide-table :deep(td) { white-space: nowrap; }
-  .s-wide-table :deep(td small) { white-space: normal; max-width: 220px; }
 }
 </style>

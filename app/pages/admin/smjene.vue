@@ -2,14 +2,32 @@
 /**
  * *Smjene* — one row per night in the period, newest first.
  *
- * The whole page is one read (`GET /api/owner/shifts?from&to`) under one
- * `UiPeriod`. The period lives in the route query rather than in a `ref`, so a
- * tab the owner leaves open and reloads comes back on the same range, and a link
- * he sends himself opens on it.
+ * The whole page is one read (`GET /api/owner/shifts?from&to`) under one period
+ * control. The period lives in the route query rather than in a `ref`, so a tab
+ * the owner leaves open and reloads comes back on the same range, and a link he
+ * sends himself opens on it.
  *
  * It refetches on `shift` moving in the change feed and on nothing else: there
  * is one poll on `/admin` and this page subscribes to it rather than opening a
  * timer of its own.
+ *
+ * **Two layouts, one page.** At a desk this is a table and it should be: six
+ * columns of eight nights, compared down a column. In a hand it was a 390 px box
+ * cut off at the right edge with a scrollbar under it — and the two columns over
+ * the edge were the pazar and the razlika, the only two the owner came for. So
+ * below 1024 px the table is gone and the nights are a list (`SmjenaNights`),
+ * and the six period chips — which wrapped onto two rows and spent a third of
+ * the screen — become one row of arrow · period · arrow (`SmjenaPeriod`), with
+ * all six and *Prilagođeno* one tap behind the middle. Nothing on this screen
+ * scrolls sideways at any width.
+ *
+ * **`useMounted` is not optional there.** `useMediaQuery` answers truthfully
+ * from the first client render, and the server — which has no viewport — always
+ * says the laptop. Without the gate the two renders disagree about the whole
+ * page and Vue throws the server's markup away with a hydration mismatch. So the
+ * first paint is the table at both widths, and the phone swaps to the list on
+ * mount, which happens before the first read lands: what the owner actually sees
+ * appear is the list.
  */
 import { shiftStatusPill } from '~/components/smjena/smjenaLogic'
 import type { OwnerShiftRow } from '#shared/types'
@@ -21,12 +39,17 @@ useHead({ title: 'Smjene' })
 const api = useAdminApi()
 const route = useRoute()
 
+/** The dashboard's own breakpoint — the width `admin.css` changes density at. */
+const mounted = useMounted()
+const narrow = useMediaQuery('(max-width: 1023px)')
+const isPhone = computed(() => mounted.value && narrow.value)
+
 /**
- * `UiPeriod` builds its own `useAdminPeriod()` with the kit's default, so this
- * page must use the same default or the chips and the range would disagree.
- * A week is the more useful opening range here, so instead of a different
- * fallback the page *writes* one into the query the first time it is opened —
- * both instances then read the same URL.
+ * Both period controls build their own `useAdminPeriod()` with the kit's
+ * default, so this page must use the same default or the control and the range
+ * would disagree. A week is the more useful opening range here, so instead of a
+ * different fallback the page *writes* one into the query the first time it is
+ * opened — every instance then reads the same URL.
  */
 const period = useAdminPeriod()
 
@@ -73,13 +96,19 @@ const total = computed(() => rows.value.reduce((sum, row) => sum + row.promet_fe
   <div class="a-page">
     <UiPageHead eyebrow="Lokal" title="Smjene" sub="Svaka noć, i šta je od nje ostalo u kasi" />
 
-    <UiCard quiet>
+    <!-- ---- the phone ------------------------------------------------- -->
+    <SmjenaPeriod v-if="isPhone" />
+
+    <!-- ---- the laptop ------------------------------------------------ -->
+    <UiCard v-else quiet>
       <UiPeriod />
     </UiCard>
 
     <p v-if="error" class="a-error">{{ error }}</p>
 
-    <UiCard title="Smjene" :count="`${rows.length}`" flush>
+    <SmjenaNights v-if="isPhone" :rows="rows" :loading="loading" :total="total" />
+
+    <UiCard v-else title="Smjene" :count="`${rows.length}`" flush>
       <template #actions>
         <span class="a-total">
           <span class="a-total-label">Ukupno</span>
@@ -148,7 +177,8 @@ const total = computed(() => rows.value.reduce((sum, row) => sum + row.promet_fe
 
 /* The links fill their cells. A date rendered inline is a 17 px target and the
    chevron a 20 px one — both well under the 44 px floor DESIGN §3 puts on
-   anything inline in a dense row, on a laptop as much as on a phone. */
+   anything inline in a dense row. The table itself is a laptop's, so there is
+   no phone rule under this one: below 1024 px `SmjenaNights` has the nights. */
 .a-row :deep(a) {
   display: flex;
   align-items: center;
@@ -160,9 +190,4 @@ const total = computed(() => rows.value.reduce((sum, row) => sum + row.promet_fe
 
 .a-row :deep(td.r a) { justify-content: flex-end; }
 .a-row :deep(a:hover) { text-decoration: underline; }
-
-@media (max-width: 1023px) {
-  /* The whole row is the target on a phone, so it clears 44 px on its own. */
-  .a-row :deep(td) { padding-top: 14px; padding-bottom: 14px; }
-}
 </style>

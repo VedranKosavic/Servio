@@ -15,7 +15,10 @@
  * that differs from the card payments needs a sentence — the server answers
  * `422 NOTE_REQUIRED` and the note field is here for exactly that.
  *
- * `Izvoz` is a link, not a fetch: the export page owns the file.
+ * **The way back is `UiPageHead`'s own.** It draws *Nazad na Smjene* above the
+ * title on every screen that is not a tab destination, so this header builds no
+ * back control of its own — two controls doing one job is what the redesign
+ * took out of *Roba* as well.
  */
 import { shiftStatusPill } from './smjenaLogic'
 import type { Shift } from '#shared/types'
@@ -84,24 +87,16 @@ const noteModel = computed({
   get: () => props.note,
   set: (value: string | number | null) => emit('update:note', String(value ?? '')),
 })
-
-/** *Izvoz*, pre-filtered to this night. */
-const exportLink = computed(() => ({
-  path: '/admin/izvoz',
-  query: {
-    smjena: props.shift.id,
-    from: props.shift.business_date,
-    to: props.shift.business_date,
-  },
-}))
 </script>
 
 <template>
   <header class="s-head">
     <UiPageHead eyebrow="Lokal" title="Smjena" :sub="line">
+      <!-- The status is the whole of this head's right-hand side. *Izvoz* used
+           to sit beside it and pointed at `/admin/izvoz`, a page the dashboard
+           no longer has. -->
       <template #actions>
         <UiPill :tone="pill.tone">{{ statusLabel }}</UiPill>
-        <NuxtLink :to="exportLink" class="s-head-export">Izvoz</NuxtLink>
       </template>
     </UiPageHead>
 
@@ -133,24 +128,6 @@ const exportLink = computed(() => ({
 <style scoped>
 .s-head { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
-/* Shaped like `UiButton`'s ghost, because it is one — a link that has to look
-   like the control beside it. */
-.s-head-export {
-  height: 38px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 16px;
-  border-radius: var(--radius-field);
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink);
-  font-weight: 600;
-  font-size: var(--text-label);
-  text-decoration: none;
-}
-
-.s-head-export:hover { background: var(--surface-3); border-color: var(--muted); }
-
 /* The review row is one action, so it sits in a well of its own rather than as
    three controls loose under a heading. */
 .s-review {
@@ -175,7 +152,6 @@ const exportLink = computed(() => ({
 }
 
 @media (max-width: 1023px) {
-  .s-head-export { height: 44px; flex: 1; justify-content: center; }
   .s-review :deep(.a-field) { width: 100%; }
   .s-review :deep(.a-btn) { width: 100%; }
 }

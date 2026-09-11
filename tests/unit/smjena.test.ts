@@ -36,6 +36,8 @@ import {
   toleranceFen,
   waiterVerdict,
 } from '../../app/components/smjena/smjenaLogic'
+import { canStepForward, stepPeriod } from '../../app/components/smjena/periodStep'
+import { resolvePeriod } from '../../app/composables/useAdminPeriod'
 import { DEFAULT_SETTINGS } from '../../shared/settings'
 import type {
   CashMovement, Settings, Settlement, Shift, ShiftCountBrief, ShiftSummary, UserSummary,
@@ -427,5 +429,78 @@ describe('the Manjak robe note', () => {
       .toBe('1 popis s odstupanjem')
     expect(stockVarianceNote([count({ variance_fen: -620 }), count({ id: 'c2', variance_fen: 5 })]))
       .toBe('2 popisa s odstupanjem')
+  })
+})
+
+// ===========================================================================
+
+/**
+ * The phone's period control on *Smjene* is two arrows and a name, and the
+ * arrows are the whole reason it can be that small. What has to hold:
+ *
+ * 1. **A step that lands on a preset is written as that preset.** The period
+ *    lives in the route query — `?period=jucer` for the five named ranges,
+ *    `?from&to` for anything else — so a step that lands on yesterday must
+ *    report *jučer* and not a pair of identical dates. Otherwise the control
+ *    would read "Prilagođeno" over a range that has a name, and there would be
+ *    no way back to a clean URL.
+ * 2. **A period steps by what it is, not by how many days it is.** *Ova
+ *    sedmica* on a Friday is five days long; moving it back five days lands on
+ *    half of one week and half of another.
+ * 3. **There is no tomorrow.** A list of nights that have happened does not
+ *    step forward past tonight.
+ */
+describe('stepping the period on Smjene', () => {
+  // A Friday, so *ova sedmica* is a part-week and the whole-week rule has
+  // something to be wrong about.
+  const today = '2026-09-11'
+  const range = (key: Parameters<typeof resolvePeriod>[0]) => resolvePeriod(key, today)
+
+  it('steps one night at a time, and names the night when it has a name', () => {
+    expect(stepPeriod('danas', range('danas'), -1, today))
+      .toEqual({ kind: 'preset', key: 'jucer' })
+    // Two nights back has no chip, so it becomes the range *Prilagođeno* is.
+    expect(stepPeriod('jucer', range('jucer'), -1, today))
+      .toEqual({ kind: 'custom', from: '2026-09-09', to: '2026-09-09' })
+    // …and stepping back out of it returns to the chip, not to a stray range.
+    expect(stepPeriod('prilagodjeno', { from: '2026-09-09', to: '2026-09-09' }, 1, today))
+      .toEqual({ kind: 'preset', key: 'jucer' })
+  })
+
+  it('steps a week to a whole week, never by the part of it that has happened', () => {
+    // Friday's *ova sedmica* is pon–pet, five days. A five-day step would land
+    // on Sunday–Thursday; the answer is the whole week before it.
+    expect(stepPeriod('ova-sedmica', range('ova-sedmica'), -1, today))
+      .toEqual({ kind: 'preset', key: 'prosla-sedmica' })
+    expect(stepPeriod('prosla-sedmica', range('prosla-sedmica'), -1, today))
+      .toEqual({ kind: 'custom', from: '2026-08-24', to: '2026-08-30' })
+    // Forward out of *prošla sedmica* is this week — clamped at tonight, which
+    // is exactly what *ova sedmica* means.
+    expect(stepPeriod('prosla-sedmica', range('prosla-sedmica'), 1, today))
+      .toEqual({ kind: 'preset', key: 'ova-sedmica' })
+  })
+
+  it('steps a month to a whole month, and back onto the chip', () => {
+    expect(stepPeriod('ovaj-mjesec', range('ovaj-mjesec'), -1, today))
+      .toEqual({ kind: 'custom', from: '2026-08-01', to: '2026-08-31' })
+    // A whole calendar month keeps stepping in months, even though it arrived
+    // in the query as a plain `?from&to`.
+    expect(stepPeriod('prilagodjeno', { from: '2026-08-01', to: '2026-08-31' }, -1, today))
+      .toEqual({ kind: 'custom', from: '2026-07-01', to: '2026-07-31' })
+    expect(stepPeriod('prilagodjeno', { from: '2026-08-01', to: '2026-08-31' }, 1, today))
+      .toEqual({ kind: 'preset', key: 'ovaj-mjesec' })
+  })
+
+  it('steps a range the owner typed by its own length', () => {
+    expect(stepPeriod('prilagodjeno', { from: '2026-09-01', to: '2026-09-03' }, -1, today))
+      .toEqual({ kind: 'custom', from: '2026-08-29', to: '2026-08-31' })
+  })
+
+  it('has no tomorrow', () => {
+    expect(canStepForward(range('danas'), today)).toBe(false)
+    expect(canStepForward(range('ova-sedmica'), today)).toBe(false)
+    expect(canStepForward(range('ovaj-mjesec'), today)).toBe(false)
+    expect(canStepForward(range('jucer'), today)).toBe(true)
+    expect(canStepForward(range('prosla-sedmica'), today)).toBe(true)
   })
 })
