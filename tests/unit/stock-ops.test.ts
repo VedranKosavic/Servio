@@ -39,7 +39,7 @@ import {
 } from '../../server/services/counts'
 import { createDeliveryBody } from '#shared/schemas'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
-import { refuses } from '../helpers/shifts'
+import { rawClose, refuses } from '../helpers/shifts'
 
 let f: Fixture
 
@@ -889,6 +889,104 @@ describe('GET /api/stock carries how each item is measured', () => {
     const spot = getStock(f.db, f.venueId).filter(i => i.is_spot)
     expect(spot.length).toBeGreaterThan(10)
     expect(spot.map(i => i.name)).toContain('Ugalj (kocke)')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The red number beside the shelf: `settled` + `pending`
+// ---------------------------------------------------------------------------
+
+/**
+ * *Stanje šanka* prints two figures per article — the settled amount, and what
+ * tonight's open shift has taken off the shelf so far, in red beside it.
+ *
+ * The split is a **read model**. Nothing about when stock is deducted changed:
+ * the lock still writes its movements inside its own transaction, the ledger is
+ * still append-only, and `on_hand` is still `SUM(qty_delta)` over every row.
+ * `stock_movements.shift_id` is what makes the split possible without a second
+ * write — so the one thing worth pinning is the identity, at every moment of a
+ * night: **`settled + pending` is `on_hand`, and `on_hand` never moved.**
+ */
+describe('the settled / pending split on GET /api/stock', () => {
+  const cola = () => getStock(f.db, f.venueId).find(i => i.name === 'Coca-Cola 0,25 l')!
+
+  /** The identity, asserted over every article rather than the one under test. */
+  function expectSplitAddsUp() {
+    for (const item of getStock(f.db, f.venueId)) {
+      expect(item.settled + item.pending).toBe(item.on_hand)
+      expect(item.on_hand).toBe(f.onHand(item.name))
+    }
+  }
+
+  it('is all settled and nothing pending when no shift is open', () => {
+    const before = f.onHand('Coca-Cola 0,25 l')
+    const row = cola()
+
+    expect(row.on_hand).toBe(before)
+    expect(row.pending).toBe(0)
+    expect(row.settled).toBe(before)
+    expectSplitAddsUp()
+  })
+
+  it('names tonight\'s three bottles without moving the shelf under them', () => {
+    const before = f.onHand('Coca-Cola 0,25 l')
+    f.openShift({ members: ['Dino'] })
+    lock('Dino', 'Sto 16', [line('Coca-Cola', 3)])
+
+    const row = cola()
+    // On hand is what it has always been: the sum of every delta.
+    expect(row.on_hand).toBe(before - 3)
+    // …and the screen reads it as "this is the shelf, minus three tonight".
+    expect(row.pending).toBe(-3)
+    expect(row.settled).toBe(before)
+    expectSplitAddsUp()
+  })
+
+  it('folds the red into the settled number when the shift closes', () => {
+    const before = f.onHand('Coca-Cola 0,25 l')
+    const shiftId = f.openShift({ members: ['Dino'] })
+    lock('Dino', 'Sto 16', [line('Coca-Cola', 2)])
+    expect(cola().pending).toBe(-2)
+
+    rawClose(f, shiftId)
+
+    const row = cola()
+    expect(row.pending).toBe(0)
+    expect(row.settled).toBe(before - 2)
+    // Nothing was posted by the close: the ledger is the same length it was.
+    expect(row.on_hand).toBe(before - 2)
+    expectSplitAddsUp()
+  })
+
+  it('leaves a delivery booked outside any shift wholly settled', () => {
+    const before = f.onHand('Coca-Cola 0,25 l')
+    createDelivery(f.db, f.venueId, f.adminActor(), {
+      client_id: randomUUID(),
+      supplier_name: 'Coca-Cola HBC',
+      lines: [{ stock_item_id: f.stockItemId('Coca-Cola 0,25 l'), packs: 1, loose: 0, line_cost_fen: 2400 }],
+    } as Parameters<typeof createDelivery>[3])
+
+    const row = cola()
+    expect(row.on_hand).toBe(before + 24)
+    expect(row.pending).toBe(0)
+    expect(row.settled).toBe(before + 24)
+    expectSplitAddsUp()
+  })
+
+  it('carries a delivery received during the night on the night, and still adds up', () => {
+    const before = f.onHand('Coca-Cola 0,25 l')
+    f.openShift({ members: ['Dino'] })
+    lock('Dino', 'Sto 16', [line('Coca-Cola', 1)])
+    createDelivery(f.db, f.venueId, f.adminActor(), {
+      client_id: randomUUID(),
+      supplier_name: 'Coca-Cola HBC',
+      lines: [{ stock_item_id: f.stockItemId('Coca-Cola 0,25 l'), packs: 1, loose: 0, line_cost_fen: 2400 }],
+    } as Parameters<typeof createDelivery>[3])
+
+    const row = cola()
+    expect(row.on_hand).toBe(before + 23)
+    expect(row.settled + row.pending).toBe(row.on_hand)
+    expectSplitAddsUp()
   })
 })
 

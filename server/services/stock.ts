@@ -33,7 +33,7 @@ import type {
 } from '#shared/types'
 import type { Actor, Role } from '#shared/types'
 import type { Db, Queryable, Tx } from './types'
-import { bump, getSettings, log, verifyPinMetered } from './contracts'
+import { bump, currentShift, getSettings, log, verifyPinMetered } from './contracts'
 import { listStockItems } from './admin'
 import { applyScan } from './scan'
 
@@ -183,6 +183,43 @@ export function onHandByItem(q: Queryable, venueId: string): Map<string, number>
 }
 
 /**
+ * How much of on hand **one shift** has moved, per item — tonight's half of the
+ * split *Stanje šanka* draws.
+ *
+ * This is a read model and nothing else. Stock is still deducted inside the
+ * order-lock transaction, the ledger is still append-only, and on hand is still
+ * `SUM(qty_delta)` over every row: what changes is only that the screen is
+ * allowed to *name* the part of that sum the open shift is responsible for, so
+ * the owner can read "48 on the shelf this morning, 3 gone tonight" instead of
+ * one number that quietly slid while he was looking at it.
+ *
+ * `stock_movements.shift_id` is populated by every write that happens during a
+ * shift and indexed by `stock_movements_shift_idx`, so this is one grouped
+ * scan of that index and no new column anywhere.
+ *
+ * A movement with no shift (an admin delivery on a quiet afternoon, the seed's
+ * opening rows) belongs to nobody's night and is therefore settled by
+ * definition — `shift_id = NULL` never matches an id.
+ */
+export function shiftDeltaByItem(
+  q: Queryable, venueId: string, shiftId: string,
+): Map<string, number> {
+  const rows = q.select({
+    stockItemId: schema.stockMovements.stockItemId,
+    delta: sql<number>`sum(${schema.stockMovements.qtyDelta})`,
+  })
+    .from(schema.stockMovements)
+    .where(and(
+      eq(schema.stockMovements.venueId, venueId),
+      eq(schema.stockMovements.shiftId, shiftId),
+    ))
+    .groupBy(schema.stockMovements.stockItemId)
+    .all()
+
+  return new Map(rows.map(r => [r.stockItemId, r.delta ?? 0]))
+}
+
+/**
  * On hand **as of** a moment: the same sum, bounded by `occurred_at`.
  *
  * This is what a count compares its counted quantity against, and the bound is
@@ -297,7 +334,21 @@ function lastMovements(q: Queryable, venueId: string): Map<string, StockLastMove
   return out
 }
 
-/** `GET /api/stock` — *Stanje šanka*, and the `stock` snapshot in `/api/changes`. */
+/**
+ * `GET /api/stock` — *Stanje šanka*, and the `stock` snapshot in `/api/changes`.
+ *
+ * **`on_hand` is untouched and stays the definition.** `settled` and `pending`
+ * are a second reading of the *same* sum, split at the open shift:
+ *
+ * - `pending` — what tonight's shift has moved so far (negative on a normal
+ *   night, because a night sells); `0` when no shift is open.
+ * - `settled` — everything else, which is the shelf as it stood when the last
+ *   shift closed.
+ *
+ * `settled + pending === on_hand`, by construction rather than by agreement:
+ * `settled` is computed by subtraction, so the two halves cannot drift apart
+ * even if a future movement type forgets to stamp a shift.
+ */
 export function getStock(q: Queryable, venueId: string): StockItem[] {
   const items = q.select()
     .from(schema.stockItems)
@@ -307,9 +358,12 @@ export function getStock(q: Queryable, venueId: string): StockItem[] {
 
   const onHandMap = onHandByItem(q, venueId)
   const lastMap = lastMovements(q, venueId)
+  const shift = currentShift(q, venueId)
+  const pendingMap = shift ? shiftDeltaByItem(q, venueId, shift.id) : null
 
   return items.map((item) => {
     const hand = onHandMap.get(item.id) ?? 0
+    const pending = pendingMap?.get(item.id) ?? 0
     const cost = unitCost(item)
     return {
       id: item.id,
@@ -325,6 +379,11 @@ export function getStock(q: Queryable, venueId: string): StockItem[] {
       tare_g: item.tareG,
       tolerance_qty: item.toleranceQty,
       on_hand: hand,
+      // The split, not a second truth: `settled` is `on_hand` minus what
+      // tonight moved, so the two always add back up to the one number every
+      // other screen and every invariant test computes.
+      settled: hand - pending,
+      pending,
       status: stockStatus(item, hand),
       estimated: cost.estimated,
       unit_cost_mfen: cost.mfen,
@@ -1117,6 +1176,9 @@ export function correctStock(
   const row = requireItem(db, venueId, body.stock_item_id)
   const hand = onHand(db, venueId, row.id)
   const cost = unitCost(row)
+  // The same split `getStock` reports, for the one row it would not have listed.
+  const shift = currentShift(db, venueId)
+  const pending = shift ? shiftDeltaByItem(db, venueId, shift.id).get(row.id) ?? 0 : 0
   return {
     id: row.id,
     name: row.name,
@@ -1129,6 +1191,8 @@ export function correctStock(
     tare_g: row.tareG,
     tolerance_qty: row.toleranceQty,
     on_hand: hand,
+    settled: hand - pending,
+    pending,
     status: stockStatus(row, hand),
     estimated: cost.estimated,
     unit_cost_mfen: cost.mfen,

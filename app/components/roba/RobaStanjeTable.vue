@@ -1,11 +1,15 @@
 <script lang="ts">
 /**
- * *Stanje šanka* — the shelf as one dense table, and the four nag lists under it.
+ * *Stanje šanka* as one dense table — **the laptop half of the screen.** Below
+ * 1024 px the page draws `RobaStanjeList` instead and this component is not
+ * rendered at all; six columns in a 390 px box is a sideways drag past the name
+ * to reach a status nobody can see.
  *
  * The row shape and the two pure functions that build it live in this plain
- * `<script>` block rather than in `<script setup>`, because the page needs them
- * too: it counts the four chips off exactly the rows the table draws, so a chip
- * that says "U minusu 1" and a table that shows none is impossible.
+ * `<script>` block rather than in `<script setup>`, because the page and the
+ * phone list need them too: the page counts the four chips off exactly the rows
+ * that get drawn, so a chip saying "U minusu 1" over a list showing none is
+ * impossible, and both layouts read one row shape rather than two.
  */
 import type {
   BaseUnit, CountView, ProductAdmin, StockItem, StockItemStock,
@@ -16,7 +20,18 @@ export interface StanjeRow {
   id: string
   name: string
   base_unit: BaseUnit
+  /** The true shelf: `SUM(qty_delta)` over the whole ledger. `settled + pending`. */
   on_hand: number
+  /**
+   * The number the screen prints large — the shelf as the last closed shift
+   * left it. It is `on_hand` when no shift is open, which is most of the day.
+   */
+  settled: number
+  /**
+   * What the open shift has moved so far, negative on a normal night, `0` when
+   * none is open. Drawn in `--danger` beside `settled` and nowhere else.
+   */
+  pending: number
   status: StockStatus
   value_fen: number
   par_qty: number | null
@@ -87,10 +102,15 @@ function lateSyncItems(counts: CountView[]): Set<string> {
  *
  * Four reads meet here. `GET /api/owner/stock` is the priced shelf; `GET
  * /api/stock` carries each item's last movement, which is what the *u minusu*
- * row quotes underneath its pill; `GET /api/admin/products` says which shelf
+ * row quotes underneath its pill, **and the settled/pending split** the two
+ * numbers on every row come from; `GET /api/admin/products` says which shelf
  * items the menu actually consumes — an item no recipe and no 1:1 product points
  * at can never be reconciled, which is *Bez normativa*; and the confirmed counts
  * say which items a round reached late.
+ *
+ * An item the live read does not carry falls back to "all settled, nothing
+ * pending", which is the honest answer: the split is a reading of the ledger,
+ * and with no reading the whole quantity is simply the shelf.
  */
 export function buildStanjeRows(
   items: StockItemStock[],
@@ -98,7 +118,7 @@ export function buildStanjeRows(
   products: ProductAdmin[],
   counts: CountView[],
 ): StanjeRow[] {
-  const lastById = new Map(live.map(item => [item.id, item.last_movement]))
+  const liveById = new Map(live.map(item => [item.id, item]))
   const late = lateSyncItems(counts)
 
   const consumed = new Set<string>()
@@ -111,12 +131,20 @@ export function buildStanjeRows(
   }
 
   return items.map((item): StanjeRow => {
-    const last = lastById.get(item.id) ?? null
+    const now = liveById.get(item.id)
+    const last = now?.last_movement ?? null
+    const pending = now?.pending ?? 0
     return {
       id: item.id,
       name: item.name,
       base_unit: item.base_unit,
       on_hand: item.on_hand,
+      // Subtracted from the priced read's own on-hand rather than taken from
+      // `now.settled`, so the two numbers on the row always add back up to the
+      // quantity the rest of the row is about, even if the two reads landed a
+      // second apart and one of them is a lock older than the other.
+      settled: item.on_hand - pending,
+      pending,
       status: item.status,
       value_fen: item.value_fen,
       par_qty: item.par_qty,
@@ -156,6 +184,7 @@ defineProps<{
 const COLUMNS: UiColumn[] = [
   { key: 'name', label: 'Artikal' },
   { key: 'on_hand', label: 'Na stanju', align: 'r' },
+  { key: 'pending', label: 'Večeras', align: 'r' },
   { key: 'packs', label: 'Paketi + komadi' },
   { key: 'value', label: 'Vrijednost', align: 'r' },
   { key: 'status', label: 'Status' },
@@ -191,7 +220,14 @@ function lastLine(row: StanjeRow): string {
           <span v-if="row.no_recipe" class="a-roba-note">bez normativa</span>
           <span v-else-if="row.late_sync" class="a-roba-note">kasno sinhronizovano</span>
         </td>
-        <td class="r">{{ formatStockQty(row.on_hand, row.base_unit) }}</td>
+        <td class="r">{{ formatStockQty(row.settled, row.base_unit) }}</td>
+        <!-- Only when there is something to say. A column of dashes down a
+             quiet afternoon is a column the eye stops reading. -->
+        <td class="r">
+          <span v-if="row.pending !== 0" class="a-roba-pending num">
+            {{ formatMovementQty(row.pending, row.base_unit) }}
+          </span>
+        </td>
         <td class="a-roba-packs">
           <span v-if="row.packs_label">{{ row.packs_label }}</span>
           <span v-else class="a-roba-dash">—</span>
@@ -230,6 +266,11 @@ function lastLine(row: StanjeRow): string {
 
 .a-roba-packs { white-space: nowrap; }
 .a-roba-dash { color: var(--muted); }
+
+/* Tonight, in the one colour on this screen that means "still moving". The
+   word for it is in the column header and in the sentence under the card —
+   colour never carries the meaning alone (DESIGN §2). */
+.a-roba-pending { color: var(--danger); font-weight: 600; white-space: nowrap; }
 
 .a-roba-status { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 .a-roba-status small { font-size: var(--text-caption); color: var(--muted); }

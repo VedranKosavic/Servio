@@ -145,8 +145,10 @@ async function send() {
 <template>
   <div class="a-page">
     <RobaTabs :sub="head ? `kretanje · ${head.name}` : 'kretanje'">
+      <!-- No *Nazad na stanje* here any more: `UiPageHead` draws the way back
+           on every screen that is not a tab destination, so a second one would
+           be two controls doing one job. -->
       <template #actions>
-        <UiButton variant="ghost" @click="navigateTo('/admin/roba')">Nazad na stanje</UiButton>
         <UiButton variant="primary" @click="openSheet">Korekcija</UiButton>
       </template>
     </RobaTabs>

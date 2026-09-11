@@ -102,11 +102,9 @@ async function send() {
 
 <template>
   <div class="a-page">
-    <RobaTabs sub="početno stanje · jednom po artiklu">
-      <template #actions>
-        <UiButton variant="ghost" @click="navigateTo('/admin/roba')">Nazad na stanje</UiButton>
-      </template>
-    </RobaTabs>
+    <!-- `UiPageHead` draws the way back by itself; a *Nazad na stanje* button
+         beside it would be two controls doing one job. -->
+    <RobaTabs sub="početno stanje · jednom po artiklu" />
 
     <UiCard title="Šta ovaj ekran radi">
       <p class="a-note">

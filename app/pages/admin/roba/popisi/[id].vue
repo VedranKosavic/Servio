@@ -101,11 +101,10 @@ const PHASE_LABELS: Record<CountView['phase'], string> = {
 
 <template>
   <div class="a-page">
-    <RobaTabs :sub="count ? `${KIND_LABELS[count.kind]} · ${PHASE_LABELS[count.phase]}` : 'popis'">
-      <template #actions>
-        <UiButton variant="ghost" @click="navigateTo('/admin/roba/popisi')">Svi popisi</UiButton>
-      </template>
-    </RobaTabs>
+    <!-- The *Svi popisi* button is gone with the *Popisi* list it pointed at.
+         One count still opens from a shift (`SmjenaCounts`), and the way out is
+         `UiPageHead`'s own *Nazad*, which climbs to *Roba*. -->
+    <RobaTabs :sub="count ? `${KIND_LABELS[count.kind]} · ${PHASE_LABELS[count.phase]}` : 'popis'" />
 
     <p v-if="error" class="a-error">{{ error }}</p>
 

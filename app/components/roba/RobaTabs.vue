@@ -1,14 +1,24 @@
 <script setup lang="ts">
 /**
- * The head of every *Roba* page: the title, the quiet second line, and the six
- * tabs from the mockup.
+ * The head of every *Roba* page: the title, the quiet second line, and the two
+ * tabs the owner actually opens.
+ *
+ * **It used to carry six.** *Popisi*, *Otpis*, *Nargila* and *Kategorije* were
+ * each a screen of their own, and between them they made the strip wider than a
+ * phone — which is how a six-tab bar teaches somebody to stop reading it. They
+ * are gone by the owner's call, with their pages: what a night does to the shelf
+ * is on *Stanje šanka*, and what arrives on it is on *Prijem robe*. Nothing on
+ * the backend went with them — a waiter still logs otpis and a bartender still
+ * counts, from `/konobar` and `/sanker`, which is where those two jobs actually
+ * happen.
  *
  * The tabs are `NuxtLink`s and not a `v-model` segment, because each one is its
- * own page with its own URL — a period the owner picked on *Kategorije* stays in
- * that page's query, and a tab he leaves open reloads onto the same tab.
+ * own page with its own URL — a tab the owner leaves open reloads onto the same
+ * tab.
  *
- * A sub-page (an article's ledger, one count, *Početno stanje*) has no tab of its
- * own and lights up the tab it belongs under, so the strip never goes blank.
+ * A sub-page (an article's ledger, one count, *Početno stanje*) has no tab of
+ * its own and lights up the tab it belongs under, so the strip never goes blank.
+ * Its way back is `UiPageHead`'s, which climbs to the nearest real page.
  */
 interface Tab {
   to: string
@@ -18,12 +28,15 @@ interface Tab {
 }
 
 const TABS: Tab[] = [
-  { to: '/admin/roba', label: 'Stanje šanka', owns: ['/admin/roba/artikal', '/admin/roba/pocetno-stanje'] },
+  {
+    to: '/admin/roba',
+    label: 'Stanje šanka',
+    // `/admin/roba/popisi/<id>` is here because the count a *Smjena* links to
+    // still opens, and the shelf is what it is about — the *Popisi* list it used
+    // to belong under is gone.
+    owns: ['/admin/roba/artikal', '/admin/roba/pocetno-stanje', '/admin/roba/popisi'],
+  },
   { to: '/admin/roba/prijem', label: 'Prijem robe' },
-  { to: '/admin/roba/popisi', label: 'Popisi' },
-  { to: '/admin/roba/otpis', label: 'Otpis' },
-  { to: '/admin/roba/nargila', label: 'Nargila' },
-  { to: '/admin/roba/kategorije', label: 'Kategorije' },
 ]
 
 defineProps<{
@@ -68,9 +81,14 @@ function isActive(tab: Tab): boolean {
  * *Roba* used to draw its six tabs as a segmented well and *Meni i postavke* drew
  * its eight as copper pills — two different ideas of "the same page, a different
  * part" in one product, which is exactly what makes an app feel assembled rather
- * than designed. Both are now an underlined bar: the row reads as one strip, the
- * copper rule under the current tab is the only colour on it, and the strip
- * scrolls sideways on a phone while the page body never does.
+ * than designed. Both are now an underlined bar: the row reads as one strip and
+ * the copper rule under the current tab is the only colour on it.
+ *
+ * **The sideways scroller is gone with the four tabs.** Six labels did not fit
+ * on a 390 px screen, so the strip used to scroll and shade its cut edge with
+ * two pairs of gradients. Two labels fit with room to spare, and a scroller
+ * around content that never overflows is a scroller that only ever gets in the
+ * way of a thumb swiping the page.
  */
 .a-roba-head { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 
@@ -79,31 +97,8 @@ function isActive(tab: Tab): boolean {
   gap: 4px;
   border-bottom: 1px solid var(--line);
   max-width: 100%;
-  /* Six labels do not fit on a phone; the strip scrolls rather than wrapping
-     into two rows that push the page's first card off the screen. */
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-
-  /**
-   * …and it says so at the edge it is cut at. A strip that clips a tab
-   * mid-word with nothing at the edge reads as broken layout rather than as
-   * "there is more this way".
-   *
-   * Two pairs of gradients and no JavaScript: the *covers* are attached
-   * `local`, so they sit on the ends of the scrolled content and slide away as
-   * it moves; the *shadows* are attached `scroll`, so they stay pinned to the
-   * visible box. Where the content ends, the cover hides the shadow — so an end
-   * that is really the end has a clean edge, and a cut one is shaded.
-   */
-  background:
-    linear-gradient(to right, var(--bg), transparent) left center / 24px 100% no-repeat local,
-    linear-gradient(to left, var(--bg), transparent) right center / 24px 100% no-repeat local,
-    linear-gradient(to right, var(--line), transparent) left center / 16px 100% no-repeat scroll,
-    linear-gradient(to left, var(--line), transparent) right center / 16px 100% no-repeat scroll;
+  min-width: 0;
 }
-
-.a-roba-tabs::-webkit-scrollbar { display: none; }
 
 .a-roba-tab {
   /* `--tap`: a tab is a navigation target and the floor is 44 px on the

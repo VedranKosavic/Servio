@@ -63,6 +63,28 @@ export interface StockItem {
   /** How far a count may miss before the line needs a note. */
   tolerance_qty: number
   on_hand: number
+  /**
+   * The shelf as the last closed shift left it — `on_hand` minus `pending`.
+   *
+   * This is the number *Stanje šanka* prints large, because it is the one that
+   * stops moving: the owner reading it at 23:00 sees the same figure he will
+   * still see at 23:05, with tonight's traffic named separately beside it
+   * rather than folded in silently.
+   */
+  settled: number
+  /**
+   * What the **currently open** shift has moved so far, negative on a normal
+   * night. `0` when no shift is open, and the screen then draws nothing.
+   *
+   * Not a deferred write and not a second ledger: stock is still deducted
+   * inside the order-lock transaction, and this is `SUM(qty_delta)` over the
+   * rows carrying that shift's `shift_id`. When the shift closes it stops being
+   * the open one, `pending` falls to 0 and the same quantity is simply inside
+   * `settled` instead — nothing is posted and nothing moves.
+   *
+   * `settled + pending === on_hand`, always.
+   */
+  pending: number
   status: StockStatus
   /** The unit cost is the `last_cost_mfen` fallback, not a real average (§6.8). */
   estimated: boolean
