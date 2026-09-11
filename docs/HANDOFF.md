@@ -44,6 +44,15 @@ itself on first boot. To start clean, delete the file and restart.
 | `npm test` | The vitest suite against an in-memory database with real migrations |
 | `npm run build` | The production build |
 | `npm run db:seed` | Seeds an empty database |
+| `npm run db:roster` | Brings an **existing** database onto the café's roster, in place |
+
+`db:roster` is the one to run against a database created before a change to the
+staff or to Phase 4's seed rows. It creates the people the database does not
+have, deactivates (never deletes) everybody else so their history stays
+readable, and backfills the three *Razgovor* channels and the two shift
+templates — rows a migration cannot write, and whose absence is why *Razgovor*
+opened on an empty list and *Raspored* said "Nema nijednog šablona smjene" on
+every day of the week.
 
 The browser suite runs against a production build on its own database and port;
 `tests/e2e/helpers.ts` documents how, and every spec file resets the rate limiter
@@ -56,26 +65,48 @@ per venue and the backend refuses a duplicate.
 
 | Account | Role | PIN |
 |---|---|---|
-| Haris | admin | 1111 |
-| Amar | radnik | 2222 |
-| Emir | radnik | 3333 |
+| Harun | admin | 5240 |
+| Vedran | admin | 7715 |
+| Emir | admin | 5733 |
+| Adin | admin | 2055 |
+| Muamer | admin | 8759 |
+| Benza | radnik | 5116 |
+| Nidal | radnik | 9296 |
 
 An admin lands on the dashboard. A worker picks the screen they are working on,
-Konobar or Šanker, and can switch later from the profile menu. The admin also has
-an email entrance at `/admin/login` with `haris@lounge.ba` and password 1111.
-The test suites need a larger cast, so the seed can also create Lejla, Dino and
-Tarik (PINs 4444, 5555, 6666) behind an explicit option; the app's own seed makes
-only the three above.
+Konobar or Šanker, and can switch later from the profile menu. Harun also holds
+the e-mail entrance at `/admin/login`, `harun@lounge.ba` with password 5240 —
+the laptop door for the day nobody has an enrolled phone to hand.
 
-These are testing-phase numbers: before a real install, set real PINs in
-`/admin/postavke/osoblje` and remove `SANK_DEV_ENROL` from the server's `.env`.
+The unit and browser suites are written against a separate invented cast (Haris
+1111, Amar 2222, Emir 3333, Lejla 4444, Dino 5555, Tarik 6666), seeded behind
+`cast: 'full'`. It is a separate list rather than the café's with three extras
+appended, so hiring somebody does not rewrite a thousand assertions.
+
+**These are testing-phase numbers and they are in the repository, so they are
+not secrets.** Before a real install, set real PINs in `/admin/postavke/osoblje`
+— the only door that writes a PIN nobody else has read — and remove
+`SANK_DEV_ENROL` from the server's `.env`.
 
 ## The routes
 
 - `/` — the PIN pad, then the screen chooser for a worker
 - `/konobar` — floor plan, table, order, payment, storno, end of shift, count, waste, chat, schedule, rules
 - `/sanker` — tickets, approval queue, count, chat, schedule; `/stanje` — stock and deliveries
-- `/admin` — Puls, shifts, stock and reports, menu, settings, schedule, chat, log, exports
+- `/admin` — Puls, shifts, stock and reports, menu, settings, schedule, exports
+
+Two `/admin` screens are deliberately **not** in the navigation. *Razgovor* is
+the copper button in the corner of every dashboard screen (`ChatDock`), because
+chat is something the owner answers while looking at a number rather than a
+place he travels to; the full page survives at `/admin/razgovor`. *Dnevnik* left
+the nav by the owner's call — it is what he opens when a number looks wrong, not
+a weekly destination — and is reached from the sentence at the foot of
+*Podešavanja*. Nothing about the record changed: `log()` still writes an entry
+inside every admin transaction.
+
+*Meni i postavke* is six tabs, not eight. *Stolovi* is drawn once and still
+lives at `/admin/postavke/stolovi`; *Šabloni* moved to *Raspored*, which is the
+only screen that uses the shift templates.
 
 ## What holds the system together
 
@@ -105,6 +136,16 @@ watches it while you work.
 - Never bind port 3002. Use your own port and `DB_PATH=data/verify.db`.
 - Never run `pkill` or kill a process you did not start. This has killed the
   owner's server before. Stop only your own, by PID.
+- **`nuxt dev` locks `.nuxt`, not the port.** A second `npm run dev` refuses to
+  start even on a free port while another server holds that directory. Copy the
+  tree into a scratch directory and symlink `node_modules` if you need one of
+  your own.
+- **Browse your verify server as `http://sank-verify.localhost:<port>`, not
+  `localhost`.** Cookies ignore the port, so `localhost:3002` and
+  `localhost:3013` share one jar — and since the last browser to tap
+  `POST /api/dev/enrol` wins the device cookie, two servers on `localhost` clear
+  each other's session every few seconds. A distinct host name on the same
+  loopback gives you your own jar.
 - Keep typecheck, unit tests and build green in every commit.
 - No new hex values or ad hoc font sizes: use the tokens in `docs/DESIGN.md`.
 - Bosnian on screen, no English, no emoji, icons as inline SVG.

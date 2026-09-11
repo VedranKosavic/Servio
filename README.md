@@ -42,22 +42,29 @@ app refuses to set one that is already taken. For the same reason every PIN in a
 the same number of digits: the pad fires on the last tap, so if one person's PIN were six
 digits and its first four were somebody else's whole PIN, the fourth tap would sign that
 somebody else in. Four or six are both fine; mixing them inside one café is not, and the
-app refuses that too (*Svi PIN-ovi u lokalu moraju imati isti broj cifara*). A fresh `npm run db:seed` creates three
-accounts: **Haris 1111** (vlasnik — lands on `/admin`, and `haris@lounge.ba` / `1111` is
-the same door on a laptop), **Amar 2222** and **Emir 3333** (radnici). A radnik picks
-*Konobar* or *Šanker* after the PIN and can switch later without signing out; both screens
-are open to both of them.
+app refuses that too (*Svi PIN-ovi u lokalu moraju imati isti broj cifara*). A fresh
+`npm run db:seed` creates the café's seven accounts — **Harun 5240**, **Vedran 7715**,
+**Emir 5733**, **Adin 2055** and **Muamer 8759** as admins, **Benza 5116** and
+**Nidal 9296** as radnici. Harun also holds the laptop door, `harun@lounge.ba` / `5240`.
+A radnik picks *Konobar* or *Šanker* after the PIN and can switch later without signing
+out; both screens are open to both of them.
+
+These numbers are in the repository, so they are not secrets — they are testing-phase
+values. Before the café opens on this app every one of them is replaced from
+*/admin/postavke/osoblje*, which is the only door that writes a PIN nobody else has read.
 
 The `SANK_DEV_PIN` override that gave everybody the same PIN is gone: a shared PIN can no
-longer identify anybody, so it must not be possible to seed one. `npm run db:dev-pins`
-survives, repointed — it brings an **existing** database onto those three accounts and
-those three PINs in place, and deactivates everybody else rather than deleting them, so
-the rounds they served stay readable. That is the script to run on any dev database seeded
-before this change: one seeded with `SANK_DEV_PIN=1111` has six people behind the same
-four digits, and the pad answers *Taj PIN koristi više osoba* rather than guessing which
-of them is standing at the till.
+longer identify anybody, so it must not be possible to seed one. `npm run db:roster`
+survives, repointed — it brings an **existing** database onto that roster in place,
+creating the people it does not have yet and deactivating everybody else rather than
+deleting them, so the rounds they served stay readable. It also backfills the seed rows a
+migration cannot write: the three *Razgovor* channels and the two shift templates, which a
+database seeded before Phase 4 has tables for and no rows in. That is the script to run on
+any dev database seeded before this change.
 
-`SANK_SEED_CAST=full` (on `db:seed`) and `SANK_DEV_CAST=full` (on `db:dev-pins`) add Lejla,
-Dino and Tarik on 4444 / 5555 / 6666, which is what the unit fixtures and the Playwright
-suite need. Both are explicit flags and not `NODE_ENV` guesses, for the same reason the
+`SANK_SEED_CAST=full` (on `db:seed`) and `SANK_DEV_CAST=full` (on `db:roster`) swap in the
+suites' own cast instead — Haris 1111, Amar 2222, Emir 3333, Lejla 4444, Dino 5555 and
+Tarik 6666 — which is what the unit fixtures and the Playwright suite are written against.
+It is a separate list and not the café's with extras appended, so hiring somebody does not
+rewrite a thousand assertions. Both are explicit flags and not `NODE_ENV` guesses, for the same reason the
 dev PINs are: a test cast that can reach a real café is a stranger's name on the pad.

@@ -15,13 +15,15 @@
  * prints a line telling whoever is installing to set the PINs in `/admin`. A
  * default PIN that reaches a real café is a PIN nobody ever changes.
  *
- * **`cast` is the second explicit argument.** The venue has three accounts —
- * Haris, Amar and Emir — and that is what a fresh clone and the live database
- * get. The unit fixture and the Playwright suite need more people than that
- * (somebody to hand a float to, somebody to swap a shift with, somebody to
- * deactivate mid-test), so they pass `cast: 'full'` and get three more. It is a
- * flag and not an environment guess for the same reason `devSecrets` is: a test
- * cast that can reach a real café is a stranger's name on the lock screen.
+ * **`cast` is the second explicit argument.** By default the venue gets its own
+ * seven people — Harun, Vedran, Emir, Adin and Muamer on the dashboard, Benza
+ * and Nidal on the floor. The unit fixture and the Playwright suite are written
+ * against six invented names instead (somebody to hand a float to, somebody to
+ * swap a shift with, somebody to deactivate mid-test), so they pass
+ * `cast: 'full'`. The two lists are separate and not one with extras appended,
+ * so hiring somebody does not rewrite a thousand assertions. It is a flag and
+ * not an environment guess for the same reason `devSecrets` is: a test cast
+ * that can reach a real café is a stranger's name on the lock screen.
  */
 import { sql } from 'drizzle-orm'
 import type { Db } from './client'
@@ -36,20 +38,44 @@ export interface SeedOptions {
   /** Give the seeded people the dev PINs and Haris his email + password. */
   devSecrets?: boolean
   /**
-   * `'default'` — the three real accounts (Haris, Amar, Emir).
-   * `'full'` — those three plus Lejla, Dino and Tarik, for the test suites.
+   * `'default'` — the café's own roster: Harun, Vedran, Emir, Adin and Muamer
+   * as admins, Benza and Nidal as workers.
+   * `'full'` — the invented cast the unit and browser suites are written
+   * against. See `roster()`.
    */
   cast?: 'default' | 'full'
 }
 
 /**
- * Fixed ids for the seeded people.
+ * Fixed ids for the people the seed writes.
  *
  * They are constants for one reason: `hashSecret` mixes the user id into the
  * hash, so a memoised hash is only reusable if the id is the same every time.
  * A vitest file that builds twenty fixtures would otherwise run twenty × six
  * scrypt hashes — about a minute of a deliberately slow function, per file.
+ *
+ * **Two casts, two tables, and they do not overlap.** `STAFF_IDS` is the café's
+ * own roster and `SEED_USER_IDS` is the invented cast the suites are written
+ * against. They are separate rather than one list with three extra names on the
+ * end, because the day the café hires somebody the test fixtures must not move:
+ * 1400-odd assertions name Haris, Amar and Emir, and a roster change that
+ * rewrites them is a roster change nobody dares make. *Emir* appears in both
+ * with different ids, which is safe because a database is seeded with one cast
+ * or the other and never with both.
  */
+
+/** The café's people (`cast: 'default'`) — five admins and two workers. */
+const STAFF_IDS = {
+  Harun: '527678c8-63e8-4316-b3be-847dc8bb0f75',
+  Vedran: 'becdc77a-d26b-4fb4-8355-bb70c304c17f',
+  Emir: 'cd2fc538-17cd-4261-b433-8dd211ced131',
+  Adin: '623a67d2-ba1d-4105-80be-b2e897c3c250',
+  Muamer: '8a0af0eb-0cc0-46ba-8169-0865b8ca5bbc',
+  Benza: 'cc0b574c-fb00-436b-bd5b-6cf3b48bd1c5',
+  Nidal: '9bb339fa-bf8c-4353-8a3e-e45fe9854092',
+} as const
+
+/** The invented cast the unit and browser suites seed (`cast: 'full'`). */
 const SEED_USER_IDS = {
   Amar: '11111111-1111-4111-8111-111111111111',
   Lejla: '22222222-2222-4222-8222-222222222222',
@@ -63,14 +89,26 @@ const SEED_USER_IDS = {
  * Dev only, and **every one of them different**.
  *
  * Since the PIN identifies the person there is no such thing as a shared PIN:
- * two people on 1111 make a pad that resolves to whichever row SQLite returned
- * first, which is why `requirePinFree` refuses it at every door that sets one.
- * The testing-phase `SANK_DEV_PIN` override — one number for the whole team —
- * was deleted for exactly that reason: it can no longer produce a database
- * anybody can log into. `db:dev-pins` survives, repointed at these per-account
- * PINs, because a database seeded *before* this change already has six people
- * behind one number and needs a way back that does not delete it.
+ * two people on the same number make a pad that resolves to whichever row
+ * SQLite returned first, which is why `requirePinFree` refuses it at every door
+ * that sets one. The testing-phase `SANK_DEV_PIN` override — one number for the
+ * whole team — was deleted for exactly that reason.
+ *
+ * **These are testing-phase numbers and they are in the repository**, which
+ * means they are not secrets. Before the café opens on this app, every one of
+ * them is replaced from `/admin/postavke/osoblje`, which is the only door that
+ * writes a PIN nobody else has read.
  */
+export const STAFF_PINS: Record<keyof typeof STAFF_IDS, string> = {
+  Harun: '5240',
+  Vedran: '7715',
+  Emir: '5733',
+  Adin: '2055',
+  Muamer: '8759',
+  Benza: '5116',
+  Nidal: '9296',
+}
+
 export const DEV_PINS: Record<keyof typeof SEED_USER_IDS, string> = {
   Haris: '1111',
   Amar: '2222',
@@ -80,9 +118,57 @@ export const DEV_PINS: Record<keyof typeof SEED_USER_IDS, string> = {
   Tarik: '6666',
 }
 
+/**
+ * The `/admin/login` e-mail door, which exists for the once a year somebody
+ * opens the dashboard on a laptop with no enrolled device. Exactly one admin
+ * per cast has one; everybody else gets in with a PIN like everybody else.
+ */
+export const STAFF_ADMIN_EMAIL = 'harun@lounge.ba'
+export const STAFF_ADMIN_PASSWORD = STAFF_PINS.Harun
+
 export const DEV_ADMIN_EMAIL = 'haris@lounge.ba'
 /** The owner's laptop entrance at `/admin/login`, and his PIN, are the same 1111. */
 export const DEV_ADMIN_PASSWORD = '1111'
+
+/** One person as both casts describe them, and as `db:roster` writes them. */
+export interface RosterPerson {
+  id: string
+  name: string
+  role: 'admin' | 'radnik'
+  pin: string
+  /** Only the one admin who holds the `/admin/login` e-mail door. */
+  email?: string
+  password?: string
+}
+
+/**
+ * Who a database gets, by cast.
+ *
+ * `seed()` writes this into an empty database and `server/database/roster.ts`
+ * brings an already-populated one onto it — one list, so the two can never
+ * describe different people.
+ */
+export function roster(cast: 'default' | 'full'): RosterPerson[] {
+  if (cast === 'full') {
+    return [
+      { id: SEED_USER_IDS.Haris, name: 'Haris', role: 'admin', pin: DEV_PINS.Haris, email: DEV_ADMIN_EMAIL, password: DEV_ADMIN_PASSWORD },
+      { id: SEED_USER_IDS.Amar, name: 'Amar', role: 'radnik', pin: DEV_PINS.Amar },
+      { id: SEED_USER_IDS.Emir, name: 'Emir', role: 'radnik', pin: DEV_PINS.Emir },
+      { id: SEED_USER_IDS.Lejla, name: 'Lejla', role: 'radnik', pin: DEV_PINS.Lejla },
+      { id: SEED_USER_IDS.Dino, name: 'Dino', role: 'radnik', pin: DEV_PINS.Dino },
+      { id: SEED_USER_IDS.Tarik, name: 'Tarik', role: 'radnik', pin: DEV_PINS.Tarik },
+    ]
+  }
+  return [
+    { id: STAFF_IDS.Harun, name: 'Harun', role: 'admin', pin: STAFF_PINS.Harun, email: STAFF_ADMIN_EMAIL, password: STAFF_ADMIN_PASSWORD },
+    { id: STAFF_IDS.Vedran, name: 'Vedran', role: 'admin', pin: STAFF_PINS.Vedran },
+    { id: STAFF_IDS.Emir, name: 'Emir', role: 'admin', pin: STAFF_PINS.Emir },
+    { id: STAFF_IDS.Adin, name: 'Adin', role: 'admin', pin: STAFF_PINS.Adin },
+    { id: STAFF_IDS.Muamer, name: 'Muamer', role: 'admin', pin: STAFF_PINS.Muamer },
+    { id: STAFF_IDS.Benza, name: 'Benza', role: 'radnik', pin: STAFF_PINS.Benza },
+    { id: STAFF_IDS.Nidal, name: 'Nidal', role: 'radnik', pin: STAFF_PINS.Nidal },
+  ]
+}
 
 /** Module scope, so the whole test suite pays for each hash exactly once. */
 const hashCache = new Map<string, string>()
@@ -129,29 +215,12 @@ export function seed(db: Db, opts: SeedOptions = {}): void {
     // Two roles: `admin` has the dashboard and the approvals and never appears
     // on a staff screen; `radnik` is everybody else, and which screen he works
     // tonight — Konobar or Šanker — is a choice on his session, not a property
-    // of his account. The three real accounts come first; `cast: 'full'` adds
-    // the three the test suites need.
-    const staff: Array<{
-      name: keyof typeof SEED_USER_IDS
-      role: 'admin' | 'radnik'
-      pinLen: 4 | 6
-    }> = [
-      { name: 'Haris', role: 'admin', pinLen: 4 },
-      { name: 'Amar', role: 'radnik', pinLen: 4 },
-      { name: 'Emir', role: 'radnik', pinLen: 4 },
-      ...(opts.cast === 'full'
-        ? [
-            { name: 'Lejla', role: 'radnik', pinLen: 4 },
-            { name: 'Dino', role: 'radnik', pinLen: 4 },
-            { name: 'Tarik', role: 'radnik', pinLen: 4 },
-          ] as const
-        : []),
-    ]
-    for (const person of staff) {
-      const userId = SEED_USER_IDS[person.name]
+    // of his account. Who arrives is `roster(cast)`: the café's seven people by
+    // default, the suites' six under `cast: 'full'`.
+    for (const person of roster(opts.cast ?? 'default')) {
       const isAdmin = person.role === 'admin'
       tx.insert(schema.users).values({
-        id: userId,
+        id: person.id,
         venueId,
         name: person.name,
         // Everyone goes by a first name here, so the avatar shows its first two
@@ -159,14 +228,16 @@ export function seed(db: Db, opts: SeedOptions = {}): void {
         initials: person.name.slice(0, 2).toUpperCase(),
         role: person.role,
         active: 1,
-        pinHash: devSecrets ? memoHash(DEV_PINS[person.name], userId) : null,
-        pinLen: person.pinLen,
+        pinHash: devSecrets ? memoHash(person.pin, person.id) : null,
+        pinLen: person.pin.length === 6 ? 6 : 4,
         pinSetAt: devSecrets ? now : null,
         pinPepperV: 1,
-        // Email + password is the only way into `/admin` on a laptop, and only an
-        // admin has one.
-        passwordHash: devSecrets && isAdmin ? memoHash(DEV_ADMIN_PASSWORD, userId) : null,
-        email: devSecrets && isAdmin ? DEV_ADMIN_EMAIL : null,
+        // Email + password is the only way into `/admin` on a laptop, and only
+        // one admin per cast has one.
+        passwordHash: devSecrets && isAdmin && person.password
+          ? memoHash(person.password, person.id)
+          : null,
+        email: devSecrets && isAdmin && person.email ? person.email : null,
         logSeenAt: null,
         createdAt: now,
       }).run()
