@@ -44,9 +44,14 @@ useHead({
 const badge: Record<string, () => number> = {
   puls: () => changes.attentionCount.value,
 }
-const dot: Record<string, () => boolean> = {
-  dnevnik: () => changes.logUnread.value,
-}
+/**
+ * A row that carries a quiet dot rather than a count.
+ *
+ * It is empty since *Dnevnik* left the nav, and it stays because the *Više*
+ * tab's dot is computed from it — a package that adds a row with news to
+ * report adds one line here rather than re-deriving the whole mechanism.
+ */
+const dot: Record<string, () => boolean> = {}
 
 /**
  * The rail's shape, by row id.
@@ -58,8 +63,8 @@ const dot: Record<string, () => boolean> = {
  */
 const GROUPS: Array<{ label: string, ids: string[] }> = [
   { label: 'Lokal', ids: ['puls', 'smjene', 'roba'] },
-  { label: 'Ljudi', ids: ['razgovor', 'raspored'] },
-  { label: 'Podešavanje', ids: ['postavke', 'dnevnik', 'izvoz'] },
+  { label: 'Ljudi', ids: ['raspored'] },
+  { label: 'Podešavanje', ids: ['postavke', 'izvoz'] },
 ]
 
 const grouped = computed(() => {
@@ -208,6 +213,11 @@ async function signOut() {
     <main class="a-main">
       <slot />
     </main>
+
+    <!-- *Razgovor*, as a button in the corner rather than a row in the nav.
+         It is mounted on the shell so it survives every route change with its
+         thread and its half-typed reply intact. -->
+    <ChatDock />
 
     <!-- The phone tabs. Hidden at 1024 px and above. -->
     <nav class="a-tabs" aria-label="Glavna navigacija">

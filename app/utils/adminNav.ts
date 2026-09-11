@@ -42,12 +42,17 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { id: 'puls', to: '/admin', label: 'Puls', icon: 'pulse', sub: 'Večeras, uživo', tab: true, ready: true },
   { id: 'smjene', to: '/admin/smjene', label: 'Smjena', icon: 'money', sub: 'Noći, pazar i predaje', tab: true, ready: true },
   { id: 'roba', to: '/admin/roba', label: 'Roba', icon: 'box', sub: 'Stanje, prijem, popisi, otpis', tab: true, ready: true },
-  // Phase 4 — WP1 flips `ready`, and that is the only line it touches here.
-  { id: 'razgovor', to: '/admin/razgovor', label: 'Razgovor', icon: 'chat', sub: 'Svi i Admini', ready: true },
-  // Phase 4 — WP2 flips `ready`.
+  // *Razgovor* is deliberately absent. Chat is not a place the owner navigates
+  // to and back from — it is something he answers while looking at a number, so
+  // it lives in `ChatDock`, the copper button pinned to the corner of every
+  // `/admin` screen. The page at `/admin/razgovor` still exists for a laptop.
   { id: 'raspored', to: '/admin/raspored', label: 'Raspored', icon: 'calendar', sub: 'Sedmica, zamjene i sati', ready: true },
   { id: 'postavke', to: '/admin/postavke', label: 'Meni i postavke', icon: 'users', sub: 'Cijene, normativi, stolovi, osoblje, uređaji', ready: true },
-  { id: 'dnevnik', to: '/admin/dnevnik', label: 'Dnevnik', icon: 'list', sub: 'Ko je šta uradio, po danima', ready: true },
+  // *Dnevnik* is absent too, by the owner's call — it is a record he reads when
+  // a number looks wrong, not a weekly destination. Nothing about the record
+  // changed: `log()` still writes an entry inside every admin transaction, and
+  // */admin/dnevnik* is still the page that reads them, reached from the
+  // sentence at the foot of *Podešavanja*.
   { id: 'izvoz', to: '/admin/izvoz', label: 'Izvoz', icon: 'calendar', sub: 'CSV fajlovi za period', ready: true },
 ]
 

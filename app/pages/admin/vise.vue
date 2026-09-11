@@ -2,15 +2,17 @@
 /**
  * *Više* — the phone's fourth tab.
  *
- * The bottom bar holds four targets, and the dashboard has six pages; the three
- * that do not fit live here as a plain card list. On a laptop nobody arrives
- * here, because the left nav shows all six.
+ * The bottom bar holds three targets and *Više*; the rest of the dashboard lives
+ * here as a plain card list. On a laptop nobody arrives here, because the left
+ * nav shows every row at once.
+ *
+ * *Razgovor* is not in this list and never will be: it is `ChatDock`, the button
+ * in the corner of every screen. *Dnevnik* is not here either — it left the nav
+ * by the owner's call and is reached from the foot of *Podešavanja*.
  */
 definePageMeta({ middleware: 'admin', layout: 'admin' })
 
 useHead({ title: 'Više' })
-
-const changes = useAdminChanges()
 
 // The list comes from `app/utils/adminNav.ts` (WP0), the same array the left
 // nav reads — so a Phase 4 row lands in both places at once.
@@ -35,7 +37,6 @@ const links = adminMore()
             <strong>{{ link.label }}</strong>
             <small>{{ link.sub }}</small>
           </span>
-          <UiPill v-if="link.id === 'dnevnik' && changes.logUnread.value" tone="bad">novo</UiPill>
           <UiIcon name="chevron-right" :size="20" />
         </NuxtLink>
       </template>

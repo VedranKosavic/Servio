@@ -101,8 +101,13 @@ async function save(key: keyof Settings, value: number | Role[]) {
       @save="save"
     />
 
+    <!-- The one way into *Dnevnik* since it left the nav. It is not a
+         destination the owner browses to — it is where he goes when a number
+         looks wrong, and this sentence is where he is standing when it does. -->
     <p class="p-foot">
-      Svaka izmjena ide u Dnevnik sa starom i novom vrijednošću.
+      Svaka izmjena ide u
+      <NuxtLink to="/admin/dnevnik" class="p-foot-link">Dnevnik</NuxtLink>
+      sa starom i novom vrijednošću.
     </p>
   </PostavkePage>
 </template>
@@ -116,4 +121,10 @@ async function save(key: keyof Settings, value: number | Role[]) {
 }
 
 .p-foot { margin: 0; color: var(--muted); font-size: var(--text-micro); }
+
+.p-foot-link {
+  color: var(--accent-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 </style>

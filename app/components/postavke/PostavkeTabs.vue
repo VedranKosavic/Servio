@@ -1,22 +1,30 @@
 <script setup lang="ts">
 /**
- * The eight screens of *Meni i postavke*, as one strip of chips.
+ * The screens of *Meni i postavke*, as one strip of chips.
  *
  * The left nav has one item for all of them ("Meni i postavke"), so this is what
- * actually moves the owner between the catalogue, the floor plan, the staff, the
- * phones and the thresholds. On a phone the strip scrolls sideways inside its
- * own box; the page body never does.
+ * actually moves the owner between the catalogue, the staff, the phones and the
+ * thresholds. On a phone the strip scrolls sideways inside its own box; the page
+ * body never does — but a strip that has to scroll is already one the owner
+ * cannot read at a glance, which is why it is six and not eight.
+ *
+ * **Two left.** *Stolovi* is the floor plan, and a café's 27 tables are drawn
+ * once and then never touched again; the page is still there at
+ * `/admin/postavke/stolovi` for the day a wall moves. *Šabloni* was never a menu
+ * screen at all — the two shift templates exist so *Raspored* has something to
+ * build a week out of, so it moved to the screen that uses it.
+ *
+ * The order is how often the owner opens them, not how the code is arranged:
+ * the menu and its categories are a weekly job, staff and phones a monthly one,
+ * and the thresholds and *Pravila* are set once.
  */
 const route = useRoute()
 
 const tabs = [
   { to: '/admin/meni', label: 'Meni' },
   { to: '/admin/postavke/kategorije', label: 'Kategorije' },
-  { to: '/admin/postavke/stolovi', label: 'Stolovi' },
   { to: '/admin/postavke/osoblje', label: 'Osoblje' },
   { to: '/admin/postavke/uredaji', label: 'Uređaji' },
-  // Phase 4, WP2. Reachability: without a chip here the page has no way in.
-  { to: '/admin/postavke/sabloni', label: 'Šabloni' },
   { to: '/admin/postavke', label: 'Podešavanja' },
   { to: '/admin/postavke/pravila', label: 'Pravila' },
 ]
