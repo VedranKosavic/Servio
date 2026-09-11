@@ -806,6 +806,29 @@ lost.** The rounds get typed in afterwards. That sentence is the whole of
 
 ---
 
+## The way back in if every phone is lost
+
+The sign-in pad is PIN-only and has nothing under it. A phone the server does not
+recognise is routed to the enrolment-code screen by the session itself, so the
+usual case needs no link — but the code comes from
+*Meni i postavke → Uređaji*, which needs somebody already signed in. If every
+enrolled device is lost, wiped or replaced at once, there is nobody to generate
+one and the café is locked out of its own database.
+
+**`/admin/login` is the way back.** It is the e-mail and password door, it is
+deliberately not linked from the pad any more, and it is the only entrance that
+does not need an enrolled device. Exactly one admin holds those credentials (the
+seed gives them to the first admin in the roster). Two things follow:
+
+- The owner should write that e-mail and password down somewhere off the
+  premises, once, and never on the phone that runs the app.
+- `SANK_DEV_ENROL` must stay **off** on this server. It is the dev door that
+  enrols any browser with no code at all, which on a public host means anybody
+  who finds the URL is one PIN guess from the till.
+
+Type the URL by hand — `https://<domena>/admin/login` — then enrol a phone from
+*Uređaji* and go back to using the pad.
+
 ## When it breaks
 
 | What you see | What it usually means |

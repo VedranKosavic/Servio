@@ -25,8 +25,6 @@ const tabs = [
   { to: '/admin/postavke/kategorije', label: 'Kategorije' },
   { to: '/admin/postavke/osoblje', label: 'Osoblje' },
   { to: '/admin/postavke/uredaji', label: 'Uređaji' },
-  { to: '/admin/postavke', label: 'Podešavanja' },
-  { to: '/admin/postavke/pravila', label: 'Pravila' },
 ]
 
 // Exact match, not `startsWith`: `/admin/postavke` is *Podešavanja* itself and must

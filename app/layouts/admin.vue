@@ -47,11 +47,14 @@ const badge: Record<string, () => number> = {
 /**
  * A row that carries a quiet dot rather than a count.
  *
- * It is empty since *Dnevnik* left the nav, and it stays because the *Više*
- * tab's dot is computed from it — a package that adds a row with news to
- * report adds one line here rather than re-deriving the whole mechanism.
+ * *Dnevnik* is no longer a row of its own — it lives inside *Ostalo* — so the
+ * dot moved up to the row that now contains it. The owner still learns there is
+ * something new to read without a number shouting at him from the nav, and the
+ * *Više* tab inherits it through `moreDot` below.
  */
-const dot: Record<string, () => boolean> = {}
+const dot: Record<string, () => boolean> = {
+  ostalo: () => changes.logUnread.value,
+}
 
 /**
  * The rail's shape, by row id.
@@ -64,7 +67,7 @@ const dot: Record<string, () => boolean> = {}
 const GROUPS: Array<{ label: string, ids: string[] }> = [
   { label: 'Lokal', ids: ['puls', 'smjene', 'roba'] },
   { label: 'Ljudi', ids: ['raspored'] },
-  { label: 'Podešavanje', ids: ['postavke', 'izvoz'] },
+  { label: 'Podešavanje', ids: ['postavke', 'ostalo'] },
 ]
 
 const grouped = computed(() => {
@@ -80,14 +83,16 @@ const grouped = computed(() => {
 /** The pages the phone hides behind *Više*. */
 const moreItems = computed(() => adminMore())
 
-function isActive(to: string): boolean {
-  // `/admin` is the exact page; everything else owns its whole subtree.
-  return to === '/admin' ? route.path === '/admin' : route.path.startsWith(to)
+function isActive(item: { to: string, match?: string[] }): boolean {
+  // `/admin` is the exact page; everything else owns its whole subtree, and a
+  // row whose screens are split across two prefixes names both in `match`.
+  return (item.match ?? [item.to]).some(path =>
+    path === '/admin' ? route.path === '/admin' : route.path.startsWith(path))
 }
 
 /** *Više* is active for any of its children, and carries their badges as one dot. */
 const moreActive = computed(() =>
-  route.path === '/admin/vise' || moreItems.value.some(item => isActive(item.to)))
+  route.path === '/admin/vise' || moreItems.value.some(item => isActive(item)))
 
 const moreDot = computed(() => moreItems.value.some(item => dot[item.id]?.() ?? false))
 
@@ -155,8 +160,8 @@ async function signOut() {
               v-else
               :to="item.to"
               class="a-nav-item"
-              :class="{ on: isActive(item.to) }"
-              :aria-current="isActive(item.to) ? 'page' : undefined"
+              :class="{ on: isActive(item) }"
+              :aria-current="isActive(item) ? 'page' : undefined"
             >
               <UiIcon :name="item.icon" :size="20" />
               <span>{{ item.label }}</span>
@@ -226,8 +231,8 @@ async function signOut() {
         :key="item.id"
         :to="item.to"
         class="a-tab"
-        :class="{ on: isActive(item.to) }"
-        :aria-current="isActive(item.to) ? 'page' : undefined"
+        :class="{ on: isActive(item) }"
+        :aria-current="isActive(item) ? 'page' : undefined"
       >
         <span class="a-tab-icon">
           <UiIcon :name="item.icon" :size="22" />

@@ -56,6 +56,7 @@ function save() {
     :open="open"
     title="Novi uređaj"
     :pending="pending"
+    :content-key="result ? 'kod' : 'forma'"
     @close="emit('close')"
   >
     <template #footer>
@@ -131,7 +132,24 @@ function save() {
   font-weight: 600;
 }
 
-/* Big enough to read out from the other side of the bar. */
+/**
+ * **Big on purpose**, and it is a type step rather than a number because the
+ * whole palette is.
+ *
+ * `--text-display` is not a dark-theme-only token: the scale lives in the
+ * `@theme` block in `app/assets/css/main.css`, and Tailwind v4 emits those onto
+ * `:root`, so every step resolves under `[data-theme='light']` too. (Checked
+ * rather than assumed — `getComputedStyle(document.documentElement)` on an
+ * `/admin` page answers `2.5rem`.) `admin.css` redefines *colour* per theme, not
+ * the type scale.
+ *
+ * Six characters are typed into a second phone, usually by somebody reading them
+ * off a first one held at arm's length, and an O misread as a 0 costs the enrol
+ * attempt and a rate-limit step. Shrinking it to body size to make it harder to
+ * read over a shoulder trades a real, frequent failure against a threat the
+ * sheet does not actually face: the owner opens this deliberately, next to the
+ * phone being enrolled, and the code is single-use and short-lived.
+ */
 .p-code {
   margin: 0;
   font-family: var(--font-title);

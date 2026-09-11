@@ -93,7 +93,8 @@ not secrets.** Before a real install, set real PINs in `/admin/postavke/osoblje`
 - `/` — the PIN pad, then the screen chooser for a worker
 - `/konobar` — floor plan, table, order, payment, storno, end of shift, count, waste, chat, schedule, rules
 - `/sanker` — tickets, approval queue, count, chat, schedule; `/stanje` — stock and deliveries
-- `/admin` — Puls, shifts, stock and reports, menu, settings, schedule, exports
+- `/admin` — Puls, shifts, stock and reports, menu and staff, the roster, and
+  *Ostalo* for the rest
 
 Two `/admin` screens are deliberately **not** in the navigation. *Razgovor* is
 the copper button in the corner of every dashboard screen (`ChatDock`), because
@@ -104,9 +105,18 @@ a weekly destination — and is reached from the sentence at the foot of
 *Podešavanja*. Nothing about the record changed: `log()` still writes an entry
 inside every admin transaction.
 
-*Meni i postavke* is six tabs, not eight. *Stolovi* is drawn once and still
-lives at `/admin/postavke/stolovi`; *Šabloni* moved to *Raspored*, which is the
-only screen that uses the shift templates.
+*Meni i postavke* is four tabs — Meni, Kategorije, Osoblje, Uređaji. *Raspored*
+is one screen, not four. Everything a café opens a few times a year rather than
+weekly is behind `/admin/ostalo`: *Podešavanja*, *Pravila*, *Stolovi*,
+*Šabloni*, *Dnevnik* and *Izvoz*. None of them was deleted, and two must not be
+— *Podešavanja* holds the thresholds every manjak flag is measured against, and
+*Pravila* is the page staff acknowledge, which is what keeps PLAN §8
+accountability rather than surveillance.
+
+The pad has nothing under it. The PIN is the only advertised way in: an unknown
+phone is routed to the enrol code by the session itself, and `/admin/login`
+still works but is no longer linked — it is the way back if every enrolled
+device is lost at once.
 
 ## What holds the system together
 

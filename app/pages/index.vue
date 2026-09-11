@@ -58,15 +58,18 @@ const view = ref<View>('boot')
 /**
  * Why the enrol screen is on — and it is the whole point of this ref.
  *
- * `null` is the foot-row tap: somebody chose *Ovaj telefon nije prijavljen?*
- * and knows why he is here. The other two are the screen arriving uninvited,
- * and then it owes the person a sentence:
+ * The enrol view is now only ever reached uninvited: the pad has no rows under
+ * it, so nobody chooses this screen, the session decides it. That means it
+ * always owes the person a sentence saying which of the two things happened:
  *
  *   `unknown` this phone presented a `sank_d` the server has no row for — a
  *             database rebuilt under a browser that kept its cookie, or a
  *             device deleted in *Postavke → Uređaji*. **Not a PIN problem**,
  *             and the pad used to let it look like one.
  *   `revoked` the owner threw this phone out, or fifteen failures locked it.
+ *
+ * `null` is only the resting value before either has been decided; the enrol
+ * view is never drawn while it holds.
  */
 type DeviceReason = 'unknown' | 'revoked' | null
 const deviceReason = ref<DeviceReason>(null)
@@ -541,34 +544,22 @@ async function afterLogin() {
             @submit="submitPin"
           />
 
-          <!-- The device door. Quiet, and at the foot: it is the once-a-year
-               case, and the pad is the screen. -->
-          <button type="button" class="more quiet" :disabled="busy" @click="enrolPath()">
-            <span>Ovaj telefon nije prijavljen?</span>
-            <svg
-              class="more-chev" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
-              fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
-              stroke-linejoin="round"
-            ><path d="M9 6l6 6-6 6" /></svg>
-          </button>
-
           <!--
-            The laptop's door, and the reason this row exists at all.
-            `/admin` and *Odjavi se* both end on this pad now, which is right for
-            the phone in the owner's apron and a dead end on a laptop: a laptop
-            is not an enrolled device, so it has no PIN to type here. One quiet
-            row is the way out. It names no person and no role — the pad still
-            offers nobody — only the fact that a second door exists, which is
-            already true of `/admin/login` itself.
+            **Nothing under the pad.** There were two quiet rows here — *Ovaj
+            telefon nije prijavljen?* and *Prijava e-mailom* — and the owner's
+            instruction is that the PIN is the only way in.
+
+            Neither was load-bearing. The device row was a shortcut to a screen
+            the pad already reaches by itself: `boot()` reads `nodevice` from the
+            session and routes to the enrol view unprompted, with a sentence
+            saying why, so a phone the server does not know still gets its code
+            without anybody choosing anything. The e-mail row pointed at
+            `/admin/login`, which still exists and still works — it is simply no
+            longer advertised on the screen every waiter looks at twice a night.
+            That route is the way back in if every enrolled device is ever lost
+            at once, so it is unlinked rather than deleted, and `deploy/` is
+            where that is written down.
           -->
-          <NuxtLink to="/admin/login" class="more quiet">
-            <span>Prijava e-mailom</span>
-            <svg
-              class="more-chev" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
-              fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
-              stroke-linejoin="round"
-            ><path d="M9 6l6 6-6 6" /></svg>
-          </NuxtLink>
         </section>
 
         <template #fallback>

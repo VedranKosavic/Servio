@@ -6,6 +6,13 @@
  * instead of the plain one, and what the *Kategorije* report groups nabavka and
  * prodaja by. `note_chips` are the quick notes the waiter taps instead of typing
  * ("bez šećera", "duplo"), entered here one per line.
+ *
+ * **`sort` is here for the laptop only.** A phone reorders by moving a row in
+ * the list, which is a swap of two numbers and therefore cannot be a field on a
+ * form with one Save; a laptop has the whole table in front of it and typing a
+ * number is a reasonable thing to ask there. Either way the number is still sent
+ * — the field is hidden, not dropped — so a phone edit never resets a category's
+ * place in the menu.
  */
 import type { CategoryAdmin, CategoryKind } from '#shared/types'
 import type { CreateCategoryBody, UpdateCategoryBody } from '#shared/schemas'
@@ -14,6 +21,10 @@ const props = defineProps<{
   open: boolean
   /** `null` means *Nova kategorija*. */
   category: CategoryAdmin | null
+  /** Where a new category goes: one past the last one. */
+  nextSort: number
+  /** The laptop edits `sort` as a number; the phone moves rows instead. */
+  showSort: boolean
   pending: boolean
   error: string | null
 }>()
@@ -43,7 +54,7 @@ watch(() => [props.open, props.category?.id], () => {
   name.value = category?.name ?? ''
   kind.value = category?.kind ?? 'pice'
   chips.value = (category?.note_chips ?? []).join('\n')
-  sort.value = category?.sort ?? 0
+  sort.value = category?.sort ?? props.nextSort
   active.value = category?.active ?? true
 }, { immediate: true })
 
@@ -97,6 +108,7 @@ function save() {
     />
 
     <PostavkeNumField
+      v-if="showSort"
       label="Sortiranje"
       :model-value="sort"
       kind="int"
