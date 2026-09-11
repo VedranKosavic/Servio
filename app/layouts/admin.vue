@@ -47,14 +47,11 @@ const badge: Record<string, () => number> = {
 /**
  * A row that carries a quiet dot rather than a count.
  *
- * *Dnevnik* is no longer a row of its own — it lives inside *Ostalo* — so the
- * dot moved up to the row that now contains it. The owner still learns there is
- * something new to read without a number shouting at him from the nav, and the
- * *Više* tab inherits it through `moreDot` below.
+ * Empty since *Dnevnik* was deleted, and kept because the *Više* tab's dot is
+ * computed from it — a row with news to report adds one line here rather than
+ * re-deriving the mechanism.
  */
-const dot: Record<string, () => boolean> = {
-  ostalo: () => changes.logUnread.value,
-}
+const dot: Record<string, () => boolean> = {}
 
 /**
  * The rail's shape, by row id.
@@ -67,7 +64,7 @@ const dot: Record<string, () => boolean> = {
 const GROUPS: Array<{ label: string, ids: string[] }> = [
   { label: 'Lokal', ids: ['puls', 'smjene', 'roba'] },
   { label: 'Ljudi', ids: ['raspored'] },
-  { label: 'Podešavanje', ids: ['postavke', 'ostalo'] },
+  { label: 'Podešavanje', ids: ['postavke'] },
 ]
 
 const grouped = computed(() => {

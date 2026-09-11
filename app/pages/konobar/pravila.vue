@@ -6,7 +6,7 @@
  * Three layers, in this order, and each is here for a different reason:
  *
  * 1. **The published document.** `rules.body_md`, written by the owner on
- *    `/admin/postavke/pravila` and versioned; a correction is a new version, never
+ *    the owner and versioned; a correction is a new version, never
  *    an edit. The `{{…}}` thresholds inside it are filled from
  *    `me.venue.settings` at render time, so a number changed in *Podešavanja*
  *    changes here on every phone **without** a new version — which is the whole

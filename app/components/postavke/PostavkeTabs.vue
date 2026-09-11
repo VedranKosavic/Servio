@@ -1,22 +1,23 @@
 <script setup lang="ts">
 /**
- * The screens of *Meni i postavke*, as one strip of chips.
+ * The three screens of *Meni i postavke*, as one strip.
  *
- * The left nav has one item for all of them ("Meni i postavke"), so this is what
- * actually moves the owner between the catalogue, the staff, the phones and the
- * thresholds. On a phone the strip scrolls sideways inside its own box; the page
- * body never does — but a strip that has to scroll is already one the owner
- * cannot read at a glance, which is why it is six and not eight.
+ * It was eight chips and is now three. *Podešavanja*, *Pravila*, *Stolovi* and
+ * *Šabloni* were deleted outright on the owner's call; *Uređaji* is the one
+ * survivor that is not here, and that is deliberate rather than an oversight —
+ * see below.
  *
- * **Two left.** *Stolovi* is the floor plan, and a café's 27 tables are drawn
- * once and then never touched again; the page is still there at
- * `/admin/postavke/stolovi` for the day a wall moves. *Šabloni* was never a menu
- * screen at all — the two shift templates exist so *Raspored* has something to
- * build a week out of, so it moved to the screen that uses it.
+ * **Uređaji has no chip but still has its URL.** The owner asked for the tab
+ * gone, and the tab is gone. The page is not, because
+ * `/admin/postavke/uredaji` is the only screen in the app that mints a device
+ * enrolment code, and a phone cannot sign in until somebody does: the pad asks
+ * for a PIN, the PIN needs a device cookie, and the cookie needs a code from
+ * this screen. Deleting the page would mean no phone could ever be added to the
+ * café — including the first one, on the day this is installed. So the route
+ * stays reachable by typing it, and this comment is the note to whoever wonders
+ * why it is not in the strip.
  *
- * The order is how often the owner opens them, not how the code is arranged:
- * the menu and its categories are a weekly job, staff and phones a monthly one,
- * and the thresholds and *Pravila* are set once.
+ * The order is how often the owner opens them.
  */
 const route = useRoute()
 
@@ -24,11 +25,9 @@ const tabs = [
   { to: '/admin/meni', label: 'Meni' },
   { to: '/admin/postavke/kategorije', label: 'Kategorije' },
   { to: '/admin/postavke/osoblje', label: 'Osoblje' },
-  { to: '/admin/postavke/uredaji', label: 'Uređaji' },
 ]
 
-// Exact match, not `startsWith`: `/admin/postavke` is *Podešavanja* itself and must
-// not light up while `/admin/postavke/stolovi` is open.
+// Exact match, not `startsWith`: a tab lights up for its own screen only.
 const isOn = (to: string) => route.path === to
 </script>
 

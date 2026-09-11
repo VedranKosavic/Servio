@@ -3,10 +3,11 @@
  * `/admin/raspored` — the owner's roster: the week, and nothing else.
  *
  * **It used to be four tabs and is now one screen.** *Sati* (the month planned
- * against worked) is gone; *Šabloni* lives at `/admin/postavke/sabloni` and the
- * week's own empty state is what points at it, which is the only moment anybody
- * needs it; *Zamjene* is at `/admin/raspored/zamjene` and is linked from the
- * strip below — but **only while somebody is actually waiting on an answer**.
+ * against worked) and *Šabloni* are both gone — the templates screen went with
+ * the rest of *Ostalo*, so the two the venue has (*Dnevna*, *Večernja*) are
+ * whatever the seed wrote. *Zamjene* is at `/admin/raspored/zamjene` and is
+ * linked from the strip below — but **only while somebody is actually waiting
+ * on an answer**.
  *
  * That last one is the only part of this worth explaining. A waiter can raise a
  * swap from `/konobar/raspored`, and the owner is the only person who can assign

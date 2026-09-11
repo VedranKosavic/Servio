@@ -239,7 +239,11 @@ function rosterFiles(): string[] {
     'app/components/raspored', 'app/pages/admin/raspored',
     'app/pages/konobar/raspored', 'app/pages/sanker/raspored',
   ]
-  const found = ['app/composables/useRoster.ts', 'app/pages/admin/postavke/sabloni.vue']
+  // `app/pages/admin/postavke/sabloni.vue` used to be listed here. The shift
+  // templates screen was deleted with the rest of *Ostalo* on the owner's call,
+  // so the roster is built from its own folders plus the one composable that
+  // lives outside them.
+  const found = ['app/composables/useRoster.ts']
 
   function walk(dir: string) {
     for (const name of readdirSync(dir)) {

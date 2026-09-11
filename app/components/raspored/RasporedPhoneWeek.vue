@@ -169,7 +169,6 @@ function toggle(cell: RosterCell) {
 
       <p v-if="!day.cells.length" class="r-empty">
         Nema nijednog šablona smjene.
-            <NuxtLink to="/admin/postavke/sabloni" class="r-empty-link">Napravi šablon</NuxtLink>
       </p>
 
       <div v-for="cell in day.cells" :key="cell.template.id" class="r-row">
@@ -422,12 +421,4 @@ function toggle(cell: RosterCell) {
 .r-nobody-row { margin: 0; color: var(--muted); font-size: var(--text-micro); }
 .r-quiet { margin: 2px 0 0; color: var(--muted); font-size: var(--text-caption); line-height: 1.35; }
 
-.r-empty-link {
-  display: inline-block;
-  margin-left: 4px;
-  color: var(--accent-ink);
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
 </style>

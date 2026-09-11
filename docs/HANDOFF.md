@@ -93,25 +93,27 @@ not secrets.** Before a real install, set real PINs in `/admin/postavke/osoblje`
 - `/` — the PIN pad, then the screen chooser for a worker
 - `/konobar` — floor plan, table, order, payment, storno, end of shift, count, waste, chat, schedule, rules
 - `/sanker` — tickets, approval queue, count, chat, schedule; `/stanje` — stock and deliveries
-- `/admin` — Puls, shifts, stock and reports, menu and staff, the roster, and
-  *Ostalo* for the rest
+- `/admin` — Puls, Smjena, Roba, Raspored, Meni i postavke. Four nav rows, and
+  that is the whole dashboard.
 
-Two `/admin` screens are deliberately **not** in the navigation. *Razgovor* is
-the copper button in the corner of every dashboard screen (`ChatDock`), because
-chat is something the owner answers while looking at a number rather than a
-place he travels to; the full page survives at `/admin/razgovor`. *Dnevnik* left
-the nav by the owner's call — it is what he opens when a number looks wrong, not
-a weekly destination — and is reached from the sentence at the foot of
-*Podešavanja*. Nothing about the record changed: `log()` still writes an entry
-inside every admin transaction.
+**A lot was deleted, on the owner's explicit call** — pages and all, not hidden:
+*Dnevnik*, *Izvoz*, *Podešavanja*, *Pravila* (the admin editor), *Stolovi*,
+*Šabloni*, and under *Roba* the *Popisi*, *Otpis*, *Nargila* and *Kategorije*
+tabs. What that costs is written down in the morning report for 12.09; the two
+worth repeating here are that **thresholds can no longer be edited** (they keep
+whatever `settings_json` holds) and **Pravila can no longer be published**, so
+the staff acknowledgement flow has no way to get a new version.
 
-*Meni i postavke* is four tabs — Meni, Kategorije, Osoblje, Uređaji. *Raspored*
-is one screen, not four. Everything a café opens a few times a year rather than
-weekly is behind `/admin/ostalo`: *Podešavanja*, *Pravila*, *Stolovi*,
-*Šabloni*, *Dnevnik* and *Izvoz*. None of them was deleted, and two must not be
-— *Podešavanja* holds the thresholds every manjak flag is measured against, and
-*Pravila* is the page staff acknowledge, which is what keeps PLAN §8
-accountability rather than surveillance.
+`log_entries` is still written inside every admin transaction — the record
+survived, only the screen that read it is gone.
+
+*Razgovor* is not in the nav either: it is `ChatDock`, the copper button in the
+corner of every dashboard screen, with the full page still at `/admin/razgovor`.
+
+**`/admin/postavke/uredaji` has no tab but still has its URL**, and that is
+deliberate: it is the only screen that mints a device enrolment code, and a
+phone cannot sign in without one. Deleting it would mean no phone could ever be
+added, including the first one on install day.
 
 The pad has nothing under it. The PIN is the only advertised way in: an unknown
 phone is routed to the enrol code by the session itself, and `/admin/login`

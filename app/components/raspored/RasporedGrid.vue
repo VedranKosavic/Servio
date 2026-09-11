@@ -97,7 +97,6 @@ const days = computed(() => props.week.days.map(d => d.work_date))
         <tr v-if="!rows.length">
           <td :colspan="8" class="r-empty">
             Nema nijednog šablona smjene.
-            <NuxtLink to="/admin/postavke/sabloni" class="r-empty-link">Napravi šablon</NuxtLink>
           </td>
         </tr>
       </tbody>
@@ -187,12 +186,4 @@ const days = computed(() => props.week.days.map(d => d.work_date))
   .r-wrap { display: none; }
 }
 
-.r-empty-link {
-  display: inline-block;
-  margin-left: 4px;
-  color: var(--accent-ink);
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
 </style>

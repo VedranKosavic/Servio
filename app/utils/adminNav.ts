@@ -15,8 +15,7 @@
  */
 
 /** The names in `UiIcon`'s set, spelled out — plain `tsc` cannot read a type
- * out of a single-file component, which is why `admin.vue` and
- * `dnevnikKinds.ts` spell the same union. */
+ * out of a single-file component, which is why this file spells the union. */
 export type AdminIcon =
   | 'pulse' | 'money' | 'box' | 'list' | 'users' | 'calendar'
   | 'chevron-right' | 'check' | 'x' | 'clock' | 'more' | 'chat' | 'image'
@@ -59,19 +58,11 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // that moved to *Ostalo* and is no longer one of this row's four tabs. The row
   // has to land on a tab it actually shows.
   { id: 'postavke', to: '/admin/meni', match: ['/admin/meni', '/admin/postavke'], label: 'Meni i postavke', icon: 'users', sub: 'Cijene, kategorije, osoblje i uređaji', ready: true },
-  // *Dnevnik* is absent too, by the owner's call — it is a record he reads when
-  // a number looks wrong, not a weekly destination. Nothing about the record
-  // changed: `log()` still writes an entry inside every admin transaction, and
-  // */admin/dnevnik* is still the page that reads them, reached from the
-  // sentence at the foot of *Podešavanja*.
-  // One row for everything the owner touches a few times a year: the
-  // thresholds, the published *Pravila*, the floor plan, the *Dnevnik* and the
-  // CSV export. Each of those used to hold a row or a tab of its own, and
-  // between them they made both the nav and the *Meni i postavke* strip longer
-  // than anybody could read at a glance. They are not deleted — every one of
-  // them still works, and a café needs all five eventually — they are simply
-  // not in the way of the four screens this dashboard is actually for.
-  { id: 'ostalo', to: '/admin/ostalo', label: 'Ostalo', icon: 'more', sub: 'Pragovi, pravila, stolovi, dnevnik i izvoz', ready: true },
+  // Four rows, and that is the whole dashboard. *Dnevnik*, *Izvoz*,
+  // *Podešavanja*, *Pravila*, *Stolovi* and *Šabloni* were deleted outright on
+  // the owner's call — not hidden, deleted, pages and all. `log()` still writes
+  // an entry inside every admin transaction and `log_entries` is still the
+  // record behind it; what is gone is the screen that read it.
 ]
 
 /** The rows the phone's bottom bar shows. Four targets, and *Više* is the fifth. */
@@ -82,4 +73,95 @@ export function adminTabs(): AdminNavItem[] {
 /** Everything the bottom bar cannot fit — the *Više* list. */
 export function adminMore(): AdminNavItem[] {
   return ADMIN_NAV.filter(item => !item.tab)
+}
+
+/**
+ * Where *Nazad* goes from a given `/admin` path, or `null` on a screen that is
+ * already a destination.
+ *
+ * The owner's words were that navigating back and forth was "missing and
+ * heavily needed": the phone has four bottom tabs and no browser chrome, so a
+ * drill-down — a shift, an article, a delivery — was a one-way trip ending in a
+ * tab tap that threw the context away.
+ *
+ * **It walks up the real router, not the string.** Chopping a segment off a path
+ * produces plenty of URLs that are not pages: `/admin/smjena/<id>` would give
+ * `/admin/smjena`, which 404s. So the caller passes `exists`, backed by
+ * `router.resolve`, and this climbs until it finds an ancestor that actually
+ * resolves. Two consequences worth knowing: a page added tomorrow is handled
+ * with no change here, and a page deleted tomorrow cannot leave a back button
+ * pointing into nothing.
+ *
+ * `ROOTS` are the screens a tab reaches directly. They end the climb rather than
+ * starting one, because *Nazad* out of a destination is the bottom bar's job.
+ * `OVERRIDES` are the handful of places where the nearest resolvable ancestor is
+ * not the one a person means — a shift belongs to *Smjene* even though the two
+ * spell their path differently.
+ */
+const BACK_ROOTS = new Set([
+  '/admin',
+  '/admin/smjene',
+  '/admin/roba',
+  '/admin/roba/prijem',
+  '/admin/raspored',
+  '/admin/meni',
+  '/admin/postavke/kategorije',
+  '/admin/postavke/osoblje',
+  '/admin/vise',
+])
+
+const BACK_OVERRIDES: Array<[RegExp, string]> = [
+  // `/admin/smjena/<id>` — singular path, plural list. Climbing finds `/admin`.
+  [/^\/admin\/smjena\/[^/]+$/, '/admin/smjene'],
+]
+
+export function adminBack(path: string, exists: (candidate: string) => boolean): string | null {
+  const clean = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path
+  if (BACK_ROOTS.has(clean)) return null
+  if (!clean.startsWith('/admin')) return null
+
+  for (const [pattern, target] of BACK_OVERRIDES) {
+    if (pattern.test(clean)) return target
+  }
+
+  let candidate = clean
+  for (;;) {
+    const cut = candidate.lastIndexOf('/')
+    if (cut < '/admin'.length - 1) break
+    candidate = candidate.slice(0, cut) || '/admin'
+    if (candidate === '/admin') return '/admin'
+    if (exists(candidate)) return candidate
+  }
+  return '/admin'
+}
+
+/** The label on the way back — a nav row's own name when the target is one. */
+export function adminBackLabel(to: string): string {
+  return ADMIN_NAV.find(item => item.to === to)?.label ?? 'Nazad'
+}
+
+/**
+ * The same destination in the accusative, because *na* governs it.
+ *
+ * The visible label is the screen's own name and is right as it stands — a
+ * button reading *Smjena* is a noun, not a sentence. The **accessible** name is
+ * a sentence, and "Nazad na Smjena" is not Bosnian: feminine nouns in *-a* take
+ * *-u* after *na* (*Smjenu*, *Robu*), while the masculine ones do not change
+ * (*Puls*, *Raspored*). Five rows, so the forms are written out rather than
+ * guessed at by a rule that would be wrong the first time somebody adds a sixth.
+ *
+ * A target that is not a nav row — the middle of a drill-down, say — has no name
+ * worth reading out, so the label is the whole sentence.
+ */
+const BACK_ACCUSATIVE: Record<string, string> = {
+  '/admin': 'Puls',
+  '/admin/smjene': 'Smjenu',
+  '/admin/roba': 'Robu',
+  '/admin/raspored': 'Raspored',
+  '/admin/meni': 'Meni i postavke',
+}
+
+export function adminBackAria(to: string): string {
+  const accusative = BACK_ACCUSATIVE[to]
+  return accusative ? `Nazad na ${accusative}` : 'Nazad'
 }
