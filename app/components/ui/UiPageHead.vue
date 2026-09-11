@@ -18,8 +18,21 @@
  * `stale` is the sentence a page shows when its numbers are older than it would
  * like. It is a `role="status"` and not an `alert`, because the screen still
  * works: the old figures are on it and it is saying so.
+ *
+ * **Nazad appears by itself.** Every drill-down used to be a one-way trip: the
+ * phone has four bottom tabs and no browser chrome, so the only way out of a
+ * shift or an article was to tap a tab, which threw away where you had been.
+ * The head now draws the way back on any screen that is not itself a tab
+ * destination, and no page has to remember to ask for it.
+ *
+ * It is a `NuxtLink` to a real parent and **not** `router.back()`. History is
+ * not a hierarchy: after a reload there is nothing behind you, and after
+ * arriving from a link *back* is whatever the person was reading before the
+ * app. A named destination always goes to the same place, which is the thing
+ * that makes it worth tapping. `adminBack` in `app/utils/adminNav.ts` picks it
+ * by climbing the router, so it can never point at a URL that is not a page.
  */
-defineProps<{
+const props = defineProps<{
   title: string
   /** The quiet line under the title: a date, a period, "Ažurirano 22:41". */
   sub?: string
@@ -27,11 +40,44 @@ defineProps<{
   eyebrow?: string
   /** Shown in `--danger` under the head when a read did not land. */
   stale?: string
+  /**
+   * Override the computed way back: a path, or `null` on a screen that must not
+   * offer one. Left alone (`undefined`), the head works it out.
+   *
+   * **`null` and not `false`, and that is not a style choice.** Vue reads the
+   * prop *types* off this interface, and a union containing `false` makes this a
+   * Boolean prop — at which point an absent `back` arrives as `false` rather
+   * than `undefined`, because that is how Vue casts a boolean attribute nobody
+   * wrote. The first version of this said `string | false`, so the "suppress
+   * it" branch fired on every screen in the app and the back link never drew
+   * once. `null` is not a boolean, so nothing is cast and an absent prop stays
+   * absent.
+   */
+  back?: string | null
 }>()
+
+const route = useRoute()
+const router = useRouter()
+
+const backTo = computed(() => {
+  if (props.back === null) return null
+  if (typeof props.back === 'string') return props.back
+  return adminBack(route.path, candidate => router.resolve(candidate).matched.length > 0)
+})
+
+const backLabel = computed(() => (backTo.value ? adminBackLabel(backTo.value) : ''))
+const backAria = computed(() => (backTo.value ? adminBackAria(backTo.value) : ''))
 </script>
 
 <template>
   <header class="a-head">
+    <NuxtLink v-if="backTo" :to="backTo" class="a-head-back" :aria-label="backAria">
+      <!-- The kit has one chevron and it points right; a back arrow is the same
+           shape mirrored, which keeps the two identical in weight and grid. -->
+      <UiIcon name="chevron-right" :size="20" class="a-head-back-icon" />
+      <span>{{ backLabel }}</span>
+    </NuxtLink>
+
     <div class="a-head-text">
       <p v-if="eyebrow || $slots.eyebrow" class="a-head-eyebrow">
         <slot name="eyebrow">{{ eyebrow }}</slot>
@@ -53,6 +99,37 @@ defineProps<{
   flex-wrap: wrap;
   min-width: 0;
 }
+
+/**
+ * The way back sits above the title on its own line, at full row width.
+ *
+ * Not beside the title: a phone title wraps to two lines often enough that a
+ * left-hand button would either squeeze it or float away from it. Above reads
+ * as "you came from here", which is what it means, and it gives the tap a
+ * 44 px row of its own without stealing any width from the title.
+ */
+.a-head-back {
+  order: -1;
+  flex-basis: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  align-self: flex-start;
+  height: var(--tap);
+  margin: -10px 0 -6px -8px;
+  padding: 0 10px 0 4px;
+  border-radius: var(--radius-field);
+  color: var(--muted);
+  font-size: var(--text-label);
+  font-weight: 600;
+  text-decoration: none;
+  width: fit-content;
+  transition: color var(--dur-fast) var(--ease-standard);
+}
+
+.a-head-back:hover { color: var(--ink); }
+.a-head-back:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.a-head-back-icon { transform: scaleX(-1); }
 
 .a-head-text { display: flex; flex-direction: column; min-width: 0; }
 

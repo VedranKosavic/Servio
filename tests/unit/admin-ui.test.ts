@@ -20,6 +20,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { adminBack, adminBackAria, adminBackLabel } from '../../app/utils/adminNav'
 import { attentionTarget } from '../../shared/attention'
 import { ATTENTION_ROUTES } from '../../shared/types/owner'
 import type { AttentionItem } from '../../shared/types/owner'
@@ -229,5 +230,75 @@ describe('the light theme is one palette', () => {
       .filter(path => emoji.test(readFileSync(path, 'utf8')))
 
     expect(offenders).toEqual([])
+  })
+})
+
+/**
+ * *Nazad*, which is computed and not hand-written on each page.
+ *
+ * The failure this guards against is a back button that points at a URL which
+ * is not a page — the exact thing that happens when you chop a segment off a
+ * path and hope. `adminBack` climbs the real router instead, so the fake
+ * `exists` here has to behave like one: it matches dynamic segments too, the
+ * way `router.resolve` does.
+ */
+describe('the way back', () => {
+  const PAGES = new Set([
+    '/admin', '/admin/smjene', '/admin/roba', '/admin/roba/prijem', '/admin/raspored',
+    '/admin/raspored/zamjene', '/admin/meni', '/admin/postavke/kategorije',
+    '/admin/postavke/osoblje', '/admin/postavke/uredaji', '/admin/vise', '/admin/razgovor',
+  ])
+  const DYNAMIC = [
+    /^\/admin\/smjena\/[^/]+$/,
+    /^\/admin\/smjena\/[^/]+\/stavke$/,
+    /^\/admin\/roba\/artikal\/[^/]+$/,
+  ]
+  const exists = (path: string) => PAGES.has(path) || DYNAMIC.some(r => r.test(path))
+
+  it('offers nothing on a screen a tab reaches directly', () => {
+    for (const root of ['/admin', '/admin/smjene', '/admin/roba', '/admin/roba/prijem',
+      '/admin/meni', '/admin/postavke/osoblje', '/admin/raspored']) {
+      expect(adminBack(root, exists), root).toBeNull()
+    }
+  })
+
+  it('climbs to the nearest ancestor that is really a page', () => {
+    expect(adminBack('/admin/smjena/abc/stavke', exists)).toBe('/admin/smjena/abc')
+    expect(adminBack('/admin/roba/artikal/xyz', exists)).toBe('/admin/roba')
+    expect(adminBack('/admin/raspored/zamjene', exists)).toBe('/admin/raspored')
+  })
+
+  it('sends a shift to Smjene, whose path is spelled differently', () => {
+    expect(adminBack('/admin/smjena/abc', exists)).toBe('/admin/smjene')
+  })
+
+  it('falls back to Puls rather than to a 404', () => {
+    expect(adminBack('/admin/postavke/uredaji', exists)).toBe('/admin')
+    expect(adminBack('/admin/razgovor', exists)).toBe('/admin')
+  })
+
+  it('never returns a path the router would not resolve', () => {
+    const paths = ['/admin/smjena/a', '/admin/smjena/a/stavke', '/admin/roba/artikal/b',
+      '/admin/raspored/zamjene', '/admin/postavke/uredaji', '/admin/razgovor']
+    for (const path of paths) {
+      const target = adminBack(path, exists)
+      if (target !== null) expect(exists(target), `${path} -> ${target}`).toBe(true)
+    }
+  })
+
+  it('names the destination when it is a nav row', () => {
+    expect(adminBackLabel('/admin')).toBe('Puls')
+    expect(adminBackLabel('/admin/roba')).toBe('Roba')
+    expect(adminBackLabel('/admin/smjena/abc')).toBe('Nazad')
+  })
+
+  /** *na* governs the accusative: Smjenu and Robu, but Puls and Raspored. */
+  it('inflects the destination in the accessible name', () => {
+    expect(adminBackAria('/admin/smjene')).toBe('Nazad na Smjenu')
+    expect(adminBackAria('/admin/roba')).toBe('Nazad na Robu')
+    expect(adminBackAria('/admin')).toBe('Nazad na Puls')
+    expect(adminBackAria('/admin/raspored')).toBe('Nazad na Raspored')
+    // No name worth reading out, so the label is the whole sentence.
+    expect(adminBackAria('/admin/smjena/abc')).toBe('Nazad')
   })
 })
