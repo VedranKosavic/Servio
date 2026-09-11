@@ -435,6 +435,19 @@ shared primitive reads the token and is correct in the area it renders in,
 instead of guessing from the viewport width. This is what makes `UiButton` and
 `UiField` safe to use on `/konobar/raspored`.
 
+**The floor plan is drawn twice, on purpose.** `/konobar`'s `FloorPlan` +
+`FloorTable` and `/admin`'s `puls/PulsFloor` + `puls/PulsFloorTable` lay the room
+out by the same rule — one stack per `col`, ordered by `row`, shorter stacks
+centred, a `grp` in its own dashed box — and that rule lives in neither of them:
+it is `floorZones()` in `app/utils/puls.ts` and the catalogue's own coordinates.
+What differs is what a tile *says*, and it is a different question on each
+screen: a waiter's asks *is this mine* (copper, or a colleague's initials), the
+owner's asks *how much is on it and how long has it been there*. Sharing one
+component would have meant a prop that switches the tile's whole content, and
+the two also run in opposite materials — `/konobar` is dark, `/admin` is light,
+and the two never share a CSS rule (§2). Two components against one geometry is
+the smaller duplication.
+
 **Left alone on purpose:** `FloorTable.vue` and `ProductTile.vue` keep their
 scoped CSS. Each is used by exactly one screen, and a component with one caller
 is where its own layout belongs — the system owns what is shared, not everything

@@ -10,27 +10,30 @@
  *   of them (`otpis` / `naplatiti`) inverts if you read *Odobri* as approving
  *   the money rather than approving the waiter's request. A wrong body here is
  *   a 400 at best and the opposite decision at worst.
+ * - **which shift it is.** The screen names the shift out of the roster's
+ *   templates, and the windows do not cover the whole day — a night still being
+ *   counted at 02:30 has to stay *Večernja* and not become tomorrow's *Dnevna*.
+ * - **the shift's promet.** It is the fold of `live.who`, not the business
+ *   day's total, and on a day the *Dnevna* worked those are different numbers.
  * - **the age bands.** A table crossing an hour has to turn amber at an hour,
  *   not at fifty-nine minutes and not at sixty-one.
- * - **the feed's arithmetic.** `charged_fen` is append-only and never rewritten,
- *   so a storno has to be *made* negative on the way to the screen.
- * - **the Bosnian counting words**, which go in threes and trip on the teens.
+ * - **the room's geometry**, which is the catalogue's col/row and never this
+ *   code's.
  */
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type { LineRow, TableState, VenueTable } from '../../shared/types'
+import type {
+  LiveWho, ShiftTemplateView, TableState, VenueTable,
+} from '../../shared/types'
 import {
   NOTE_MIN,
   decisionBody,
   decisionNeedsNote,
-  feedAmountFen,
-  feedMark,
-  feedTitle,
-  feedTone,
-  groupTablesByZone,
+  floorZones,
   shiftLineBs,
-  stolovaBs,
+  shiftNaming,
+  shiftPrometFen,
   tableTone,
   weekdayBs,
   zoneLabel,
@@ -74,6 +77,120 @@ describe('decisionBody', () => {
       .toEqual({ note: 'otišao kući' })
     // `forceCloseBody` is `z.string().trim().min(3)`.
     expect(NOTE_MIN).toBe(3)
+  })
+})
+
+// ===========================================================================
+
+function template(patch: Partial<ShiftTemplateView> & { id: string }): ShiftTemplateView {
+  return {
+    name: 'Dnevna', start_time: '08:00', end_time: '16:00', sort: 1, active: true, ...patch,
+  }
+}
+
+/** The café's own two, as `db:roster` writes them. */
+const SERVIO: ShiftTemplateView[] = [
+  template({ id: 'd', name: 'Dnevna', start_time: '08:00', end_time: '16:00', sort: 1 }),
+  template({ id: 'v', name: 'Večernja', start_time: '16:00', end_time: '01:00', sort: 2 }),
+]
+
+describe('shiftNaming', () => {
+  it('names the shift the owner is in, and numbers it the way he asks', () => {
+    expect(shiftNaming(SERVIO, '09:30')).toEqual({
+      name: 'Dnevna', index: 1, ordinal_bs: 'prva smjena', hours: '08–16',
+    })
+    expect(shiftNaming(SERVIO, '18:05')).toEqual({
+      name: 'Večernja', index: 2, ordinal_bs: 'druga smjena', hours: '16–01',
+    })
+  })
+
+  it('reads a window that runs past midnight as one shift', () => {
+    // Večernja is 16:00–01:00, so `end <= start` means the next day — the same
+    // reading `plannedHours()` gives it.
+    expect(shiftNaming(SERVIO, '16:00')!.name).toBe('Večernja')
+    expect(shiftNaming(SERVIO, '23:59')!.name).toBe('Večernja')
+    expect(shiftNaming(SERVIO, '00:40')!.name).toBe('Večernja')
+    expect(shiftNaming(SERVIO, '15:59')!.name).toBe('Dnevna')
+  })
+
+  it('keeps a late night on the evening shift, where no window reaches', () => {
+    // 01:00–08:00 belongs to no template at all, and that gap is exactly when a
+    // long night is still being counted. The nearest edge is Večernja's own
+    // end, so 02:30 stays the evening's rather than becoming tomorrow morning's.
+    expect(shiftNaming(SERVIO, '01:30')!.name).toBe('Večernja')
+    expect(shiftNaming(SERVIO, '02:30')!.name).toBe('Večernja')
+  })
+
+  it('hands the small hours over to the morning as the morning gets nearer', () => {
+    expect(shiftNaming(SERVIO, '06:00')!.name).toBe('Dnevna')
+    expect(shiftNaming(SERVIO, '07:45')!.name).toBe('Dnevna')
+  })
+
+  it('counts the ordinal over the shifts that are worked, not the retired ones', () => {
+    const retired = [
+      template({ id: 'd', name: 'Jutarnja', start_time: '06:00', end_time: '08:00', sort: 0, active: false }),
+      ...SERVIO,
+    ]
+    expect(shiftNaming(retired, '18:00')).toEqual({
+      name: 'Večernja', index: 2, ordinal_bs: 'druga smjena', hours: '16–01',
+    })
+  })
+
+  it('reads the roster rather than two names written here', () => {
+    const three = [
+      template({ id: 'a', name: 'Jutarnja', start_time: '06:00', end_time: '12:00', sort: 1 }),
+      template({ id: 'b', name: 'Popodnevna', start_time: '12:00', end_time: '18:00', sort: 2 }),
+      template({ id: 'c', name: 'Noćna', start_time: '18:00', end_time: '02:00', sort: 3 }),
+    ]
+    expect(shiftNaming(three, '13:00')).toEqual({
+      name: 'Popodnevna', index: 2, ordinal_bs: 'druga smjena', hours: '12–18',
+    })
+    expect(shiftNaming(three, '20:00')!.ordinal_bs).toBe('treća smjena')
+  })
+
+  it('answers nothing rather than guessing when there is nothing to read', () => {
+    expect(shiftNaming([], '18:00')).toBeNull()
+    expect(shiftNaming(SERVIO, '')).toBeNull()
+    expect(shiftNaming(SERVIO, 'nije vrijeme')).toBeNull()
+    expect(shiftNaming([template({ id: 'x', active: false })], '09:00')).toBeNull()
+  })
+
+  it('keeps the minutes of a template that has any', () => {
+    expect(shiftNaming(
+      [template({ id: 'x', start_time: '08:30', end_time: '16:30' })], '09:00',
+    )!.hours).toBe('08:30–16:30')
+  })
+})
+
+// ===========================================================================
+
+function person(patch: Partial<LiveWho> & { user_id: string }): LiveWho {
+  return {
+    name: 'Harun',
+    initials: 'H.M.',
+    joined_at: null,
+    promet_fen: 0,
+    open_tabs: 0,
+    settled: false,
+    ...patch,
+  }
+}
+
+describe('the shift’s own promet', () => {
+  it('is the fold of who is on it — the identity the server refuses to break', () => {
+    // `summarizeShift` throws SUMMARY_MISMATCH unless
+    // `Σ by_user.promet_fen === promet_fen`, and `live.who` *is* that fold for
+    // the shift Puls is looking at. So this is the shift's promet, not the
+    // business day's — which on a day the Dnevna worked is a bigger number.
+    expect(shiftPrometFen([
+      person({ user_id: 'a', promet_fen: 125050 }),
+      person({ user_id: 'b', promet_fen: 48000 }),
+      person({ user_id: 'c', promet_fen: 0 }),
+    ])).toBe(173050)
+  })
+
+  it('is zero for nobody, which is only ever drawn behind an open shift', () => {
+    expect(shiftPrometFen([])).toBe(0)
   })
 })
 
@@ -123,28 +240,46 @@ function venueTable(patch: Partial<VenueTable> & { id: string }): VenueTable {
   }
 }
 
-describe('groupTablesByZone', () => {
+describe('floorZones', () => {
   const now = Date.parse('2026-09-11T22:00:00Z')
 
+  /** Two runs along the walls, a VIP box under the second, and one in the garden. */
   const catalogue: VenueTable[] = [
-    venueTable({ id: 'b1', name: 'Sto 20', zone: 'basta', sort: 20 }),
-    venueTable({ id: 'u2', name: 'Sto 2', zone: 'unutra', sort: 2 }),
-    venueTable({ id: 'u1', name: 'Sto 1', zone: 'unutra', sort: 1 }),
+    venueTable({ id: 'u1', name: 'Sto 1', col: 1, row: 1, sort: 1 }),
+    venueTable({ id: 'u2', name: 'Sto 2', col: 1, row: 2, sort: 2 }),
+    venueTable({ id: 'u3', name: 'Sto 3', col: 2, row: 1, sort: 3 }),
+    venueTable({ id: 'v1', name: 'Sto 4', col: 2, row: 1, grp: 'vip', sort: 4 }),
+    venueTable({ id: 'v2', name: 'Sto 5', col: 2, row: 2, grp: 'vip', sort: 5 }),
+    venueTable({ id: 'b1', name: 'Sto 20', zone: 'basta', col: 1, row: 1, sort: 20 }),
   ]
 
-  it('puts Unutra before Bašta and sorts inside each by the catalogue order', () => {
-    const groups = groupTablesByZone(
-      [tableState({ table_id: 'u1' }), tableState({ table_id: 'u2' }), tableState({ table_id: 'b1' })],
-      catalogue,
-      now,
-    )
-    expect(groups.map(g => g.zone)).toEqual(['unutra', 'basta'])
-    expect(groups[0]!.tiles.map(t => t.name)).toEqual(['Sto 1', 'Sto 2'])
-    expect(groups[1]!.label).toBe('Bašta')
+  const states = catalogue.map(t => tableState({ table_id: t.id }))
+
+  it('draws the room the way the catalogue’s coordinates say, Unutra first', () => {
+    const zones = floorZones(states, catalogue, now)
+    expect(zones.map(z => z.zone)).toEqual(['unutra', 'basta'])
+    expect(zones[1]!.label).toBe('Bašta')
+
+    const inside = zones[0]!
+    expect(inside.columns.map(c => c.col)).toEqual([1, 2])
+    expect(inside.columns[0]!.cells.map(c => c.name)).toEqual(['Sto 1', 'Sto 2'])
+    // A grouped table is never in the column's own stack, or its coordinates
+    // would collide with the run of tables along the wall.
+    expect(inside.columns[1]!.cells.map(c => c.name)).toEqual(['Sto 3'])
+    expect(inside.columns[1]!.groups).toHaveLength(1)
+    expect(inside.columns[1]!.groups[0]!.name).toBe('vip')
+    expect(inside.columns[1]!.groups[0]!.cells.map(c => c.name)).toEqual(['Sto 4', 'Sto 5'])
   })
 
-  it('joins the live row to the catalogue name and writes the age in words', () => {
-    const groups = groupTablesByZone([
+  it('says "7" on the tile and keeps "Sto 7" for the sheet’s title', () => {
+    const cell = floorZones(states, catalogue, now)[0]!.columns[0]!.cells[0]!
+    expect(cell.label).toBe('1')
+    expect(cell.name).toBe('Sto 1')
+  })
+
+  it('joins the live row to the catalogue and writes the age in words', () => {
+    const zones = floorZones([
+      ...states.filter(s => s.table_id !== 'u2'),
       tableState({
         table_id: 'u2',
         tab_id: 'tab-1',
@@ -154,17 +289,34 @@ describe('groupTablesByZone', () => {
       }),
     ], catalogue, now)
 
-    const tile = groups[0]!.tiles[0]!
-    expect(tile.name).toBe('Sto 2')
-    expect(tile.tone).toBe('warm')
-    expect(tile.age).toBe('1 h 40')
-    expect(tile.waiter).toBe('A.H.')
-    expect(tile.remaining_fen).toBe(2450)
+    const cell = zones[0]!.columns[0]!.cells[1]!
+    expect(cell.name).toBe('Sto 2')
+    expect(cell.tab_id).toBe('tab-1')
+    expect(cell.tone).toBe('warm')
+    expect(cell.age).toBe('1 h 40')
+    expect(cell.waiter).toBe('A.H.')
+    expect(cell.remaining_fen).toBe(2450)
   })
 
-  it('drops a live row the catalogue does not name rather than drawing it blank', () => {
-    const groups = groupTablesByZone([tableState({ table_id: 'ghost' })], catalogue, now)
-    expect(groups).toEqual([])
+  it('counts what is busy in each half of the room, boxed tables included', () => {
+    const zones = floorZones([
+      ...states.filter(s => s.table_id !== 'u1' && s.table_id !== 'v1'),
+      tableState({ table_id: 'u1', tab_id: 't1', opened_at: new Date(now).toISOString() }),
+      tableState({ table_id: 'v1', tab_id: 't2', opened_at: new Date(now).toISOString() }),
+    ], catalogue, now)
+
+    expect(zones[0]!.total).toBe(5)
+    expect(zones[0]!.busy).toBe(2)
+    expect(zones[1]!.total).toBe(1)
+    expect(zones[1]!.busy).toBe(0)
+  })
+
+  it('draws a table the live read is silent about as free — a room has no holes', () => {
+    const zones = floorZones([], catalogue, now)
+    expect(zones[0]!.total).toBe(5)
+    expect(zones[0]!.busy).toBe(0)
+    expect(zones[0]!.columns[0]!.cells[0]!.tone).toBe('free')
+    expect(zones[0]!.columns[0]!.cells[0]!.age).toBe('')
   })
 
   it('names the two zones the way the room does', () => {
@@ -175,72 +327,7 @@ describe('groupTablesByZone', () => {
 
 // ===========================================================================
 
-function line(patch: Partial<LineRow>): LineRow {
-  return {
-    line_id: 'l1',
-    at: '2026-09-11T20:41:00Z',
-    arrived_at: '2026-09-11T20:41:00Z',
-    sync_lag_s: 0,
-    shift_seq: 3,
-    table_name: 'Sto 9',
-    name_snapshot: 'Kafa',
-    note: null,
-    flavour_names: [],
-    qty: 1,
-    charged_fen: 1200,
-    unit_price_fen: 1200,
-    status: 'naplaceno',
-    late_sync: false,
-    locked_by: 'u1',
-    locked_by_name: 'Dino',
-    ...patch,
-  }
-}
-
-describe('the feed', () => {
-  it('reads a storno as money coming back off the night', () => {
-    expect(feedTone('storno')).toBe('void')
-    expect(feedTone('storno_na_cekanju')).toBe('void')
-    expect(feedAmountFen(line({ status: 'storno' }))).toBe(-1200)
-  })
-
-  it('leaves a gratis positive but marks it amber', () => {
-    expect(feedTone('gratis')).toBe('comp')
-    expect(feedAmountFen(line({ status: 'gratis' }))).toBe(1200)
-  })
-
-  it('always says the status in a word as well as in a colour', () => {
-    expect(feedMark(line({ status: 'storno' }))).toBe('storno')
-    expect(feedMark(line({ status: 'storno_na_cekanju' }))).toBe('storno na čekanju')
-    expect(feedMark(line({ status: 'gratis' }))).toBe('gratis')
-    expect(feedMark(line({ status: 'nije_placeno' }))).toBe('nije plaćeno')
-    expect(feedMark(line({ status: 'naplaceno' }))).toBe('')
-  })
-
-  it('writes the table, the quantity and a nargila’s flavours', () => {
-    expect(feedTitle(line({}))).toBe('Sto 9 · Kafa')
-    expect(feedTitle(line({ qty: 2 }))).toBe('Sto 9 · 2× Kafa')
-    expect(feedTitle(line({
-      name_snapshot: 'Nargila', flavour_names: ['Jabuka', 'Menta'],
-    }))).toBe('Sto 9 · Nargila (Jabuka + Menta)')
-  })
-})
-
-// ===========================================================================
-
 describe('the Bosnian words', () => {
-  it('counts tables in threes and does not trip on the teens', () => {
-    expect(stolovaBs(1)).toBe('sto')
-    expect(stolovaBs(2)).toBe('stola')
-    expect(stolovaBs(4)).toBe('stola')
-    expect(stolovaBs(5)).toBe('stolova')
-    expect(stolovaBs(0)).toBe('stolova')
-    expect(stolovaBs(11)).toBe('stolova')
-    expect(stolovaBs(12)).toBe('stolova')
-    expect(stolovaBs(21)).toBe('sto')
-    expect(stolovaBs(22)).toBe('stola')
-  })
-
   it('names a business day’s weekday without pushing it through a timezone', () => {
     expect(weekdayBs('2026-09-11')).toBe('pet')
     expect(weekdayBs('2026-09-12')).toBe('sub')

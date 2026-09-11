@@ -1,66 +1,66 @@
 <script setup lang="ts">
 /**
- * *Ko radi* — the inside of the fifth tile.
+ * *Ko radi* — who is on the shift that is running.
  *
- * One line of names, then the two things about tonight's staff the owner
- * actually has to notice: who has already handed his envelope in (*predao*),
- * and whose phone is holding rounds it has not managed to send.
+ * It used to be one line of names inside a tile, because it was the fifth of
+ * six figures across the top of the page. The owner asked for three things on
+ * *Puls* and this is one of them, so it is a card of its own and the people are
+ * rows: the initials in the shared `.avatar` circle, the name at row weight, and
+ * the one thing about a person tonight the owner has to notice — whether he has
+ * already handed his envelope in.
  *
- * **No money per person here.** The tile says who is on, not who took what:
- * per-person figures live on *Smjena*, one click further in, and CLAUDE.md is
+ * **No money per person here.** The card says who is on, not who took what:
+ * per-person figures live on *Smjena*, one screen further in, and CLAUDE.md is
  * explicit that the dashboard is accountability rather than a scoreboard.
+ *
+ * The card is only ever drawn while a shift is open — `live.who` is folded from
+ * the focus shift, which is the last one of the day once tonight's has closed,
+ * and a list of people who went home an hour ago is not *ko radi*.
  */
-import type { LiveWho, StaleDevice } from '#shared/types'
+import type { LiveWho } from '#shared/types'
 
-const props = defineProps<{
-  who: LiveWho[]
-  unsent: StaleDevice[]
-}>()
-
-const names = computed(() => props.who.map(person => person.name).join(' · '))
-const settled = computed(() => props.who.filter(person => person.settled))
+defineProps<{ who: LiveWho[] }>()
 </script>
 
 <template>
-  <div class="a-who-strip">
-    <p v-if="who.length" class="a-who-names">{{ names }}</p>
-    <p v-else class="a-who-none">Niko još nije prijavljen</p>
+  <UiCard title="Ko radi" :count="who.length ? `${who.length}` : undefined">
+    <ul v-if="who.length" class="a-who">
+      <li v-for="person in who" :key="person.user_id" class="a-who-row">
+        <span class="avatar avatar-sm" aria-hidden="true">{{ person.initials }}</span>
+        <span class="a-who-name">{{ person.name }}</span>
+        <UiPill v-if="person.settled" tone="good">predao</UiPill>
+      </li>
+    </ul>
 
-    <div v-if="settled.length || unsent.length" class="a-who-pills">
-      <UiPill v-for="person in settled" :key="person.user_id" tone="good">
-        {{ person.name }} · predao
-      </UiPill>
-      <UiPill v-for="device in unsent" :key="device.device_id" tone="warn">
-        {{ device.label }} · bez veze
-      </UiPill>
-    </div>
-  </div>
+    <p v-else class="a-who-none">Niko još nije prijavljen na smjenu.</p>
+  </UiCard>
 </template>
 
 <style scoped>
-.a-who-strip {
+.a-who { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+
+.a-who-row {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line-soft);
   min-width: 0;
 }
 
-/* The strip is the tile's *second* line now — the count above it is the figure —
-   so the names read at label size in the secondary ink rather than competing
-   with the metric they sit under. */
-.a-who-names {
-  margin: 0;
-  font-size: var(--text-label);
-  font-weight: 600;
-  line-height: 1.35;
-  color: var(--ink-2);
+.a-who-row:last-child { border-bottom: 0; }
+
+.a-who-name {
+  flex-grow: 1;
+  min-width: 0;
+  font-size: var(--text-body);
+  font-weight: 500;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.a-who-none { margin: 0; font-size: var(--text-label); color: var(--muted); }
-
-.a-who-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
+.a-who-none { margin: 0; color: var(--muted); font-size: var(--text-label); }
 </style>
