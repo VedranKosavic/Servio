@@ -20,6 +20,12 @@
  *      taps shut one device — even against a correct PIN — and leave every
  *      other device open, because the pad names nobody and the counter has no
  *      account to key on.
+ *   8. **Signing out of the dashboard ends on this pad**, and not on
+ *      `/admin/login`. The owner carries a phone; the e-mail door is the laptop
+ *      entrance he keeps for the once a year he forgets his PIN.
+ *   9. **A phone the server does not know is told that it is a phone problem.**
+ *      A `sank_d` naming a device with no row behind it is not a wrong PIN, no
+ *      PIN can fix it, and the screen says so and asks for an enrol code.
  *
  * **This file is the acceptance test for the new screen** (`app/pages/index.vue`
  * and the chooser). The API half of it — every assertion that goes through
@@ -210,6 +216,107 @@ test.describe('Prijava — the PIN pad', () => {
     expect(after.session.id).toBe(before.session.id)
 
     await page.close()
+  })
+
+  /**
+   * Where *Odjavi se* ends, which is the pad and not the e-mail door.
+   *
+   * The owner has two ways in and they are not interchangeable: four digits on
+   * the phone in his apron, and `haris@lounge.ba` on a laptop. Sending every
+   * sign-out to `/admin/login` put the door he almost never uses in front of
+   * the one he always does — a keyboard on a screen with no keyboard, and a tap
+   * on *Nazad* to reach the keypad.
+   *
+   * The viewport is a laptop's on purpose: *Odjavi se* lives in the rail, which
+   * is hidden below 1024 px because a phone's dashboard is the bottom tabs.
+   */
+  test('signing out of the dashboard lands on the pad, not the e-mail door', async () => {
+    const page = await context.newPage()
+    await page.setViewportSize({ width: 1280, height: 900 })
+
+    await padIn(page, PINS.Haris)
+    await expect(page).toHaveURL(/\/admin$/)
+
+    await page.getByRole('button', { name: 'Odjavi se' }).click()
+
+    await expect(page).toHaveURL(/\/$/)
+    await expect(page).not.toHaveURL(/\/admin\/login/)
+    // The pad, and not a form: this is the door his PIN opens.
+    await expect(page.getByRole('button', { name: '1', exact: true })).toBeVisible()
+    await expect(page.getByLabel('Email')).toHaveCount(0)
+
+    // The laptop is not left without a door. `/admin` and *Odjavi se* both end
+    // here now, and a laptop is not an enrolled device — it has no PIN to type
+    // — so the e-mail entrance is one quiet row down.
+    await page.getByRole('link', { name: 'Prijava e-mailom' }).click()
+    await expect(page).toHaveURL(/\/admin\/login$/)
+    await expect(page.getByLabel('Email')).toBeVisible()
+
+    await page.close()
+  })
+
+  /**
+   * The same landing rule from the other side: opening `/admin` with no session
+   * — the owner's fourteen hours ran out overnight, or he typed the address on
+   * a phone nobody has signed in on — is the pad too, and not the e-mail form.
+   * It is the one screen that can say *why* there is a login in front of him.
+   */
+  test('and opening the dashboard with no session lands on the pad as well', async () => {
+    const page = await context.newPage()
+    // Not asserted: the test above already left this context signed out, and a
+    // logout with no session to end answers 401. Either way what follows needs
+    // only that there is no session now.
+    await page.request.post('/api/auth/logout', { data: {} })
+
+    await page.goto('/admin')
+
+    await expect(page).toHaveURL(/\/$/)
+    await expect(page.getByRole('button', { name: '1', exact: true })).toBeVisible()
+
+    await page.close()
+  })
+
+  /**
+   * The phone the server has no row for.
+   *
+   * A `sank_d` survives a database that was rebuilt under it, and a device
+   * deleted in *Postavke → Uređaji* leaves one behind in somebody's pocket. The
+   * pad used to draw itself anyway and answer every correct PIN with *"PIN nije
+   * prepoznat"* — naming the one thing that was not wrong. It now says the
+   * phone is not signed in and asks for the six characters that fix it.
+   *
+   * `POST /api/dev/enrol` is stubbed out to a 404 because this run has
+   * `SANK_DEV_ENROL=1` and the real café server does not: the dev door would
+   * quietly enrol the browser and hide the screen under test.
+   */
+  test('a phone the server does not know is told so, and offered the enrol path', async ({ browser }) => {
+    const stranger = await browser.newContext()
+    try {
+      await stranger.route('**/api/dev/enrol', route => route.fulfill({ status: 404, body: '{}' }))
+      const page = await stranger.newPage()
+
+      // A browser with no device cookie at all is the ordinary first visit, and
+      // it gets the pad. That is the control for what follows.
+      await page.goto('/')
+      await expect(page.getByRole('button', { name: '1', exact: true })).toBeVisible()
+
+      // Now the stale cookie: well formed, and naming a device that never was.
+      await stranger.addCookies([
+        { name: 'sank_d', value: 'ovaj-token-server-nikad-nije-izdao', url: page.url() },
+      ])
+      await page.reload()
+
+      await expect(page.getByText(/Ovaj telefon nije prijavljen/)).toBeVisible()
+      // And it says which half was wrong, because the pad never did.
+      await expect(page.getByText(/Nije do PIN-a/)).toBeVisible()
+      // The way out is on the same screen: the six-character code.
+      await expect(page.getByRole('heading', { name: 'Unesi kod uređaja' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Prijavi uređaj' })).toBeVisible()
+      // No pad to type a PIN into, because no PIN would have helped.
+      await expect(page.getByRole('button', { name: '1', exact: true })).toHaveCount(0)
+    } finally {
+      await stranger.close()
+    }
   })
 
   /**

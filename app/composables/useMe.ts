@@ -61,6 +61,19 @@ export function useMe() {
   const me = useState<MeContext | null>('sank:me', () => null)
   const status = useState<MeStatus>('sank:me:status', () => 'unknown')
 
+  /**
+   * The error code behind the last refusal — `NO_DEVICE`, `DEVICE_REVOKED`,
+   * `SESSION_REVOKED`, `NO_SESSION` — or `null` while somebody is signed in.
+   *
+   * A `MeStatus` alone cannot carry this and the start screen needs it: a phone
+   * the server has never seen and a phone the owner threw out are both
+   * `nodevice`, and they are two different sentences with two different ways
+   * out. Same on the other side — `anon` is both "nobody has typed anything
+   * yet" and "your shift session ran out an hour ago", and the pad that says
+   * the wrong one of those is the pad that looks like it has forgotten a PIN.
+   */
+  const authCode = useState<string | null>('sank:me:code', () => null)
+
   const user = computed(() => me.value?.user ?? null)
   const venue = computed(() => me.value?.venue ?? null)
   const device = computed(() => me.value?.device ?? null)
@@ -106,8 +119,10 @@ export function useMe() {
     try {
       me.value = await api.getMe()
       status.value = 'ready'
+      authCode.value = null
     } catch (err) {
       status.value = classify(err)
+      authCode.value = (err as ApiSideError)?.code ?? null
       if (status.value !== 'offline') me.value = null
       if (status.value === 'nodevice') wipeLocalState()
     }
@@ -168,6 +183,10 @@ export function useMe() {
     lock.unlock()
     me.value = null
     status.value = 'anon'
+    // A deliberate sign-out is not an expired session. Clearing the code is
+    // what keeps the pad from greeting the next person with *Prijava je
+    // istekla* when the last one simply handed the phone over.
+    authCode.value = null
     await navigateTo('/')
   }
 
@@ -216,6 +235,7 @@ export function useMe() {
   async function handleAuthError(err: unknown): Promise<boolean> {
     const state = classify(err)
     if (state === 'nodevice' || state === 'anon') {
+      authCode.value = (err as ApiSideError)?.code ?? null
       if (state === 'nodevice') {
         wipeLocalState()
         // A revoked device may be in somebody else's hands by now.
@@ -233,6 +253,7 @@ export function useMe() {
     mode,
     me,
     status,
+    authCode,
     user,
     venue,
     device,

@@ -50,12 +50,40 @@ useHead({ title: 'Prijava' })
 const api = useApi()
 const me = useMe()
 const lock = useLock()
+const update = useAppUpdate()
 
 type View = 'boot' | 'pin' | 'enrol'
 const view = ref<View>('boot')
 
+/**
+ * Why the enrol screen is on — and it is the whole point of this ref.
+ *
+ * `null` is the foot-row tap: somebody chose *Ovaj telefon nije prijavljen?*
+ * and knows why he is here. The other two are the screen arriving uninvited,
+ * and then it owes the person a sentence:
+ *
+ *   `unknown` this phone presented a `sank_d` the server has no row for — a
+ *             database rebuilt under a browser that kept its cookie, or a
+ *             device deleted in *Postavke → Uređaji*. **Not a PIN problem**,
+ *             and the pad used to let it look like one.
+ *   `revoked` the owner threw this phone out, or fifteen failures locked it.
+ */
+type DeviceReason = 'unknown' | 'revoked' | null
+const deviceReason = ref<DeviceReason>(null)
+
 const busy = ref(false)
 const message = ref<string | null>(null)
+
+/**
+ * The session this phone was holding is over — it ran out, or somebody revoked
+ * it — rather than there never having been one.
+ *
+ * It is a separate flag and not a message, because the pad still works: the
+ * only thing that changes is the line under *Unesi PIN*, which says what
+ * happened instead of leaving a waiter to guess that his own PIN stopped
+ * working.
+ */
+const sessionExpired = ref(false)
 
 /**
  * How many digits this pad waits for, and it is the venue's number rather than
@@ -134,6 +162,17 @@ onBeforeUnmount(() => {
 const relocked = computed(() => lock.relocked.value)
 
 onMounted(async () => {
+  // A newer build, the moment one is installed and waiting: take it.
+  //
+  // This screen is the app's one reliably safe moment — nobody is mid-round on
+  // a lock screen, and the drafts and the outbox are in IndexedDB rather than
+  // in memory, so the reload costs nothing. It is also the screen most likely
+  // to be looking at an old bundle, because *Nova verzija* is only ever offered
+  // on the two waiter lists: a tablet that sits here between shifts would never
+  // have been asked. It watches instead of checking once, because the worker
+  // that this very load woke up needs a second to install before it can say so.
+  update.applyWhenIdle()
+
   const state = await me.load()
 
   // Somebody is signed in and this is not a re-lock: he typed the address, or
@@ -145,9 +184,17 @@ onMounted(async () => {
     return
   }
   if (state === 'nodevice') {
-    await enrolPath()
+    // Two phones end up here and they are not the same phone. `/api/me` reports
+    // an unknown `sank_d` as `NO_DEVICE` and a device the owner threw out as
+    // `DEVICE_REVOKED`, and each gets its own sentence on the enrol screen.
+    await enrolPath(me.authCode.value === 'DEVICE_REVOKED' ? 'revoked' : 'unknown')
     return
   }
+  // `SESSION_REVOKED` is a session that was really there and is now over — the
+  // fourteen hours ran out, or an admin ended it. `NO_SESSION` is the ordinary
+  // start of a shift and says nothing. The pad is the same pad either way; only
+  // the line under it changes.
+  sessionExpired.value = me.authCode.value === 'SESSION_REVOKED'
   if (state === 'offline') {
     // A re-lock has a cached PIN to work with; anything else needs the network,
     // and the pad says so rather than swallowing the taps.
@@ -167,7 +214,8 @@ onMounted(async () => {
  * not set — which is everywhere but a development machine (BACKEND §5.6) — and
  * that 404 is exactly how this screen knows to ask for a real code instead.
  */
-async function enrolPath() {
+async function enrolPath(reason: DeviceReason = null) {
+  deviceReason.value = reason
   view.value = 'enrol'
   if (devEnrolTried.value) return
   devEnrolTried.value = true
@@ -175,6 +223,7 @@ async function enrolPath() {
   try {
     await api.devEnrol()
     message.value = null
+    deviceReason.value = null
     view.value = 'pin'
     await loadPinLen()
   } catch {
@@ -183,6 +232,25 @@ async function enrolPath() {
     busy.value = false
   }
 }
+
+/**
+ * The lead line on the enrol screen, and the sentence this whole change is
+ * about: an unknown phone is told it is an unknown phone.
+ *
+ * It is deliberately not `apiErrorText(NO_DEVICE)` verbatim — that sentence
+ * names the fix ("Unesi kod za prijavu uređaja") and the heading right under
+ * this line already is the fix. What the person needs first is the part the pad
+ * never said: **the digits were never the problem**.
+ */
+const deviceNote = computed(() => {
+  if (deviceReason.value === 'unknown') {
+    return 'Ovaj telefon nije prijavljen. Nije do PIN-a — telefon se prvo prijavljuje kodom.'
+  }
+  if (deviceReason.value === 'revoked') {
+    return 'Ovaj telefon je odjavljen ili zaključan. Javi se vlasniku za novi kod.'
+  }
+  return null
+})
 
 const codeReady = computed(() => enrolCode.value.trim().length === 6)
 
@@ -196,6 +264,8 @@ async function submitCode() {
       label: enrolLabel.value.trim() || undefined,
     })
     enrolCode.value = ''
+    deviceReason.value = null
+    sessionExpired.value = false
     view.value = 'pin'
     // This browser only became a device a moment ago, so the boot read of the
     // pad's length either never ran or 401'd. Ask now, before the first tap.
@@ -209,10 +279,25 @@ async function submitCode() {
 
 function backToPad() {
   message.value = null
+  deviceReason.value = null
   view.value = 'pin'
 }
 
 // -- the pad ----------------------------------------------------------------
+
+/**
+ * The line under *Unesi PIN*, and it is the one place the pad explains itself.
+ *
+ * Three states, in the order they beat each other: a session that is over says
+ * so first (it is the surprising one, and the one that used to arrive as
+ * silence); a tablet that re-locked itself says that; and otherwise the pad is
+ * simply the pad.
+ */
+const padSub = computed(() => {
+  if (sessionExpired.value) return 'Prijava je istekla. Unesi PIN ponovo.'
+  if (relocked.value) return 'Telefon se zaključao sam. Unesi PIN da nastaviš.'
+  return 'PIN te prijavljuje.'
+})
 
 /**
  * The one path a PIN can take without a network.
@@ -256,7 +341,12 @@ async function attempt(pin: string): Promise<boolean> {
       // A wrong PIN against the cache. No `auth_attempts` row was written, so
       // this is not metered — which is why the cache expires in 14 h and holds
       // a 150 000-round hash rather than the PIN.
-      message.value = 'PIN nije prepoznat.'
+      //
+      // The second sentence is not decoration: with no network the only PIN
+      // this phone can recognise is the one the *server* accepted here last,
+      // so a colleague typing his own correct digits lands on exactly this
+      // message and would otherwise read it as "my PIN is gone".
+      message.value = 'PIN nije prepoznat. Bez veze radi samo PIN posljednje prijave.'
       return false
     }
 
@@ -268,6 +358,7 @@ async function attempt(pin: string): Promise<boolean> {
     // offline unlock of the same phone.
     await lock.remember(result.user.id, pin)
     lock.unlock()
+    sessionExpired.value = false
     await afterLogin()
   } catch (err) {
     const e = err as ApiSideError
@@ -276,17 +367,26 @@ async function attempt(pin: string): Promise<boolean> {
       // sentence would be the same thing said twice.
       startLock(Number(e.data.retry_after_s ?? 60))
     } else if (e.code === 'NO_DEVICE' || e.code === 'DEVICE_REVOKED') {
-      // Never enrolled, or thrown out since. Both end at the same door.
+      // Never enrolled, thrown out since, or holding a `sank_d` this server has
+      // no row for. All three end at the same door — and none of them is a
+      // wrong PIN, which is the whole reason they are caught here rather than
+      // falling through to the sentence below.
       me.wipeLocalState()
       await lock.wipe()
-      message.value = apiErrorText(err)
-      await enrolPath()
+      message.value = null
+      await enrolPath(e.code === 'DEVICE_REVOKED' ? 'revoked' : 'unknown')
       // `enrolPath()` leaves the view on the pad only when the dev door enrolled
       // this browser, which is the one case where retrying makes sense.
       if (view.value === 'pin') {
         message.value = null
         return true
       }
+    } else if (e.code === 'SESSION_REVOKED' || e.code === 'NO_SESSION') {
+      // The pad itself never asks for a session, so this is a phone whose
+      // session died between the boot read and the last digit. It is not a PIN
+      // that stopped working, and the line under the heading says which.
+      sessionExpired.value = e.code === 'SESSION_REVOKED'
+      message.value = apiErrorText(err)
     } else if (e.code === 'NETWORK') {
       // The honest half of the offline story: this screen can re-open over a
       // session that is still alive, but nothing on this phone can *create* a
@@ -362,6 +462,17 @@ async function afterLogin() {
 
         <!-- This phone is not enrolled -->
         <section v-else-if="view === 'enrol'" class="stage">
+          <!--
+            Why this screen came up, when it came up by itself. It sits *above*
+            the heading because the heading is already the instruction, and what
+            the person is missing is the diagnosis: the pad refused him for the
+            phone, not for the digits.
+          -->
+          <p
+            v-if="deviceNote" class="note"
+            :class="{ 'note-warn': deviceReason === 'revoked' }"
+          >{{ deviceNote }}</p>
+
           <div class="stage-head">
             <h2 class="section-title">Unesi kod uređaja</h2>
             <p class="stage-sub">Vlasnik ti daje šestoslovni kod. Unosi se jednom, po telefonu.</p>
@@ -417,9 +528,7 @@ async function afterLogin() {
         <section v-else class="stage">
           <div class="stage-head">
             <h2 class="section-title">Unesi PIN</h2>
-            <p class="stage-sub">
-              {{ relocked ? 'Telefon se zaključao sam. Unesi PIN da nastaviš.' : 'PIN te prijavljuje.' }}
-            </p>
+            <p class="stage-sub">{{ padSub }}</p>
           </div>
 
           <WaiterPinPad
@@ -434,7 +543,7 @@ async function afterLogin() {
 
           <!-- The device door. Quiet, and at the foot: it is the once-a-year
                case, and the pad is the screen. -->
-          <button type="button" class="more quiet" :disabled="busy" @click="enrolPath">
+          <button type="button" class="more quiet" :disabled="busy" @click="enrolPath()">
             <span>Ovaj telefon nije prijavljen?</span>
             <svg
               class="more-chev" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
@@ -442,6 +551,24 @@ async function afterLogin() {
               stroke-linejoin="round"
             ><path d="M9 6l6 6-6 6" /></svg>
           </button>
+
+          <!--
+            The laptop's door, and the reason this row exists at all.
+            `/admin` and *Odjavi se* both end on this pad now, which is right for
+            the phone in the owner's apron and a dead end on a laptop: a laptop
+            is not an enrolled device, so it has no PIN to type here. One quiet
+            row is the way out. It names no person and no role — the pad still
+            offers nobody — only the fact that a second door exists, which is
+            already true of `/admin/login` itself.
+          -->
+          <NuxtLink to="/admin/login" class="more quiet">
+            <span>Prijava e-mailom</span>
+            <svg
+              class="more-chev" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
+              fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+              stroke-linejoin="round"
+            ><path d="M9 6l6 6-6 6" /></svg>
+          </NuxtLink>
         </section>
 
         <template #fallback>
@@ -586,6 +713,9 @@ async function afterLogin() {
   color: var(--ink-2);
   font-size: var(--text-label);
   font-weight: 600;
+  /* One of these rows is a `NuxtLink` — the e-mail door — and an underline
+     would be the only one on the screen. The rows are a list, not prose. */
+  text-decoration: none;
   cursor: pointer;
 }
 

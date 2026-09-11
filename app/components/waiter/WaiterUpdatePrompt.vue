@@ -18,19 +18,18 @@
 const cart = useCartStore()
 const outbox = useOutboxStore()
 
-// `$pwa` is what `@vite-pwa/nuxt` injects with `registerType: 'prompt'`. It is
-// absent under `npm run dev` (the worker is off there), hence the optional read.
-const { $pwa } = useNuxtApp() as unknown as {
-  $pwa?: { needRefresh: boolean, updateServiceWorker: (reload?: boolean) => Promise<void> }
-}
+// One file knows how a waiting build is taken: `useAppUpdate`. The lock screen
+// takes it without asking — nothing is unsaved there — and this card is the
+// other door, the one that waits for a gap between rounds.
+const update = useAppUpdate()
 
 const safeMoment = computed(() => cart.myDrafts.length === 0 && outbox.pending === 0)
-const show = computed(() => $pwa?.needRefresh === true && safeMoment.value)
+const show = computed(() => update.needRefresh.value && safeMoment.value)
 
 const busy = ref(false)
 async function refreshNow() {
   busy.value = true
-  await $pwa?.updateServiceWorker(true)
+  await update.apply()
 }
 </script>
 

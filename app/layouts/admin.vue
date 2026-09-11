@@ -90,9 +90,19 @@ const moreDot = computed(() => moreItems.value.some(item => dot[item.id]?.() ?? 
 const initials = computed(() => (me.user.value?.name ?? '')
   .split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase())
 
+/**
+ * *Odjavi se*, and it ends on the pad like every other sign-out in the app.
+ *
+ * `me.logout()` already navigates to `/` — the PIN pad — and a second
+ * `navigateTo` here used to overwrite that with `/admin/login`, the e-mail
+ * door. That is the wrong screen for the phone the owner is actually holding:
+ * the pad is where his PIN works, `/admin/login` is the laptop entrance he
+ * keeps for the once a year he forgets it, and landing there after every
+ * sign-out meant tapping *Nazad* to get to the only door with a keypad.
+ * The one landing rule is `shared/landing.ts`, and its start is `/`.
+ */
 async function signOut() {
   await me.logout()
-  await navigateTo('/admin/login')
 }
 </script>
 

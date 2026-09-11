@@ -12,7 +12,14 @@
  *
  * The two outcomes are deliberately different:
  *
- * - **nobody is logged in** → `/admin/login`, where he can log in.
+ * - **nobody is logged in** → `/`, the PIN pad. It used to be `/admin/login`,
+ *   the e-mail door, and that is the wrong screen for the device the owner is
+ *   almost always holding: he carries a phone, his PIN is what opens it, and
+ *   the pad is the one screen that can also tell him *why* he is looking at a
+ *   login — a session that ran out says so, and a phone the server does not
+ *   know is sent to the enrol code instead of being asked for digits that
+ *   cannot work. `/admin/login` is still there for the laptop, one quiet row
+ *   down on that pad.
  * - **a waiter is logged in** → `/konobar`, his own screen. He is not an
  *   intruder, he is in the wrong room; sending him to a login form he has
  *   already passed would just look broken.
@@ -27,6 +34,6 @@ export default defineNuxtRouteMiddleware(async () => {
   const me = useMe()
   const state = me.me.value ? me.status.value : await me.load()
 
-  if (state !== 'ready') return navigateTo('/admin/login')
+  if (state !== 'ready') return navigateTo('/')
   if (me.user.value?.role !== 'admin') return navigateTo(me.home.value)
 })

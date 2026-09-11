@@ -1102,6 +1102,9 @@ export function resolveDeviceByToken(q: Queryable, token: string | undefined): D
  * 2. `public` route → resolve the device where the route needs one, and pass;
  * 3. resolve the session — a dead session is a 401 and never a 403, because
  *    "log in again" and "you may not" are different instructions to a waiter;
+ *    and when there is no session at all, the *device* cookie is read before
+ *    answering, so an unknown phone is told it is an unknown phone instead of
+ *    being sent to a pad that cannot let it in;
  * 4. `ROUTE_ROLES` → **absent is 403**. A new route is dead until somebody
  *    declares it, so forgetting to guard one fails closed;
  * 5. build the actor.
@@ -1122,7 +1125,13 @@ export function authorizeRequest(db: Db, req: {
     if (!DEVICE_REQUIRED_PUBLIC.has(key)) return { ok: true, role: declared }
     const device = resolveDeviceByToken(db, req.cookies.d)
     if (!device || device.revokedAt || device.lockedAt) {
-      return { ok: false, status: 401, code: 'NO_DEVICE', clearCookies: !!device }
+      // `clearCookies` is asked for whenever the phone presented a `sank_d` at
+      // all, and not only when that cookie named a device we can still find.
+      // A token this server has never issued — a database rebuilt under a
+      // browser that kept its cookie — used to be left in place, so the phone
+      // presented the same dead token on every request for the rest of its
+      // life and the enrol code it was then given had to fight it.
+      return { ok: false, status: 401, code: 'NO_DEVICE', clearCookies: !!req.cookies.d }
     }
     return { ok: true, device, role: declared }
   }
@@ -1134,7 +1143,25 @@ export function authorizeRequest(db: Db, req: {
         .get()
     : undefined
 
-  if (!session) return { ok: false, status: 401, code: 'NO_SESSION' }
+  if (!session) {
+    // Nobody is signed in — but *why* is not always "nobody is signed in", and
+    // the two answers send the phone to two different screens. Before saying
+    // `NO_SESSION` (→ the pad), look at the phone itself: a `sank_d` naming a
+    // device this server cannot find is an **unknown phone**, and the way back
+    // from that is a six-character enrol code, not four more digits on a pad
+    // that can only ever refuse them. `GET /api/me` is the call every screen
+    // boots with, so this is where the start screen learns the difference.
+    if (req.cookies.d) {
+      const presented = resolveDeviceByToken(db, req.cookies.d)
+      if (!presented) {
+        return { ok: false, status: 401, code: 'NO_DEVICE', clearCookies: true }
+      }
+      if (presented.revokedAt || presented.lockedAt) {
+        return { ok: false, status: 401, code: 'DEVICE_REVOKED', clearCookies: true }
+      }
+    }
+    return { ok: false, status: 401, code: 'NO_SESSION' }
+  }
 
   // The device is checked **before** the session's own `revoked_at`, and the
   // order is not cosmetic: revoking a device revokes every session on it, so
@@ -1155,7 +1182,16 @@ export function authorizeRequest(db: Db, req: {
   }
 
   if (session.revokedAt) return { ok: false, status: 401, code: 'SESSION_REVOKED', clearCookies: true }
-  if (session.expiresAt <= req.now) return { ok: false, status: 401, code: 'NO_SESSION', clearCookies: true }
+  // A session that ran out is **not** `NO_SESSION`. The two codes read as one
+  // 401 to a handler and as two different sentences to the person holding the
+  // phone: `NO_SESSION` is 'Nisi prijavljen.' — nobody has typed anything yet —
+  // and `SESSION_REVOKED` is 'Prijava je istekla. Prijavi se ponovo.', which is
+  // what actually happened when fourteen hours went by. Saying the first one
+  // for the second is how a waiter whose shift session lapsed ends up believing
+  // the pad has forgotten his PIN.
+  if (session.expiresAt <= req.now) {
+    return { ok: false, status: 401, code: 'SESSION_REVOKED', clearCookies: true }
+  }
 
   const user = db.select().from(schema.users).where(eq(schema.users.id, session.userId)).get()
   if (!user || user.active !== 1) {

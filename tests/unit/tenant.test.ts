@@ -124,6 +124,63 @@ describe('deny by default', () => {
 
 // ===========================================================================
 
+/**
+ * *Why* there is no session, when the answer is not "nobody has typed yet".
+ *
+ * Every screen boots on `GET /api/me`, so this is the call that decides which
+ * screen the person lands on — and a phone holding a `sank_d` the server has no
+ * row for must not be sent to the pad. It is not a PIN problem, no PIN can fix
+ * it, and the way back is a six-character enrol code. The pad used to get
+ * `NO_SESSION` here, draw itself, and refuse every correct PIN typed into it
+ * with *"PIN nije prepoznat"* — which named the one thing that was not wrong.
+ */
+describe('an unknown phone is told it is an unknown phone', () => {
+  it('answers NO_DEVICE, not NO_SESSION, for a device cookie the server never issued', () => {
+    // A database rebuilt under a browser that kept its cookie, or a device
+    // deleted in Postavke → Uređaji. The token is well formed and names nobody.
+    expect(ask('/api/me', 'GET', { d: 'a-token-this-server-never-issued' }))
+      .toMatchObject({ ok: false, status: 401, code: 'NO_DEVICE', clearCookies: true })
+  })
+
+  it('answers DEVICE_REVOKED for a phone the owner threw out', () => {
+    const device = enrolShared()
+    f.db.update(schema.devices).set({ revokedAt: f.clock.now() })
+      .where(eq(schema.devices.id, device.deviceId)).run()
+
+    expect(ask('/api/me', 'GET', { d: device.token }))
+      .toMatchObject({ ok: false, status: 401, code: 'DEVICE_REVOKED', clearCookies: true })
+  })
+
+  it('still answers NO_SESSION for an enrolled phone nobody has signed in on', () => {
+    // The ordinary start of a shift, and the one case that really is the pad's.
+    const device = enrolShared()
+    expect(ask('/api/me', 'GET', { d: device.token }))
+      .toMatchObject({ ok: false, status: 401, code: 'NO_SESSION' })
+  })
+
+  it('and for a browser carrying no device cookie at all', () => {
+    expect(ask('/api/me', 'GET')).toMatchObject({ ok: false, status: 401, code: 'NO_SESSION' })
+  })
+
+  /**
+   * The cookie has to actually go. `clearCookies` is what makes the middleware
+   * send the `Set-Cookie` that deletes `sank_d`; without it the phone presents
+   * the same dead token on every request for the rest of its life, which is the
+   * *stale* half of this bug.
+   */
+  it('asks for the dead cookie to be cleared at the pad door too', () => {
+    expect(ask('/api/auth/pin', 'POST', { d: 'a-token-this-server-never-issued' }))
+      .toMatchObject({ ok: false, status: 401, code: 'NO_DEVICE', clearCookies: true })
+
+    // Nothing to clear when nothing was presented: a first visit must not be
+    // answered with a Set-Cookie for a cookie that was never there.
+    expect(ask('/api/auth/pin', 'POST'))
+      .toMatchObject({ ok: false, status: 401, code: 'NO_DEVICE', clearCookies: false })
+  })
+})
+
+// ===========================================================================
+
 describe('the two public routes that still need a device', () => {
   it('401 NO_DEVICE without a device cookie', () => {
     expect(ask('/api/auth/pin', 'POST')).toMatchObject({ ok: false, status: 401, code: 'NO_DEVICE' })

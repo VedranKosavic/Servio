@@ -88,7 +88,15 @@ export default defineEventHandler((event) => {
   if (!verdict.ok) {
     if (verdict.clearCookies) {
       clearSessionCookie(event)
-      if (verdict.code === 'DEVICE_REVOKED') clearDeviceCookie(event)
+      // `NO_DEVICE` belongs on this line beside `DEVICE_REVOKED`: both mean the
+      // `sank_d` the browser just sent is worthless, and a device cookie left
+      // in place is sent again on every request for the rest of that browser's
+      // life. That is the stale cookie behind "PIN nije prepoznat" — the phone
+      // kept presenting a device the server had no row for, and nothing ever
+      // took it away.
+      if (verdict.code === 'DEVICE_REVOKED' || verdict.code === 'NO_DEVICE') {
+        clearDeviceCookie(event)
+      }
     }
     throw apiError(verdict.status, verdict.code, errorMessage(verdict.code))
   }

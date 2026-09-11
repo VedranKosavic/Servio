@@ -748,12 +748,20 @@ describe('sessions', () => {
     expect(verdict.actor?.deviceId).toBe(device.deviceId)
   })
 
-  it('expires', () => {
+  /**
+   * Fourteen hours later the session is over, and the code says *that* rather
+   * than `NO_SESSION`. The two are one 401 to a handler and two sentences to
+   * the waiter: 'Nisi prijavljen.' is what a phone nobody has typed on is told,
+   * and 'Prijava je istekla. Prijavi se ponovo.' is what actually happened
+   * here. The pad reads the code to decide which one to print, so answering the
+   * first for the second is how a lapsed shift looks like a forgotten PIN.
+   */
+  it('expires, and says so', () => {
     const { device, sessionToken } = loginAmar()
     f.clock.advance(15 * 3600)
 
     expect(refuse(f, '/api/tables/state', 'GET', sessionToken, device.token)).toEqual({
-      status: 401, code: 'NO_SESSION',
+      status: 401, code: 'SESSION_REVOKED',
     })
   })
 

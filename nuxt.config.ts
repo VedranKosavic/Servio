@@ -3,6 +3,7 @@ import tailwindcss from '@tailwindcss/vite'
 // them. The config is read before Nuxt's auto-imports exist, so this is the
 // one place they are imported by path.
 import { APP_DESCRIPTION, APP_NAME, THEME_COLOR_DARK } from './shared/brand'
+import { SHELL_CACHE } from './shared/pwa'
 
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
@@ -53,6 +54,27 @@ export default defineNuxtConfig({
       ],
     },
     workbox: {
+      /**
+       * **`cleanupOutdatedCaches` is deliberately not set here**, and the
+       * reason is measured rather than assumed.
+       *
+       * It looks like the answer to a phone serving an old bundle, and it is
+       * not. Workbox already replaces a build: every precached file carries a
+       * revision, and activating a new worker drops the entries whose revision
+       * moved. The old bundle survived because with `registerType: 'prompt'`
+       * below the new worker never *activated* — it installed, waited, and the
+       * only thing that could let it in was a card on two waiter screens. That
+       * is fixed in `useAppUpdate().applyWhenIdle()`, on the lock screen.
+       *
+       * What the flag actually does is delete precaches written by an older
+       * *Workbox* version, whose storage format the current one cannot read —
+       * and it does it inside the worker's `activate` event, which every client
+       * waits on. Turning it on made `phase4-razgovor`'s offline photo check
+       * fail in three runs out of six, each of those runs taking three times as
+       * long; four runs with it off, everything else identical, were green and
+       * fast, as were six on the unmodified base. A one-line tidy-up is not
+       * worth a worker that sometimes takes half a minute to take over.
+       */
       // `html` is on this list for one reason: `navigateFallback` can only
       // serve a page the worker actually has, and this app is server-rendered,
       // so the only HTML in `.output/public` is what `nitro.prerender` below
@@ -91,7 +113,30 @@ export default defineNuxtConfig({
             && !url.pathname.startsWith('/admin'),
           handler: 'NetworkFirst',
           options: {
-            cacheName: 'sank-shell',
+            /**
+             * One HTML document per URL the phone has opened — and **every one
+             * of them belongs to the build that wrote it**, because the script
+             * tags inside name that build's hashed files.
+             *
+             * The cache has to stay: without it an offline reload of
+             * `/konobar/razgovor/svi` is answered with the precached `/konobar`
+             * shell and the waiter is left looking at the floor plan instead of
+             * the screen he was on (the `navigateFallback` note above is the
+             * same fact from the other side).
+             *
+             * What must not stay is a document from a build that is gone —
+             * and this is the one cache Workbox does **not** clean up for us.
+             * Precached files carry a revision and are replaced when the new
+             * worker activates; a runtime cache is keyed by URL alone, so last
+             * build's `/konobar/razgovor/svi` survives the swap and is handed
+             * out whenever the three seconds below run out. That is a stale
+             * version served on a slow connection, pointing at script files the
+             * activation has already deleted. So this cache is emptied once per
+             * build, from the page rather than from the worker:
+             * `app/plugins/shell-cache.client.ts`, which compares Nuxt's
+             * `buildId` with the one that last wrote it.
+             */
+            cacheName: SHELL_CACHE,
             networkTimeoutSeconds: 3,
             plugins: [{
               // `ignoreSearch`, because a precached entry is stored under its

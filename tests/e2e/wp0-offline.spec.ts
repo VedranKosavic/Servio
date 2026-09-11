@@ -38,6 +38,7 @@
  */
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 import { APP_NAME } from '../../shared/brand'
+import { SHELL_CACHE } from '../../shared/pwa'
 import { ackRules, resetLimits, pinLogin, type Person } from './helpers'
 
 
@@ -397,6 +398,24 @@ test.describe('WP0 — the offline outbox', () => {
     for (const icon of body.icons as { src: string }[]) {
       expect((await context.request.get(icon.src)).status()).toBe(200)
     }
+
+    /**
+     * And the page cache the worker writes under is the one the app clears.
+     *
+     * `sank-shell` holds one HTML document per screen the phone has opened, and
+     * every one of them names the hashed script files of the build that wrote
+     * it. Workbox will not clean that up — a runtime cache is keyed by URL
+     * alone, with no revision to compare — so `app/plugins/shell-cache.client.ts`
+     * empties this exact cache whenever Nuxt's `buildId` moves. The name is the
+     * only thing joining those two files, it is written once in `shared/pwa.ts`,
+     * and a rename on either side would leave the phone holding the previous
+     * build's HTML with nothing left to clear it. Hence reading it back out of
+     * the worker the build actually produced.
+     */
+    const worker = await context.request.get('/sw.js')
+    expect(worker.status()).toBe(200)
+    const source = await worker.text()
+    expect(source).toContain(`cacheName:"${SHELL_CACHE}"`)
 
     // `loginAsAmar` in `beforeAll` already asserted the worker takes control.
     const page = await freshPage()
