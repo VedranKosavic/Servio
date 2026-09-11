@@ -59,7 +59,6 @@ const error = ref<string | null>(null)
 /** Which row has a write in flight — so its own controls grey out, not the page. */
 const busyId = ref<string | null>(null)
 
-const show = ref<'aktivni' | 'svi'>('aktivni')
 const search = ref('')
 
 /**
@@ -107,7 +106,6 @@ const favouriteCount = computed(() =>
 const visible = computed(() => {
   const needle = search.value.trim().toLowerCase()
   return products.value.filter((product) => {
-    if (show.value === 'aktivni' && !product.active) return false
     if (!needle) return true
     return product.name.toLowerCase().includes(needle)
       || (product.short_name ?? '').toLowerCase().includes(needle)
@@ -210,34 +208,10 @@ async function createProduct(body: CreateProductBody) {
     <!-- ---- the phone ------------------------------------------------- -->
     <template v-if="isPhone">
       <PostavkeMeniControls
-        :show="show"
         :search="search"
-        :favourite-count="favouriteCount"
-        :favourite-cap="FAVOURITE_CAP"
-        @update:show="value => show = value"
         @update:search="value => search = value"
         @create="newOpen = true"
       />
-
-      <!--
-        The standing caution, folded.
-
-        It is true all year and it is three lines, which on a phone is a banner
-        the owner scrolls past every time to reach the first product — and a
-        banner that is always there is a banner nobody reads. The instruction
-        itself stays on screen in one line; the reason is one tap behind it.
-        `<details>` and not a toggle in script, because the browser already
-        knows how to open and announce one.
-      -->
-      <details class="p-fold">
-        <summary>
-          <span class="p-fold-line">Cijenu mijenjaj prije otvaranja smjene</span>
-          <UiIcon class="p-fold-chev" name="chevron-right" :size="18" />
-        </summary>
-        <p class="p-fold-body">
-          Već zaključene ture zadržavaju cijenu po kojoj su naplaćene.
-        </p>
-      </details>
 
       <PostavkeMeniList
         :groups="groups"
@@ -250,18 +224,7 @@ async function createProduct(body: CreateProductBody) {
 
     <!-- ---- the laptop ------------------------------------------------ -->
     <template v-else>
-      <p class="p-warn">
-        Mijenjaj cijene prije otvaranja smjene — već zaključene ture zadržavaju
-        cijenu po kojoj su naplaćene.
-      </p>
-
       <div class="p-filters">
-        <UiSeg
-          :model-value="show"
-          label="Koji artikli"
-          :options="[{ value: 'aktivni', label: 'Aktivni' }, { value: 'svi', label: 'Svi' }]"
-          @update:model-value="value => show = value as 'aktivni' | 'svi'"
-        />
         <input
           v-model="search"
           class="p-search"
@@ -269,9 +232,6 @@ async function createProduct(body: CreateProductBody) {
           placeholder="Traži artikal"
           aria-label="Traži artikal"
         >
-        <span class="p-fav-count">
-          Omiljeno {{ favouriteCount }} / {{ FAVOURITE_CAP }}
-        </span>
       </div>
 
       <UiCard v-if="loading" title="Meni">
@@ -338,15 +298,6 @@ async function createProduct(body: CreateProductBody) {
 </template>
 
 <style scoped>
-.p-warn {
-  margin: 0;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: var(--warn-soft);
-  color: var(--warn);
-  font-size: var(--text-label);
-  font-weight: 500;
-}
 
 .p-filters { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
@@ -366,52 +317,6 @@ async function createProduct(body: CreateProductBody) {
 
 .p-search:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-.p-fav-count {
-  font-size: var(--text-micro);
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  margin-left: auto;
-}
-
 .p-empty { margin: 0; color: var(--muted); }
 
-/* ---- the folded caution (phone only) ----------------------------------- */
-
-.p-fold {
-  background: var(--warn-soft);
-  color: var(--warn);
-  border-radius: var(--radius-field);
-}
-
-.p-fold summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: var(--tap);
-  padding: 0 12px;
-  cursor: pointer;
-  list-style: none;
-  font-size: var(--text-label);
-  font-weight: 600;
-}
-
-/* Safari draws its own triangle; the chevron is the disclosure here. */
-.p-fold summary::-webkit-details-marker { display: none; }
-.p-fold summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-
-.p-fold-line { flex-grow: 1; min-width: 0; }
-
-.p-fold-chev {
-  flex-shrink: 0;
-  transition: transform var(--dur-fast) var(--ease-standard);
-}
-
-.p-fold[open] .p-fold-chev { transform: rotate(90deg); }
-
-.p-fold-body {
-  margin: 0;
-  padding: 0 12px 12px;
-  font-size: var(--text-micro);
-  font-weight: 500;
-}
 </style>
