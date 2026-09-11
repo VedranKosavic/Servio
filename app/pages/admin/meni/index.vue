@@ -198,7 +198,7 @@ async function createProduct(body: CreateProductBody) {
 <template>
   <PostavkePage
     title="Meni"
-    sub="Cijene, omiljeno i normativi"
+    sub="Cijene po kategorijama"
     :error="error"
   >
     <!-- On a phone the page's one copper button rides in the toolbar beside the
