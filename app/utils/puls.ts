@@ -4,9 +4,9 @@
  * Everything here is a **pure function**: an argument in, a value out, no
  * `fetch`, no `ref`, no component. That is what makes it testable in
  * `tests/unit/puls.test.ts` without a browser, and it is where the rules that
- * are easy to get quietly wrong live — which shift the café is in, how old a
- * table has to be before its tile turns amber, and which body a decide route
- * wants.
+ * are easy to get quietly wrong live — which shift the café is in now, which one
+ * it just finished and which one comes next; what a shift actually sold; and
+ * which body a decide route wants.
  *
  * Files in `app/utils/` are auto-imported by Nuxt exactly like composables, so
  * no component below writes an `import` line for any of this.
@@ -14,6 +14,7 @@
 import type {
   AttentionAction,
   AttentionRefType,
+  LineRow,
   LiveWho,
   ShiftTemplateView,
   TableState,
@@ -25,6 +26,24 @@ import { durationBs } from './adminFormat'
 // ---------------------------------------------------------------------------
 // The one-tap decisions
 // ---------------------------------------------------------------------------
+
+/**
+ * **Nothing on `/admin` calls the three functions below tonight.**
+ *
+ * *Puls* used to end in one row — `PulsOdluke` — that opened the decisions
+ * waiting to be made, and the owner asked for that row and its whole logic to
+ * go. Two of its buttons were the only door in the app to their route
+ * (`POST /api/tabs/:id/unpaid/decide` and `POST /api/shifts/:id/force-close`),
+ * so those two decisions now have nowhere to be made from a screen.
+ *
+ * What is kept here is the *vocabulary*, because it is the part that cannot be
+ * re-derived by reading a route: three decide routes that each mean something
+ * different by *Odobri*, and one that refuses to run without a written sentence.
+ * It is under test in `tests/unit/puls.test.ts`, so whichever screen is given
+ * those doors deliberately later finds the contract intact rather than guessing
+ * at it a second time. Nothing here posts anything, and nothing here is
+ * rendered.
+ */
 
 /**
  * What the route behind *Odobri* / *Odbij* / *Bilješka* wants in its body.
@@ -86,22 +105,56 @@ export const NOTE_MIN = 3
 // ---------------------------------------------------------------------------
 
 /**
- * How the screen names tonight's shift.
+ * One of the venue's shifts, as the screen names it.
  *
- * `name` is the template's own word — *Dnevna*, *Večernja* — and `ordinal_bs`
- * is the owner's way of asking for it ("first or second shift"). Both come out
- * of the roster's `shift_templates`, because a café that adds a third shift
- * must not have to have this file edited.
+ * `name` is the template's own word — *Prva smjena*, *Večernja* — and
+ * `ordinal_bs` is the owner's way of asking for it ("first or second shift").
+ * Both come out of the roster's `shift_templates`, because a café that adds a
+ * third shift must not have to have this file edited.
  */
-export interface ShiftNaming {
-  /** The template's own name: "Večernja". */
+export interface ShiftWindow {
+  id: string
+  /** The template's own name: "Prva smjena". */
   name: string
   /** Where it sits among the venue's active shifts, 1-based. */
   index: number
   /** "prva smjena", "druga smjena" — what the owner calls it. */
   ordinal_bs: string
-  /** "16–01", with an en dash, from the template's own wall clock. */
+  /** "07–15", with an en dash, from the template's own wall clock. */
   hours: string
+  start_time: string
+  end_time: string
+}
+
+/**
+ * Which calendar day a shift that is not running belongs to, read against the
+ * clock we asked about — not against the business date, which still calls 03:00
+ * yesterday. *Sljedeća smjena je u 07:00* is **sutra** at half eleven at night
+ * and **danas** at five in the morning, and that is the answer a person reading
+ * a phone wants.
+ */
+export type ShiftDay = 'juce' | 'danas' | 'sutra'
+
+/** A shift the clock is not inside: the one before it, or the one after it. */
+export interface ShiftTurn {
+  window: ShiftWindow
+  day: ShiftDay
+  /** Minutes until it starts (`next`), or since it ended (`last`). */
+  minutes: number
+}
+
+/**
+ * Where the café is in its own day: the shift that is running, the one that
+ * ended most recently, and the one that starts next.
+ *
+ * `current` is null between shifts and through the night — which is exactly when
+ * the screen shows `last` instead, so *Puls* always has two shifts to draw and
+ * never an empty state.
+ */
+export interface ShiftClock {
+  current: ShiftWindow | null
+  last: ShiftTurn | null
+  next: ShiftTurn | null
 }
 
 const ORDINALS_BS = ['prva', 'druga', 'treća', 'četvrta', 'peta', 'šesta'] as const
@@ -130,65 +183,140 @@ function circularGap(at: number, mark: number): number {
 }
 
 /**
- * Which of the venue's shift templates the café is in, named the owner's way.
+ * The venue's shifts, in the roster's own order, with the unreadable and the
+ * retired rows dropped.
  *
- * **The window first, and the nearest edge when no window has it.** *Dnevna* is
- * 08–16 and *Večernja* 16–01, so between them they leave 01:00–08:00 owned by
- * nobody — and that gap is exactly when a long night is still being counted.
- * The rule is therefore two steps: the template whose own hours contain the
- * clock (`end <= start` means it runs past midnight, the same reading
- * `plannedHours()` in `shared/dates.ts` gives it), and failing that the
- * template with the nearest edge — which keeps 02:30 on the evening that ended
- * at one and puts 07:45 on the morning that starts at eight.
- *
- * `atHhmm` is a wall clock in the café's own zone — `localTime()` from
- * `shared/dates.ts`, never `getHours()`.
- *
- * Inactive templates are not shifts anybody works, so they are dropped before
- * the ordinal is counted — otherwise retiring the morning shift would leave the
- * evening one called "the second".
+ * Inactive templates are not shifts anybody works, so they go before the ordinal
+ * is counted — otherwise retiring the morning shift would leave the evening one
+ * still called "the second".
  */
-export function shiftNaming(
-  templates: ShiftTemplateView[], atHhmm: string,
-): ShiftNaming | null {
-  const at = minutesOf(atHhmm)
-  if (at === null) return null
-
-  const active = templates
+function activeWindows(templates: ShiftTemplateView[]): ShiftWindow[] {
+  return templates
     .filter(t => t.active && minutesOf(t.start_time) !== null && minutesOf(t.end_time) !== null)
     .sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name))
+    .map((t, i) => ({
+      id: t.id,
+      name: t.name,
+      index: i + 1,
+      ordinal_bs: `${ORDINALS_BS[i] ?? `${i + 1}.`} smjena`,
+      hours: hoursBs(t.start_time, t.end_time),
+      start_time: t.start_time,
+      end_time: t.end_time,
+    }))
+}
 
-  let index = -1
-  let bestDistance = Number.POSITIVE_INFINITY
+/** How long a window lasts, in minutes. `end <= start` means it runs past midnight. */
+function spanOf(window: ShiftWindow): number {
+  const start = minutesOf(window.start_time)!
+  const end = minutesOf(window.end_time)!
+  return end <= start ? end + DAY_MIN - start : end - start
+}
 
-  for (let i = 0; i < active.length; i++) {
-    const start = minutesOf(active[i]!.start_time)!
-    const end = minutesOf(active[i]!.end_time)!
-    const span = end <= start ? end + DAY_MIN - start : end - start
+/**
+ * Is the wall clock inside this window?
+ *
+ * The start is inclusive and the end is not, which is what makes 15:00 the first
+ * minute of *Druga smjena* rather than the last of *Prva* — the two templates
+ * meet on that minute and exactly one of them may own it.
+ *
+ * `end <= start` is read as "ends the next day", the same reading
+ * `plannedHours()` in `shared/dates.ts` gives it, so a café that closes at 01:00
+ * needs no change here.
+ */
+function contains(window: ShiftWindow, at: number): boolean {
+  const start = minutesOf(window.start_time)!
+  return (at - start + DAY_MIN) % DAY_MIN < spanOf(window)
+}
 
-    // Inside its own hours: nothing beats that, and the first such template
-    // wins, so two overlapping shifts read in the roster's own order.
-    if ((at - start + DAY_MIN) % DAY_MIN < span) {
-      index = i
-      break
+/**
+ * Where the café is in its own day — the two cards *Puls* draws, worked out from
+ * the roster's templates and the café's wall clock.
+ *
+ * **Nothing here is an empty state.** The café runs *Prva smjena* 07–15 and
+ * *Druga* 15–23, so between 23:00 and 07:00 no template owns the clock. That is
+ * not a screen with nothing on it: it is the night, when what the owner wants is
+ * the shift that just finished and the one that starts in the morning. So this
+ * answers three things and the page picks two of them — `current` and `next`
+ * while a shift is running, `last` and `next` when none is.
+ *
+ * - `current` — the window the clock is inside, or null.
+ * - `next` — the window whose start comes soonest **after** now. A window
+ *   starting exactly now is the current one, so its own next turn is a full day
+ *   away and it does not shadow the other shift.
+ * - `last` — the window whose end came most recently, counting 0 as "just
+ *   ended": at 23:00 sharp, *Druga smjena* has this second finished.
+ *
+ * `atHhmm` is a wall clock in the café's own zone — `localTime()` from
+ * `shared/dates.ts`, never `getHours()`, which answers in whatever zone the
+ * laptop happens to be set to.
+ */
+export function shiftClock(templates: ShiftTemplateView[], atHhmm: string): ShiftClock {
+  const at = minutesOf(atHhmm)
+  const windows = activeWindows(templates)
+  const empty: ShiftClock = { current: null, last: null, next: null }
+  if (at === null || windows.length === 0) return empty
+
+  // The first window that owns the minute wins, so two overlapping shifts read
+  // in the roster's own order.
+  const current = windows.find(w => contains(w, at)) ?? null
+
+  let next: ShiftTurn | null = null
+  let last: ShiftTurn | null = null
+
+  for (const window of windows) {
+    const start = minutesOf(window.start_time)!
+    const end = minutesOf(window.end_time)!
+
+    // Until it starts again. A gap of nothing means it is starting this minute —
+    // which is the shift that is running, and its *next* turn is tomorrow.
+    const ahead = ((start - at) % DAY_MIN + DAY_MIN) % DAY_MIN || DAY_MIN
+    if (!next || ahead < next.minutes) {
+      next = { window, day: start > at ? 'danas' : 'sutra', minutes: ahead }
     }
 
-    const distance = Math.min(circularGap(at, start), circularGap(at, end))
+    // Since it ended. Zero is honest here: at 23:00 the evening has just ended.
+    const behind = ((at - end) % DAY_MIN + DAY_MIN) % DAY_MIN
+    if (!last || behind < last.minutes) {
+      last = { window, day: end <= at ? 'danas' : 'juce', minutes: behind }
+    }
+  }
+
+  return { current, last, next }
+}
+
+/**
+ * Which shift a timestamp belongs to — how a shift that has already been worked
+ * is named.
+ *
+ * The clock alone cannot answer that: a shift row carries the minute it was
+ * opened, and a bar that opened at 15:04 or ran twenty minutes over is still
+ * *Druga smjena*. So the window that contains the minute, and failing that the
+ * window with the nearest edge — which keeps a night opened at 23:20 on the
+ * evening shift instead of handing it to a morning that had not started.
+ */
+export function shiftWindowFor(
+  templates: ShiftTemplateView[], atHhmm: string,
+): ShiftWindow | null {
+  const at = minutesOf(atHhmm)
+  const windows = activeWindows(templates)
+  if (at === null || windows.length === 0) return null
+
+  const inside = windows.find(w => contains(w, at))
+  if (inside) return inside
+
+  let best: ShiftWindow | null = null
+  let bestDistance = Number.POSITIVE_INFINITY
+  for (const window of windows) {
+    const distance = Math.min(
+      circularGap(at, minutesOf(window.start_time)!),
+      circularGap(at, minutesOf(window.end_time)!),
+    )
     if (distance < bestDistance) {
       bestDistance = distance
-      index = i
+      best = window
     }
   }
-
-  const template = active[index]
-  if (!template) return null
-
-  return {
-    name: template.name,
-    index: index + 1,
-    ordinal_bs: `${ORDINALS_BS[index] ?? `${index + 1}.`} smjena`,
-    hours: hoursBs(template.start_time, template.end_time),
-  }
+  return best
 }
 
 /**
@@ -212,36 +340,23 @@ export function shiftPrometFen(who: LiveWho[]): number {
 // ---------------------------------------------------------------------------
 
 /**
- * How long the guests have been sitting there, as a colour band.
+ * One tile of the room, with everything the template needs already resolved.
  *
- * `free` is an empty table, then under an hour, one to three, over three. The
- * band is only ever half the message: every tile prints the age in words
- * beside it, because a colour on its own is not a status anybody can read out
- * loud (or see, colour-blind, in a bright bar).
+ * **There is no age band on it any more.** The tiles used to be tinted in three
+ * shades by how long the guests had been sitting, with a five-word legend under
+ * the plan; the owner asked for the waiter's plan instead — *"we can now remove
+ * all the reservations, etc.. all should be same color"* — so a tile is either
+ * occupied or free and nothing else. The age survives as words, in the tile's
+ * accessible name and in the sheet that opens when it is tapped, which is where
+ * a number belongs when it is not a colour.
  */
-export type TableTone = 'free' | 'fresh' | 'warm' | 'old'
-
-const HOUR_MS = 3_600_000
-
-export function tableTone(openedAt: string | null, nowMs: number): TableTone {
-  if (!openedAt) return 'free'
-  const opened = Date.parse(openedAt)
-  if (Number.isNaN(opened)) return 'fresh'
-  const age = nowMs - opened
-  if (age >= 3 * HOUR_MS) return 'old'
-  if (age >= HOUR_MS) return 'warm'
-  return 'fresh'
-}
-
-/** One tile of the room, with everything the template needs already resolved. */
 export interface PulsFloorCell {
   table_id: string
   tab_id: string | null
-  /** The number alone: every circle would otherwise say "Sto". */
+  /** The number alone: every tile would otherwise say "Sto". */
   label: string
   /** The whole name, which is what the sheet's title says. */
   name: string
-  tone: TableTone
   /** `"48 min"`, `"1 h 40"`, or empty for a free table. */
   age: string
   remaining_fen: number
@@ -312,7 +427,6 @@ export function floorZones(
       tab_id: live?.tab_id ?? null,
       label: shortLabel(table.name),
       name: table.name,
-      tone: tableTone(openedAt, nowMs),
       age: openedAt ? durationBs((nowMs - Date.parse(openedAt)) / 1000) : '',
       remaining_fen: live?.remaining_fen ?? 0,
       waiter: live?.assigned_to_initials ?? live?.opened_by_name ?? '',
@@ -374,16 +488,160 @@ export function weekdayBs(businessDay: string): string {
   return WEEKDAYS[day] ?? ''
 }
 
-/** What the header says about tonight's shift, in Bosnian and never guessed. */
-export function shiftLineBs(
+/**
+ * What the pill on a shift card says.
+ *
+ * Two words at most, because the card already carries the shift's name above it
+ * and its hours below: the pill's whole job is *is this still running*. A colour
+ * never says it alone — there is always the word in the pill (DESIGN §2).
+ */
+export function shiftPillBs(
   status: 'open' | 'closing' | 'closed' | 'reviewed' | null,
-  closerName: string | null,
 ): string {
   switch (status) {
-    case 'open': return 'smjena otvorena'
-    case 'closing': return closerName ? `zatvaranje · ${closerName}` : 'zatvaranje smjene'
-    case 'closed': return 'smjena zatvorena'
-    case 'reviewed': return 'smjena pregledana'
-    default: return 'nema otvorene smjene'
+    case 'open': return 'u toku'
+    case 'closing': return 'zatvaranje'
+    case 'closed': return 'zatvorena'
+    case 'reviewed': return 'pregledana'
+    default: return 'nije otvarana'
+  }
+}
+
+/**
+ * *Počinje sutra u 07:00* — when a shift that is not running is, in words.
+ *
+ * Inside the hour it is a countdown and the day word is dropped, because "za
+ * 20 min" is how somebody standing behind a bar thinks about it and "danas" adds
+ * nothing to it. Past the hour it is the clock plus the day, which is the
+ * reading that stops *07:00* meaning tomorrow morning to one person and this
+ * morning to another. `durationBs` is the dashboard's own duration, so this says
+ * "3 h 20" exactly the way every other length of time on `/admin` says it.
+ */
+export function shiftWhenBs(turn: ShiftTurn, tense: 'next' | 'last'): string {
+  const day = turn.day === 'danas' ? 'danas' : turn.day === 'sutra' ? 'sutra' : 'jučer'
+
+  if (tense === 'next') {
+    return turn.minutes < 60
+      ? `počinje za ${durationBs(turn.minutes * 60)}`
+      : `počinje ${day} u ${turn.window.start_time}`
+  }
+
+  return turn.minutes < 60
+    ? `završena prije ${durationBs(turn.minutes * 60)}`
+    : `završena ${day} u ${turn.window.end_time}`
+}
+
+/**
+ * *Dobro veče, Harun* — the one line at the top of *Puls*.
+ *
+ * It is a **line and not a headline**: the owner opens this screen for a number,
+ * and a greeting that pushed that number down a phone screen would be a greeting
+ * he learned to scroll past. The hour comes from the café's own wall clock —
+ * `localTime()`, never `getHours()` — and only the first name is used, because
+ * that is what everybody in the café is called (DESIGN §6, second person
+ * singular).
+ *
+ * An unreadable clock gets the greeting with no time of day in it rather than a
+ * guessed one.
+ */
+export function greetingBs(atHhmm: string, name?: string | null): string {
+  const first = (name ?? '').trim().split(/\s+/)[0] ?? ''
+  const at = minutesOf(atHhmm)
+  const hour = at === null ? null : Math.floor(at / 60)
+
+  const greeting = hour === null
+    ? 'Zdravo'
+    : hour < 5 ? 'Dobro veče'
+      : hour < 11 ? 'Dobro jutro'
+        : hour < 18 ? 'Dobar dan'
+          : 'Dobro veče'
+
+  return first ? `${greeting}, ${first}` : greeting
+}
+
+// ---------------------------------------------------------------------------
+// What a shift has sold
+// ---------------------------------------------------------------------------
+
+/**
+ * One product on the counter behind a shift card: how many went out, and for
+ * how much.
+ *
+ * Aggregated **by the name snapshotted on the line**, which is what the ledger
+ * carries — a line records the name and the price the guest was actually charged,
+ * not a pointer to a product whose name somebody may rename next week. So
+ * renaming *Kafa* to *Espresso* splits tonight from last month on this screen,
+ * and that is the honest reading: they were sold under two different names.
+ */
+export interface SoldRow {
+  name: string
+  /** Everything that went out, gratis included, storna excluded. */
+  qty: number
+  /** What was charged for it. Gratis adds nothing, because nothing was charged. */
+  fen: number
+  /** How many of `qty` went out *na račun kuće*. */
+  gratis_qty: number
+  /** Cancelled, and therefore not in `qty` at all. */
+  storno_qty: number
+}
+
+export interface SoldTotals {
+  /** How many different articles the shift actually sold. */
+  products: number
+  qty: number
+  fen: number
+  gratis_qty: number
+  storno_qty: number
+}
+
+/**
+ * The counter: every product a shift sold, most-sold first.
+ *
+ * **A counter, not a feed.** `GET /api/owner/shift/:id/lines` answers one row per
+ * line rung up — three hundred of them on a busy night — and the owner's question
+ * is not *what happened at 21:14*, it is *how many coffees went out tonight*. So
+ * the lines are folded by product here, in the browser, off a read that already
+ * exists rather than a route added for it.
+ *
+ * **An applied storno is not a sale.** It is counted on its own row instead, so a
+ * product whose only two rounds were cancelled reads as "2 stornirana" rather
+ * than disappearing from a screen that is supposed to say what happened. A storno
+ * still *waiting* on a decision has not been granted, so it counts as sold — it
+ * is money the café is still owed, and that is what every other screen says
+ * about it too.
+ */
+export function soldRows(lines: LineRow[]): SoldRow[] {
+  const rows = new Map<string, SoldRow>()
+
+  for (const line of lines) {
+    const name = line.name_snapshot
+    const row = rows.get(name)
+      ?? { name, qty: 0, fen: 0, gratis_qty: 0, storno_qty: 0 }
+
+    if (line.status === 'storno') {
+      row.storno_qty += line.qty
+    } else {
+      row.qty += line.qty
+      row.fen += line.charged_fen
+      if (line.status === 'gratis') row.gratis_qty += line.qty
+    }
+
+    rows.set(name, row)
+  }
+
+  // Most sold first, then the biggest money, then alphabetical — so a list of
+  // ones and twos has a stable order instead of the ledger's arrival order.
+  return [...rows.values()].sort((a, b) =>
+    b.qty - a.qty || b.fen - a.fen || a.name.localeCompare(b.name, 'bs'))
+}
+
+/** The foot of the counter. `products` counts what actually sold, not the storna. */
+export function soldTotals(rows: SoldRow[]): SoldTotals {
+  return {
+    products: rows.filter(row => row.qty > 0).length,
+    qty: rows.reduce((n, row) => n + row.qty, 0),
+    fen: rows.reduce((n, row) => n + row.fen, 0),
+    gratis_qty: rows.reduce((n, row) => n + row.gratis_qty, 0),
+    storno_qty: rows.reduce((n, row) => n + row.storno_qty, 0),
   }
 }

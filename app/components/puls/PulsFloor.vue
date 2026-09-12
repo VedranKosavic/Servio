@@ -2,24 +2,32 @@
 /**
  * *Stolovi* — the room from above, the way `/konobar` draws it.
  *
- * The owner asked for the waiter's floor plan on his own screen: "mimic and
- * make it same as we did for waiter screen, showing live state of the tables".
- * So the geometry is the waiter's exactly — one vertical stack per `col`,
- * ordered by `row`, the stacks spread across the width, a boxed group (today
- * the VIP pair) under the column it hangs off, and the whole plan sitting in an
- * inset well, because the room is a space the tables stand *in* rather than a
- * list of cards. `floorZones()` in `app/utils/puls.ts` builds it out of the
- * catalogue's own coordinates, so adding a table to the database adds it here.
+ * The geometry is the waiter's exactly — one vertical stack per `col`, ordered by
+ * `row`, the stacks spread across the width, a boxed group (today the VIP pair)
+ * under the column it hangs off, and the whole plan sitting in an inset well,
+ * because the room is a space the tables stand *in* rather than a list of cards.
+ * `floorZones()` in `app/utils/puls.ts` builds it out of the catalogue's own
+ * coordinates, so adding a table to the database adds it here.
+ *
+ * **The legend is gone, and so is everything it named.** It keyed five colours —
+ * free, under an hour, one to three, over three, waiting — and the owner asked
+ * for the waiter's plan instead: one colour for every occupied table. Two states
+ * need no key, so the foot of the plan is now the plan.
+ *
+ * What the five words did carry, and what the card head carries in their place,
+ * is the count: *"6 od 27 zauzeto · 1 čeka naplatu"*. A ring around a tile is a
+ * thing to notice rather than a colour to look up, and the number of them is a
+ * fact worth reading before the owner has looked at a single tile.
  *
  * **Both zones at once, and no switch.** The waiter picks a half of the room
- * because he is walking to one of them; the owner is watching the whole night
- * and should not have to tap to see half of it. *Unutra* and *Bašta* are two
- * labelled wells, stacked.
+ * because he is walking to one of them; the owner is watching the whole night and
+ * should not have to tap to see half of it. *Unutra* and *Bašta* are two labelled
+ * wells, stacked.
  *
  * **Nothing here shares a rule with `/konobar`.** The dark screens and this one
- * are two materials on one set of token names (DESIGN §2), so the plan is
- * rebuilt against the light theme rather than imported — the waiter's own
- * component and its scoped CSS are untouched.
+ * are two materials on one set of token names (DESIGN §2), so the plan is rebuilt
+ * against the light theme rather than imported — the waiter's own component and
+ * its scoped CSS are untouched.
  */
 import type { PulsFloorCell, PulsFloorZone } from '~/utils/puls'
 
@@ -30,11 +38,19 @@ const props = defineProps<{
 
 defineEmits<{ open: [cell: PulsFloorCell] }>()
 
-/** "6 od 27 zauzeto" — the one number a card head is worth. */
+/** Every tile of every zone, once — the boxed groups included. */
+const cells = computed(() => props.zones.flatMap(zone =>
+  zone.columns.flatMap(column => [...column.cells, ...column.groups.flatMap(g => g.cells)])))
+
+/** "6 od 27 zauzeto · 1 čeka naplatu" — the one line a card head is worth. */
 const count = computed(() => {
   const busy = props.zones.reduce((n, zone) => n + zone.busy, 0)
   const total = props.zones.reduce((n, zone) => n + zone.total, 0)
-  return total ? `${busy} od ${total} zauzeto` : undefined
+  if (!total) return undefined
+  const waiting = cells.value.filter(cell => cell.pending_review).length
+  const parts = [`${busy} od ${total} zauzeto`]
+  if (waiting) parts.push(`${waiting} čeka naplatu`)
+  return parts.join(' · ')
 })
 </script>
 
@@ -75,16 +91,6 @@ const count = computed(() => {
           </div>
         </div>
       </div>
-
-      <!-- The caption on the plan: colour never carries a meaning on its own,
-           so every marker is drawn beside the word it stands for. -->
-      <ul class="a-legend">
-        <li><i class="a-key k-free" />slobodan</li>
-        <li><i class="a-key k-fresh" />do 1 h</li>
-        <li><i class="a-key k-warm" />1–3 h</li>
-        <li><i class="a-key k-old" />preko 3 h</li>
-        <li><i class="a-key k-wait" />čeka</li>
-      </ul>
     </template>
 
     <p v-else class="a-empty">
@@ -114,8 +120,8 @@ const count = computed(() => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 14px 12px;
-  border-radius: var(--radius-card);
+  padding: 16px 12px;
+  border-radius: var(--radius-panel);
   background: var(--bg-2);
   border: 1px solid var(--line-soft);
   overflow-x: auto;
@@ -123,12 +129,13 @@ const count = computed(() => {
 
 /* A stack shorter than the tallest one is centred against it (`align-items:
    center` above), so Bašta's three sit level with the middle of the seven —
-   which is what the owner's sketch of the garden shows. */
+   which is what the owner's sketch of the garden shows. 12 px between tiles is
+   the waiter's own spacing. */
 .a-col {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 
 /* Tables with a group — today only the VIP pair — are drawn in their own dashed
@@ -138,8 +145,8 @@ const count = computed(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px 8px;
+  gap: 8px;
+  padding: 8px 12px 12px;
   border-radius: var(--radius-card);
   border: 1px dashed var(--line);
 }
@@ -152,41 +159,7 @@ const count = computed(() => {
   font-weight: 600;
 }
 
-.a-grp-row { display: flex; gap: 8px; }
-
-.a-legend {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 14px;
-  margin: 0;
-  padding: 10px 0 0;
-  list-style: none;
-  border-top: 1px solid var(--line-soft);
-  font-size: var(--text-caption);
-  letter-spacing: 0;
-  color: var(--muted);
-}
-
-.a-legend li { display: flex; align-items: center; gap: 6px; }
-
-/* The markers are the tiles in miniature — same fills, same edges, so the key
-   and the plan cannot drift apart. */
-.a-key {
-  display: inline-block;
-  width: 11px;
-  height: 11px;
-  flex-shrink: 0;
-  border-radius: 4px;
-  border: 1px solid var(--line-soft);
-  background: var(--surface);
-}
-
-.k-free { background: var(--bg-2); border-color: var(--line-soft); }
-.k-fresh { background: var(--good-soft); }
-.k-warm { background: var(--warn-soft); }
-.k-old { background: var(--danger-soft); }
-.k-wait { background: transparent; border: 2px solid var(--warn); }
+.a-grp-row { display: flex; gap: 12px; }
 
 .a-empty { margin: 0; color: var(--muted); font-size: var(--text-label); }
 
@@ -203,9 +176,12 @@ const count = computed(() => {
 @media (max-width: 1023px) {
   .a-room {
     margin-inline: -16px;
-    padding: 12px 8px;
+    padding: 14px 8px;
     border-radius: 0;
     border-inline: 0;
   }
+
+  .a-col { gap: 10px; }
+  .a-grp-row { gap: 10px; }
 }
 </style>
