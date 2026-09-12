@@ -19,10 +19,17 @@
  * thing to notice rather than a colour to look up, and the number of them is a
  * fact worth reading before the owner has looked at a single tile.
  *
- * **Both zones at once, and no switch.** The waiter picks a half of the room
- * because he is walking to one of them; the owner is watching the whole night and
- * should not have to tap to see half of it. *Unutra* and *Bašta* are two labelled
- * wells, stacked.
+ * **One zone at a time, switched — the waiter's own control.** This screen was
+ * built the other way, on the argument that the owner is watching the whole
+ * night and should not tap to see half of it. On a 390 px phone that argument
+ * loses to arithmetic: two stacked wells are about seventeen hundred pixels of
+ * plan, so the room became two screens tall and *Bašta* lived permanently below
+ * the fold — a floor plan you have to scroll is not a floor plan. One zone at a
+ * time fits a screen with the legend under it and nothing cut off, and the tap
+ * that costs is the same tap the waiter already makes on his.
+ *
+ * The count in the head is the whole room, both zones, so the number the owner
+ * reads first never depends on which half he is looking at.
  *
  * **Nothing here shares a rule with `/konobar`.** The dark screens and this one
  * are two materials on one set of token names (DESIGN §2), so the plan is rebuilt
@@ -42,6 +49,22 @@ defineEmits<{ open: [cell: PulsFloorCell] }>()
 const cells = computed(() => props.zones.flatMap(zone =>
   zone.columns.flatMap(column => [...column.cells, ...column.groups.flatMap(g => g.cells)])))
 
+/** Which half of the room is on screen. The first zone until he says otherwise. */
+const shown = ref<string>('')
+
+const zoneOptions = computed(() =>
+  props.zones.map(zone => ({ value: zone.zone, label: zone.label })))
+
+watch(() => props.zones, (list) => {
+  if (list.length && !list.some(zone => zone.zone === shown.value)) {
+    shown.value = list[0]!.zone
+  }
+}, { immediate: true })
+
+const visibleZones = computed(() => (props.zones.length > 1
+  ? props.zones.filter(zone => zone.zone === shown.value)
+  : props.zones))
+
 /** "6 od 27 zauzeto · 1 čeka naplatu" — the one line a card head is worth. */
 const count = computed(() => {
   const busy = props.zones.reduce((n, zone) => n + zone.busy, 0)
@@ -57,10 +80,18 @@ const count = computed(() => {
 <template>
   <UiCard title="Stolovi" :count="count">
     <template v-if="zones.length">
-      <div v-for="zone in zones" :key="zone.zone" class="a-zone">
-        <div class="a-zone-label">{{ zone.label }}</div>
+      <UiSeg
+        v-if="zones.length > 1"
+        v-model="shown"
+        label="Zona"
+        :options="zoneOptions"
+      />
+
+      <div v-for="zone in visibleZones" :key="zone.zone" class="a-zone">
+        <div v-if="zones.length === 1" class="a-zone-label">{{ zone.label }}</div>
 
         <div class="a-room">
+          <div class="a-room-grid">
           <div
             v-for="column in zone.columns"
             :key="column.col"
@@ -89,6 +120,16 @@ const count = computed(() => {
               </div>
             </div>
           </div>
+          </div>
+
+          <!-- The legend is the foot of the same well, behind a hairline, so it
+               reads as a caption on the plan rather than a row of controls under
+               it — the waiter's placement, one material along. -->
+          <ul class="a-key">
+            <li><i class="a-key-dot busy" />zauzet</li>
+            <li><i class="a-key-dot free" />slobodan</li>
+            <li><i class="a-key-dot wait" />čeka naplatu</li>
+          </ul>
         </div>
       </div>
     </template>
@@ -117,13 +158,20 @@ const count = computed(() => {
    plan and never the dashboard. */
 .a-room {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 16px 12px;
+  flex-direction: column;
+  padding: 16px 12px 12px;
   border-radius: var(--radius-panel);
   background: var(--bg-2);
   border: 1px solid var(--line-soft);
+}
+
+/* The runs of tables. `overflow-x` is on this and not on the page, so a café
+   that grows a fourth run scrolls the plan and never the dashboard. */
+.a-room-grid {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   overflow-x: auto;
 }
 
@@ -160,6 +208,32 @@ const count = computed(() => {
 }
 
 .a-grp-row { display: flex; gap: 12px; }
+
+.a-key {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  margin: 0;
+  padding: 12px 0 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+  font-size: var(--text-caption);
+  color: var(--muted);
+}
+
+.a-key li { display: flex; align-items: center; gap: 6px; }
+
+.a-key-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.a-key-dot.free { background: var(--surface-2); }
+.a-key-dot.busy { background: var(--surface); border: 1px solid var(--line); }
+.a-key-dot.wait { background: var(--surface); box-shadow: 0 0 0 2px var(--warn); }
 
 .a-empty { margin: 0; color: var(--muted); font-size: var(--text-label); }
 

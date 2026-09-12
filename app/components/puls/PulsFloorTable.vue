@@ -88,9 +88,13 @@ const label = computed(() => {
   flex-shrink: 0;
   padding: 0 4px;
   border-radius: var(--radius-card);
-  border: 1.5px solid var(--line-soft);
+  /* No edge on the base — each state brings its own, or none. The old rule put
+     a 1.5 px `--line-soft` border on every tile, which on the well's own ground
+     was two beiges a shade apart: the free tiles read as smudges and their
+     edges competed with the occupied ones for the same attention. */
+  border: 0;
   background: transparent;
-  color: var(--muted);
+  color: var(--ink-2);
   font: inherit;
   text-align: center;
   min-width: 0;
@@ -100,7 +104,8 @@ const label = computed(() => {
 }
 
 button.a-tbl { cursor: pointer; }
-button.a-tbl:hover { box-shadow: var(--shadow-raise); }
+button.a-tbl:hover { box-shadow: var(--shadow-pop); }
+button.a-tbl.wait:hover { box-shadow: var(--shadow-pop), 0 0 0 2px var(--warn); }
 button.a-tbl:active { transform: scale(0.95); }
 button.a-tbl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -126,10 +131,23 @@ button.a-tbl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
 }
 
 /**
- * Free: the quietest thing on the plan — the well's own ground showing through,
- * a soft rule, a muted number. An empty table is a slot in the room, not an
- * object in it.
+ * **The plan is a ladder of three values, and no borders between them.**
+ *
+ * well (`--bg-2`) → free (`--surface-2`) → occupied (`--surface`), each a real
+ * step lighter than the last, so the state of a table is legible from the fill
+ * alone at arm's length. That is the waiter's own rule in the other material:
+ * on his dark screen a free tile is one step up from the well and an occupied
+ * one is a step above that. Only the top step carries an edge and a shadow,
+ * which is what makes it the only thing on the plan that looks like an object.
+ *
+ * Free: flat fill, no border, no shadow, muted number. An empty table is a slot
+ * in the room rather than an object in it, and seventeen of them should sink
+ * into the ground.
  */
+.a-tbl.free {
+  background: var(--surface-2);
+}
+
 .a-tbl.free .a-tbl-no { color: var(--muted); }
 
 /**
@@ -145,18 +163,27 @@ button.a-tbl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
  */
 .a-tbl.busy {
   background: var(--surface);
-  border-color: var(--line);
-  box-shadow: var(--shadow-card);
+  /* A real edge rather than a hairline the paper swallows, and `--shadow-raise`
+     rather than `--shadow-card`: contact shadow is what a resting card gets,
+     and these tiles have to lift off a mid-tone well, not off white. */
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-raise);
   color: var(--ink-2);
 }
 
 .a-tbl.busy .a-tbl-no { color: var(--ink); }
 
-/* Somebody has to look at this one. A ring, so the tile still reads as occupied
-   first — the same marker the waiter's plan puts on the same tab. */
+/**
+ * Somebody has to look at this one. A ring, so the tile still reads as occupied
+ * first — the same marker the waiter's plan puts on the same tab.
+ *
+ * A `box-shadow` ring and not `outline: … offset: 2px`. The tiles sit 10 px
+ * apart, so an outline standing 2 px off the edge spent 4 px of that gap and
+ * came within a hair of its neighbour; this hugs the border instead, costs no
+ * geometry at all, and stacks over the raise rather than replacing it.
+ */
 .a-tbl.wait {
-  outline: 2px solid var(--warn);
-  outline-offset: 2px;
+  box-shadow: var(--shadow-raise), 0 0 0 2px var(--warn);
 }
 
 /**
