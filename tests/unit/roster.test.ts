@@ -45,7 +45,7 @@ const futureWeek = () => weekStart(addDays(today(), 7))
  * afterwards — which is the pair of rules under test, so the fixture has to go
  * around both rather than through either.
  */
-function planPast(name: string, date: string, templateName = 'Večernja'): string {
+function planPast(name: string, date: string, templateName = 'Druga smjena'): string {
   const t = template(templateName)
   const id = crypto.randomUUID()
   f.sqlite.exec(
@@ -63,7 +63,7 @@ const template = (name: string) =>
 function plan(name: string, opts: { date?: string, template?: string, force?: boolean } = {}) {
   return addAssignment(f.db, f.venueId, f.adminActor(), {
     work_date: opts.date ?? today(),
-    template_id: template(opts.template ?? 'Večernja').id,
+    template_id: template(opts.template ?? 'Druga smjena').id,
     user_id: f.userId(name),
     ...(opts.force ? { force_double: true } : {}),
   }, f.clock.now())
@@ -105,21 +105,21 @@ describe('overlapping and double shifts', () => {
   })
 
   it('refuses two overlapping templates on one date, with no override', () => {
-    updateTemplate(f.db, f.venueId, f.adminActor(), template('Dnevna').id, {
+    updateTemplate(f.db, f.venueId, f.adminActor(), template('Prva smjena').id, {
       start_time: '15:00', end_time: '23:00',
     }, f.clock.now())
 
-    plan('Amar', { template: 'Večernja' })
-    expectCode(() => plan('Amar', { template: 'Dnevna' }), 'OVERLAP')
+    plan('Amar', { template: 'Druga smjena' })
+    expectCode(() => plan('Amar', { template: 'Prva smjena' }), 'OVERLAP')
     // …and `force_double` does not help: one person cannot be in two places.
-    expectCode(() => plan('Amar', { template: 'Dnevna', force: true }), 'OVERLAP')
+    expectCode(() => plan('Amar', { template: 'Prva smjena', force: true }), 'OVERLAP')
   })
 
   it('asks once about a non-overlapping second shift and takes the retry', () => {
-    plan('Amar', { template: 'Dnevna' })
-    expectCode(() => plan('Amar', { template: 'Večernja' }), 'DOUBLE_SHIFT')
+    plan('Amar', { template: 'Prva smjena' })
+    expectCode(() => plan('Amar', { template: 'Druga smjena' }), 'DOUBLE_SHIFT')
 
-    const forced = plan('Amar', { template: 'Večernja', force: true })
+    const forced = plan('Amar', { template: 'Druga smjena', force: true })
     expect(forced.status).toBe('planned')
     expect(f.db.select().from(schema.rosterAssignments).all()).toHaveLength(2)
   })
@@ -211,8 +211,8 @@ describe('copyWeek and publishWeek', () => {
 
     const names = ['Lejla', 'Dino', 'Tarik', 'Emir']
     for (const name of names) plan(name, { date: week })
-    plan('Amar', { date: week, template: 'Dnevna', force: true })
-    plan('Lejla', { date: week, template: 'Dnevna', force: true })
+    plan('Amar', { date: week, template: 'Prva smjena', force: true })
+    plan('Lejla', { date: week, template: 'Prva smjena', force: true })
 
     // Six edits after publish, six quiet entries — the Dnevnik keeps every one.
     const quiet = f.db.select().from(schema.logEntries).all()
@@ -263,11 +263,11 @@ describe('requestSwap and decideSwap', () => {
     // Lejla already works an overlapping shift, so the taker's own constraint
     // check throws **inside** the accept transaction, after the giver's row has
     // been touched. Nothing may survive that.
-    updateTemplate(f.db, f.venueId, f.adminActor(), template('Dnevna').id, {
+    updateTemplate(f.db, f.venueId, f.adminActor(), template('Prva smjena').id, {
       start_time: '15:00', end_time: '23:00',
     }, f.clock.now())
     addAssignment(f.db, f.venueId, f.adminActor(), {
-      work_date: today(), template_id: template('Dnevna').id, user_id: f.userId('Lejla'),
+      work_date: today(), template_id: template('Prva smjena').id, user_id: f.userId('Lejla'),
     }, f.clock.now())
 
     const entriesAfterSetup = f.db.select().from(schema.logEntries).all().length
@@ -435,7 +435,7 @@ describe('what a waiter is allowed to see', () => {
   it('shows a colleague\'s sick day as a hole and keeps his own', () => {
     const week = futureWeek()
     const lejla = plan('Lejla', { date: week })
-    const amar = plan('Amar', { date: week, template: 'Dnevna' })
+    const amar = plan('Amar', { date: week, template: 'Prva smjena' })
     publishWeek(f.db, f.venueId, f.adminActor(), week, f.clock.now())
 
     patchAssignment(f.db, f.venueId, f.adminActor(), lejla.id, { status: 'sick' }, f.clock.now())
@@ -562,7 +562,7 @@ describe('rosterHours', () => {
   it('reports a late first action above the grace, and the raw minutes', () => {
     const date = today()
     plan('Amar', { date })
-    worked('Amar', date, '16:40')
+    worked('Amar', date, '15:40')
 
     const rows = rosterHours(f.db, f.venueId, month(), f.userId('Amar'))
     const day = rows[0]!.days.find(d => d.business_date === date)!
@@ -574,7 +574,7 @@ describe('rosterHours', () => {
   it('says nothing when the first action is inside the grace', () => {
     const date = today()
     plan('Amar', { date })
-    worked('Amar', date, '16:20')
+    worked('Amar', date, '15:20')
     expect(rosterHours(f.db, f.venueId, month(), f.userId('Amar'))[0]!.late_min).toBe(0)
   })
 
@@ -595,7 +595,7 @@ describe('rosterHours', () => {
   it('does not flag the šanker who submitted a count and locked nothing', () => {
     const date = today()
     plan('Emir', { date })
-    worked('Emir', date, '16:00', '01:00')
+    worked('Emir', date, '15:00', '23:00')
 
     const emir = rosterHours(f.db, f.venueId, month(), f.userId('Emir'))[0]!
     expect(emir.late_min).toBe(0)
@@ -612,7 +612,7 @@ describe('rosterHours', () => {
     }, f.clock.now())
     decideSwap(f.db, f.venueId, f.actor('Lejla'), request.id, 'accept', {}, f.clock.now())
 
-    const dino = plan('Dino', { date, template: 'Dnevna' })
+    const dino = plan('Dino', { date, template: 'Prva smjena' })
     patchAssignment(f.db, f.venueId, f.adminActor(), dino.id, { status: 'absent' }, f.clock.now())
 
     const rows = rosterHours(f.db, f.venueId, month())

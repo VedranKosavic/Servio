@@ -124,8 +124,17 @@ async function loadPinLen() {
 const enrolCode = ref('')
 const enrolLabel = ref('')
 
-/** Tried once per visit to the enrol view: it 404s anywhere but a dev machine. */
-const devEnrolTried = ref(false)
+/**
+ * Does the silent dev door exist on this server?
+ *
+ * `null` until asked, then `false` forever once it has 404'd. **The absence is
+ * cached, not the attempt.** The previous version remembered that it had tried
+ * once per visit, which meant the second time a device cookie went missing in
+ * the same page — and on a laptop running two servers on `localhost`, cookies
+ * ignore the port, so that happens constantly — the pad stopped trying and
+ * showed the six-character code form on a machine that never needs one.
+ */
+const devDoorOpen = ref<boolean | null>(null)
 
 // -- lockout countdown ------------------------------------------------------
 
@@ -218,22 +227,31 @@ onMounted(async () => {
  * that 404 is exactly how this screen knows to ask for a real code instead.
  */
 async function enrolPath(reason: DeviceReason = null) {
+  // Try the silent door *first* and stay where we are while it answers. The
+  // old order flipped the view to `enrol` and then tried, so a dev machine
+  // flashed the code form on the way past every single time — a screen that
+  // says "ask the owner for a code" has no business appearing on a laptop that
+  // is about to enrol itself.
+  if (devDoorOpen.value !== false) {
+    busy.value = true
+    try {
+      await api.devEnrol()
+      devDoorOpen.value = true
+      message.value = null
+      deviceReason.value = null
+      view.value = 'pin'
+      await loadPinLen()
+      return
+    } catch {
+      devDoorOpen.value = false
+    } finally {
+      busy.value = false
+    }
+  }
+
+  // No dev door: the six characters the owner reads out across the bar.
   deviceReason.value = reason
   view.value = 'enrol'
-  if (devEnrolTried.value) return
-  devEnrolTried.value = true
-  busy.value = true
-  try {
-    await api.devEnrol()
-    message.value = null
-    deviceReason.value = null
-    view.value = 'pin'
-    await loadPinLen()
-  } catch {
-    // No dev door: the six characters the owner reads out across the bar.
-  } finally {
-    busy.value = false
-  }
 }
 
 /**

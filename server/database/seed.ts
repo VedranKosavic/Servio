@@ -30,6 +30,7 @@ import type { Db } from './client'
 import * as schema from './schema'
 import { randomUUID } from 'node:crypto'
 import { hashSecret } from '../utils/password'
+import { sealPin } from '../utils/pinReveal'
 import { CHANNEL_KINDS, CHANNEL_NAMES } from '#shared/chat'
 
 const id = () => randomUUID()
@@ -229,6 +230,8 @@ export function seed(db: Db, opts: SeedOptions = {}): void {
         role: person.role,
         active: 1,
         pinHash: devSecrets ? memoHash(person.pin, person.id) : null,
+        // Readable for a worker only; see `server/utils/pinReveal.ts`.
+        pinCipher: devSecrets && person.role === 'radnik' ? sealPin(person.pin) : null,
         pinLen: person.pin.length === 6 ? 6 : 4,
         pinSetAt: devSecrets ? now : null,
         pinPepperV: 1,
@@ -534,12 +537,13 @@ export function seed(db: Db, opts: SeedOptions = {}): void {
     }
 
     // -- Raspored -----------------------------------------------------------
-    // `end_time <= start_time` means the shift ends the next day, which is what
-    // *Večernja* 16:00–01:00 is. No timezone maths anywhere: these are wall
-    // clocks the owner wrote on a plan.
+    // The café's two shifts, as the owner runs them: 07–15 and 15–23. Neither
+    // crosses midnight, so `end_time > start_time` in both — the
+    // `end_time <= start_time` case is still handled everywhere, because a
+    // venue that closes at 01:00 is one settings change away.
     const templates = [
-      { name: 'Dnevna', start: '08:00', end: '16:00', sort: 1 },
-      { name: 'Večernja', start: '16:00', end: '01:00', sort: 2 },
+      { name: 'Prva smjena', start: '07:00', end: '15:00', sort: 1 },
+      { name: 'Druga smjena', start: '15:00', end: '23:00', sort: 2 },
     ]
     for (const t of templates) {
       tx.insert(schema.shiftTemplates).values({

@@ -187,7 +187,8 @@ describe('the seed', () => {
 
     const templates = f.db.select().from(schema.shiftTemplates).all()
     expect(templates.map(t => `${t.name} ${t.startTime}-${t.endTime}`).sort())
-      .toEqual(['Dnevna 08:00-16:00', 'Večernja 16:00-01:00'])
+      // `.sort()` is alphabetical, so *Druga* comes before *Prva* here.
+      .toEqual(['Druga smjena 15:00-23:00', 'Prva smjena 07:00-15:00'])
   })
 
   it('turns on the one setting the dev bar tablet needs', () => {

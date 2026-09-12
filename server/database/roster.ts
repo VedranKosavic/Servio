@@ -33,6 +33,7 @@ import { eq, sql } from 'drizzle-orm'
 import { openDatabase } from './client'
 import * as schema from './schema'
 import { hashSecret, verifySecret } from '../utils/password'
+import { sealPin } from '../utils/pinReveal'
 import { roster } from './seed'
 import { CHANNEL_KINDS, CHANNEL_NAMES } from '#shared/chat'
 
@@ -65,6 +66,7 @@ for (const person of wanted) {
   const isAdmin = person.role === 'admin'
   const secrets = {
     pinHash: hashSecret(person.pin, person.id),
+    pinCipher: person.role === 'radnik' ? sealPin(person.pin) : null,
     pinLen: person.pin.length === 6 ? (6 as const) : (4 as const),
     pinSetAt: now,
     pinPepperV: 1,
@@ -100,7 +102,7 @@ for (const person of existing) {
   // people, so a stale hash left behind is a number nobody can use and nobody
   // can be given either.
   db.update(schema.users)
-    .set({ active: 0, pinHash: null, pinSetAt: null, email: null, passwordHash: null })
+    .set({ active: 0, pinHash: null, pinSetAt: null, pinCipher: null, email: null, passwordHash: null })
     .where(eq(schema.users.id, person.id))
     .run()
 }
@@ -121,12 +123,11 @@ const templateCount = db
   .select({ n: sql<number>`count(*)` }).from(schema.shiftTemplates).get()?.n ?? 0
 const addedTemplates: string[] = []
 if (templateCount === 0) {
-  // `end_time <= start_time` means the shift ends the next day, which is what
-  // *Večernja* 16:00–01:00 is. Wall clocks the owner wrote on a plan, no
-  // timezone maths.
+  // The café's two shifts, as the owner runs them: 07–15 and 15–23. Wall
+  // clocks, no timezone maths.
   for (const t of [
-    { name: 'Dnevna', start: '08:00', end: '16:00', sort: 1 },
-    { name: 'Večernja', start: '16:00', end: '01:00', sort: 2 },
+    { name: 'Prva smjena', start: '07:00', end: '15:00', sort: 1 },
+    { name: 'Druga smjena', start: '15:00', end: '23:00', sort: 2 },
   ]) {
     db.insert(schema.shiftTemplates).values({
       id: randomUUID(), venueId, name: t.name,

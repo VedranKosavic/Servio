@@ -626,10 +626,10 @@ const CALLS: Record<string, () => void | Promise<void>> = {
 
 const RULES_MD = '# Pravila\n\nOvo je tekst pravila koji svi vide na telefonu.'
 
-/** The seeded *Večernja*. */
+/** The seeded *Druga smjena*. */
 function templateId(): string {
   return f.db.select().from(schema.shiftTemplates).all()
-    .find(t => t.name === 'Večernja')!.id
+    .find(t => t.name === 'Druga smjena')!.id
 }
 
 /** A date the roster will accept: today, in business-day terms. */
