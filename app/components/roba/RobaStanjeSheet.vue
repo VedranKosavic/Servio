@@ -99,11 +99,10 @@ const status = computed<{ tone: 'good' | 'warn' | 'bad', text: string } | null>(
           </span>
         </div>
 
-        <div v-if="row.no_recipe || row.late_sync" class="r-fact">
+        <div v-if="row.late_sync" class="r-fact">
           <span class="r-fact-label">Napomena</span>
           <span class="r-fact-value">
-            <UiPill v-if="row.no_recipe" tone="warn">bez normativa</UiPill>
-            <UiPill v-if="row.late_sync" tone="warn">kasno sinhronizovano</UiPill>
+            <UiPill tone="warn">kasno sinhronizovano</UiPill>
           </span>
         </div>
       </div>

@@ -5,15 +5,20 @@
  * rendered at all; six columns in a 390 px box is a sideways drag past the name
  * to reach a status nobody can see.
  *
- * The row shape and the two pure functions that build it live in this plain
- * `<script>` block rather than in `<script setup>`, because the page and the
- * phone list need them too: the page counts the four chips off exactly the rows
+ * The row shape and the pure functions that build and group it live in this
+ * plain `<script>` block rather than in `<script setup>`, because the page and
+ * the phone list need them too: the page counts the chips off exactly the rows
  * that get drawn, so a chip saying "U minusu 1" over a list showing none is
- * impossible, and both layouts read one row shape rather than two.
+ * impossible, and both layouts read one row shape and one set of sections
+ * rather than two.
+ *
+ * **One table per section.** The page draws *Kafa*, *Nargila* and *Ostalo* as
+ * three cards, each with one of these inside it, which is the same shape *Meni*
+ * gives its categories on a laptop.
  */
 import type {
-  BaseUnit, CountView, ProductAdmin, StockItem, StockItemStock,
-  StockLastMovement, StockStatus,
+  BaseUnit, CountView, StockItem, StockItemStock,
+  StockKind, StockLastMovement, StockStatus,
 } from '#shared/types'
 
 export interface StanjeRow {
@@ -41,12 +46,85 @@ export interface StanjeRow {
   last_movement: StockLastMovement | null
   /** A round arrived for this item after a popis had already counted it. */
   late_sync: boolean
-  /** Nothing on the menu takes this off the shelf: no recipe line, no 1:1 item. */
-  no_recipe: boolean
+  /** Which of the three sections of the shelf this article belongs to. */
+  group: StanjeGroup
 }
 
-/** The four nag lists of PLAN §9, in the mockup's order. */
-export type StanjeFilter = 'sve' | 'u-minusu' | 'bez-cijene' | 'bez-normativa' | 'kasno'
+/** The three nag lists of PLAN §9 that are still warnings worth a chip. */
+export type StanjeFilter = 'sve' | 'u-minusu' | 'bez-cijene' | 'kasno'
+
+/**
+ * The shelf in three sections — the owner's own division of it: *Kafa*,
+ * *Nargila*, and everything else.
+ *
+ * Nineteen articles in one flat list is a list nobody reads to the end on a
+ * phone, and the three things it holds are not one kind of thing: the tobacco
+ * and the coal are the shisha side of the café, the coffee corner is its own
+ * shelf, and the rest is bottles.
+ *
+ * **It is read off the data, not off a list of names.** *Nargila* is the
+ * article's own `kind` — `duhan` (a tin of tobacco) or `zar` (coal) — which is
+ * the same column `coalStockItem()` resolves the coal by, so it needs no name to
+ * be right. *Kafa* is the article's **menu category**, the one the owner
+ * maintains himself on *Meni*: the category whose name is *Kafa*. Everything
+ * else falls to *Ostalo*, and a section with nothing in it is not drawn.
+ *
+ * Which means an article the owner wants under *Kafa* is moved there by giving
+ * it the *Kafa* category — and today that is a `category_id` on the article,
+ * which no screen edits since the *Kategorije* tab under *Roba* was removed. On
+ * the café's own catalogue that leaves *Mlijeko* and *Čaj (vrećice)* under
+ * *Ostalo*, which is honest (milk goes in more than coffee) and is written down
+ * in the handoff rather than hidden behind a hard-coded name list here.
+ */
+export type StanjeGroup = 'kafa' | 'nargila' | 'ostalo'
+
+export interface StanjeSection {
+  key: StanjeGroup
+  /** The Bosnian heading. */
+  label: string
+  rows: StanjeRow[]
+}
+
+/** The sections in the order the screen draws them. */
+const GROUP_LABELS: Array<{ key: StanjeGroup, label: string }> = [
+  { key: 'kafa', label: 'Kafa' },
+  { key: 'nargila', label: 'Nargila' },
+  { key: 'ostalo', label: 'Ostalo' },
+]
+
+/** Fold a category name to one comparable key: "Kafa", "kafa" and "KAFA". */
+function categoryKey(name: string | null): string {
+  return (name ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .trim()
+}
+
+/**
+ * The categories that belong on the *Kafa* shelf.
+ *
+ * The owner's line was "kafa, nargile and all the rest", and when asked which
+ * articles that leaves he answered "nes and caj stay" — so the section is the
+ * hot drinks, not the coffee category alone. *Čaj (vrećice)* carries its own
+ * menu category, which is why matching `kafa` by itself put the tea in
+ * *Ostalo* and left *Kafa* holding one row.
+ */
+const KAFA_CATEGORIES: ReadonlySet<string> = new Set(['kafa', 'caj'])
+
+export function stanjeGroup(item: { kind: StockKind, category_name: string | null }): StanjeGroup {
+  const category = categoryKey(item.category_name)
+  if (item.kind === 'duhan' || item.kind === 'zar' || category === 'nargila') return 'nargila'
+  if (KAFA_CATEGORIES.has(category)) return 'kafa'
+  return 'ostalo'
+}
+
+/** The rows in sections, empty sections dropped. */
+export function groupStanjeRows(rows: StanjeRow[]): StanjeSection[] {
+  return GROUP_LABELS
+    .map(group => ({ ...group, rows: rows.filter(row => row.group === group.key) }))
+    .filter(section => section.rows.length > 0)
+}
 
 /**
  * "3 × gajba + 7".
@@ -100,13 +178,17 @@ function lateSyncItems(counts: CountView[]): Set<string> {
 /**
  * The rows the table draws.
  *
- * Four reads meet here. `GET /api/owner/stock` is the priced shelf; `GET
+ * Three reads meet here. `GET /api/owner/stock` is the priced shelf; `GET
  * /api/stock` carries each item's last movement, which is what the *u minusu*
  * row quotes underneath its pill, **and the settled/pending split** the two
- * numbers on every row come from; `GET /api/admin/products` says which shelf
- * items the menu actually consumes — an item no recipe and no 1:1 product points
- * at can never be reconciled, which is *Bez normativa*; and the confirmed counts
- * say which items a round reached late.
+ * numbers on every row come from; and the confirmed counts say which items a
+ * round reached late.
+ *
+ * **The menu is no longer read here.** It was, for one thing only — *Bez
+ * normativa*, the warning that nothing on the menu consumed an article — and the
+ * owner had that removed everywhere it appeared. The recipes themselves are
+ * untouched: `recipe_lines` is how a sale deducts stock and is not going
+ * anywhere. What is gone is the nag.
  *
  * An item the live read does not carry falls back to "all settled, nothing
  * pending", which is the honest answer: the split is a reading of the ledger,
@@ -115,20 +197,10 @@ function lateSyncItems(counts: CountView[]): Set<string> {
 export function buildStanjeRows(
   items: StockItemStock[],
   live: StockItem[],
-  products: ProductAdmin[],
   counts: CountView[],
 ): StanjeRow[] {
   const liveById = new Map(live.map(item => [item.id, item]))
   const late = lateSyncItems(counts)
-
-  const consumed = new Set<string>()
-  let sellsShisha = false
-  for (const product of products) {
-    if (!product.active) continue
-    if (product.kind === 'shisha') sellsShisha = true
-    if (product.sells_stock_item_id) consumed.add(product.sells_stock_item_id)
-    for (const line of product.recipe) consumed.add(line.stock_item_id)
-  }
 
   return items.map((item): StanjeRow => {
     const now = liveById.get(item.id)
@@ -151,10 +223,7 @@ export function buildStanjeRows(
       packs_label: packsLabel(item),
       last_movement: last,
       late_sync: late.has(item.id) || last?.type === 'late_sync',
-      // Tobacco has no recipe line by design: a shisha product carries
-      // `shisha_grams` and the aromas are chosen at lock, so the tins are
-      // consumed by every bowl even though nothing points at them statically.
-      no_recipe: !consumed.has(item.id) && !(sellsShisha && item.kind === 'duhan'),
+      group: stanjeGroup(item),
     }
   })
 }
@@ -164,7 +233,6 @@ export function matchesFilter(row: StanjeRow, filter: StanjeFilter): boolean {
   switch (filter) {
     case 'u-minusu': return row.status === 'u_minusu'
     case 'bez-cijene': return row.status === 'bez_cijene'
-    case 'bez-normativa': return row.no_recipe
     case 'kasno': return row.late_sync
     default: return true
   }
@@ -217,8 +285,7 @@ function lastLine(row: StanjeRow): string {
       <tr v-for="row in rows" :key="row.id">
         <td>
           <NuxtLink :to="`/admin/roba/artikal/${row.id}`" class="a-roba-link">{{ row.name }}</NuxtLink>
-          <span v-if="row.no_recipe" class="a-roba-note">bez normativa</span>
-          <span v-else-if="row.late_sync" class="a-roba-note">kasno sinhronizovano</span>
+          <span v-if="row.late_sync" class="a-roba-note">kasno sinhronizovano</span>
         </td>
         <td class="r">{{ formatStockQty(row.settled, row.base_unit) }}</td>
         <!-- Only when there is something to say. A column of dashes down a
@@ -241,10 +308,6 @@ function lastLine(row: StanjeRow): string {
         </td>
       </tr>
     </UiTable>
-
-    <p v-if="!loading && rows.length === 0" class="a-roba-empty">
-      Nema robe za ovaj filter.
-    </p>
   </div>
 </template>
 
@@ -276,7 +339,6 @@ function lastLine(row: StanjeRow): string {
 .a-roba-status small { font-size: var(--text-caption); color: var(--muted); }
 
 .a-stanje { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.a-roba-empty { margin: 0; color: var(--muted); font-size: var(--text-label); }
 
 @media (max-width: 1023px) {
   /* The article name is the row's link into its ledger, so it is a thumb's

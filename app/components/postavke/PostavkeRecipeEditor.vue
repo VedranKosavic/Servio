@@ -9,9 +9,11 @@
  * a local copy and sends the finished set; closing it without saving changes
  * nothing.
  *
- * A product with no lines here consumes nothing when it is sold, which is what
- * the *bez normativa* mark on the row means — legitimate for "Dodatni žar" and
- * a mistake for "Kafa".
+ * A product with no lines here consumes nothing when it is sold. That used to
+ * carry a *bez normativa* warning on the row; the owner had it removed, and
+ * after the shelf lost its uncounted articles (coffee, sugar, coal, lemon) it
+ * would have been wrong more often than right — *Kafa* legitimately deducts
+ * nothing now.
  */
 import type { ProductAdmin, StockItemAdmin } from '#shared/types'
 

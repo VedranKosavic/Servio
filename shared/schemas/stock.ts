@@ -36,7 +36,16 @@ const lineCostFen = z.int().min(1).max(MAX_MONEY_FEN)
  */
 export const createDeliveryBody = z.object({
   client_id: uuid,
-  supplier_name: z.string().trim().min(1).max(80),
+  /**
+   * **Optional since the *Prijem robe* rework.** The owner took the field off
+   * that screen: a delivery already records the person who entered it, which is
+   * the accountability that matters, and one more box between him and the
+   * crates bought nothing. It stays in the body because the *Prijem sa slike*
+   * flow reads a supplier off the photograph without anybody typing it, and
+   * `scan_aliases` is keyed on it — so the field is absent rather than an empty
+   * string, and `createDelivery` stores `''` for a document that names nobody.
+   */
+  supplier_name: z.string().trim().min(1).max(80).optional(),
   invoice_no: z.string().trim().max(40).optional(),
   /** The invoice date — one of exactly three timestamps a body may carry (§2). */
   delivered_at: clientAt.optional(),

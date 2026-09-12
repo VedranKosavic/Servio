@@ -29,19 +29,6 @@ const emit = defineEmits<{
 
 const isShisha = computed(() => props.product.kind === 'shisha')
 
-/**
- * A product that consumes nothing on a sale.
- *
- * A `shisha` is excluded because it deducts through `shisha_grams` and
- * `coal_pcs` rather than `recipe_lines` (`stockDeltas`,
- * `server/services/orders.ts`) — without that clause every nargila on the menu
- * carried a warning about a normativ it does not use.
- */
-const noRecipe = computed(() =>
-  !isShisha.value
-  && props.product.recipe.length === 0
-  && !props.product.sells_stock_item_id)
-
 const starDisabled = computed(() => props.favouriteFull && !props.product.is_favourite)
 </script>
 
@@ -52,7 +39,6 @@ const starDisabled = computed(() => props.favouriteFull && !props.product.is_fav
         <strong>{{ product.name }}</strong>
         <small v-if="product.short_name">{{ product.short_name }}</small>
       </div>
-      <UiPill v-if="noRecipe" tone="warn">bez normativa</UiPill>
     </td>
 
     <td class="r">

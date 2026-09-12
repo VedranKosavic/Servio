@@ -9,11 +9,19 @@
  */
 import { useDb } from '../utils/db'
 import { seedIfEmpty } from '../database/seed'
+import { retireUncountedItems } from '../database/retire'
 
 export default defineNitroPlugin(() => {
   const db = useDb()
 
   if (import.meta.dev) {
-    if (seedIfEmpty(db)) console.info('[sank] empty database — seeded venue "Lounge"')
+    if (seedIfEmpty(db)) {
+      // The seed writes all nineteen articles; the café counts sixteen. Run
+      // right after a *fresh* seed and never on an existing database, so an
+      // article the owner switches back on in `/admin` stays on — see
+      // `database/retire.ts`.
+      retireUncountedItems(db)
+      console.info('[sank] empty database — seeded venue "Lounge"')
+    }
   }
 })

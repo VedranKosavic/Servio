@@ -8,6 +8,7 @@ import { count } from 'drizzle-orm'
 import { openDatabase } from './client'
 import * as schema from './schema'
 import { isEmpty, seed } from './seed'
+import { retireUncountedItems } from './retire'
 import { getHealth } from '../services/bootstrap'
 
 const configured = process.env.DB_PATH || 'data/sank.db'
@@ -33,6 +34,11 @@ if (!isEmpty(db)) {
   // café as a stranger's name on the lock screen.
   const cast = process.env.SANK_SEED_CAST === 'full' ? 'full' : 'default'
   seed(db, { devSecrets, cast })
+  // The three articles the café does not count — coal, sugar, ground coffee.
+  // `seed.ts` still writes all nineteen, so this is the correction in place,
+  // the same bargain `db:roster` makes with the staff list: a fresh clone then
+  // shows the shelf the café actually has. `retire.ts` says what it costs.
+  retireUncountedItems(db)
   // Counted, not written down: the line said "14 products" for as long as the
   // seed had fourteen, and then it said it for a while longer.
   const { tables, products } = getHealth(db)

@@ -486,7 +486,17 @@ export function setOpeningStock(
   return ownerStockItems(db, venueId)
 }
 
-/** The admin row plus what the ledger says about it (§6.8's `StockItemAdmin`+). */
+/**
+ * The admin row plus what the ledger says about it (§6.8's `StockItemAdmin`+).
+ *
+ * **Active articles only, like `getStock`.** This is the shelf — what stands in
+ * the bar tonight — and a deactivated article is not on it: it is history with a
+ * ledger that still reads. The two reads *Stanje šanka* joins are keyed on the
+ * article id, so they have to agree about which articles exist, or a retired row
+ * would appear with no live half and silently fall back to "all settled".
+ * `listStockItems` keeps returning everything, because the catalogue screens are
+ * where an article is switched back on.
+ */
 export function ownerStockItems(q: Queryable, venueId: string): StockItemStock[] {
   const hands = onHandByItem(q, venueId)
   const costs = new Map(
@@ -502,7 +512,7 @@ export function ownerStockItems(q: Queryable, venueId: string): StockItemStock[]
       .map(r => [r.id, r]),
   )
 
-  return listStockItems(q, venueId).map((item) => {
+  return listStockItems(q, venueId).filter(item => item.active).map((item) => {
     const hand = hands.get(item.id) ?? 0
     const row = costs.get(item.id)!
     return {
@@ -576,7 +586,11 @@ export function createDelivery(
       id,
       venueId,
       clientId: body.client_id,
-      supplierName: body.supplier_name,
+      // The column is `NOT NULL` from Korak 2 and the ledger is not rebuilt for
+      // a field the owner removed from one screen: a document that names no
+      // supplier stores the empty string, and the screens read it as *bez
+      // dobavljača* rather than printing a blank.
+      supplierName: body.supplier_name ?? '',
       invoiceNo: body.invoice_no ?? null,
       deliveredAt,
       totalFen: lines.reduce((sum, l) => sum + l.lineCostFen, 0),
@@ -645,7 +659,10 @@ export function createDelivery(
       kind: 'delivery_posted',
       body: {
         delivery_id: id,
-        supplier: body.supplier_name,
+        // `logTemplates` is frozen for Korak 2 and types this as a string it
+        // prints inside a sentence, so a document that names no supplier says so
+        // in words rather than leaving "Prijem robe proknjižen ·  · 7,50 KM".
+        supplier: body.supplier_name ?? 'bez dobavljača',
         total_fen: lines.reduce((sum, l) => sum + l.lineCostFen, 0),
         lines: lines.length,
       },

@@ -121,6 +121,19 @@ async function reverse(note: string) {
   }
 }
 
+/**
+ * What a document is called in the list.
+ *
+ * The supplier used to be a required field and is not one any more — the owner
+ * had it taken off *Prijem robe*, and `supplier_name` arrives empty on
+ * everything entered by hand since. So a document that names nobody is called
+ * what it is, and the line under it still carries the two facts that identify
+ * it: the date on the invoice, and the person who entered it.
+ */
+function docTitle(delivery: DeliveryView): string {
+  return delivery.supplier_name || 'Prijem robe'
+}
+
 /** What the period actually cost, reversals left out — they cost nothing. */
 const total = computed(() => deliveries.value
   .filter(delivery => !delivery.reversed_at)
@@ -158,11 +171,11 @@ const total = computed(() => deliveries.value
             :key="delivery.id"
             type="button"
             class="h-row"
-            :aria-label="`Dokument, ${delivery.supplier_name}`"
+            :aria-label="`Dokument, ${docTitle(delivery)}`"
             @click="openId = delivery.id"
           >
             <span class="h-text">
-              <span class="h-name">{{ delivery.supplier_name }}</span>
+              <span class="h-name">{{ docTitle(delivery) }}</span>
               <span class="h-meta">
                 <span class="num">{{ dateBs(delivery.delivered_at) }}</span>
                 · {{ delivery.entered_by_name }}
@@ -186,7 +199,10 @@ const total = computed(() => deliveries.value
         <UiTable :columns="COLUMNS" :loading="loading">
           <tr v-for="delivery in deliveries" :key="delivery.id">
             <td class="a-nowrap num">{{ dateBs(delivery.delivered_at) }}</td>
-            <td>{{ delivery.supplier_name }}</td>
+            <td>
+              <span v-if="delivery.supplier_name">{{ delivery.supplier_name }}</span>
+              <span v-else class="a-dash">—</span>
+            </td>
             <td class="r num">{{ delivery.lines.length }}</td>
             <td class="r"><UiMoney :fen="delivery.total_fen" :currency="false" :colour="false" /></td>
             <td>{{ delivery.entered_by_name }}</td>
@@ -223,6 +239,7 @@ const total = computed(() => deliveries.value
 .a-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
 .a-empty { margin: 0; color: var(--muted); font-size: var(--text-label); }
 .a-nowrap { white-space: nowrap; }
+.a-dash { color: var(--muted); }
 .a-acts { display: flex; gap: 6px; justify-content: flex-end; }
 
 /* ---- the phone list ----------------------------------------------------- */

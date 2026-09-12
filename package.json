@@ -18,7 +18,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "node --env-file-if-exists=.env --import tsx server/database/seed-cli.ts",
-    "db:roster": "node --env-file-if-exists=.env --import tsx server/database/roster.ts"
+    "db:roster": "node --env-file-if-exists=.env --import tsx server/database/roster.ts",
+    "db:retire": "node --env-file-if-exists=.env --import tsx server/database/retire-cli.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",

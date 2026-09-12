@@ -2,13 +2,26 @@
 /**
  * *Stanje šanka* — what is on the shelf, and what tonight has taken off it.
  *
- * **The four tiles are gone.** *Vrijednost zaliha*, *U minusu*, *Nisko* and *Bez
- * cijene* sat above the list and answered questions nobody opens this screen to
- * ask; on a phone they were most of the first screenful, so the owner scrolled
- * past four aggregates every time to reach the twenty rows he came for. The
- * three that were really warnings are still here, as the chips that filter the
- * list — which is the useful version of the same fact, because a count you can
- * tap is a count that takes you to the rows.
+ * **Three sections, not one flat list.** *Kafa*, *Nargila* and everything else,
+ * which is the owner's own division of his bar: nineteen articles in one column
+ * is a column nobody reads to the end on a phone, and the tobacco, the coffee
+ * corner and the bottles are not one kind of thing. The rule is `stanjeGroup()`
+ * in `RobaStanjeTable.vue` — the article's own `kind` for *Nargila*, its menu
+ * category for *Kafa* — and a section with nothing in it is not drawn.
+ *
+ * **Three articles are not here any more.** *Ugalj (kocke)*, *Šećer* and *Kafa
+ * (mljevena)* are consumables the café does not count: coffee is effectively
+ * infinite, unlike a bottle of Coca-Cola. They are deactivated rather than
+ * deleted, so their ledger still reads, and both shelf reads list active
+ * articles only — `server/database/retire.ts` says what that costs.
+ *
+ * **The four tiles are gone**, and so is *Bez normativa*. *Vrijednost zaliha*,
+ * *U minusu*, *Nisko* and *Bez cijene* sat above the list and answered questions
+ * nobody opens this screen to ask; on a phone they were most of the first
+ * screenful. The two that were really warnings are still here as chips that
+ * filter the list — a count you can tap is the useful version of the same fact.
+ * The *Bez normativa* nag went out on the owner's call: the recipes themselves
+ * stay, because `recipe_lines` is how a sale deducts stock.
  *
  * **Two numbers per article.** The big one is *settled*: the shelf as the last
  * closed shift left it. Beside it, in `--danger`, is what tonight's open shift
@@ -23,27 +36,27 @@
  * written when a shift closes — the red number stops being pending because the
  * shift stops being open.
  *
- * **Two layouts, one page.** At a desk this is a six-column table and should be:
- * twenty articles compared across quantity, packs, value and status at a glance.
- * In a hand that table is a sideways drag, so below 1024 px it is a list
- * (`RobaStanjeList`) — name and quantity on the row, the state as a small mark,
- * everything else one tap behind the row in `RobaStanjeSheet`. Nothing on this
- * screen scrolls sideways at any width.
+ * **Two layouts, one page.** At a desk each section is a card with a dense table
+ * in it and should be: articles compared across quantity, packs, value and
+ * status at a glance. In a hand that table is a sideways drag, so below 1024 px
+ * the sections become lists (`RobaStanjeList`) — name and quantity on the row,
+ * the state as a small mark, everything else one tap behind the row in
+ * `RobaStanjeSheet`. Nothing on this screen scrolls sideways at any width.
  *
  * **`useMounted` is not optional.** `useMediaQuery` answers truthfully from the
  * first client render and the server, which has no viewport, always says the
  * laptop; without the gate the two renders disagree and Vue throws the server's
  * markup away with a hydration mismatch.
  *
- * Four reads, one poll. `useAdminChanges` is the dashboard's single timer: this
+ * Three reads, one poll. `useAdminChanges` is the dashboard's single timer: this
  * page opens none of its own, it says which entities matter and refetches only
  * when one of them moves.
  */
 import {
-  buildStanjeRows, matchesFilter,
+  buildStanjeRows, groupStanjeRows, matchesFilter,
   type StanjeFilter, type StanjeRow,
 } from '~/components/roba/RobaStanjeTable.vue'
-import type { CountView, OwnerStockReport, ProductAdmin, StockItem } from '#shared/types'
+import type { CountView, OwnerStockReport, StockItem } from '#shared/types'
 
 definePageMeta({ middleware: 'admin', layout: 'admin' })
 
@@ -58,7 +71,6 @@ const isPhone = computed(() => mounted.value && narrow.value)
 
 const report = ref<OwnerStockReport | null>(null)
 const live = ref<StockItem[]>([])
-const products = ref<ProductAdmin[]>([])
 const counts = ref<CountView[]>([])
 const loading = ref(true)
 const error = ref('')
@@ -73,16 +85,14 @@ const sheetId = ref<string | null>(null)
 
 async function load() {
   try {
-    // Four independent reads, so they go out together rather than in a chain.
-    const [stockReport, stockLive, menu, confirmed] = await Promise.all([
+    // Three independent reads, so they go out together rather than in a chain.
+    const [stockReport, stockLive, confirmed] = await Promise.all([
       api.getOwnerStock(),
       api.getStock(),
-      api.getProducts(),
       api.getCounts({ status: 'confirmed' }),
     ])
     report.value = stockReport
     live.value = stockLive.items
-    products.value = menu
     counts.value = confirmed
     error.value = ''
   } catch (err) {
@@ -94,7 +104,7 @@ async function load() {
 
 useAdminChanges({
   onEntity: (entity) => {
-    if (entity === 'stock' || entity === 'count' || entity === 'menu') void load()
+    if (entity === 'stock' || entity === 'count') void load()
   },
 })
 
@@ -104,9 +114,12 @@ useAdminChanges({
 onMounted(() => { void load() })
 
 const rows = computed<StanjeRow[]>(() =>
-  buildStanjeRows(report.value?.items ?? [], live.value, products.value, counts.value))
+  buildStanjeRows(report.value?.items ?? [], live.value, counts.value))
 
 const shown = computed(() => rows.value.filter(row => matchesFilter(row, filter.value)))
+
+/** *Kafa*, *Nargila*, *Ostalo* — of what the filter left standing. */
+const sections = computed(() => groupStanjeRows(shown.value))
 
 /** The sheet's article, read fresh every render. Null closes the sheet. */
 const sheetRow = computed(() => rows.value.find(row => row.id === sheetId.value) ?? null)
@@ -120,11 +133,10 @@ const sheetRow = computed(() => rows.value.find(row => row.id === sheetId.value)
  */
 const anyPending = computed(() => rows.value.some(row => row.pending !== 0))
 
-/** The four nag lists of PLAN §9, each with the count of the rows it leaves standing. */
+/** The nag lists of PLAN §9 that survived, each with the count of its rows. */
 const CHIPS: Array<{ key: StanjeFilter, label: string }> = [
   { key: 'u-minusu', label: 'U minusu' },
   { key: 'bez-cijene', label: 'Bez cijene' },
-  { key: 'bez-normativa', label: 'Bez normativa' },
   { key: 'kasno', label: 'Kasno sinhronizovano' },
 ]
 
@@ -135,18 +147,18 @@ function chipCount(key: StanjeFilter): number {
 /**
  * On a phone, a nag chip appears only when it has something in it.
  *
- * Four chips wrap to three rows at 390 px, which put most of a screenful of
- * *filters that would empty the list* above the first article — and three of the
- * four say 0 on a healthy night. At a desk they fit on one line and a zero is
- * worth reading there ("nothing is in minus" is an answer), so the laptop keeps
- * all four. The active one never disappears, whatever its count falls to, or the
- * filter would become impossible to switch off.
+ * Three chips wrap to two rows at 390 px, which put a screenful of *filters that
+ * would empty the list* above the first article — and all three say 0 on a
+ * healthy night. At a desk they fit on one line and a zero is worth reading
+ * there ("nothing is in minus" is an answer), so the laptop keeps all three. The
+ * active one never disappears, whatever its count falls to, or the filter would
+ * become impossible to switch off.
  */
 const visibleChips = computed(() => (isPhone.value
   ? CHIPS.filter(chip => chipCount(chip.key) > 0 || filter.value === chip.key)
   : CHIPS))
 
-/** A second tap on the active chip clears it — the chips are one filter, not four. */
+/** A second tap on the active chip clears it — the chips are one filter, not three. */
 function toggle(key: StanjeFilter) {
   filter.value = filter.value === key ? 'sve' : key
 }
@@ -164,40 +176,61 @@ function toggle(key: StanjeFilter) {
 
     <p v-if="error" class="a-error">{{ error }}</p>
 
-    <UiCard title="Stanje šanka" :count="`${shown.length} od ${rows.length}`">
-      <div v-if="visibleChips.length > 0 || filter !== 'sve'" class="a-chips">
-        <button
-          v-for="chip in visibleChips"
-          :key="chip.key"
-          type="button"
-          class="a-chip"
-          :class="{ on: filter === chip.key }"
-          :aria-pressed="filter === chip.key"
-          @click="toggle(chip.key)"
-        >{{ chip.label }} {{ chipCount(chip.key) }}</button>
-        <button
-          v-if="filter !== 'sve'"
-          type="button"
-          class="a-chip"
-          @click="filter = 'sve'"
-        >Prikaži sve</button>
-      </div>
+    <!-- The filters and the legend sit on the page's own ground, above the
+         sections: a card around them would be a fourth card competing with the
+         three the screen is about. -->
+    <div v-if="visibleChips.length > 0 || filter !== 'sve'" class="a-chips">
+      <button
+        v-for="chip in visibleChips"
+        :key="chip.key"
+        type="button"
+        class="a-chip"
+        :class="{ on: filter === chip.key }"
+        :aria-pressed="filter === chip.key"
+        @click="toggle(chip.key)"
+      >{{ chip.label }} {{ chipCount(chip.key) }}</button>
+      <button
+        v-if="filter !== 'sve'"
+        type="button"
+        class="a-chip"
+        @click="filter = 'sve'"
+      >Prikaži sve</button>
+    </div>
 
-      <!-- The legend, said once, and only while there is something red to
-           explain. `role="status"` because it appears when the first round of
-           the night lands, under somebody who is already looking at the list. -->
-      <p v-if="anyPending" class="a-legend" role="status">
-        Crveno je večerašnja smjena; ulazi u stanje kad se smjena zatvori.
-      </p>
+    <!-- The legend, said once, and only while there is something red to
+         explain. `role="status"` because it appears when the first round of
+         the night lands, under somebody who is already looking at the list. -->
+    <p v-if="anyPending" class="a-legend" role="status">
+      Crveno je večerašnja smjena; ulazi u stanje kad se smjena zatvori.
+    </p>
 
-      <RobaStanjeList
-        v-if="isPhone"
-        :rows="shown"
-        :loading="loading"
-        @open="row => sheetId = row.id"
-      />
-      <RobaStanjeTable v-else :rows="shown" :loading="loading" />
-    </UiCard>
+    <!-- ---- the phone ---------------------------------------------------- -->
+    <RobaStanjeList
+      v-if="isPhone"
+      :sections="sections"
+      :loading="loading"
+      @open="row => sheetId = row.id"
+    />
+
+    <!-- ---- the laptop --------------------------------------------------- -->
+    <template v-else>
+      <UiCard v-if="loading" title="Stanje šanka">
+        <RobaStanjeTable :rows="[]" loading />
+      </UiCard>
+
+      <UiCard
+        v-for="section in loading ? [] : sections"
+        :key="section.key"
+        :title="section.label"
+        :count="section.rows.length"
+      >
+        <RobaStanjeTable :rows="section.rows" />
+      </UiCard>
+    </template>
+
+    <p v-if="!loading && sections.length === 0" class="a-empty">
+      Nema robe za ovaj filter.
+    </p>
 
     <RobaStanjeSheet
       :open="sheetRow !== null"
@@ -218,5 +251,15 @@ function toggle(key: StanjeFilter) {
   margin: 0;
   color: var(--muted);
   font-size: var(--text-micro);
+}
+
+.a-empty {
+  margin: 0;
+  padding: 22px 16px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-card);
+  color: var(--muted);
+  font-size: var(--text-body);
+  text-align: center;
 }
 </style>

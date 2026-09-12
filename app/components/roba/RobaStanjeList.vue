@@ -1,13 +1,23 @@
 <script setup lang="ts">
 /**
- * *Stanje šanka* as a list, for the phone.
+ * *Stanje šanka* as a list, for the phone — and the phone is 99 % of how this
+ * dashboard is read.
  *
- * The laptop gets a six-column `UiTable` and should: twenty articles compared
- * across quantity, packs, value and status at one glance is what a desk is for.
- * In a hand that table is a 390 px box the owner drags sideways past the name to
+ * The laptop gets a `UiTable` per section and should: articles compared across
+ * quantity, packs, value and status at one glance is what a desk is for. In a
+ * hand that table is a 390 px box the owner drags sideways past the name to
  * reach a status he cannot see — so below 1024 px the row stops being a table
  * row and becomes the one thing this screen is about: **an article and how much
  * of it there is.**
+ *
+ * **Three sections, not one list of nineteen.** *Kafa*, *Nargila* and *Ostalo*,
+ * each a sticky label over a card of rows: the label holds the top of the screen
+ * for as long as its own articles are on it and the next one pushes it off, so
+ * the owner always knows which part of the shelf the number under his thumb
+ * belongs to. It is the same shape *Meni* uses for its categories on a phone,
+ * because it is the same problem. Which article is in which section is
+ * `stanjeGroup()` in `RobaStanjeTable.vue`, read off the article's own `kind` and
+ * menu category.
  *
  * **Two numbers, and the second one is red.** The big figure is the *settled*
  * amount — the shelf as the last closed shift left it, which is the number that
@@ -19,15 +29,15 @@
  * moment; the ledger has said the same thing all along (`docs/BACKEND.md` §6.8).
  *
  * **The state is a mark, not a column.** A row that is `ok` says nothing, which
- * is what makes the three that are not carry. Everything else an article has —
+ * is what makes the two that are not carry. Everything else an article has —
  * what it is worth, how many packs that is, what last moved it, where its ledger
  * is — is one tap behind the name, in `RobaStanjeSheet`, because on this screen
  * it is read once a week and the quantity is read every night.
  */
-import type { StanjeRow } from './RobaStanjeTable.vue'
+import type { StanjeRow, StanjeSection } from './RobaStanjeTable.vue'
 
 defineProps<{
-  rows: StanjeRow[]
+  sections: StanjeSection[]
   /** The first read has not landed: draw bars, not an empty screen. */
   loading?: boolean
 }>()
@@ -54,37 +64,71 @@ function mark(row: StanjeRow): { tone: 'warn' | 'bad', text: string } | null {
       </div>
     </div>
 
-    <div v-else-if="rows.length > 0" class="r-card">
-      <button
-        v-for="row in rows"
-        :key="row.id"
-        type="button"
-        class="r-row"
-        :aria-label="`Detalji, ${row.name}`"
-        @click="emit('open', row)"
-      >
-        <span class="r-text">
-          <span class="r-name">{{ row.name }}</span>
-          <span v-if="mark(row)" class="r-mark">
-            <UiPill :tone="mark(row)!.tone">{{ mark(row)!.text }}</UiPill>
-          </span>
-        </span>
+    <section v-for="section in loading ? [] : sections" :key="section.key" class="r-group">
+      <h2 class="r-group-head">
+        <span class="r-group-name">{{ section.label }}</span>
+        <span class="r-group-n num">{{ section.rows.length }}</span>
+      </h2>
 
-        <span class="r-qty">
-          <span class="r-settled num">{{ formatStockQty(row.settled, row.base_unit) }}</span>
-          <span v-if="row.pending !== 0" class="r-pending num">
-            {{ formatMovementQty(row.pending, row.base_unit) }}
+      <div class="r-card">
+        <button
+          v-for="row in section.rows"
+          :key="row.id"
+          type="button"
+          class="r-row"
+          :aria-label="`Detalji, ${row.name}`"
+          @click="emit('open', row)"
+        >
+          <span class="r-text">
+            <span class="r-name">{{ row.name }}</span>
+            <span v-if="mark(row)" class="r-mark">
+              <UiPill :tone="mark(row)!.tone">{{ mark(row)!.text }}</UiPill>
+            </span>
           </span>
-        </span>
-      </button>
-    </div>
 
-    <p v-else class="r-empty">Nema robe za ovaj filter.</p>
+          <span class="r-qty">
+            <span class="r-settled num">{{ formatStockQty(row.settled, row.base_unit) }}</span>
+            <span v-if="row.pending !== 0" class="r-pending num">
+              {{ formatMovementQty(row.pending, row.base_unit) }}
+            </span>
+          </span>
+        </button>
+      </div>
+    </section>
   </div>
 </template>
 
 <style scoped>
 .r-list { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+.r-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+
+/**
+ * The one sticky thing on the screen.
+ *
+ * It sits on `--bg` — the page's own ground, opaque — so the card of rows passes
+ * cleanly underneath it, and it is only as wide as the card, so nothing shows
+ * around its edges. `top: 0` is the top of the viewport: the dashboard's phone
+ * layout puts its tab bar at the **bottom**, so there is nothing up there to sit
+ * under. The same block `PostavkeMeniList` uses for a category.
+ */
+.r-group-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 2px 7px;
+  background: var(--bg);
+  font-size: var(--text-section);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+}
+
+.r-group-n { font-size: var(--text-label); font-weight: 500; color: var(--muted); }
 
 .r-card {
   background: var(--surface);
@@ -171,14 +215,4 @@ function mark(row: StanjeRow): { tone: 'warn' | 'bad', text: string } | null {
 }
 
 .r-skel-bar.wide { width: 45%; }
-
-.r-empty {
-  margin: 0;
-  padding: 22px 16px;
-  border: 1px dashed var(--line);
-  border-radius: var(--radius-card);
-  color: var(--muted);
-  font-size: var(--text-body);
-  text-align: center;
-}
 </style>

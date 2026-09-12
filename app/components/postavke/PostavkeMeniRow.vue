@@ -8,7 +8,7 @@
  * price he can change with his thumb.**
  *
  * **The row carries no badges.** It briefly wore a star for *omiljeno*, pills
- * for *osoblje* and *bez normativa* and the grams of a nargila, and six rows of
+ * for *osoblje* and for a missing normativ and the grams of a nargila, and six rows of
  * that is a wall of decoration around the one number the owner came to change.
  *
  * The single exception is *ugašen*, and it is not decoration: under the *Svi*

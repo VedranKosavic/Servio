@@ -32,8 +32,9 @@ import { createOrder } from '../../server/services/orders'
 import { requestAdjustment } from '../../server/services/adjustments'
 import {
   approveWaste, correctStock, createDelivery, getStock, insertMovement, logWaste, onHand,
-  recomputeAvgCost, reverseDelivery, setOpeningStock, theoreticalAt, unitCost,
+  ownerStockItems, recomputeAvgCost, reverseDelivery, setOpeningStock, theoreticalAt, unitCost,
 } from '../../server/services/stock'
+import { retireUncountedItems } from '../../server/database/retire'
 import {
   confirmCount, listCounts, pendingCounts, submitCount, witnessCount,
 } from '../../server/services/counts'
@@ -1209,5 +1210,167 @@ describe('otpis with the approver PIN on the spot (S13)', () => {
       }),
       'ADMIN_PIN_FOREIGN_DEVICE', 403,
     )
+  })
+})
+
+// ===========================================================================
+// The three articles the café stopped counting
+// ===========================================================================
+
+/**
+ * *Ugalj (kocke)*, *Šećer* and *Kafa (mljevena)* come off the shelf on the
+ * owner's call: coffee is effectively infinite, unlike a bottle of Coca-Cola,
+ * and coal and sugar are consumables nobody weighs against a ledger.
+ *
+ * What these tests are actually about is the half that could break the till.
+ * Removing an article is one `UPDATE`; removing it while a `recipe_lines` row
+ * still points at it is a sale deducting from a shelf no screen shows, forever.
+ * So: the articles go, their normativ lines go with them, their ledger stays
+ * readable — and *Kafa*, *Nes*, *Čaj* and *Nargila* keep locking and keep
+ * deducting exactly what is still counted.
+ */
+describe('retiring coal, sugar, ground coffee and lemon', () => {
+  // The owner's four uncounted articles. *Limun* joined the first three when he
+  // saw the shelf: *Nes* and *Čaj (vrećice)* stay, because those come in a jar
+  // and a box somebody actually counts.
+  const RETIRED = ['Ugalj (kocke)', 'Šećer', 'Kafa (mljevena)', 'Limun']
+
+  const shelf = () => getStock(f.db, f.venueId).map(item => item.name)
+
+  function recipeCount(product: string): number {
+    return f.db.select().from(schema.recipeLines)
+      .where(and(
+        eq(schema.recipeLines.venueId, f.venueId),
+        eq(schema.recipeLines.productId, f.productId(product)),
+      ))
+      .all().length
+  }
+
+  /** Every article the `sale` rows of this ledger touched, by name. */
+  function soldItems(): string[] {
+    return movements('sale').map(row =>
+      getStock(f.db, f.venueId).find(item => item.id === row.stockItemId)?.name
+      ?? f.db.select({ name: schema.stockItems.name }).from(schema.stockItems)
+        .where(eq(schema.stockItems.id, row.stockItemId)).get()!.name)
+  }
+
+  it('deactivates the four and takes their normativ lines with them', () => {
+    expect(recipeCount('Kafa')).toBe(2)
+    expect(recipeCount('Dodatni žar')).toBe(1)
+
+    const result = retireUncountedItems(f.db)
+
+    expect(result.deactivated.map(item => item.name).sort()).toEqual([...RETIRED].sort())
+    // Kafa's two, Kafa s mlijekom's two, Nes's one, Čaj's one, Limunada's two
+    // (sugar and lemon) and Dodatni žar's one — every line that pointed at one
+    // of the four.
+    expect(result.recipeLinesRemoved).toBe(9)
+    expect(recipeCount('Kafa')).toBe(0)
+    expect(recipeCount('Dodatni žar')).toBe(0)
+    // The lines pointing at articles the café still counts are untouched.
+    expect(recipeCount('Nes')).toBe(1)
+    expect(recipeCount('Čaj')).toBe(1)
+    expect(recipeCount('Kafa s mlijekom')).toBe(1)
+  })
+
+  it('is safe to run twice — the second run moves nothing', () => {
+    retireUncountedItems(f.db)
+    const again = retireUncountedItems(f.db)
+
+    expect(again.deactivated).toEqual([])
+    expect(again.recipeLinesRemoved).toBe(0)
+    expect(again.alreadyInactive.map(item => item.name).sort()).toEqual([...RETIRED].sort())
+  })
+
+  it('takes them off both shelf reads and leaves their ledger readable', () => {
+    const coalId = f.stockItemId('Ugalj (kocke)')
+    const before = f.onHand('Ugalj (kocke)')
+    expect(before).toBeGreaterThan(0)
+
+    retireUncountedItems(f.db)
+
+    for (const name of RETIRED) {
+      expect(shelf()).not.toContain(name)
+      expect(ownerStockItems(f.db, f.venueId).map(item => item.name)).not.toContain(name)
+    }
+    // Deactivated, never deleted: the row and every movement behind it are
+    // still there, which is why the append-only ledger stays whole.
+    expect(onHand(f.db, f.venueId, coalId)).toBe(before)
+    expect(movements().some(row => row.stockItemId === coalId)).toBe(true)
+  })
+
+  it('still locks a kafa, and it now deducts nothing', () => {
+    retireUncountedItems(f.db)
+    f.openShift({ members: ['Amar'] })
+
+    const before = movements('sale').length
+    const order = lock('Amar', 'Sto 7', [line('Kafa', 2)])
+
+    expect(order.order_total_fen).toBe(300)
+    expect(movements('sale').length).toBe(before)
+  })
+
+  it('still deducts what a nes and a čaj really use', () => {
+    retireUncountedItems(f.db)
+    f.openShift({ members: ['Amar'] })
+
+    const nesBefore = f.onHand('Nes')
+    const bagsBefore = f.onHand('Čaj (vrećice)')
+    const sugarBefore = f.onHand('Šećer')
+
+    const order = lock('Amar', 'Sto 7', [line('Nes', 1), line('Čaj', 2)])
+
+    expect(order.order_total_fen).toBe(250 + 2 * 200)
+    expect(f.onHand('Nes')).toBe(nesBefore - 1)
+    expect(f.onHand('Čaj (vrećice)')).toBe(bagsBefore - 2)
+    // The sugar is not deducted and not on the shelf: the café stopped
+    // counting it, and a sale may not move an article nobody counts.
+    expect(f.onHand('Šećer')).toBe(sugarBefore)
+    expect(soldItems()).toEqual(['Nes', 'Čaj (vrećice)'])
+  })
+
+  it('leaves the nargila taking tobacco and no coal at all', () => {
+    retireUncountedItems(f.db)
+    f.openShift({ members: ['Amar'] })
+
+    const coalBefore = f.onHand('Ugalj (kocke)')
+    const tobaccoBefore = f.onHand('Al Fakher · Jabuka')
+
+    lock('Amar', 'Sto 7', [line('Nargila', 1, ['Al Fakher · Jabuka'])])
+
+    expect(f.onHand('Al Fakher · Jabuka')).toBe(tobaccoBefore - 20)
+    // `coal_pcs` is still 3 on the product — the café's norm did not change —
+    // but `coalStockItem()` finds no active `zar` article, so nothing moves.
+    expect(f.onHand('Ugalj (kocke)')).toBe(coalBefore)
+    expect(soldItems()).toEqual(['Al Fakher · Jabuka'])
+  })
+
+  it('still lets Dodatni žar be given away, and it costs the ledger nothing', () => {
+    retireUncountedItems(f.db)
+    f.openShift({ members: ['Amar'] })
+
+    const coalBefore = f.onHand('Ugalj (kocke)')
+    const order = lock('Amar', 'Sto 7', [line('Dodatni žar', 1)])
+
+    expect(order.order_total_fen).toBe(0)
+    expect(f.onHand('Ugalj (kocke)')).toBe(coalBefore)
+    expect(movements('sale')).toHaveLength(0)
+  })
+
+  it('keeps settled + pending === on_hand over the whole shelf', () => {
+    retireUncountedItems(f.db)
+    f.openShift({ members: ['Amar'] })
+    lock('Amar', 'Sto 7', [
+      line('Kafa', 1), line('Nes', 1), line('Čaj', 1), line('Coca-Cola', 3),
+      line('Nargila', 1, ['Al Fakher · Menta']),
+    ])
+
+    // Twenty seeded articles, three of them retired.
+    const items = getStock(f.db, f.venueId)
+    expect(items).toHaveLength(16)
+    for (const item of items) {
+      expect(item.settled + item.pending).toBe(item.on_hand)
+      expect(item.on_hand).toBe(f.onHand(item.name))
+    }
   })
 })

@@ -10,6 +10,18 @@
  * what it cost, add it.** The lines pile up underneath, and the document is
  * concluded at the foot with the date and the amount written on the paper.
  *
+ * **Two more fields are gone, on the owner's call: *Dobavljač* and *Napomena*.**
+ * `supplier_name` is optional in the schema now rather than sent as an empty
+ * string (`shared/schemas/stock.ts`), and what a delivery is accountable by did
+ * not move: the server takes the person from the session and the history lists
+ * him on every row. *Prijem sa slike* still fills a supplier in — it reads one
+ * off the photograph, and nobody types it.
+ *
+ * **The article is picked in a sheet, not in a `<select>`.** See
+ * `RobaArtikalPicker.vue`: search, and the same three sections as *Stanje
+ * šanka*. The OS wheel of nineteen names it replaces is the control this screen
+ * is used through, which is why it got the work.
+ *
  * **Quantity is one number, in the article's own unit.** The route still takes
  * `packs` and `loose` and computes `qty = packs × pack_qty + loose`, so this
  * screen sends the whole quantity as `loose` and nothing is lost — "Coca-Cola
@@ -70,18 +82,30 @@ const pickId = ref('')
 const pickQty = ref<number | null>(null)
 const pickCost = ref<number | null>(null)
 
-const options = computed(() => props.items
-  .filter(item => item.active)
-  .map(item => ({ value: item.id, label: item.name })))
+/** The picker sheet. Closed by a choice, which is its only job. */
+const pickerOpen = ref(false)
 
-// The select needs a value to show from the first paint; an empty one renders
-// as the first option while holding "", which is a line pointing at nothing.
-watch(options, (list) => {
-  if (!pickId.value && list.length > 0) pickId.value = list[0]!.value
-}, { immediate: true })
-
+/**
+ * Nothing is preselected, and that is the change from the `<select>`.
+ *
+ * A select has to hold a value to render, so it opened the document already
+ * pointing at whatever happened to be first in the catalogue — and a quantity
+ * typed under a name nobody read is a crate of the wrong article. The button
+ * says *Izaberi artikal* until somebody picks one, and *Dodaj* stays grey.
+ */
 function itemOf(id: string): StockItemAdmin | undefined {
   return props.items.find(item => item.id === id)
+}
+
+const pickedName = computed(() => itemOf(pickId.value)?.name ?? '')
+
+function pick(id: string) {
+  pickId.value = id
+  pickerOpen.value = false
+  // The suggestion follows the article: a cost typed for the previous one is
+  // not this one's price, so the field goes back to suggesting.
+  costTouched.value = false
+  pickCost.value = suggestedCost(itemOf(id), pickQty.value)
 }
 
 /** "kom · gajba = 24 kom" — the unit, and the crate for anybody multiplying. */
@@ -193,10 +217,8 @@ function qtyText(line: DocLine): string {
 
 // -- the foot ----------------------------------------------------------------
 
-const supplier = ref('')
 const deliveredOn = ref('')
 const writtenFen = ref<number | null>(null)
-const note = ref('')
 const sending = ref(false)
 const error = ref('')
 const okText = ref('')
@@ -239,7 +261,6 @@ const mismatch = computed(() =>
 const problems = computed(() => {
   const list: string[] = []
   if (lines.value.length === 0) list.push('Dodaj bar jedan artikal.')
-  if (supplier.value.trim().length === 0) list.push('Upiši dobavljača.')
   if (deliveredOn.value.length === 0) list.push('Upiši datum sa fakture.')
   if ((writtenFen.value ?? 0) <= 0) list.push('Upiši iznos koji piše na fakturi.')
   return list
@@ -264,9 +285,9 @@ async function send() {
   try {
     const body: CreateDeliveryBody = {
       client_id: clientId.value,
-      supplier_name: supplier.value.trim(),
+      // No `supplier_name` and no `note`: the two fields the owner removed are
+      // **absent** from the body rather than sent empty (see the top).
       delivered_at: deliveredAt(),
-      note: note.value.trim() || undefined,
       lines: lines.value.map(line => ({
         stock_item_id: line.stock_item_id,
         // The whole quantity as loose units: `qty = packs × pack_qty + loose`,
@@ -284,12 +305,11 @@ async function send() {
     // replay key, so a stale retry can never attach to it.
     clientId.value = crypto.randomUUID()
     lines.value = []
-    supplier.value = ''
     deliveredOn.value = ''
     writtenFen.value = null
-    note.value = ''
     pickQty.value = null
     pickCost.value = null
+    costTouched.value = false
     touched.value = false
     emit('posted')
   } catch (err) {
@@ -310,12 +330,27 @@ async function send() {
 
     <!-- ---- pick an article -------------------------------------------- -->
     <div class="d-add">
-      <UiField
-        v-model="pickId"
-        label="Artikal"
-        kind="select"
-        :options="options"
-      />
+      <!-- A button drawn as a field: the row reads as three fields and one
+           action, and what it opens is `RobaArtikalPicker`. -->
+      <div class="d-pick">
+        <span id="d-pick-label" class="d-pick-label">Artikal</span>
+        <button
+          type="button"
+          class="d-pick-btn"
+          :class="{ unset: !pickedName }"
+          aria-haspopup="dialog"
+          aria-labelledby="d-pick-label"
+          @click="pickerOpen = true"
+        >
+          <span class="d-pick-name">{{ pickedName || 'Izaberi artikal' }}</span>
+          <svg
+            width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+            class="d-pick-chevron" aria-hidden="true"
+          ><path d="M6 9l6 6 6-6" /></svg>
+        </button>
+      </div>
+
       <UiField v-model="pickQty" label="Količina" kind="decimal" :hint="qtyHint" />
       <UiField
         v-model="pickCost"
@@ -362,7 +397,6 @@ async function send() {
       <p class="d-foot-title">Zaključivanje prijema</p>
 
       <div class="d-foot-fields">
-        <UiField v-model="supplier" label="Dobavljač" placeholder="Npr. Zvečevo d.o.o." />
         <UiField v-model="deliveredOn" label="Datum sa fakture" kind="date" />
         <UiField v-model="writtenFen" label="Iznos sa fakture (KM)" kind="money" />
       </div>
@@ -376,8 +410,6 @@ async function send() {
         Zbir artikala i iznos sa fakture se ne poklapaju. Provjeri stavke —
         prijem se svejedno može proknjižiti.
       </p>
-
-      <UiField v-model="note" label="Napomena" placeholder="Neobavezno" />
 
       <!-- The wrapper catches the click the disabled button swallows, so asking
            why *Proknjiži* is grey is what shows the list of reasons. -->
@@ -395,6 +427,14 @@ async function send() {
     <p v-if="error" class="d-error">{{ error }}</p>
     <p v-if="okText" class="d-ok" role="status">{{ okText }}</p>
 
+    <RobaArtikalPicker
+      :open="pickerOpen"
+      :items="items"
+      :selected-id="pickId"
+      @close="pickerOpen = false"
+      @pick="pick"
+    />
+
     <RobaPrijemLinijaSheet
       :open="openLine !== null"
       :name="openLine ? nameOf(openLine.stock_item_id) : ''"
@@ -411,14 +451,84 @@ async function send() {
 <style scoped>
 /* ---- the adder ---------------------------------------------------------- */
 
+/**
+ * The three cells line up on their **labels**, not on their bottoms.
+ *
+ * They are not the same height — a picker is a 44 px target (DESIGN §3 puts that
+ * floor under "pick one of a set") and a text field is 40, and only one of the
+ * three carries a hint under it — so bottom-aligning them staggered the three
+ * uppercase labels down the row like a badly set table. Aligned at the top the
+ * labels sit on one line, which is the line the eye reads the row by. The button
+ * keeps to the bottom, where the fields end.
+ */
 .d-add {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto;
-  align-items: end;
+  align-items: start;
   gap: 12px;
 }
 
-.d-add-act { display: flex; }
+.d-add-act { display: flex; align-self: end; }
+
+/* ---- the article, as a field that opens a sheet ------------------------- */
+
+/**
+ * Drawn as `UiField` draws a select — the same label, the same slot height, the
+ * same chevron — because it is the same job and the row it sits in is three
+ * fields wide. What it is underneath is a button, so what it opens can be a
+ * sheet with a search in it instead of the operating system's wheel.
+ */
+.d-pick { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+
+.d-pick-label {
+  font-size: var(--text-caption);
+  line-height: 1.3;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.d-pick-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 10px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-field);
+  background: var(--field-bg);
+  font: inherit;
+  font-size: var(--text-body);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-standard);
+}
+
+.d-pick-btn:hover { border-color: var(--muted); }
+
+.d-pick-btn:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: -1px;
+  border-color: var(--accent-line);
+}
+
+/* Nothing chosen yet: the words are a placeholder, not a value. The modifier
+   is `unset` and not `empty`, because `.empty` is the system's own dashed
+   "nothing here" card in `main.css` and it would win the flex direction. */
+.d-pick-btn.unset .d-pick-name { color: var(--muted); }
+
+.d-pick-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.d-pick-chevron { flex-shrink: 0; margin-left: auto; color: var(--muted); }
 
 /* ---- the lines ---------------------------------------------------------- */
 
@@ -503,9 +613,10 @@ async function send() {
   color: var(--muted);
 }
 
+/* Two fields now that *Dobavljač* is gone: the date and what the paper says. */
 .d-foot-fields {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
 }
 

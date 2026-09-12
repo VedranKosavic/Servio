@@ -40,26 +40,6 @@ const emit = defineEmits<{
 
 const isShisha = computed(() => props.product?.kind === 'shisha')
 
-/**
- * A product that consumes nothing on a sale — the one thing on this sheet that
- * is a warning rather than a setting, because it is silent leakage: the round
- * is charged, the stock never moves, and the shortfall surfaces weeks later at
- * a popis with nothing to attribute it to.
- *
- * **A nargila is not one of them, and used to be marked as one.** A `shisha`
- * product deducts through `shisha_grams` (split across the bowl's aromas) and
- * `coal_pcs`, not through `recipe_lines` — `stockDeltas` in
- * `server/services/orders.ts` is the whole rule. So the old test flagged every
- * nargila on the menu as *bez normativa* while it was deducting tobacco and
- * coal correctly, which is the worst kind of warning: one that is wrong exactly
- * where it is loudest, and teaches the owner to ignore it everywhere else.
- */
-const noRecipe = computed(() =>
-  !!props.product
-  && props.product.kind !== 'shisha'
-  && props.product.recipe.length === 0
-  && !props.product.sells_stock_item_id)
-
 const starDisabled = computed(() =>
   props.favouriteFull && !props.product?.is_favourite)
 
@@ -161,7 +141,6 @@ const recipeLine = computed(() => {
           <span class="p-set-text">
             <span class="p-set-label">
               Normativ
-              <UiPill v-if="noRecipe" tone="warn">bez normativa</UiPill>
             </span>
             <span class="p-set-hint">{{ recipeLine }}</span>
           </span>

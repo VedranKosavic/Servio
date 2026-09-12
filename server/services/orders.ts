@@ -697,6 +697,16 @@ interface PendingMovement { stockItemId: string, qtyDelta: number, unitCostMfen:
  * a sale is never blocked because the ledger disagrees with the shelf. The
  * *U minusu* list is what makes that visible, not a refusal at the till. A
  * comped line still takes its goods off the shelf: the bowl was smoked.
+ *
+ * **A deactivated article is not deducted from.** *Stanje šanka* and `getStock`
+ * both list active articles only, so a movement against an inactive one would
+ * move a shelf no screen shows and put a row that nobody can see *u minusu*
+ * forever. The three articles the café stopped counting — coal, sugar, ground
+ * coffee — lose their normativ lines with them (`database/retire.ts`), so this
+ * is the belt to that braces: an article switched off from `/admin` stops being
+ * deducted the moment it is switched off, whatever still points at it. A *Kafa*
+ * whose whole normativ is gone therefore locks, charges and deducts nothing,
+ * which is exactly what "we don't count coffee" means.
  */
 function resolveStock(
   tx: Tx,
@@ -707,7 +717,9 @@ function resolveStock(
 ): PendingMovement[] {
   const out: PendingMovement[] = []
   const push = (stockItemId: string, qtyDelta: number) => {
-    out.push({ stockItemId, qtyDelta, unitCostMfen: costOf(tx, venueId, stockItemId) })
+    const item = itemOf(tx, venueId, stockItemId)
+    if (!item || item.active === 0) return
+    out.push({ stockItemId, qtyDelta, unitCostMfen: unitCost(item).mfen })
   }
 
   if (product.sellsStockItemId) {
@@ -744,19 +756,20 @@ function resolveStock(
 }
 
 /**
- * What one base unit of this item costs, in milli-feninga — the moving average
- * when there is one, the last invoice price when there is not, and 0 only for an
- * item nobody has ever priced (`unitCost`, BACKEND §6.8).
+ * The two things the lock needs to know about an article: whether it is still
+ * counted, and what one base unit of it costs in milli-feninga — the moving
+ * average when there is one, the last invoice price when there is not, and 0
+ * only for an article nobody has ever priced (`unitCost`, BACKEND §6.8).
  */
-function costOf(tx: Tx, venueId: string, stockItemId: string): number {
-  const item = tx.select({
+function itemOf(tx: Tx, venueId: string, stockItemId: string) {
+  return tx.select({
+    active: schema.stockItems.active,
     avgCostMfen: schema.stockItems.avgCostMfen,
     lastCostMfen: schema.stockItems.lastCostMfen,
   })
     .from(schema.stockItems)
     .where(and(eq(schema.stockItems.id, stockItemId), eq(schema.stockItems.venueId, venueId)))
     .get()
-  return item ? unitCost(item).mfen : 0
 }
 
 /**

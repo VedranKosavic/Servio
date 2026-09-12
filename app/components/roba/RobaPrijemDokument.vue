@@ -48,7 +48,7 @@ const canReverse = computed(() => note.value.trim().length >= 3)
 <template>
   <UiSheet
     :open="open"
-    :title="delivery?.supplier_name ?? 'Prijem'"
+    :title="delivery?.supplier_name || 'Prijem robe'"
     :content-key="asking ? 'storno' : 'pregled'"
     @close="emit('close')"
   >
