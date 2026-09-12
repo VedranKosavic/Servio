@@ -37,10 +37,17 @@ import {
   waiterVerdict,
 } from '../../app/components/smjena/smjenaLogic'
 import { canStepForward, stepPeriod } from '../../app/components/smjena/periodStep'
+import {
+  EXTRA_SLOT_NAME,
+  PLAIN_SLOT_NAME,
+  groupShiftsByDay,
+  matchTemplate,
+} from '../../app/components/smjena/smjeneDays'
 import { resolvePeriod } from '../../app/composables/useAdminPeriod'
 import { DEFAULT_SETTINGS } from '../../shared/settings'
 import type {
-  CashMovement, Settings, Settlement, Shift, ShiftCountBrief, ShiftSummary, UserSummary,
+  CashMovement, OwnerShiftRow, Settings, Settlement, Shift, ShiftCountBrief, ShiftSummary,
+  ShiftTemplateView, UserSummary,
 } from '../../shared/types'
 
 const settings: Settings = { ...DEFAULT_SETTINGS, cash_tolerance_fen: 500, cash_tolerance_pct: 1 }
@@ -502,5 +509,174 @@ describe('stepping the period on Smjene', () => {
     expect(canStepForward(range('ovaj-mjesec'), today)).toBe(false)
     expect(canStepForward(range('jucer'), today)).toBe(true)
     expect(canStepForward(range('prosla-sedmica'), today)).toBe(true)
+  })
+})
+
+// ===========================================================================
+
+/**
+ * *Smjene* as days — the grouping the page's whole shape rests on.
+ *
+ * The café runs two shifts a day, *Prva* 07:00–15:00 and *Druga* 15:00–23:00, so
+ * the screen is a date with two cards under it. What has to hold:
+ *
+ * 1. **A shift finds its slot by the window it opened in**, read on the café's
+ *    wall clock. The 16:00–02:00 night that is in the owner's database right now
+ *    is *Druga smjena* and not an oddity, because 16:00 is inside 15:00–23:00 —
+ *    where it *ended* is not what the slot is about.
+ * 2. **A slot nobody worked is still a card.** One shift out of two is a fact the
+ *    owner came for, and it is not the same fact as two shifts one of which took
+ *    0,00 KM — the card carries no amount at all.
+ * 3. **Nothing vanishes.** A shift that matches no window, and a second shift
+ *    inside one window, each get a card of their own. The period total is summed
+ *    from the same rows, so a dropped shift would be a total that stops matching
+ *    the screen.
+ * 4. **A day exists because it was worked.** A date with no shift produces no
+ *    day: the owner's database holds weeks the app was not in use, and a month of
+ *    empty headings would bury the nights that have numbers on them.
+ */
+describe('Smjene as days', () => {
+  const PRVA: ShiftTemplateView = {
+    id: 't-prva', name: 'Prva smjena', start_time: '07:00', end_time: '15:00',
+    sort: 1, active: true,
+  }
+  const DRUGA: ShiftTemplateView = {
+    id: 't-druga', name: 'Druga smjena', start_time: '15:00', end_time: '23:00',
+    sort: 2, active: true,
+  }
+  const TEMPLATES = [PRVA, DRUGA]
+
+  /** September in Sarajevo is UTC+2, so 05:12Z is the 07:12 opening. */
+  function row(patch: Partial<OwnerShiftRow> & { id: string, opened_at: string }): OwnerShiftRow {
+    return {
+      business_date: '2026-09-11',
+      status: 'closed',
+      closed_at: null,
+      promet_fen: 100000,
+      diff_fen: null,
+      ...patch,
+    }
+  }
+
+  const morning = row({ id: 's-1', opened_at: '2026-09-11T05:12:00Z', promet_fen: 42500 })
+  const evening = row({ id: 's-2', opened_at: '2026-09-11T13:04:00Z', promet_fen: 181250 })
+
+  it('puts the two shifts of one day in the templates’ own order', () => {
+    // The read arrives newest first; the day is still morning then evening.
+    const [day, ...rest] = groupShiftsByDay([evening, morning], TEMPLATES)
+    expect(rest).toEqual([])
+    expect(day!.business_date).toBe('2026-09-11')
+    expect(day!.slots.map(slot => [slot.name, slot.shift?.id])).toEqual([
+      ['Prva smjena', 's-1'],
+      ['Druga smjena', 's-2'],
+    ])
+    expect(day!.worked).toBe(2)
+    expect(day!.promet_fen).toBe(42500 + 181250)
+  })
+
+  it('keeps the card of a shift nobody worked, with no shift and no money on it', () => {
+    const [day] = groupShiftsByDay([evening], TEMPLATES)
+    expect(day!.slots).toHaveLength(2)
+
+    const [prva, druga] = day!.slots
+    // The unworked slot is a slot, not a shift: nothing to price, and the only
+    // clock it has is the template's own window.
+    expect(prva!.name).toBe('Prva smjena')
+    expect(prva!.shift).toBeNull()
+    expect(prva!.start_time).toBe('07:00')
+    expect(prva!.end_time).toBe('15:00')
+
+    expect(druga!.shift?.id).toBe('s-2')
+    // The day is worth what the one shift made, and not what two would have.
+    expect(day!.worked).toBe(1)
+    expect(day!.promet_fen).toBe(181250)
+  })
+
+  it('has no day for a date the café did not work', () => {
+    expect(groupShiftsByDay([], TEMPLATES)).toEqual([])
+  })
+
+  it('reads a 16:00–02:00 night as the second shift, because that is when it opened', () => {
+    // The real row in the owner's database, opened under the old templates:
+    // 16:00 local, closed at 02:00 the next morning.
+    const late = row({
+      id: 's-late',
+      opened_at: '2026-09-11T14:00:00Z',
+      closed_at: '2026-09-12T00:00:00Z',
+    })
+    const [day] = groupShiftsByDay([late], TEMPLATES)
+    expect(day!.slots[1]!.name).toBe('Druga smjena')
+    expect(day!.slots[1]!.shift?.id).toBe('s-late')
+    expect(matchTemplate(late, TEMPLATES)?.id).toBe('t-druga')
+  })
+
+  it('gives a shift that matches no window a card of its own, after the two', () => {
+    // 04:30 on the café's clock: inside the business day that started at 06:00
+    // the evening before, and inside neither template.
+    const nightshift = row({ id: 's-odd', opened_at: '2026-09-11T02:30:00Z', promet_fen: 9900 })
+    const [day] = groupShiftsByDay([nightshift, morning], TEMPLATES)
+
+    expect(day!.slots.map(slot => [slot.name, slot.shift?.id ?? null])).toEqual([
+      ['Prva smjena', 's-1'],
+      ['Druga smjena', null],
+      [EXTRA_SLOT_NAME, 's-odd'],
+    ])
+    // It has no slot, so it has no nominal window either — only its own clock.
+    expect(day!.slots[2]!.start_time).toBeNull()
+    expect(matchTemplate(nightshift, TEMPLATES)).toBeNull()
+    // And its pazar is still in the day, which is what keeps the period total
+    // equal to the sum of the cards on screen.
+    expect(day!.promet_fen).toBe(42500 + 9900)
+    expect(day!.worked).toBe(2)
+  })
+
+  it('never lets a second shift in one window overwrite the first', () => {
+    const first = row({ id: 's-a', opened_at: '2026-09-11T05:00:00Z', promet_fen: 1000 })
+    const second = row({ id: 's-b', opened_at: '2026-09-11T09:00:00Z', promet_fen: 2000 })
+    const [day] = groupShiftsByDay([second, first], TEMPLATES)
+
+    // The earlier one is what the slot is about; the later one is still drawn.
+    expect(day!.slots.map(slot => slot.shift?.id ?? null))
+      .toEqual(['s-a', null, 's-b'])
+    expect(day!.slots[2]!.name).toBe(EXTRA_SLOT_NAME)
+    expect(day!.promet_fen).toBe(3000)
+  })
+
+  it('holds a window that crosses midnight, for the café that closes at 01:00', () => {
+    const vecernja: ShiftTemplateView = {
+      id: 't-vecernja', name: 'Večernja', start_time: '15:00', end_time: '01:00',
+      sort: 2, active: true,
+    }
+    // 00:30 on the café's clock — inside 15:00–01:00, and still last night.
+    const late = row({ id: 's-late', opened_at: '2026-09-11T22:30:00Z' })
+    expect(matchTemplate(late, [PRVA, vecernja])?.id).toBe('t-vecernja')
+    // 01:00 is the end of the window and the start of nothing.
+    expect(matchTemplate(row({ id: 's-x', opened_at: '2026-09-11T23:00:00Z' }), [PRVA, vecernja]))
+      .toBeNull()
+  })
+
+  it('ignores a template the owner switched off', () => {
+    const [day] = groupShiftsByDay([evening], [PRVA, { ...DRUGA, active: false }])
+    expect(day!.slots.map(slot => slot.name)).toEqual(['Prva smjena', EXTRA_SLOT_NAME])
+  })
+
+  it('says "Smjena" and not "Vanredna" when the venue has no templates at all', () => {
+    const [day] = groupShiftsByDay([morning, evening], [])
+    expect(day!.slots.map(slot => slot.name)).toEqual([PLAIN_SLOT_NAME, PLAIN_SLOT_NAME])
+    expect(day!.promet_fen).toBe(42500 + 181250)
+  })
+
+  it('orders the days newest first and every shift exactly once', () => {
+    const older = row({
+      id: 's-old', business_date: '2026-09-09', opened_at: '2026-09-09T13:00:00Z',
+      promet_fen: 5000,
+    })
+    const days = groupShiftsByDay([morning, older, evening], TEMPLATES)
+    expect(days.map(day => day.business_date)).toEqual(['2026-09-11', '2026-09-09'])
+
+    const ids = days.flatMap(day => day.slots.map(slot => slot.shift?.id).filter(Boolean))
+    expect(ids.sort()).toEqual(['s-1', 's-2', 's-old'])
+    // The page's total is summed from the rows; the days have to agree with it.
+    expect(days.reduce((sum, day) => sum + day.promet_fen, 0)).toBe(42500 + 181250 + 5000)
   })
 })

@@ -1,36 +1,44 @@
 <script setup lang="ts">
 /**
- * *Smjene* — one row per night in the period, newest first.
+ * *Smjene* — the period as a list of **days**, newest first, each with the
+ * shifts the café runs in a day under it.
  *
- * The whole page is one read (`GET /api/owner/shifts?from&to`) under one period
- * control. The period lives in the route query rather than in a `ref`, so a tab
- * the owner leaves open and reloads comes back on the same range, and a link he
- * sends himself opens on it.
+ * **A day is two shifts.** The café works *Prva smjena* 07:00–15:00 and *Druga
+ * smjena* 15:00–23:00, which is what `shift_templates` holds, so the screen is a
+ * date with two cards beneath it and not a flat list of shifts: the owner reads
+ * "Thursday made this in the morning and that in the evening", which a row per
+ * shift could never say. The grouping and the slot matching are pure functions in
+ * `smjena/smjeneDays.ts` — how a shift finds its slot, what happens to one that
+ * matches no window, and why a day nobody worked produces nothing are all
+ * written there and tested without mounting a component.
  *
- * It refetches on `shift` moving in the change feed and on nothing else: there
- * is one poll on `/admin` and this page subscribes to it rather than opening a
- * timer of its own.
+ * **One structure at both widths.** The laptop used to get a six-column table;
+ * it now gets the same days, with the date as a left-hand column and the two
+ * shifts side by side, so eight days still compare down a column at a desk. The
+ * phone stacks the two cards. Nothing on this screen scrolls sideways at any
+ * width, at either layout.
  *
- * **Two layouts, one page.** At a desk this is a table and it should be: six
- * columns of eight nights, compared down a column. In a hand it was a 390 px box
- * cut off at the right edge with a scrollbar under it — and the two columns over
- * the edge were the pazar and the razlika, the only two the owner came for. So
- * below 1024 px the table is gone and the nights are a list (`SmjenaNights`),
- * and the six period chips — which wrapped onto two rows and spent a third of
- * the screen — become one row of arrow · period · arrow (`SmjenaPeriod`), with
- * all six and *Prilagođeno* one tap behind the middle. Nothing on this screen
- * scrolls sideways at any width.
+ * **Two reads, not one.** The shifts come from `GET /api/owner/shifts?from&to`
+ * under the period control, the slots from `GET /api/admin/shift-templates` —
+ * the venue's own windows, because the two shifts are a café's setting and not a
+ * constant this page gets to hard-code. The templates are read once and again
+ * when `roster` moves in the change feed; the shifts refetch when `shift` does.
+ * There is one poll on `/admin` and this page subscribes to it rather than
+ * opening a timer of its own.
  *
- * **`useMounted` is not optional there.** `useMediaQuery` answers truthfully
- * from the first client render, and the server — which has no viewport — always
- * says the laptop. Without the gate the two renders disagree about the whole
- * page and Vue throws the server's markup away with a hydration mismatch. So the
- * first paint is the table at both widths, and the phone swaps to the list on
- * mount, which happens before the first read lands: what the owner actually sees
- * appear is the list.
+ * The period lives in the route query rather than in a `ref`, so a tab the owner
+ * leaves open and reloads comes back on the same range, and a link he sends
+ * himself opens on it.
+ *
+ * **`useMounted` is not optional here.** `useMediaQuery` answers truthfully from
+ * the first client render, and the server — which has no viewport — always says
+ * the laptop. Without the gate the two renders disagree about the period control
+ * and Vue throws the server's markup away with a hydration mismatch. So the
+ * first paint is the laptop's control at both widths, and the phone swaps to the
+ * arrow · period · arrow row on mount, which happens before the first read lands.
  */
-import { shiftStatusPill } from '~/components/smjena/smjenaLogic'
-import type { OwnerShiftRow } from '#shared/types'
+import { groupShiftsByDay } from '~/components/smjena/smjeneDays'
+import type { OwnerShiftRow, ShiftTemplateView } from '#shared/types'
 
 definePageMeta({ middleware: 'admin', layout: 'admin' })
 
@@ -58,8 +66,20 @@ onMounted(() => {
 })
 
 const rows = ref<OwnerShiftRow[]>([])
-const loading = ref(true)
+const templates = ref<ShiftTemplateView[]>([])
+const loadingShifts = ref(true)
+const loadingTemplates = ref(true)
 const error = ref('')
+
+/**
+ * The first paint waits for both reads.
+ *
+ * Without the templates a shift has no slot to sit in, so drawing the days a
+ * moment early would label every card *Smjena* and then rename it to *Prva
+ * smjena* under the owner's thumb. A later period change does **not** raise this
+ * again: the days that are on screen stay there while the next range loads.
+ */
+const loading = computed(() => loadingShifts.value || loadingTemplates.value)
 
 async function load() {
   try {
@@ -69,32 +89,53 @@ async function load() {
     // An honest empty screen: a stale list of takings is worse than none.
     error.value = apiErrorText(err)
   } finally {
-    loading.value = false
+    loadingShifts.value = false
+  }
+}
+
+/**
+ * The venue's shifts. A failure here is deliberately **not** an error on the
+ * screen: every shift still gets a card, named *Smjena* instead of *Prva
+ * smjena*, and no number changes. A red sentence over a correct pazar would say
+ * the takings are in doubt when only their labels are.
+ */
+async function loadTemplates() {
+  try {
+    templates.value = await api.getShiftTemplates()
+  } catch {
+    templates.value = []
+  } finally {
+    loadingTemplates.value = false
   }
 }
 
 watch(period.range, load, { immediate: true })
 
+onMounted(() => { void loadTemplates() })
+
 useAdminChanges({
-  onEntity: (entity) => { if (entity === 'shift') void load() },
+  onEntity: (entity) => {
+    if (entity === 'shift') void load()
+    // Template CRUD bumps `roster` (`server/services/roster.ts`), so a window
+    // the owner moves on *Raspored* re-slots these cards without a reload.
+    if (entity === 'roster') void loadTemplates()
+  },
 })
 
-const columns = [
-  { key: 'datum', label: 'Datum' },
-  { key: 'status', label: 'Status' },
-  { key: 'vrijeme', label: 'Otvorena — zatvorena' },
-  { key: 'promet', label: 'Pazar', align: 'r' as const },
-  { key: 'razlika', label: 'Razlika', align: 'r' as const },
-  { key: 'chevron', label: '', width: '40px' },
-]
+/** The days in the period, each with its slots — the whole screen's shape. */
+const days = computed(() => groupShiftsByDay(rows.value, templates.value))
 
-/** The nights in the period, plus what they add up to. */
+/**
+ * What the period adds up to. Summed from the rows the read returned and not
+ * from the days, so the number at the top is the server's answer — and since
+ * every row lands on exactly one card, it is also the sum of what is on screen.
+ */
 const total = computed(() => rows.value.reduce((sum, row) => sum + row.promet_fen, 0))
 </script>
 
 <template>
   <div class="a-page">
-    <UiPageHead eyebrow="Lokal" title="Smjene" sub="Svaka noć, i šta je od nje ostalo u kasi" />
+    <UiPageHead eyebrow="Lokal" title="Smjene" sub="Svaki dan, i šta je od njega ostalo u kasi" />
 
     <!-- ---- the phone ------------------------------------------------- -->
     <SmjenaPeriod v-if="isPhone" />
@@ -106,88 +147,12 @@ const total = computed(() => rows.value.reduce((sum, row) => sum + row.promet_fe
 
     <p v-if="error" class="a-error">{{ error }}</p>
 
-    <SmjenaNights v-if="isPhone" :rows="rows" :loading="loading" :total="total" />
-
-    <UiCard v-else title="Smjene" :count="`${rows.length}`" flush>
-      <template #actions>
-        <span class="a-total">
-          <span class="a-total-label">Ukupno</span>
-          <UiMoney class="a-total-value" :fen="total" :colour="false" />
-        </span>
-      </template>
-
-      <p v-if="!loading && !rows.length" class="a-muted">
-        U ovom periodu nema nijedne smjene.
-      </p>
-
-      <UiTable v-else :columns="columns" :loading="loading" hover>
-        <tr v-for="row in rows" :key="row.id" class="a-row">
-          <td>
-            <NuxtLink :to="`/admin/smjena/${row.id}`">{{ dateBs(row.business_date) }}</NuxtLink>
-          </td>
-          <td>
-            <UiPill :tone="shiftStatusPill(row.status).tone">
-              {{ shiftStatusPill(row.status).word }}
-            </UiPill>
-          </td>
-          <td class="a-quiet">
-            {{ timeBs(row.opened_at) }}<template v-if="row.closed_at"> — {{ timeBs(row.closed_at) }}</template>
-            <template v-else> — u toku</template>
-          </td>
-          <td class="r"><UiMoney :fen="row.promet_fen" :currency="false" :colour="false" /></td>
-          <td class="r">
-            <UiMoney v-if="row.diff_fen !== null" :fen="row.diff_fen" :currency="false" />
-            <span v-else class="a-quiet">—</span>
-          </td>
-          <td class="r">
-            <NuxtLink :to="`/admin/smjena/${row.id}`" aria-label="Otvori smjenu">
-              <UiIcon name="chevron-right" :size="20" />
-            </NuxtLink>
-          </td>
-        </tr>
-      </UiTable>
-    </UiCard>
+    <SmjenaDays :days="days" :shifts="rows.length" :loading="loading" :total="total" />
   </div>
 </template>
 
 <style scoped>
 .a-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
-
-.a-muted { margin: 0 20px; color: var(--muted); font-size: var(--text-label); }
-.a-quiet { color: var(--muted); }
 .a-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
-
-.a-total { display: inline-flex; align-items: baseline; gap: 8px; }
-
-.a-total-label {
-  font-size: var(--text-caption);
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  font-weight: 600;
-  color: var(--muted);
-}
-
-.a-total-value {
-  font-family: var(--font-display);
-  font-size: var(--text-section);
-  font-weight: 700;
-  color: var(--ink);
-}
-
-/* The links fill their cells. A date rendered inline is a 17 px target and the
-   chevron a 20 px one — both well under the 44 px floor DESIGN §3 puts on
-   anything inline in a dense row. The table itself is a laptop's, so there is
-   no phone rule under this one: below 1024 px `SmjenaNights` has the nights. */
-.a-row :deep(a) {
-  display: flex;
-  align-items: center;
-  min-height: var(--tap);
-  color: inherit;
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.a-row :deep(td.r a) { justify-content: flex-end; }
-.a-row :deep(a:hover) { text-decoration: underline; }
 </style>
