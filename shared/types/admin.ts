@@ -227,6 +227,17 @@ export interface UserAdmin {
   pin_len: 4 | 6
   /** False = this person cannot log in until an admin sets a PIN. */
   has_pin: boolean
+  /**
+   * A **`radnik`'s** PIN in the clear, so the owner can remind him of it.
+   *
+   * `null` for every admin, by design — an admin's PIN opens the dashboard and
+   * the cash approvals, so it stays a one-way hash and nothing can read it
+   * back. `server/utils/pinReveal.ts` has the whole argument, including what
+   * this costs. Also `null` when there is no PIN at all.
+   *
+   * Reached only through the admin-guarded staff routes. Never log it.
+   */
+  pin_plain: string | null
   /** Admins only; the laptop login. Never the password itself. */
   email: string | null
   created_at: string

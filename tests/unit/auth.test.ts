@@ -13,6 +13,9 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { and, eq } from 'drizzle-orm'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
 import { hashSecret, verifySecret } from '../../server/utils/password'
+import { openPin, sealPin } from '../../server/utils/pinReveal'
+import { listUsers, updateUser } from '../../server/services/admin'
+import { resetPin } from '../../server/services/auth'
 import {
   adminLogin, authorizeRequest, getMe, listLoginUsers, lockoutState, loginWithPin,
   logout, resetPin, setSessionMode, verifyMetered, verifyPinMetered,
@@ -1119,3 +1122,62 @@ function refuse(fixture: Fixture, path: string, method: string, s?: string, d?: 
   if (verdict.ok) throw new Error(`expected ${method} ${path} to be refused`)
   return { status: verdict.status, code: verdict.code }
 }
+
+/**
+ * The readable copy of a worker's PIN.
+ *
+ * This exists because the owner asked to be able to look a worker's PIN up, and
+ * it is a deliberate weakening of the app's own rule that a PIN is one-way. The
+ * tests that matter are therefore the *limits* of it: an admin's PIN must never
+ * be readable, and a PIN must stop being readable the moment the person stops
+ * being one. `server/utils/pinReveal.ts` carries the argument.
+ */
+describe('a worker PIN the owner can read back', () => {
+  const find = (name: string) => listUsers(f.db, f.venueId).find(u => u.name === name)!
+
+  it('round-trips, and refuses a ciphertext somebody has edited', () => {
+    const sealed = sealPin('5116')!
+    expect(openPin(sealed)).toBe('5116')
+    // Each seal gets its own iv, so two seals of one PIN never match.
+    expect(sealPin('5116')).not.toBe(sealed)
+    // AES-GCM authenticates: a tampered blob opens as nothing, never as junk.
+    expect(openPin(`${sealed.slice(0, -4)}AAAA`)).toBeNull()
+    expect(openPin(null)).toBeNull()
+    expect(sealPin(null)).toBeNull()
+  })
+
+  it('is written for a radnik and never for an admin', () => {
+    // The fixture seeds both, so this is the shipped behaviour and not a stub.
+    expect(find('Amar').role).toBe('radnik')
+    expect(find('Amar').pin_plain).toBe('2222')
+
+    expect(find('Haris').role).toBe('admin')
+    expect(find('Haris').pin_plain).toBeNull()
+    // …and his PIN still works, which is the point: only the second copy is
+    // withheld, never the hash a login is checked against.
+    expect(find('Haris').has_pin).toBe(true)
+  })
+
+  it('follows a reset, for the worker only', () => {
+    resetPin(f.db, f.venueId, f.adminActor(), f.userId('Amar'), '7412')
+    expect(find('Amar').pin_plain).toBe('7412')
+
+    resetPin(f.db, f.venueId, f.adminActor(), f.userId('Haris'), '7413')
+    expect(find('Haris').pin_plain).toBeNull()
+    expect(find('Haris').has_pin).toBe(true)
+  })
+
+  it('goes when the worker is switched off', () => {
+    updateUser(f.db, f.venueId, f.adminActor(), f.userId('Amar'), { active: false })
+    expect(find('Amar').pin_plain).toBeNull()
+  })
+
+  it('goes the moment a worker is promoted to admin', () => {
+    updateUser(f.db, f.venueId, f.adminActor(), f.userId('Amar'), { role: 'admin' })
+    const amar = find('Amar')
+    expect(amar.role).toBe('admin')
+    expect(amar.pin_plain).toBeNull()
+    // The hash is untouched — he signs in with the same digits as before.
+    expect(amar.has_pin).toBe(true)
+  })
+})

@@ -86,6 +86,15 @@ export const users = sqliteTable('users', {
   pinLen: integer('pin_len').notNull().default(4),
   pinSetAt: text('pin_set_at'),
   /**
+   * A **`radnik`'s** PIN, sealed so the owner can look it up — `iv.body.tag`,
+   * AES-256-GCM under a key derived from `PIN_PEPPER` (`utils/pinReveal.ts`).
+   *
+   * It is a second copy and never the one that authenticates: `pin_hash` above
+   * is still what a login is checked against, and is still one-way. NULL for
+   * every admin by design, and NULL for anybody with no PIN.
+   */
+  pinCipher: text('pin_cipher'),
+  /**
    * Which `PIN_PEPPER` the stored hash was made with. A pepper is a secret that
    * lives only in `/opt/sank/.env`, mixed into the hash input — so a stolen
    * database file is not every 4-digit PIN in the venue. Rotating it means

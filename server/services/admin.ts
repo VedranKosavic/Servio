@@ -28,6 +28,7 @@ import { schema } from '../database/client'
 import { badRequest, conflict, notFound, unprocessable } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
 import { hashSecret } from '../utils/password'
+import { openPin, sealPin } from '../utils/pinReveal'
 import { emitChange } from '../utils/bus'
 import { bump, getSettings, log, unitCost } from './contracts'
 import { maxSeq } from './changes'
@@ -849,6 +850,16 @@ function toUser(row: typeof schema.users.$inferSelect): UserAdmin {
     active: isOn(row.active),
     pin_len: row.pinLen === 6 ? 6 : 4,
     has_pin: row.pinHash !== null,
+    /**
+     * A worker's PIN in the clear, for the owner to read out.
+     *
+     * `null` for every admin, for anybody with no PIN, and for any row sealed
+     * under a different `PIN_PEPPER` — `openPin` answers "nothing stored"
+     * rather than throwing, so a dev copy of a production database shows an
+     * empty column instead of a 500. This read is behind `requireRole('admin')`
+     * like the rest of the screen.
+     */
+    pin_plain: openPin(row.pinCipher),
     email: row.email,
     created_at: row.createdAt,
   }
@@ -898,6 +909,7 @@ export function createUser(
       role: body.role,
       active: 1,
       pinHash: hashSecret(body.pin, id),
+      pinCipher: body.role === 'radnik' ? sealPin(body.pin) : null,
       pinLen: body.pin.length === 6 ? 6 : 4,
       pinSetAt: now,
       pinPepperV: 1,
@@ -965,7 +977,15 @@ export function updateUser(
       ...(patch.role !== undefined ? { role: patch.role } : {}),
       ...(patch.active !== undefined ? { active: flag(patch.active, 1) } : {}),
       ...(patch.email !== undefined ? { email: patch.email ?? null } : {}),
-      ...(returning ? { pinHash: null, pinSetAt: null } : {}),
+      ...(returning ? { pinHash: null, pinSetAt: null, pinCipher: null } : {}),
+      // Promoted to admin: the readable copy goes immediately, because an
+      // admin's PIN is the one that must stay unrecoverable. Demoted the other
+      // way there is nothing to seal — the hash is one-way — so he simply has
+      // no readable PIN until the next reset writes one.
+      ...(patch.role === 'admin' ? { pinCipher: null } : {}),
+      // Deactivated: nothing about a person who cannot sign in should be
+      // readable either.
+      ...(patch.active === false ? { pinCipher: null } : {}),
     }).where(eq(schema.users.id, userId)).run()
 
     if (labels.length) {

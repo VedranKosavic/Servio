@@ -51,7 +51,10 @@ const initials = computed(() =>
       <span class="p-marks">
         <span class="p-role">{{ ROLE_LABELS[user.role] }}</span>
         <template v-if="user.active">
-          <UiPill v-if="user.has_pin" tone="good">ima PIN</UiPill>
+          <!-- A worker's PIN is printed; an admin's cannot be, so his row says
+               only that he has one. `pin_plain` is null for every admin. -->
+          <span v-if="user.pin_plain" class="p-pin num">{{ user.pin_plain }}</span>
+          <UiPill v-else-if="user.has_pin" tone="good">ima PIN</UiPill>
           <UiPill v-else tone="warn">bez PIN-a</UiPill>
         </template>
       </span>
@@ -115,4 +118,18 @@ const initials = computed(() =>
 .p-role { font-size: var(--text-micro); color: var(--muted); }
 
 .p-chev { flex-shrink: 0; color: var(--muted); margin-right: 8px; }
+
+/**
+ * The PIN, where the *ima PIN* pill used to be.
+ *
+ * Tabular numerals and a little tracking, because these four digits are read
+ * out loud across a bar — the one job this number has is to be unmistakable at
+ * arm's length.
+ */
+.p-pin {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
 </style>

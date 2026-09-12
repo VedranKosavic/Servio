@@ -24,6 +24,7 @@ import { and, desc, eq, gt, gte, inArray, isNull, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { SankError, badRequest, conflict, forbidden, locked, notFound, unauthorized, unprocessable } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
+import { sealPin } from '../utils/pinReveal'
 import { hashSecret, hashToken, newToken, verifySecret } from '../utils/password'
 import { pinLimiter } from '../utils/rate-limit'
 import { getSettings, log } from './contracts'
@@ -1011,6 +1012,9 @@ export function resetPin(
   db.transaction((tx) => {
     tx.update(schema.users).set({
       pinHash: hashSecret(pin, userId),
+      // The readable copy, and only for a worker — see `utils/pinReveal.ts`
+      // for why an admin's PIN is never sealed.
+      pinCipher: user.role === 'radnik' ? sealPin(pin) : null,
       pinLen: pin.length === 6 ? 6 : 4,
       pinSetAt: now,
       pinPepperV: 1,

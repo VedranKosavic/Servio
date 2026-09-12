@@ -50,6 +50,22 @@ const asking = ref(false)
 
 watch(() => [props.open, props.user?.id], () => { asking.value = false })
 
+/**
+ * The sentence under the PIN row.
+ *
+ * A worker's PIN is printed above it, so the line stops promising that nothing
+ * is ever shown again — it says where the number is used instead. An admin's
+ * PIN genuinely cannot be read back (`server/utils/pinReveal.ts`), so his row
+ * keeps the old promise, which for him is still true.
+ */
+const pinHint = computed(() => {
+  const user = props.user
+  if (!user) return ''
+  if (!user.has_pin) return 'Bez PIN-a se ne može prijaviti ni na jedan telefon.'
+  if (user.pin_plain) return 'Prijava na telefon. Ovim brojem se radnik prijavljuje.'
+  return 'Prijava na telefon. Nigdje se ne prikazuje ponovo.'
+})
+
 /** One line under the title: what he is, and whether he can sign in. */
 const summary = computed(() => {
   const user = props.user
@@ -96,10 +112,9 @@ const initials = computed(() =>
                 PIN
                 <UiPill v-if="!user.has_pin" tone="warn">bez PIN-a</UiPill>
               </span>
+              <span v-if="user.pin_plain" class="p-pin num">{{ user.pin_plain }}</span>
               <span class="p-set-hint">
-                {{ user.has_pin
-                  ? 'Prijava na telefon. Nigdje se ne prikazuje ponovo.'
-                  : 'Bez PIN-a se ne može prijaviti ni na jedan telefon.' }}
+                {{ pinHint }}
               </span>
             </span>
             <UiButton small :variant="user.has_pin ? 'ghost' : 'soft'" @click="emit('pin')">
@@ -212,4 +227,13 @@ const initials = computed(() =>
 }
 
 .p-set-hint { font-size: var(--text-micro); color: var(--muted); }
+
+/** Read out across a bar: tabular, tracked, and the loudest thing in the row. */
+.p-pin {
+  font-size: var(--text-section);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
 </style>
