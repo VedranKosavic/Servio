@@ -377,6 +377,11 @@ export interface PulsFloorColumn {
   col: number
   cells: PulsFloorCell[]
   groups: PulsFloorGroup[]
+  /**
+   * A piece of the room that is not a table, drawn at the foot of this run —
+   * today only the bar. See `FIXTURES`.
+   */
+  foot?: string
 }
 
 export interface PulsFloorZone {
@@ -414,6 +419,28 @@ function shortLabel(name: string): string {
  * it appears here. A table the live read has nothing to say about is drawn
  * **free** rather than dropped — a room with a hole in it is not the room.
  */
+/**
+ * The room's architecture: what is on the plan and is not a table.
+ *
+ * The café has one piece of it — **the bar, at the bottom of the left-hand
+ * run** — and drawing it is what turns three columns of squares into a picture
+ * of a place. Without it the plan has no landmark at all: every tile looks like
+ * every other tile and the owner has to remember which end of the grid is the
+ * door and which is the counter.
+ *
+ * It is a constant and not a row in `tables`, because it is not a table: it
+ * seats nobody, opens no tab and can never be tapped. The honest place for it
+ * eventually is a `fixtures` table alongside `tables`, so a café that moves its
+ * bar does not need a deploy — worth doing the day a second venue exists, and
+ * not before.
+ *
+ * Keyed by zone and column, so it moves with the schematic rather than being
+ * positioned in CSS.
+ */
+const FIXTURES: Partial<Record<Zone, Record<number, string>>> = {
+  unutra: { 1: 'Šank' },
+}
+
 export function floorZones(
   states: TableState[], catalogue: VenueTable[], nowMs: number,
 ): PulsFloorZone[] {
@@ -453,6 +480,7 @@ export function floorZones(
           name,
           cells: inColumn.filter(t => t.grp === name).sort((a, b) => a.row - b.row).map(toCell),
         })),
+        foot: FIXTURES[zone]?.[col],
       }
     })
 

@@ -119,6 +119,10 @@ const count = computed(() => {
                 />
               </div>
             </div>
+
+            <!-- The room's architecture: a third material, so it can never be
+                 read as a table that happens to be shaped oddly. -->
+            <div v-if="column.foot" class="a-fixture">{{ column.foot }}</div>
           </div>
           </div>
 
@@ -208,6 +212,36 @@ const count = computed(() => {
 }
 
 .a-grp-row { display: flex; gap: 12px; }
+
+/**
+ * The bar, and anything else the room has that is not a table.
+ *
+ * A solid slab, where a free table is an outline and a taken one a warm fill —
+ * three materials for three kinds of thing, so nothing on the plan is ambiguous
+ * at a glance. It is deliberately the heaviest of them: it is the one landmark
+ * that tells the owner which end of the grid he is looking at.
+ */
+.a-fixture {
+  width: 68px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border-radius: var(--radius-field);
+  background: var(--line);
+  color: var(--ink-2);
+  font-size: var(--text-caption);
+  line-height: 1.3;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  font-weight: 700;
+  text-align: center;
+}
+
+@media (max-width: 374px) {
+  .a-fixture { width: 60px; }
+}
 
 .a-key {
   display: flex;
