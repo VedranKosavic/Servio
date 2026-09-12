@@ -136,12 +136,13 @@ button.a-tbl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
  *
  * The version before this tried a ladder of fills — well `--bg-2`, free
  * `--surface-2`, occupied `--surface` — on the theory that a step of value per
- * state is enough. It is not, in this palette: `--bg-2` is `#e7e4dd` and
- * `--surface-2` is `#eae7e0`, a delta of **three** in every channel. The light
- * kit is a set of warm papers deliberately within a few points of each other,
- * so there is no rung between them to stand on and the free tiles vanished into
- * the ground. Removing their borders at the same time took away the only thing
- * that had been holding them up.
+ * state is enough. It is not, in this palette: measured, `--bg-2` and
+ * `--surface-2` are **three** points apart in every channel. The light kit is a
+ * set of warm papers deliberately within a few points of each other, so there
+ * is no rung between them to stand on and the free tiles vanished into the
+ * ground. Removing their borders at the same time took away the only thing that
+ * had been holding them up. (The numbers are in `app/assets/css/admin.css`,
+ * which is the one file allowed to spell a colour.)
  *
  * So: a free table is an **outline** — no fill at all, a `--line` edge, which is
  * 16 to 23 points off the well and therefore actually visible — and reads as
