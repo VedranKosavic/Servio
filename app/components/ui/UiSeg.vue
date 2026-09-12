@@ -13,7 +13,8 @@
  * select, not a segment.
  *
  * **Two shapes, one component.** The default is an inline pill that takes the
- * width of its labels — a filter sitting in a toolbar. `block` is the
+ * width of its labels — a filter sitting in a toolbar, and see `width:
+ * max-content` below for why that needs saying twice. `block` is the
  * full-width form the floor plan needs: equal columns and a thumb that *slides*
  * rather than a background that jumps, so the control reads as one object with
  * a moving part. The thumb moves through `--dur-fast`, which means reduced
@@ -28,7 +29,12 @@
  */
 const props = withDefaults(defineProps<{
   modelValue: string
-  options: ReadonlyArray<{ value: string, label: string }>
+  /**
+   * `hint` is a quiet second word inside the segment — a count, usually, as in
+   * *Unutra 10* / *Bašta 3*. It is there so a filter can carry the size of what
+   * it filters instead of being a pair of words the person has to try.
+   */
+  options: ReadonlyArray<{ value: string, label: string, hint?: string }>
   /** Read out by a screen reader in place of "group". */
   label?: string
   /** Full width, equal columns, sliding thumb. The floor plan's shape. */
@@ -63,13 +69,25 @@ function pick(value: string) {
       :class="{ on: option.value === modelValue }"
       :aria-pressed="option.value === modelValue"
       @click="pick(option.value)"
-    >{{ option.label }}</button>
+    >{{ option.label }}<span v-if="option.hint" class="a-seg-hint num">{{ option.hint }}</span></button>
   </div>
 </template>
 
 <style scoped>
+/**
+ * **`width: max-content` is load-bearing.** The track is `inline-flex`, which
+ * says "as wide as the labels" — and then loses that argument to every column
+ * it is dropped into: a flex column stretches its children across the cross
+ * axis, so on the floor plan the control ran the full width of the card with
+ * two labels at one end and a hand's width of empty grey at the other. It read
+ * as a broken toolbar rather than a switch. Width beats `align-items: stretch`,
+ * and unlike `align-self` it means nothing in a row, so the segments that sit
+ * in a card head are untouched.
+ */
 .a-seg {
   display: inline-flex;
+  width: max-content;
+  max-width: 100%;
   gap: 2px;
   background: var(--surface-2);
   border-radius: var(--radius-field);
@@ -77,6 +95,9 @@ function pick(value: string) {
 }
 
 .a-seg-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   height: calc(var(--tap) - 12px);
   padding: 0 14px;
   border-radius: 7px;
@@ -91,6 +112,16 @@ function pick(value: string) {
 }
 
 .a-seg-item:hover { color: var(--ink); }
+
+/* The count, a step quieter than the word it belongs to. Tabular, because it
+   changes while somebody is looking at it. */
+.a-seg-hint {
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.a-seg-item.on .a-seg-hint { color: var(--ink-2); }
 
 /* The chosen one is lifted out of the well onto the card's own material, which
    is the same "a step up the ladder" depth every other state change uses. */
@@ -107,6 +138,7 @@ function pick(value: string) {
 /* ---- the block shape: a real track with a moving part ------------------- */
 
 .a-seg.block {
+  width: auto;
   position: relative;
   display: grid;
   grid-template-columns: repeat(var(--seg-count), 1fr);

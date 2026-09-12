@@ -52,8 +52,24 @@ const cells = computed(() => props.zones.flatMap(zone =>
 /** Which half of the room is on screen. The first zone until he says otherwise. */
 const shown = ref<string>('')
 
-const zoneOptions = computed(() =>
-  props.zones.map(zone => ({ value: zone.zone, label: zone.label })))
+/**
+ * *Unutra 10* · *Bašta 3* — the switch carries each half's own count.
+ *
+ * The control used to be two words in a grey track that ran the full width of
+ * the card, most of it empty (`UiSeg`'s `width: max-content` is the fix, and the
+ * comment there is the post-mortem). Making it fit its labels leaves room for
+ * the one thing it was missing: the head's "10 od 27 zauzeto" is the whole room,
+ * and the owner's next question is which half they are in. Now he reads it
+ * without tapping — and the segment stops being two words he has to try.
+ */
+const zoneOptions = computed(() => props.zones.map(zone => ({
+  value: zone.zone,
+  label: zone.label,
+  // Always, including zero: *Bašta 0* is the answer to "is there anybody
+  // outside", and a segment whose neighbour carries a number and it does not
+  // reads as a control that has half loaded.
+  hint: `${zone.busy}`,
+})))
 
 watch(() => props.zones, (list) => {
   if (list.length && !list.some(zone => zone.zone === shown.value)) {

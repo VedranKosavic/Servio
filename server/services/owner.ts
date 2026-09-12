@@ -45,6 +45,7 @@ import { listDevices } from './devices'
 import { maxAt as logMaxAt, listLog } from './log'
 import { pendingFor as adjustmentsPending } from './adjustments'
 import { ownerStock } from './reports'
+import { plannedOn } from './roster'
 import { pendingFor as settlementsPending } from './settlements'
 import {
   hasSubmittedCount, listOwnerShifts as listShifts, pendingFor as shiftsPending, shiftBrief,
@@ -154,6 +155,9 @@ export function getLive(
       summary?.waste_fen,
     ),
     who: who(q, venueId, summary, ec?.waiters ?? [], tablesState.tables),
+    // The plan, beside the fact. *Ko radi* draws the two against each other:
+    // who the roster has on tonight, and which of them has actually signed on.
+    rostered: plannedOn(q, venueId, today),
     unsent: unsentDevices(devices),
     pending: pendingBadges(q, venueId),
     attention,

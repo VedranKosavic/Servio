@@ -29,8 +29,8 @@ import {
 } from '#shared/dates'
 import type {
   Assignment, AssignmentBody, AssignmentPatch, DecideSwapBody, HoursDay, HoursRow,
-  MyRoster, RosterDayView, RosterWeekView, ShiftTemplateBody, ShiftTemplatePatch,
-  ShiftTemplateView, SwapBody, SwapRequestView,
+  LiveRostered, MyRoster, RosterDayView, RosterWeekView, ShiftTemplateBody,
+  ShiftTemplatePatch, ShiftTemplateView, SwapBody, SwapRequestView,
 } from '#shared/types'
 import type { Actor, Db, Queryable, Tx } from './types'
 import { bump } from './changes'
@@ -97,6 +97,65 @@ export function listTemplates(q: Queryable, venueId: string, includeInactive = t
     .orderBy(asc(schema.shiftTemplates.sort), asc(schema.shiftTemplates.name))
     .all()
     .map(toTemplateView)
+}
+
+/**
+ * Who the plan has on one day — the *Ko radi* card on *Puls*.
+ *
+ * **Not `weekView`.** That builds seven days, both projections, the swap chips
+ * and every template's row, and *Puls* polls; this is one indexed read of one
+ * date (`roster_assignments_date_idx`) on a screen that asks every fifteen
+ * seconds.
+ *
+ * **Draft weeks count.** `weekView` hides an unpublished week from staff, and
+ * this is an owner-only read on an owner-only route — the owner wrote the plan,
+ * so hiding his own draft from him would only make the card lie on a Monday he
+ * has not published yet.
+ *
+ * `swapped` and `removed` rows are dropped: each has been replaced by another
+ * row on the same cell, and both being here would print the same shift twice.
+ * `sick` and `absent` stay, because a hole in tonight's plan is the single most
+ * useful thing this card can say.
+ *
+ * Ordered by the template's own `sort` and then the person's name, so the
+ * morning comes before the evening and the rows do not move between polls.
+ */
+export function plannedOn(q: Queryable, venueId: string, date: string): LiveRostered[] {
+  const rows = q.select({
+    userId: schema.rosterAssignments.userId,
+    templateId: schema.rosterAssignments.templateId,
+    startTime: schema.rosterAssignments.startTime,
+    endTime: schema.rosterAssignments.endTime,
+    status: schema.rosterAssignments.status,
+    name: schema.users.name,
+    initials: schema.users.initials,
+    templateName: schema.shiftTemplates.name,
+    sort: schema.shiftTemplates.sort,
+  })
+    .from(schema.rosterAssignments)
+    .innerJoin(schema.users, eq(schema.users.id, schema.rosterAssignments.userId))
+    .innerJoin(
+      schema.shiftTemplates,
+      eq(schema.shiftTemplates.id, schema.rosterAssignments.templateId),
+    )
+    .where(and(
+      eq(schema.rosterAssignments.venueId, venueId),
+      eq(schema.rosterAssignments.workDate, date),
+      inArray(schema.rosterAssignments.status, ['planned', 'sick', 'absent']),
+    ))
+    .orderBy(asc(schema.shiftTemplates.sort), asc(schema.users.name))
+    .all()
+
+  return rows.map(row => ({
+    user_id: row.userId,
+    name: row.name,
+    initials: row.initials,
+    template_id: row.templateId,
+    template_name: row.templateName,
+    start_time: row.startTime,
+    end_time: row.endTime,
+    status: row.status as LiveRostered['status'],
+  }))
 }
 
 // ---------------------------------------------------------------------------

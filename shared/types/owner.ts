@@ -154,6 +154,33 @@ export interface LiveWho {
 }
 
 /**
+ * One person **the plan** has on a shift today — *Ko radi*, read from
+ * *Raspored* rather than from who has signed on.
+ *
+ * `LiveWho` above is the fact: a row exists because somebody PIN-ed in and rang
+ * something up. This is the intention, and the two answer different questions.
+ * The owner opening *Puls* at ten in the morning wants to know who is meant to
+ * be behind the bar — and the gap between the two lists is the thing worth
+ * seeing, so the screen draws both against each other instead of picking one.
+ *
+ * `swapped` and `removed` rows are not here: they have been superseded by
+ * another row and are history, which lives in `log_entries`. `sick` and
+ * `absent` are, because a hole in tonight's plan is exactly what *Ko radi* is
+ * for. Both are owner-only, which this read already is.
+ */
+export interface LiveRostered {
+  user_id: string
+  name: string
+  initials: string
+  template_id: string
+  template_name: string
+  /** Snapshotted on the assignment, so an edited template never moves history. */
+  start_time: string
+  end_time: string
+  status: 'planned' | 'sick' | 'absent'
+}
+
+/**
  * `GET /api/owner/live` — *Puls*, polled every 15 s with an ETag (§4.4).
  *
  * The tag carries the role, the user and the minute: table ages and stale-device
@@ -175,6 +202,8 @@ export interface OwnerLive {
   self_voids: LiveCountFen
   waste: LiveCountFen
   who: LiveWho[]
+  /** Today's plan, from *Raspored* — see `LiveRostered`. */
+  rostered: LiveRostered[]
   /** Phones still holding rounds in their outbox. */
   unsent: StaleDevice[]
   pending: { adjustments: number, unpaid: number, payouts: number, settlements: number }

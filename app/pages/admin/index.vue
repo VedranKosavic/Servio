@@ -151,6 +151,37 @@ const shift = computed(() => live.value?.shift ?? null)
 const who = computed(() => (shift.value ? live.value?.who ?? [] : []))
 
 /**
+ * *Ko radi*, which is now the **plan** with tonight's fact folded into it.
+ *
+ * The card used to be `who` alone and was therefore empty every morning before
+ * somebody PIN-ed in — on the one screen whose job is to say what the café is
+ * doing today. `live.rostered` is today's *Raspored*, straight from the same
+ * read, and `whoShifts()` lays the two against each other.
+ */
+const rostered = computed(() => live.value?.rostered ?? [])
+
+/**
+ * Which shift *Ko radi* marks **u toku**, and where somebody working without
+ * being on the plan is drawn.
+ *
+ * The clock's own window when the clock is inside one. Otherwise a window only
+ * if a shift is genuinely open — the bar that is still serving at half eleven is
+ * working the evening that has just ended, and at three in the morning with
+ * everything shut nothing is running at all, however recently it was. Without
+ * that second condition the card would print *u toku* over an empty room.
+ *
+ * The last branch is the café that has an open shift and no templates: the
+ * people on it still have to be drawn somewhere.
+ */
+const whoWindow = computed(() => {
+  const window = clock.value.current ?? (shift.value ? clock.value.last?.window ?? null : null)
+  if (window) return { id: window.id, name: window.name, hours: window.hours }
+  return shift.value ? { id: 'open', name: 'Smjena', hours: '' } : null
+})
+
+const whoCards = computed(() => whoShifts(rostered.value, who.value, whoWindow.value))
+
+/**
  * What the running shift has taken.
  *
  * Not a number this screen invents: `summarizeShift` refuses to write a summary
@@ -438,7 +469,7 @@ onMounted(() => { void load() })
         <PulsSmjenaCard v-bind="cardNext" />
       </div>
 
-      <PulsWhoStrip v-if="shift" :who="who" />
+      <PulsWhoStrip :shifts="whoCards" />
 
       <PulsFloor :zones="zones" :loading="!bootstrap" @open="openTable" />
     </template>

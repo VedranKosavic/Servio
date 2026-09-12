@@ -26,7 +26,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type {
-  LineRow, LiveWho, ShiftTemplateView, TableState, VenueTable,
+  LineRow, LiveRostered, LiveWho, ShiftTemplateView, TableState, VenueTable,
 } from '../../shared/types'
 import {
   NOTE_MIN,
@@ -42,6 +42,8 @@ import {
   soldRows,
   soldTotals,
   weekdayBs,
+  whoShifts,
+  whoStateBs,
   zoneLabel,
 } from '../../app/utils/puls'
 
@@ -444,6 +446,121 @@ describe('the shift’s own promet', () => {
 
   it('is zero for nobody, which is only ever drawn behind an open shift', () => {
     expect(shiftPrometFen([])).toBe(0)
+  })
+})
+
+// ===========================================================================
+
+function planned(patch: Partial<LiveRostered> & { user_id: string }): LiveRostered {
+  return {
+    name: 'Benza',
+    initials: 'B.K.',
+    template_id: 'druga',
+    template_name: 'Druga smjena',
+    start_time: '15:00',
+    end_time: '23:00',
+    status: 'planned',
+    ...patch,
+  }
+}
+
+const DRUGA = { id: 'druga', name: 'Druga smjena', hours: '15–23' }
+
+describe('whoShifts', () => {
+  it('draws the plan even when nobody has signed on — the whole point of it', () => {
+    // Ten in the morning: the roster has two people on the shift that is
+    // running and neither has touched a phone yet. The card used to be `who`
+    // alone and was empty here, which is what the owner asked to be fixed.
+    const [shift, ...rest] = whoShifts([
+      planned({ user_id: 'a', name: 'Benza' }),
+      planned({ user_id: 'b', name: 'Nidal' }),
+    ], [], DRUGA)
+
+    expect(rest).toEqual([])
+    expect(shift!.running).toBe(true)
+    expect(shift!.rows.map(r => [r.name, r.state]))
+      .toEqual([['Benza', 'ceka'], ['Nidal', 'ceka']])
+  })
+
+  it('marks the planned people who are actually on, and carries `predao`', () => {
+    const [shift] = whoShifts(
+      [planned({ user_id: 'a' }), planned({ user_id: 'b', name: 'Nidal' })],
+      [person({ user_id: 'a', name: 'Benza', settled: true })],
+      DRUGA,
+    )
+
+    expect(shift!.rows.map(r => [r.state, r.settled]))
+      .toEqual([['radi', true], ['ceka', false]])
+  })
+
+  it('names somebody who is working and is on nobody\'s plan', () => {
+    // Covers get arranged by phone all the time. A card called *Ko radi* that
+    // does not name the person behind the bar is simply wrong, so he is added
+    // to the running shift rather than dropped.
+    const [shift] = whoShifts(
+      [planned({ user_id: 'a' })],
+      [person({ user_id: 'z', name: 'Adin' })],
+      DRUGA,
+    )
+
+    expect(shift!.rows.map(r => [r.name, r.state]))
+      .toEqual([['Benza', 'ceka'], ['Adin', 'van-rasporeda']])
+  })
+
+  it('keeps a hole in the plan visible, and never as `radi`', () => {
+    const [shift] = whoShifts([
+      planned({ user_id: 'a', status: 'sick' }),
+      planned({ user_id: 'b', name: 'Nidal', status: 'absent' }),
+    ], [], DRUGA)
+
+    expect(shift!.rows.map(r => r.state)).toEqual(['bolest', 'odsutan'])
+    // Even if the sick person somehow rang something up, the plan's word wins:
+    // the row is about the day the owner marked, not about a stray line.
+    const [again] = whoShifts(
+      [planned({ user_id: 'a', status: 'sick' })],
+      [person({ user_id: 'a' })],
+      DRUGA,
+    )
+    expect(again!.rows[0]!.state).toBe('bolest')
+  })
+
+  it('puts the running shift first and leaves the rest as plan only', () => {
+    const shifts = whoShifts([
+      planned({ user_id: 'a', template_id: 'prva', template_name: 'Prva smjena', start_time: '07:00', end_time: '15:00' }),
+      planned({ user_id: 'b', name: 'Nidal' }),
+    ], [], DRUGA)
+
+    expect(shifts.map(s => [s.name, s.running]))
+      .toEqual([['Druga smjena', true], ['Prva smjena', false]])
+    // Hours on a shift that is not running come from the assignment's own
+    // snapshot, so a template edited this afternoon never rewrites this morning.
+    expect(shifts[1]!.hours).toBe('07–15')
+    // No fact to compare a shift that is not running against.
+    expect(shifts[1]!.rows[0]!.state).toBe('planiran')
+  })
+
+  it('gives the running shift a group even when the plan has nobody on it', () => {
+    // So the card can say the plan for tonight is empty rather than saying
+    // nothing at all, and so a cover has somewhere to be drawn.
+    const shifts = whoShifts([], [], DRUGA)
+    expect(shifts).toHaveLength(1)
+    expect(shifts[0]!.rows).toEqual([])
+  })
+
+  it('marks nothing as running through the night, and still shows the day', () => {
+    // Three in the morning, everything shut: `whoWindow` is null on the page, so
+    // no group claims *u toku* over an empty room.
+    const shifts = whoShifts([planned({ user_id: 'a' })], [], null)
+    expect(shifts.map(s => s.running)).toEqual([false])
+    expect(shifts[0]!.rows[0]!.state).toBe('planiran')
+  })
+
+  it('has a word for every state that is not the ordinary one', () => {
+    expect(whoStateBs('radi')).toBe('')
+    expect(whoStateBs('planiran')).toBe('')
+    for (const state of ['ceka', 'bolest', 'odsutan', 'van-rasporeda'] as const) {
+      expect(whoStateBs(state)).not.toBe('')
+    }
   })
 })
 

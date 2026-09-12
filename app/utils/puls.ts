@@ -15,6 +15,7 @@ import type {
   AttentionAction,
   AttentionRefType,
   LineRow,
+  LiveRostered,
   LiveWho,
   ShiftTemplateView,
   TableState,
@@ -333,6 +334,151 @@ export function shiftWindowFor(
  */
 export function shiftPrometFen(who: LiveWho[]): number {
   return who.reduce((sum, person) => sum + person.promet_fen, 0)
+}
+
+// ---------------------------------------------------------------------------
+// Ko radi
+// ---------------------------------------------------------------------------
+
+/**
+ * What one row of *Ko radi* says about a person tonight.
+ *
+ * - `radi` — the plan has him on and he has signed on. The ordinary case.
+ * - `ceka` — the plan has him on and nobody has PIN-ed in as him yet. Before
+ *   the shift starts that is simply "not yet"; an hour in it is worth a look,
+ *   and the card leaves that judgement to the person reading it rather than
+ *   turning into an accusation at a threshold nobody published (PLAN §8).
+ * - `planiran` — a shift that is not running. There is no fact to compare the
+ *   plan against, so the row is the plan and nothing more.
+ * - `bolest` / `odsutan` — the owner marked the day in *Raspored*.
+ * - `van-rasporeda` — he is working and the plan does not have him. Not a
+ *   flag: covers get arranged by phone all the time. It is on the card because
+ *   *Ko radi* that does not name somebody standing behind the bar is wrong.
+ */
+export type WhoState = 'radi' | 'ceka' | 'planiran' | 'bolest' | 'odsutan' | 'van-rasporeda'
+
+export interface WhoRow {
+  user_id: string
+  name: string
+  initials: string
+  state: WhoState
+  /** He has handed his envelope in. Only ever true on the running shift. */
+  settled: boolean
+}
+
+/** One shift of today's plan, with its people. */
+export interface WhoShift {
+  template_id: string
+  name: string
+  /** "15–23", from the hours snapshotted on the assignment. */
+  hours: string
+  running: boolean
+  rows: WhoRow[]
+}
+
+/**
+ * *Ko radi* — today's plan, with tonight's fact laid over the shift that is
+ * running.
+ *
+ * The card used to be `live.who` alone, which is the list of people who have
+ * signed on. That answered "who is ringing things up" and not "who is working
+ * today": at ten in the morning, before anybody has touched a phone, it was
+ * empty, and the owner's plan for the day was two taps away on another screen.
+ *
+ * So the rows come from *Raspored* and the live list is folded into them:
+ *
+ * - a planned person who has signed on is `radi`;
+ * - a planned person who has not is `ceka`;
+ * - somebody signed on whom the plan does not have is added as
+ *   `van-rasporeda`, because a card called *Ko radi* has to name him;
+ * - every other shift of the day is drawn as plan only.
+ *
+ * The running shift comes first and the rest keep the roster's own order, which
+ * is the template `sort` — the morning before the evening.
+ *
+ * `running` is the window the money card is about, so the two cards always
+ * agree about which shift the screen is describing. It is passed in rather than
+ * derived here because `shiftClock()` has already worked it out, including the
+ * bar that is still open at half eleven and belongs to a window that has ended.
+ */
+export function whoShifts(
+  rostered: LiveRostered[],
+  who: LiveWho[],
+  running: { id: string, name: string, hours: string } | null,
+): WhoShift[] {
+  const signedOn = new Map(who.map(person => [person.user_id, person]))
+  const shifts = new Map<string, WhoShift>()
+
+  // A shift the plan has nobody on still gets a group, so the people who turned
+  // up without being on it have somewhere to be drawn and the card can say the
+  // plan for tonight is empty.
+  if (running) {
+    shifts.set(running.id, {
+      template_id: running.id,
+      name: running.name,
+      hours: running.hours,
+      running: true,
+      rows: [],
+    })
+  }
+
+  for (const person of rostered) {
+    const shift = shifts.get(person.template_id) ?? {
+      template_id: person.template_id,
+      name: person.template_name,
+      hours: hoursBs(person.start_time, person.end_time),
+      running: false,
+      rows: [],
+    }
+    shifts.set(person.template_id, shift)
+
+    const live = signedOn.get(person.user_id)
+    shift.rows.push({
+      user_id: person.user_id,
+      name: person.name,
+      initials: person.initials,
+      state: person.status === 'sick'
+        ? 'bolest'
+        : person.status === 'absent'
+          ? 'odsutan'
+          : !shift.running
+              ? 'planiran'
+              : live ? 'radi' : 'ceka',
+      settled: shift.running && (live?.settled ?? false),
+    })
+  }
+
+  // Whoever is working and is on nobody's plan. They belong to the shift that is
+  // running — it is the one they are working — and to no other.
+  const current = running ? shifts.get(running.id)! : null
+  if (current) {
+    const planned = new Set(current.rows.map(row => row.user_id))
+    for (const person of who) {
+      if (planned.has(person.user_id)) continue
+      current.rows.push({
+        user_id: person.user_id,
+        name: person.name,
+        initials: person.initials,
+        state: 'van-rasporeda',
+        settled: person.settled,
+      })
+    }
+  }
+
+  // The running shift first; everything else keeps the roster's order, which the
+  // server has already sorted by the template's own `sort`.
+  return [...shifts.values()].sort((a, b) => Number(b.running) - Number(a.running))
+}
+
+/** The word on a row's pill, and nothing at all for the ordinary case. */
+export function whoStateBs(state: WhoState): string {
+  switch (state) {
+    case 'ceka': return 'nije prijavljen'
+    case 'bolest': return 'bolest'
+    case 'odsutan': return 'nije došao'
+    case 'van-rasporeda': return 'van rasporeda'
+    default: return ''
+  }
 }
 
 // ---------------------------------------------------------------------------

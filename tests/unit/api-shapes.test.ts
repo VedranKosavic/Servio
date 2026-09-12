@@ -34,7 +34,7 @@ import { jpegBytes, scratchUploads } from '../helpers/phase4'
 import { businessDate } from '../../shared/dates'
 import { ROLE_LABELS } from '../../shared/landing'
 import { chatSince, postMessage } from '../../server/services/chat'
-import { getMyRoster, rosterHours } from '../../server/services/roster'
+import { addAssignment, getMyRoster, listTemplates, rosterHours } from '../../server/services/roster'
 import { latestRules, publishRules } from '../../server/services/rules'
 import { scanDelivery, setScanModel, stubScanModel } from '../../server/services/scan'
 import { createUpload } from '../../server/services/uploads'
@@ -483,7 +483,7 @@ describe('no response carries a secret', () => {
  * wrong answer on a busy one.
  */
 describe('GET /api/owner/live', () => {
-  it('carries the fourteen fields the Puls screen reads, and no secret', () => {
+  it('carries every field the Puls screen reads, and no secret', () => {
     const shiftId = f.openShift({ members: ['Amar'] })
     createOrder(f.db, f.venueId, f.actor('Amar'), {
       client_id: randomUUID(),
@@ -496,8 +496,8 @@ describe('GET /api/owner/live', () => {
 
     expect(Object.keys(live).sort()).toEqual([
       'attention', 'expected_cash_fen', 'flags', 'gratis', 'last_lines', 'log_max_at',
-      'open', 'pending', 'promet_danas_fen', 'self_voids', 'seq', 'shift', 'storna',
-      'tables', 'unsent', 'waste', 'who',
+      'open', 'pending', 'promet_danas_fen', 'rostered', 'self_voids', 'seq', 'shift',
+      'storna', 'tables', 'unsent', 'waste', 'who',
     ])
 
     expect(live.shift?.id).toBe(shiftId)
@@ -511,6 +511,21 @@ describe('GET /api/owner/live', () => {
     // One row per person on the shift, with the badge the floor plan uses.
     expect(Object.keys(live.who[0]!).sort()).toEqual([
       'initials', 'joined_at', 'name', 'open_tabs', 'promet_fen', 'settled', 'user_id',
+    ])
+
+    // And one row per person today's *Raspored* has on — the plan, which *Ko
+    // radi* lays the list above against. No note, no `updated_by`: this is the
+    // owner's screen, but the card draws a name, a badge and a shift and there
+    // is no reason for the rest of an assignment to cross the wire.
+    addAssignment(f.db, f.venueId, f.adminActor(), {
+      work_date: businessDate(new Date().toISOString()),
+      template_id: listTemplates(f.db, f.venueId)[0]!.id,
+      user_id: f.userId('Lejla'),
+    })
+    const withPlan = getLive(f.db, f.venueId, f.adminActor())
+    expect(Object.keys(withPlan.rostered[0]!).sort()).toEqual([
+      'end_time', 'initials', 'name', 'start_time', 'status', 'template_id',
+      'template_name', 'user_id',
     ])
 
     // The decidable list and the derived one, each with its own fixed shape.
