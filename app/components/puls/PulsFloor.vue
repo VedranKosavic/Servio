@@ -90,8 +90,29 @@ const count = computed(() => {
       <div v-for="zone in visibleZones" :key="zone.zone" class="a-zone">
         <div v-if="zones.length === 1" class="a-zone-label">{{ zone.label }}</div>
 
-        <div class="a-room">
+        <div class="a-room" :class="{ inside: zone.zone === 'unutra' }">
+            <!-- The room itself: the walls it is built of and what stands in
+               the corners. Decoration, so the screen reader never meets it,
+               and absolutely positioned so it costs the runs no width. -->
+          <span v-if="zone.zone === 'unutra'" class="a-decor" aria-hidden="true">
+            <span class="a-wall a-wall-slats" />
+            <span class="a-wall a-wall-bench" />
+            <svg class="a-plant a-plant-a" viewBox="0 0 24 32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20V9" />
+              <path d="M12 13c-3-1-5-4-4.5-7C10 6 12 9 12 13z" />
+              <path d="M12 15c3-1.4 5-4.6 4.2-7.6C13.4 8 12 11 12 15z" />
+              <path d="M8 20h8l-1 9H9z" />
+            </svg>
+            <svg class="a-plant a-plant-b" viewBox="0 0 24 32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20V10" />
+              <path d="M12 14c-3.2-1-5.2-4.2-4.6-7.2C10.4 7.2 12 10 12 14z" />
+              <path d="M12 16c3.2-1.4 5-4.8 4-7.8C13 9 12 12 12 16z" />
+              <path d="M8 20h8l-1 9H9z" />
+            </svg>
+          </span>
+
           <div class="a-room-grid">
+
           <div
             v-for="column in zone.columns"
             :key="column.col"
@@ -122,7 +143,14 @@ const count = computed(() => {
 
             <!-- The room's architecture: a third material, so it can never be
                  read as a table that happens to be shaped oddly. -->
-            <div v-if="column.foot" class="a-fixture">{{ column.foot }}</div>
+            <div v-if="column.foot" class="a-fixture">
+              <svg
+                class="a-fixture-ico" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                aria-hidden="true"
+              ><path d="M4 8h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" /><path d="M17 9h2a2.5 2.5 0 0 1 0 5h-2" /><path d="M5 21h12" /></svg>
+              {{ column.foot }}
+            </div>
           </div>
           </div>
 
@@ -160,7 +188,20 @@ const count = computed(() => {
    tables sit *in* a space rather than on a card. `overflow-x` is on the well
    and not on the page, so a café that grows a fourth run of tables scrolls the
    plan and never the dashboard. */
+/**
+ * The room, as a room.
+ *
+ * The floor is `--bg-2` with a set of hairlines running away from the viewer —
+ * boards, not a photograph. The owner asked for the background of a mockup that
+ * used a photo-real wood texture; a photograph behind numbers read at a glance
+ * in a dim café costs contrast and buys nothing, and it would mean colours from
+ * outside the one file allowed to spell them. Spacing the boards at 44 px and
+ * drawing them in `--line-soft` gives the ground a direction and a grain and
+ * stays under the tiles rather than competing with them.
+ */
 .a-room {
+  position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   padding: 16px 12px 12px;
@@ -169,15 +210,99 @@ const count = computed(() => {
   border: 1px solid var(--line);
 }
 
+/* Room enough at the sides for the two walls and what leans against them. */
+.a-room.inside { padding-left: 26px; padding-right: 26px; }
+
+.a-room.inside {
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent 0 43px,
+    var(--line-soft) 43px 44px
+  );
+}
+
+/**
+ * Under the tiles, over the floor, invisible to anything that reads.
+ *
+ * It hangs on the well and **not** on the run of tables, which scrolls: an
+ * absolutely positioned child of a scroll container still extends its scroll
+ * width, so the first version of this quietly added twelve pixels of sideways
+ * drag to a plan that had just been made to fit.
+ */
+.a-decor {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/**
+ * The two long walls, drawn in the well's own padding so the runs of tables
+ * keep every pixel of the width they had.
+ *
+ * Left is the slatted screen — vertical battens, warm, `--accent-line` being
+ * the one wood-ish tone in the kit. Right is the banquette: a padded strip with
+ * the horizontal channels the bench actually has, in the grey family so it
+ * cannot be mistaken for a table.
+ */
+.a-wall {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  width: 10px;
+  border-radius: 3px;
+}
+
+.a-wall-slats {
+  left: 6px;
+  background-image: repeating-linear-gradient(
+    180deg,
+    var(--accent-line) 0 3px,
+    transparent 3px 7px
+  );
+  opacity: 0.8;
+}
+
+.a-wall-bench {
+  right: 6px;
+  background: var(--surface-2);
+  background-image: repeating-linear-gradient(
+    180deg,
+    var(--line) 0 1px,
+    transparent 1px 8px
+  );
+  border: 1px solid var(--line);
+}
+
+/* Two pots, in the corners the tables do not reach. */
+.a-plant {
+  position: absolute;
+  width: 24px;
+  height: 32px;
+  color: var(--line);
+}
+
+.a-plant-a { top: 10px; left: 1px; }
+.a-plant-b { bottom: 10px; right: 1px; }
+
+@media (max-width: 374px) {
+  .a-plant { display: none; }
+}
+
 /* The runs of tables. `overflow-x` is on this and not on the page, so a café
    that grows a fourth run scrolls the plan and never the dashboard. */
 .a-room-grid {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   overflow-x: auto;
 }
+
+/* The tiles sit on the room, never under it. */
+.a-room-grid > .a-col { position: relative; z-index: 1; }
 
 /* A stack shorter than the tallest one is centred against it (`align-items:
    center` above), so Bašta's three sit level with the middle of the seven —
@@ -211,7 +336,19 @@ const count = computed(() => {
   font-weight: 600;
 }
 
+/**
+ * The boxed pair: abreast on a laptop, stacked on a phone.
+ *
+ * Two tiles side by side plus the box's padding is about 170 px, which makes
+ * the run they sit under wider than the other two together — and once the room
+ * gained walls there was no longer slack for that. Stacking costs the box some
+ * height and gives the plan back its width.
+ */
 .a-grp-row { display: flex; gap: 12px; }
+
+@media (max-width: 1023px) {
+  .a-grp-row { flex-direction: column; }
+}
 
 /**
  * The bar, and anything else the room has that is not a table.
@@ -222,6 +359,8 @@ const count = computed(() => {
  * that tells the owner which end of the grid he is looking at.
  */
 .a-fixture {
+  position: relative;
+  z-index: 1;
   width: 68px;
   min-height: 40px;
   display: flex;
@@ -229,21 +368,26 @@ const count = computed(() => {
   justify-content: center;
   padding: 0 6px;
   border-radius: var(--radius-field);
-  background: var(--line);
-  color: var(--ink-2);
+  background: var(--nav);
+  color: var(--nav-ink);
   font-size: var(--text-caption);
   line-height: 1.3;
   text-transform: uppercase;
   letter-spacing: 0.11em;
   font-weight: 700;
   text-align: center;
+  gap: 5px;
 }
+
+.a-fixture-ico { flex-shrink: 0; opacity: 0.75; }
 
 @media (max-width: 374px) {
   .a-fixture { width: 60px; }
 }
 
 .a-key {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
