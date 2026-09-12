@@ -68,69 +68,25 @@ const label = computed(() => {
     :aria-label="label"
     @click="cell.tab_id && $emit('open')"
   >
-    <span class="a-tbl-top">
-      <span class="a-tbl-no">{{ cell.label }}</span>
-      <!-- Who is holding it. Initials, because a name does not fit and the
-           owner knows his own two people by theirs. -->
-      <span v-if="cell.waiter" class="a-tbl-who">{{ cell.waiter }}</span>
-    </span>
-
-    <template v-if="cell.tab_id">
-      <span class="a-tbl-line">
-        <template v-if="cell.pending_review">
-          <svg
-            class="a-tbl-ico" width="13" height="13" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-            aria-hidden="true"
-          ><rect x="2" y="5" width="20" height="14" rx="2.5" /><path d="M2 10h20" /></svg>
-          <span class="a-tbl-wait-text">Čeka naplatu</span>
-        </template>
-        <template v-else-if="cell.age">
-          <svg
-            class="a-tbl-ico" width="13" height="13" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-            aria-hidden="true"
-          ><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
-          <span class="num">{{ cell.age }}</span>
-        </template>
-      </span>
-
-      <strong class="a-tbl-amt num">{{ formatAmount(cell.remaining_fen) }}</strong>
-    </template>
-
+    <span class="a-tbl-no">{{ cell.label }}</span>
+    <small v-if="cell.tab_id" class="a-tbl-amt num">{{ formatAmount(cell.remaining_fen) }}</small>
   </component>
 </template>
 
 <style scoped>
-/**
- * **A card of facts, not a badge with a number on it.**
- *
- * The tile was the waiter's 68 px square, which is right for him: he is looking
- * for *which* table, walking to it, and the number is the whole job. The owner
- * is doing the opposite — he knows where table 8 is and wants to know what is
- * happening at it — so the tile carries what the tab actually knows: who is
- * holding it, how long it has been open, and what is still owed.
- *
- * 96 px wide is what three runs allow on a 375 px screen once the well's
- * padding and the gaps are taken off (about 101 px each), and the height is the
- * content's rather than a square's, so a free tile stays short and an occupied
- * one takes the two lines it needs.
- *
- * What is deliberately *not* here: a head count and a drinks count. Neither is
- * recorded anywhere in this app — nobody types how many people sat down — so
- * drawing them would be drawing a guess in the same type as the money.
- */
+/* The waiter's tile, to the pixel: 68 px, `--radius-card`, the number in the
+   display face with the second line under it. */
 .a-tbl {
   position: relative;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  gap: 3px;
-  width: 96px;
-  min-height: 76px;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 68px;
+  height: 68px;
   flex-shrink: 0;
-  padding: 8px 9px 9px;
+  padding: 0 4px;
   border-radius: var(--radius-card);
   /* No edge on the base — each state brings its own, or none. The old rule put
      a 1.5 px `--line-soft` border on every tile, which on the well's own ground
@@ -153,14 +109,6 @@ button.a-tbl.wait:hover { box-shadow: var(--shadow-pop), 0 0 0 2px var(--warn); 
 button.a-tbl:active { transform: scale(0.95); }
 button.a-tbl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-.a-tbl-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px;
-  min-width: 0;
-}
-
 .a-tbl-no {
   font-family: var(--font-display);
   font-size: var(--text-section);
@@ -169,65 +117,13 @@ button.a-tbl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
   letter-spacing: -0.01em;
 }
 
-/* The colleague's initials, in the same disc the rest of the app puts a person
-   in. Dark on every tile, free or taken, so it never becomes a second status. */
-.a-tbl-who {
-  flex-shrink: 0;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 5px;
-  border-radius: var(--radius-chip);
-  background: var(--nav);
-  color: var(--nav-ink);
-  font-size: 0.6875rem;
-  line-height: 20px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  text-align: center;
-}
-
-/* How long it has been open, or what it is waiting for. One quiet line. */
-.a-tbl-line {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  font-size: var(--text-caption);
-  line-height: 1.2;
-  font-weight: 500;
-  color: var(--muted);
-  overflow: hidden;
-}
-
-.a-tbl-ico { flex-shrink: 0; }
-.a-tbl-wait-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-/**
- * A free tile is shorter than a busy one, and that is the point.
- *
- * It briefly carried a chair icon, copied off a mockup — but at 16 px on this
- * grid it read as two ticks and a dash rather than a chair, and seventeen of
- * them is a lot of noise to spend on "nothing is happening here". The number in
- * an outline says it, the legend names it, and the height difference does the
- * rest: a table with guests at it is visibly fuller than one without, before
- * any colour or text is read at all.
- */
-.a-tbl.free {
-  min-height: 52px;
-  justify-content: center;
-}
-
-.a-tbl.free .a-tbl-top { justify-content: center; }
-
-/* What is still owed — the loudest thing on an occupied tile, because it is the
-   number the owner opened the screen for. */
+/* The amount, and the whole reason the tile is a square and not a circle: it
+   gets the full width of the tile and a real type step. */
 .a-tbl-amt {
   max-width: 100%;
-  margin-top: auto;
-  font-family: var(--font-display);
-  font-size: var(--text-body);
+  font-size: var(--text-label);
   line-height: 1.1;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.01em;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -301,8 +197,16 @@ button.a-tbl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
   box-shadow: var(--shadow-raise), 0 0 0 2px var(--warn);
 }
 
-/** One step down so three runs still fit a 360 px screen. */
+/**
+ * One step down so the whole room fits a narrow phone.
+ *
+ * *Unutra* is three runs of tables with the VIP pair boxed under the last of
+ * them, so the widest line of the plan is four tiles plus the box's own edges.
+ * At 68 px that is about 340 px, which fits a 390 px screen and not a 360 px
+ * one — and a plan the owner has to drag sideways to see the end of is not a
+ * plan of the room. 60 px still carries the number and the amount.
+ */
 @media (max-width: 374px) {
-  .a-tbl { width: 88px; padding: 7px 8px 8px; }
+  .a-tbl { width: 60px; height: 62px; }
 }
 </style>

@@ -163,7 +163,7 @@ const count = computed(() => {
 .a-room {
   display: flex;
   flex-direction: column;
-  padding: 14px 8px 12px;
+  padding: 16px 12px 12px;
   border-radius: var(--radius-panel);
   background: var(--bg-2);
   border: 1px solid var(--line);
@@ -175,7 +175,7 @@ const count = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 8px;
   overflow-x: auto;
 }
 
@@ -198,10 +198,7 @@ const count = computed(() => {
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  /* 8 px and not 12 at the sides: the box is as wide as the tile inside it plus
-     this padding, and that width is what the whole run is measured at — four
-     pixels here decide whether the third run fits a 375 px screen. */
-  padding: 8px 8px 10px;
+  padding: 8px 12px 12px;
   border-radius: var(--radius-card);
   border: 1px dashed var(--line);
 }
@@ -214,19 +211,7 @@ const count = computed(() => {
   font-weight: 600;
 }
 
-/**
- * The boxed pair.
- *
- * Side by side on a laptop, stacked on a phone: two tiles abreast plus the
- * box's own padding is about 230 px, which made the run they sit under wider
- * than the other two put together and pushed the third run off a 375 px screen.
- * Stacking costs the box some height and gives the room back its width.
- */
 .a-grp-row { display: flex; gap: 12px; }
-
-@media (max-width: 1023px) {
-  .a-grp-row { flex-direction: column; }
-}
 
 /**
  * The bar, and anything else the room has that is not a table.
@@ -237,7 +222,7 @@ const count = computed(() => {
  * that tells the owner which end of the grid he is looking at.
  */
 .a-fixture {
-  width: 96px;
+  width: 68px;
   min-height: 40px;
   display: flex;
   align-items: center;
@@ -255,7 +240,7 @@ const count = computed(() => {
 }
 
 @media (max-width: 374px) {
-  .a-fixture { width: 88px; }
+  .a-fixture { width: 60px; }
 }
 
 .a-key {
