@@ -162,7 +162,7 @@ const count = computed(() => {
   padding: 16px 12px 12px;
   border-radius: var(--radius-panel);
   background: var(--bg-2);
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--line);
 }
 
 /* The runs of tables. `overflow-x` is on this and not on the page, so a café
@@ -231,9 +231,9 @@ const count = computed(() => {
   flex-shrink: 0;
 }
 
-.a-key-dot.free { background: var(--surface-2); }
-.a-key-dot.busy { background: var(--surface); border: 1px solid var(--line); }
-.a-key-dot.wait { background: var(--surface); box-shadow: 0 0 0 2px var(--warn); }
+.a-key-dot.free { border: 1px solid var(--line); }
+.a-key-dot.busy { background: var(--accent-soft); border: 1px solid var(--accent-line); }
+.a-key-dot.wait { background: var(--accent-soft); border: 1px solid var(--accent-line); box-shadow: 0 0 0 2px var(--warn); }
 
 .a-empty { margin: 0; color: var(--muted); font-size: var(--text-label); }
 

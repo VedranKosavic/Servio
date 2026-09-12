@@ -131,21 +131,29 @@ button.a-tbl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
 }
 
 /**
- * **The plan is a ladder of three values, and no borders between them.**
+ * **Outline for empty, fill for taken.** The two states differ in *kind* and not
+ * in shade, because shade is what failed here.
  *
- * well (`--bg-2`) → free (`--surface-2`) → occupied (`--surface`), each a real
- * step lighter than the last, so the state of a table is legible from the fill
- * alone at arm's length. That is the waiter's own rule in the other material:
- * on his dark screen a free tile is one step up from the well and an occupied
- * one is a step above that. Only the top step carries an edge and a shadow,
- * which is what makes it the only thing on the plan that looks like an object.
+ * The version before this tried a ladder of fills — well `--bg-2`, free
+ * `--surface-2`, occupied `--surface` — on the theory that a step of value per
+ * state is enough. It is not, in this palette: `--bg-2` is `#e7e4dd` and
+ * `--surface-2` is `#eae7e0`, a delta of **three** in every channel. The light
+ * kit is a set of warm papers deliberately within a few points of each other,
+ * so there is no rung between them to stand on and the free tiles vanished into
+ * the ground. Removing their borders at the same time took away the only thing
+ * that had been holding them up.
  *
- * Free: flat fill, no border, no shadow, muted number. An empty table is a slot
- * in the room rather than an object in it, and seventeen of them should sink
- * into the ground.
+ * So: a free table is an **outline** — no fill at all, a `--line` edge, which is
+ * 16 to 23 points off the well and therefore actually visible — and reads as
+ * what it is, an empty slot cut into the floor. An occupied one is **filled**,
+ * and filled with `--accent-soft`, the one warm tint in the kit: against a
+ * neutral beige it is a shift of hue and not of brightness, which is the
+ * difference the eye catches across a room. Every occupied table gets the same
+ * one, whoever is serving it and however long they have been sitting.
  */
 .a-tbl.free {
-  background: var(--surface-2);
+  background: transparent;
+  border: 1px solid var(--line);
 }
 
 .a-tbl.free .a-tbl-no { color: var(--muted); }
@@ -162,16 +170,18 @@ button.a-tbl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
  * (DESIGN §2).
  */
 .a-tbl.busy {
-  background: var(--surface);
-  /* A real edge rather than a hairline the paper swallows, and `--shadow-raise`
-     rather than `--shadow-card`: contact shadow is what a resting card gets,
-     and these tiles have to lift off a mid-tone well, not off white. */
-  border: 1px solid var(--line);
+  background: var(--accent-soft);
+  /* The tint's own edge, so the tile is one warm object rather than a warm fill
+     inside a grey frame. `--shadow-raise` and not `--shadow-card`: contact
+     shadow is what a resting card gets, and these have to lift off a mid-tone
+     well, not off white. */
+  border: 1px solid var(--accent-line);
   box-shadow: var(--shadow-raise);
-  color: var(--ink-2);
+  color: var(--accent-ink);
 }
 
 .a-tbl.busy .a-tbl-no { color: var(--ink); }
+.a-tbl.busy .a-tbl-amt { color: var(--accent-ink); }
 
 /**
  * Somebody has to look at this one. A ring, so the tile still reads as occupied
