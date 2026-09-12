@@ -213,6 +213,18 @@ const count = computed(() => {
 /* Room enough at the sides for the two walls and what leans against them. */
 .a-room.inside { padding-left: 26px; padding-right: 26px; }
 
+/**
+ * On a phone that channel is the most expensive decoration on the screen: 52 px
+ * of a 341 px room, a sixth of the plan, spent on two strips of wall. The walls
+ * get thinner instead of the plan getting narrower — the tables are the room and
+ * the walls are the frame around it. The rules that thin them are at the foot of
+ * this file, with the rest of the phone block, because they have to come **after**
+ * the base `.a-wall` rule to win: same specificity, so source order decides.
+ */
+@media (max-width: 1023px) {
+  .a-room.inside { padding-left: 16px; padding-right: 16px; }
+}
+
 .a-room.inside {
   background-image: repeating-linear-gradient(
     90deg,
@@ -285,7 +297,16 @@ const count = computed(() => {
 .a-plant-a { top: 10px; left: 1px; }
 .a-plant-b { bottom: 10px; right: 1px; }
 
-@media (max-width: 374px) {
+/**
+ * **Laptop only**, and that is the honest answer rather than a shrunken one.
+ *
+ * A pot needs a corner, and a phone's room has none: the side channel is 16 px
+ * wide and a wall already lives in it, so a plant there either overlaps the
+ * first table or is scaled down to a 16 px smudge. Both are worse than the
+ * corner being empty. On a laptop the channel is 26 px and the room has slack
+ * either side, which is where the plants read as plants.
+ */
+@media (max-width: 1023px) {
   .a-plant { display: none; }
 }
 
@@ -337,18 +358,17 @@ const count = computed(() => {
 }
 
 /**
- * The boxed pair: abreast on a laptop, stacked on a phone.
+ * The boxed pair, abreast — on every screen.
  *
- * Two tiles side by side plus the box's padding is about 170 px, which makes
- * the run they sit under wider than the other two together — and once the room
- * gained walls there was no longer slack for that. Stacking costs the box some
- * height and gives the plan back its width.
+ * It was stacked on a phone for exactly one release, to buy back the width the
+ * room's new walls had taken. That was the wrong thing to spend: the plan's
+ * whole job is to be a picture of the room, and two tables drawn one above the
+ * other are a different corner of it. The width comes out of the box's own
+ * padding instead (see the phone block at the foot of this file), which leaves
+ * the widest line of the plan — two runs, the box, two gaps — inside what the
+ * well has to give at 375 px, with the tiles stepping down to 60 px below that.
  */
 .a-grp-row { display: flex; gap: 12px; }
-
-@media (max-width: 1023px) {
-  .a-grp-row { flex-direction: column; }
-}
 
 /**
  * The bar, and anything else the room has that is not a table.
@@ -380,6 +400,12 @@ const count = computed(() => {
 }
 
 .a-fixture-ico { flex-shrink: 0; opacity: 0.75; }
+
+/* The bar is as wide as a table, at every step of the tile — it stands at the
+   foot of a run and a slab half a tile out of line reads as a mistake. */
+@media (max-width: 430px) {
+  .a-fixture { width: 62px; }
+}
 
 @media (max-width: 374px) {
   .a-fixture { width: 60px; }
@@ -433,7 +459,19 @@ const count = computed(() => {
     border-inline: 0;
   }
 
+  /* Thinner walls for the narrower channel — 8 px of wall in 16 px of padding
+     leaves the first table 5 px of air, which is the gap the 26 px channel
+     gives it on a laptop. */
+  .a-wall { width: 8px; }
+  .a-wall-slats { left: 3px; }
+  .a-wall-bench { right: 3px; }
+
   .a-col { gap: 10px; }
   .a-grp-row { gap: 10px; }
+
+  /* The four pixels a side that keep the VIP pair abreast: the box is the one
+     thing on the plan whose padding is decoration rather than geometry, so it
+     is what gives way when the room is narrow. */
+  .a-grp { padding: 8px 8px 10px; }
 }
 </style>

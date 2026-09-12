@@ -198,14 +198,23 @@ button.a-tbl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
 }
 
 /**
- * One step down so the whole room fits a narrow phone.
+ * Two steps down, so the whole room fits a narrow phone.
  *
- * *Unutra* is three runs of tables with the VIP pair boxed under the last of
- * them, so the widest line of the plan is four tiles plus the box's own edges.
- * At 68 px that is about 340 px, which fits a 390 px screen and not a 360 px
- * one — and a plan the owner has to drag sideways to see the end of is not a
- * plan of the room. 60 px still carries the number and the amount.
+ * *Unutra* is three runs of tables with the **VIP pair boxed abreast** under the
+ * last of them, so the widest line of the plan is four tiles side by side plus
+ * the box's own edges and two gaps. That pair is the sum that decides the tile:
+ * at 68 px the line is 316 px and the room has 309 px to give at 375 px, so the
+ * plan would have to be dragged sideways to see the end of — which is not a plan
+ * of the room. 62 px brings the line to 292 px and 60 px to 284 px, and both
+ * still carry the number with the amount under it.
+ *
+ * The steps are at 430 px and 375 px rather than one step at 375: a 390 px phone
+ * is the common case and 62 px is as large as it can honestly be there.
  */
+@media (max-width: 430px) {
+  .a-tbl { width: 62px; height: 64px; }
+}
+
 @media (max-width: 374px) {
   .a-tbl { width: 60px; height: 62px; }
 }
