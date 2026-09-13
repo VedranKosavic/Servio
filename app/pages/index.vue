@@ -195,11 +195,23 @@ onMounted(async () => {
     await navigateTo(me.home.value)
     return
   }
-  if (state === 'nodevice') {
-    // Two phones end up here and they are not the same phone. `/api/me` reports
-    // an unknown `sank_d` as `NO_DEVICE` and a device the owner threw out as
-    // `DEVICE_REVOKED`, and each gets its own sentence on the enrol screen.
-    await enrolPath(me.authCode.value === 'DEVICE_REVOKED' ? 'revoked' : 'unknown')
+  /**
+   * **An unknown phone is just a phone.**
+   *
+   * It used to be sent to the code screen here, which is the wall the owner
+   * asked twice to have taken down: the code comes from an admin who is already
+   * signed in, so on a fresh browser — the first phone of the install, the
+   * owner's own laptop — nobody could get in at all. `POST /api/auth/pin` now
+   * gives a browser a device of its own the moment the digits are right, so
+   * `NO_DEVICE` is not a state this screen has to handle: the pad is the answer.
+   *
+   * `DEVICE_REVOKED` still is. That is a phone somebody deliberately threw out
+   * or the pad itself locked after fifteen wrong PINs, and quietly handing it a
+   * fresh device would be a way to walk around both. It gets the code screen,
+   * which is now the only thing that screen is for.
+   */
+  if (state === 'nodevice' && me.authCode.value === 'DEVICE_REVOKED') {
+    await enrolPath('revoked')
     return
   }
   // `SESSION_REVOKED` is a session that was really there and is now over — the

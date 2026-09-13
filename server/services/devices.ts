@@ -463,6 +463,63 @@ export function assertNoPendingOutbox(
  * Used by the two `public` routes that still need one (`POST /api/auth/pin`,
  * `GET /api/auth/users`).
  */
+/**
+ * The device behind a PIN attempt — **or null, which is now a normal answer.**
+ *
+ * Enrolment used to be a wall in front of the pad: a phone the server did not
+ * recognise was sent to a six-character code screen, and the code came from an
+ * admin who was already signed in. The owner asked twice for that to go, and he
+ * is right about what it cost — on a fresh browser it meant nobody could sign
+ * in at all, including the owner, including on install day.
+ *
+ * So a cookie the server has never seen is not an error any more; it is a new
+ * browser, and `loginWithPin` gives it a device of its own once the digits are
+ * right. What is deliberately *not* softened is a device that was **revoked or
+ * locked**: those are decisions somebody made about this browser, and minting a
+ * fresh device for it would be a way to walk straight around them.
+ */
+export function deviceForPin(q: Queryable, token: string | undefined): DeviceRow | null {
+  if (!token) return null
+  const device = q.select().from(schema.devices)
+    .where(eq(schema.devices.tokenHash, hashToken(token))).get()
+  if (!device) return null
+  if (device.revokedAt) throw unauthorized('DEVICE_REVOKED', 'this device was revoked')
+  if (device.lockedAt) throw unauthorized('DEVICE_REVOKED', 'this device is locked')
+  return device
+}
+
+/**
+ * Give this browser a device row, with no code and nobody's permission.
+ *
+ * One row per browser rather than one shared row, because everything that hangs
+ * off a device — the offline outbox's pending count, the clock skew, *Revoke
+ * this phone*, the stale-device list on *Puls* — is only meaningful if the row
+ * means one physical thing. The label is what the admin's device list will show
+ * until somebody renames it.
+ */
+export function autoEnrolDevice(
+  db: Db, venueId: string, label: string, now = nowIso(),
+): { device: DeviceRow, token: string } {
+  const token = newToken()
+  const id = newId()
+
+  db.insert(schema.devices).values({
+    id,
+    venueId,
+    label,
+    tokenHash: hashToken(token),
+    mode: 'shared',
+    boundUserId: null,
+    enrolledAt: now,
+    enrolledBy: null,
+    lastSeenAt: now,
+    pendingCount: 0,
+    clockSkewS: 0,
+  }).run()
+
+  return { device: db.select().from(schema.devices).where(eq(schema.devices.id, id)).get()!, token }
+}
+
 export function requireEnrolledDevice(q: Queryable, token: string | undefined): DeviceRow {
   const device = token
     ? q.select().from(schema.devices).where(eq(schema.devices.tokenHash, hashToken(token))).get()

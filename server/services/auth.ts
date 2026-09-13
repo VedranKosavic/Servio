@@ -23,6 +23,7 @@
 import { and, desc, eq, gt, gte, inArray, isNull, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { SankError, badRequest, conflict, forbidden, locked, notFound, unauthorized, unprocessable } from '../utils/errors'
+import { autoEnrolDevice } from './devices'
 import { newId, nowIso } from '../utils/ids'
 import { sealPin } from '../utils/pinReveal'
 import { hashSecret, hashToken, newToken, verifySecret } from '../utils/password'
@@ -823,38 +824,59 @@ export function listMySessions(
  * is about the phone and never about the digits.
  */
 export function loginWithPin(
-  db: Db, device: DeviceRow, body: PinLoginBody, ctx: { ip: string, userAgent?: string, now?: string },
-): { result: PinLoginResult, token: string, maxAgeS: number } {
+  db: Db, venueId: string, device: DeviceRow | null, body: PinLoginBody,
+  ctx: { ip: string, userAgent?: string, now?: string, label?: string },
+): { result: PinLoginResult, token: string, maxAgeS: number, deviceToken?: string } {
   const now = ctx.now ?? nowIso()
-  const venueId = device.venueId
+  let mintedToken: string | undefined
 
-  const user = resolvePinToUser(db, venueId, device.id, body.pin, { ip: ctx.ip, now })
+  /**
+   * **The digits are metered before a device exists**, and the subject is
+   * `(null device, ip)` when there is none.
+   *
+   * This is the whole reason implicit enrolment is not simply "mint a device,
+   * then log in as before". The PIN lockout is keyed on the device *and* the
+   * address; minting first would hand every cookie-less attempt a brand new
+   * device id, which is a brand new counter, which is a four-digit secret an
+   * attacker can walk through 10 000 times by clearing cookies between tries.
+   * Resolving first puts every unenrolled attempt from one address into one
+   * bucket, so the five / ten / fifteen steps still mean something.
+   */
+  const user = resolvePinToUser(db, venueId, device?.id ?? null, body.pin, { ip: ctx.ip, now })
 
-  // The admin PIN rule, unchanged. A PIN typed on a worker's phone is watched
-  // once and approves everything afterwards, so an admin PINs only on a device
-  // bound to him. The dev device is exempt so that one laptop can test every
-  // screen. This is the one place the owner still has to be on his own phone —
-  // he may open any screen once he is in.
-  const devDevice = device.label === DEV_DEVICE_LABEL
-  if (user.role === 'admin' && !devDevice && device.boundUserId !== user.id) {
-    throw forbidden('ADMIN_DEVICE_ONLY', 'an admin may only pin in on his own device')
-  }
+  /**
+   * **`ADMIN_DEVICE_ONLY` is gone**, at the owner's instruction: *"If PIN
+   * matches, let him log in."*
+   *
+   * It said an admin may only PIN in on a device bound to him, which made sense
+   * while a device was something an admin deliberately enrolled — and made none
+   * at all once any browser can have one for the asking. What it was protecting
+   * against was a PIN watched over a shoulder on a worker's phone; what now
+   * protects against that is the PIN being secret and the lockout above, which
+   * is a thinner defence and is the owner's call to make. It also means the
+   * owner can sign in on any phone in the room, which is what he asked for.
+   */
+  const enrolled = device ?? (() => {
+    const fresh = autoEnrolDevice(db, venueId, ctx.label ?? 'Telefon', now)
+    mintedToken = fresh.token
+    return fresh.device
+  })()
 
   // A personal phone belongs to somebody. A colleague may still use it — a
   // worker whose battery died is a real Saturday night — and he no longer has
   // to declare it, because the pad did not ask his name and the server already
   // knows whose phone this is. He gets two hours instead of fourteen and a
   // `borrowed` flag on the row, which is what that flag was ever for.
-  const borrowed = device.mode === 'personal'
-    && device.boundUserId !== null
-    && device.boundUserId !== user.id
+  const borrowed = enrolled.mode === 'personal'
+    && enrolled.boundUserId !== null
+    && enrolled.boundUserId !== user.id
 
   // An admin has no mode: his landing is `/admin` (`shared/landing.ts`), and he
   // reaches `/konobar` or `/sanker` by opening them, not by being sent there.
   const mode = user.role === 'admin' ? null : body.mode ?? null
 
   const session = newSession(db, {
-    venueId, userId: user.id, deviceId: device.id, kind: 'staff', borrowed, mode,
+    venueId, userId: user.id, deviceId: enrolled.id, kind: 'staff', borrowed, mode,
     ttlS: borrowed ? BORROWED_SESSION_S : STAFF_SESSION_S,
     now, ip: ctx.ip, userAgent: ctx.userAgent,
   })
@@ -863,10 +885,12 @@ export function loginWithPin(
     result: {
       user: toMeUser(user),
       session: toSessionBrief(session.row),
-      device: toDeviceBrief(device),
+      device: toDeviceBrief(enrolled),
     },
     token: session.token,
     maxAgeS: session.maxAgeS,
+    // Present only when this call created the device: the route sets the cookie.
+    ...(mintedToken ? { deviceToken: mintedToken } : {}),
   }
 }
 
@@ -1062,8 +1086,22 @@ export function resetPin(
 /** The label `POST /api/dev/enrol` keeps its one device under. */
 export const DEV_DEVICE_LABEL = 'dev'
 
-/** Routes that are `public` but still need an enrolled device in front of them. */
-const DEVICE_REQUIRED_PUBLIC = new Set(['POST /api/auth/pin', 'GET /api/auth/pin-len'])
+/**
+ * Routes that are `public` but still need an enrolled device in front of them.
+ *
+ * **The PIN door left this set**, which is the third and last gate that stood
+ * between a correct PIN and a session. The route now decides for itself: an
+ * unknown cookie is a new browser and gets a device once the digits are right,
+ * while a *revoked or locked* one is still refused — by `deviceForPin`, inside
+ * the handler, where the difference can be told. Leaving the check here would
+ * have refused both alike, before the route ever ran, which is exactly what it
+ * was doing.
+ *
+ * `pin-len` goes with it: it answers how many digits this venue's pads take, a
+ * number the pad needs *before* anybody can type anything, and refusing it on a
+ * fresh browser left the pad unable to draw itself.
+ */
+const DEVICE_REQUIRED_PUBLIC = new Set<string>([])
 
 export interface AuthzOk {
   ok: true

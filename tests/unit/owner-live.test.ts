@@ -450,7 +450,7 @@ describe('the owner\'s screens are the owner\'s', () => {
     const row = f.db.select().from(schema.devices)
       .where(eq(schema.devices.id, enrolled.result.device.id)).get()!
     const { token } = loginWithPin(
-      f.db, row, { user_id: f.userId(name), pin }, { ip: IP, now: f.clock.now() },
+      f.db, f.venueId, row, { user_id: f.userId(name), pin }, { ip: IP, now: f.clock.now() },
     )
     return { s: token, d: enrolled.token }
   }

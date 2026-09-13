@@ -372,14 +372,30 @@ describe('no request handler picks its own venue', () => {
    * *and*, more immediately, a handler that works without a session, which is
    * how the Korak 1 escape hatch stayed open as long as it did.
    *
-   * One exception, and it is structural rather than a leftover:
-   * `POST /api/dev/enrol` mints the first device cookie, so it runs before any
-   * session or venue can be known. It 404s unless `SANK_DEV_ENROL=1`, which
-   * `/opt/sank/.env` never sets.
+   * **Two** exceptions, and both are structural rather than leftovers. They are
+   * the two routes that run *before* a device cookie exists, which is the only
+   * situation in which there is no venue to read:
+   *
+   * - `POST /api/dev/enrol` mints the first device cookie on a dev machine. It
+   *   404s unless `SANK_DEV_ENROL=1`, which `/opt/sank/.env` never sets.
+   * - `POST /api/auth/pin` joined it when the enrolment wall came down. A
+   *   browser the server has never seen now gets a device once its digits are
+   *   right, and until that happens there is no cookie to read a venue from.
+   * - `GET /api/auth/pin-len` is the same first visit one step earlier: the pad
+   *   has to know how many digits to collect before anybody can type any, and
+   *   that number is not a secret and names nobody.
+   *
+   * The invariant itself has not moved: a handler may not pick a venue when it
+   * could have read one. Both of these run when it could not. The day there are
+   * two cafés, both need a venue on the request some other way — a hostname, a
+   * path — and this list is where that work starts.
    */
-  const ALLOWED = [join('dev', 'enrol.post.ts')]
+  // Sorted, because the walk that produces the actual list is.
+  const ALLOWED = [
+    join('auth', 'pin-len.get.ts'), join('auth', 'pin.post.ts'), join('dev', 'enrol.post.ts'),
+  ]
 
-  it('calls currentVenueId from exactly one route file, the dev door', () => {
+  it('calls currentVenueId only from the routes that run before a session', () => {
     const offenders = walk(API_DIR)
       // Comments stripped first: several handlers *explain* in a comment that
       // they no longer call this, and a grep that counted those would make the

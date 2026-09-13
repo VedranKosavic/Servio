@@ -46,7 +46,7 @@ function enrolShared() {
 function pinIn(name: string) {
   const device = enrolShared()
   const row = f.db.select().from(schema.devices).where(eq(schema.devices.id, device.deviceId)).get()!
-  const { token } = loginWithPin(f.db, row, { pin: f.pin(name) }, { ip: IP, now: f.clock.now() })
+  const { token } = loginWithPin(f.db, f.venueId, row, { pin: f.pin(name) }, { ip: IP, now: f.clock.now() })
   return { session: token, device: device.token }
 }
 
@@ -168,23 +168,45 @@ describe('an unknown phone is told it is an unknown phone', () => {
    * the same dead token on every request for the rest of its life, which is the
    * *stale* half of this bug.
    */
-  it('asks for the dead cookie to be cleared at the pad door too', () => {
-    expect(ask('/api/auth/pin', 'POST', { d: 'a-token-this-server-never-issued' }))
+  it('clears it at /api/me, which is the call every screen boots with', () => {
+    expect(ask('/api/me', 'GET', { d: 'a-token-this-server-never-issued' }))
       .toMatchObject({ ok: false, status: 401, code: 'NO_DEVICE', clearCookies: true })
+  })
 
-    // Nothing to clear when nothing was presented: a first visit must not be
-    // answered with a Set-Cookie for a cookie that was never there.
-    expect(ask('/api/auth/pin', 'POST'))
-      .toMatchObject({ ok: false, status: 401, code: 'NO_DEVICE', clearCookies: false })
+  /**
+   * The pad door does **not** bounce it any more, and does not need to: it lets
+   * the digits through, and `loginWithPin` mints a device whose cookie replaces
+   * the dead one on the way back out. Replaced is as gone as cleared, and it
+   * happens on the request that signs the person in rather than on one that
+   * refuses him. (`auth.test.ts` is where that minting is asserted.)
+   */
+  it('lets a dead cookie through the pad door, to be replaced rather than refused', () => {
+    expect(ask('/api/auth/pin', 'POST', { d: 'a-token-this-server-never-issued' }))
+      .toMatchObject({ ok: true })
   })
 })
 
 // ===========================================================================
 
-describe('the two public routes that still need a device', () => {
-  it('401 NO_DEVICE without a device cookie', () => {
-    expect(ask('/api/auth/pin', 'POST')).toMatchObject({ ok: false, status: 401, code: 'NO_DEVICE' })
-    expect(ask('/api/auth/pin-len', 'GET')).toMatchObject({ ok: false, status: 401, code: 'NO_DEVICE' })
+/**
+ * **The invariant that moved, and it moved on purpose.**
+ *
+ * `DEVICE_REQUIRED_PUBLIC` used to hold the two pad routes, so the middleware
+ * refused them with `NO_DEVICE` before the handler ran. That was the outermost
+ * of three gates between a correct PIN and a session, and the owner asked twice
+ * for the enrolment wall to come down: a code comes from an admin who is
+ * already signed in, so on a browser the server has never seen — the first
+ * phone of an install, the owner's own laptop — nobody could get in at all.
+ *
+ * The set is empty now and the **handler** decides, which is the only place the
+ * difference can be told: an unknown cookie is a new browser and earns a device
+ * once the digits are right, while a revoked or locked one is still refused by
+ * `deviceForPin`. The middleware could not tell those apart, and refused both.
+ */
+describe('the pad routes no longer need a device in front of them', () => {
+  it('lets a browser with no cookie at all reach the pad and its digit count', () => {
+    expect(ask('/api/auth/pin', 'POST')).toMatchObject({ ok: true })
+    expect(ask('/api/auth/pin-len', 'GET')).toMatchObject({ ok: true })
   })
 
   it('keeps the roster behind a session — an enrolled device alone is not enough', () => {
@@ -193,20 +215,10 @@ describe('the two public routes that still need a device', () => {
       .toMatchObject({ ok: false, status: 401, code: 'NO_SESSION' })
   })
 
-  it('passes with one, and hands the device to the handler', () => {
+  it('still hands the device to the handler when the browser has one', () => {
     const device = enrolShared()
     const verdict = ask('/api/auth/pin', 'POST', { d: device.token })
     expect(verdict.ok).toBe(true)
-    expect(verdict.ok && verdict.device?.id).toBe(device.deviceId)
-  })
-
-  it('refuses a revoked device before any PIN is typed', () => {
-    const device = enrolShared()
-    f.db.update(schema.devices).set({ revokedAt: f.clock.now() })
-      .where(eq(schema.devices.id, device.deviceId)).run()
-
-    expect(ask('/api/auth/pin', 'POST', { d: device.token }))
-      .toMatchObject({ ok: false, status: 401, code: 'NO_DEVICE' })
   })
 })
 

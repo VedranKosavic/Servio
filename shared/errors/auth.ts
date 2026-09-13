@@ -58,7 +58,6 @@ export const AUTH_ERRORS = {
   // phone actually shows. One code, one sentence: WP2's is the one that ships.
 
   // -- The PIN rules ---------------------------------------------------------
-  ADMIN_DEVICE_ONLY: 'Vlasnik se PIN-om prijavljuje samo na svom telefonu.',
   // `NO_PIN` stood here — 'Nemaš postavljen PIN…' — for the person the lock
   // screen offered before an admin had given him any digits. The pad offers
   // nobody now, so there is no such tap: a person with `pin_hash NULL` is simply
