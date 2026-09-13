@@ -28,6 +28,15 @@ APP_USER="sank"
 APP_DIR="/opt/sank"
 SERVICE="sank"
 NODE_MAJOR="22"
+# The native module is installed at a **pinned version**, not at whatever `npm
+# install better-sqlite3` resolves to today. The app's package.json asks for
+# ^12.4.1 and its lockfile settles on 12.11.1; a bare install put 13.0.3 on the
+# first server this kit ever touched, and the deploy refused the release with a
+# major-version mismatch — correctly, but after the build. Keep this in step
+# with package.json when the dependency moves; `deploy.sh`'s check is the
+# backstop that names the right version when it drifts, and it can be
+# overridden for a one-off: BETTER_SQLITE3=13.0.3 bash setup-server.sh
+BETTER_SQLITE3="${BETTER_SQLITE3:-12.11.1}"
 APP_PORT="3100"
 TIMEZONE="Europe/Sarajevo"
 
@@ -283,8 +292,9 @@ else
 }
 EOF
   chown "$APP_USER:$APP_USER" "$APP_DIR/native/package.json"
-  sudo -u "$APP_USER" -H npm --prefix "$APP_DIR/native" install --no-audit --no-fund better-sqlite3 >/dev/null \
-    || die "npm could not install better-sqlite3 in $APP_DIR/native"
+  sudo -u "$APP_USER" -H npm --prefix "$APP_DIR/native" install --no-audit --no-fund \
+    "better-sqlite3@$BETTER_SQLITE3" >/dev/null \
+    || die "npm could not install better-sqlite3@$BETTER_SQLITE3 in $APP_DIR/native"
   installed="$(node -p "require('$APP_DIR/native/node_modules/better-sqlite3/package.json').version")"
   info "better-sqlite3 $installed"
 fi
@@ -393,8 +403,15 @@ if [ -n "${SSH_CONNECTION:-}" ]; then
     *) SSH_PORTS="$SSH_PORTS $detected" ;;
   esac
 fi
-conf_ports="$(cat /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null \
-  | awk '$1 == "Port" && $2 ~ /^[0-9]+$/ { print $2 }' | sort -u | tr '\n' ' ')"
+# `grep -rh` and not `cat .../*.conf`: on an image whose sshd_config.d is empty
+# — Ubuntu 24.04 on Hetzner is one — the glob does not expand, `cat` fails on a
+# literal path, and `set -euo pipefail` kills the whole script here without
+# printing a word. `grep -r` is happy with a directory whether or not it has
+# files in it, and `|| true` covers "no Port line anywhere", which is the normal
+# case and is not an error.
+conf_ports="$(grep -rhE '^[[:space:]]*Port[[:space:]]+[0-9]+' \
+  /etc/ssh/sshd_config /etc/ssh/sshd_config.d/ 2>/dev/null \
+  | awk '{ print $2 }' | sort -u | tr '\n' ' ' || true)"
 SSH_PORTS="$SSH_PORTS $conf_ports"
 
 allowed=""
