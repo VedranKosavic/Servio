@@ -273,8 +273,18 @@ describe('the way back', () => {
   })
 
   it('falls back to Puls rather than to a 404', () => {
-    expect(adminBack('/admin/postavke/uredaji', exists)).toBe('/admin')
+    // `/admin/razgovor`'s only ancestor is `/admin` itself.
     expect(adminBack('/admin/razgovor', exists)).toBe('/admin')
+  })
+
+  it('sends *Uređaji* back to the screen that links to it', () => {
+    // It has no tab, and its parent path `/admin/postavke` is not a page any
+    // more, so climbing would land on *Puls* — which is not where the person
+    // came from. The link to it is at the foot of *Osoblje*, and an override
+    // says so. It is the only screen that mints a device enrolment code, so
+    // getting in and out of it is the difference between a café that can add a
+    // phone and one that cannot.
+    expect(adminBack('/admin/postavke/uredaji', exists)).toBe('/admin/postavke/osoblje')
   })
 
   it('never returns a path the router would not resolve', () => {

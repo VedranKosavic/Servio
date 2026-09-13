@@ -113,6 +113,10 @@ const BACK_ROOTS = new Set([
 const BACK_OVERRIDES: Array<[RegExp, string]> = [
   // `/admin/smjena/<id>` — singular path, plural list. Climbing finds `/admin`.
   [/^\/admin\/smjena\/[^/]+$/, '/admin/smjene'],
+  // *Uređaji* has no tab — the link to it is at the foot of *Osoblje*, and that
+  // is where *Nazad* belongs. Climbing would try `/admin/postavke`, which is
+  // not a page any more, and land on *Puls* instead of where he came from.
+  [/^\/admin\/postavke\/uredaji$/, '/admin/postavke/osoblje'],
 ]
 
 export function adminBack(path: string, exists: (candidate: string) => boolean): string | null {

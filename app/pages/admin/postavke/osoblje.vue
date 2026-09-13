@@ -300,6 +300,27 @@ async function resetPin(pin: string) {
       </UiCard>
     </template>
 
+    <!--
+      The way to *Uređaji*, which has no tab of its own.
+
+      The strip lost it at the owner's word and the page stayed, because it is
+      the only screen in the app that mints a device enrolment code — and a
+      phone cannot sign in until somebody does: the pad asks for a PIN, the PIN
+      needs a device cookie, and the cookie needs a code from there. Reachable
+      only by typing the URL is the same as unreachable on the day the café is
+      installed, so it is reachable from here.
+
+      **Here** and not in the strip, because adding a phone is what somebody is
+      doing when he is already adding the people who will hold it.
+    -->
+    <NuxtLink to="/admin/postavke/uredaji" class="p-devices">
+      <span class="p-devices-text">
+        <strong>Uređaji</strong>
+        <small>Kod za prijavu telefona i tableta</small>
+      </span>
+      <UiIcon name="chevron-right" :size="20" />
+    </NuxtLink>
+
     <!-- Mounted before the two sheets it hands over to: both lock the page
          behind them, and when this one closes to hand over, the other's lock
          has to be the one that wins. -->
@@ -341,6 +362,25 @@ async function resetPin(pin: string) {
 </template>
 
 <style scoped>
+/* A row, not a card: it is one door out of this screen, and it sits under the
+   list the way the last row of that list would. */
+.p-devices {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 12px 16px;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.p-devices-text { display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 0; }
+.p-devices-text strong { font-size: var(--text-body); font-weight: 600; }
+.p-devices-text small { font-size: var(--text-label); color: var(--muted); }
+
 .off td { opacity: 0.6; }
 .p-muted { color: var(--muted); }
 .p-actions { display: inline-flex; gap: 6px; justify-content: flex-end; }

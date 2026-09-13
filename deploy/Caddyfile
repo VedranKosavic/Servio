@@ -1,0 +1,70 @@
+# Šank behind Caddy — the whole of it.
+#
+# `deploy/nginx.conf` does the same job and is the longer road: a 170-line
+# config, certbot installed separately, a renewal timer to trust. Caddy fetches
+# the certificate the first time somebody loads the page and renews it on its
+# own, and this file is three lines. Either is fine; pick one.
+#
+# ---------------------------------------------------------------------------
+# Install it (on the server)
+# ---------------------------------------------------------------------------
+#
+#   sudo apt-get install -y caddy
+#   sudo nano /etc/caddy/Caddyfile      # paste the block below
+#   sudo systemctl reload caddy
+#
+# Point the hostname's A record at this server first and leave 80 and 443 open
+# — `setup-server.sh` already opens them. Caddy proves it owns the name over
+# port 80, so a firewall that closes it is the usual reason a certificate never
+# arrives.
+#
+# A **DuckDNS** subdomain works exactly like any other name here: it is a real
+# domain as far as Let's Encrypt is concerned, and the ordinary HTTP challenge
+# below needs no API token (that is only for wildcards). Set the subdomain's IP
+# once in the DuckDNS panel.
+#
+# ---------------------------------------------------------------------------
+# Sharing a server with another app
+# ---------------------------------------------------------------------------
+#
+# One Caddyfile holds as many of these blocks as there are hostnames. Šank
+# listens on **3100** and nothing else on the box may: `NITRO_PORT` in
+# /opt/sank/.env, `sank.service` and `HEALTH_URL` in deploy/.deploy.env all
+# name that port, and they have to keep agreeing.
+#
+# ---------------------------------------------------------------------------
+# The block
+# ---------------------------------------------------------------------------
+
+sank.example.duckdns.org {
+	reverse_proxy 127.0.0.1:3100
+}
+
+# ---------------------------------------------------------------------------
+# Why there is nothing else in it
+# ---------------------------------------------------------------------------
+#
+# **The forwarded address.** `TRUST_PROXY=1` in /opt/sank/.env tells the app to
+# believe the forwarded headers, and it must only ever be true behind a proxy
+# that writes them itself — a header is otherwise whatever the caller typed,
+# and every PIN lockout and rate-limit bucket would be chosen by the attacker.
+# `clientIp()` (server/utils/auth.ts) reads `X-Real-IP` first and otherwise the
+# **last** hop of `X-Forwarded-For`. Caddy's `reverse_proxy` appends the address
+# it is actually talking to, so the last hop is the truth and a spoofed header
+# only adds hops in front of it. Nothing to configure — but do not add a
+# `header_up` that rewrites either header, and do not put another proxy in
+# front of Caddy without reading that function first.
+#
+# **Uploads.** Chat images post to `/api/uploads`; nginx needs
+# `client_max_body_size 10m` for them and Caddy has no such limit by default,
+# so there is nothing to raise.
+#
+# **The app is not on the internet by itself.** It binds 127.0.0.1:3100 and the
+# firewall never opens that port. Caddy is the only way in, which is what makes
+# `SANK_DEV_ENROL` absent from the production .env a real protection rather
+# than a hopeful one.
+#
+# **https is not optional here.** The session and device cookies are `Secure`
+# unless `COOKIE_SECURE=0` (a dev laptop setting, never the server), and the
+# waiter app is an installable PWA whose service worker browsers will not
+# register over plain http. There is no "try it on the bare IP first" step.
