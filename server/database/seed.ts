@@ -65,7 +65,13 @@ export interface SeedOptions {
  * or the other and never with both.
  */
 
-/** The café's people (`cast: 'default'`) — five admins and two workers. */
+/**
+ * The café's people (`cast: 'default'`) — five admins and six workers.
+ *
+ * *Tarik* is also a name in the test cast below, with a different id. That is
+ * safe and deliberate: a database is seeded with one cast or the other and
+ * never with both, and the ids are what `db:roster` matches on.
+ */
 const STAFF_IDS = {
   Harun: '527678c8-63e8-4316-b3be-847dc8bb0f75',
   Vedran: 'becdc77a-d26b-4fb4-8355-bb70c304c17f',
@@ -74,6 +80,10 @@ const STAFF_IDS = {
   Muamer: '8a0af0eb-0cc0-46ba-8169-0865b8ca5bbc',
   Benza: 'cc0b574c-fb00-436b-bd5b-6cf3b48bd1c5',
   Nidal: '9bb339fa-bf8c-4353-8a3e-e45fe9854092',
+  Tarik: '7e657d31-08d2-4fd0-b041-a3abce828cba',
+  Armin: '9cc83bab-036b-4a1e-8ce2-e1e6b10006da',
+  Faris: 'd1618c1b-ef50-426f-8724-c52739fdb0d1',
+  Jan: 'c7a03749-b430-4199-8275-e818d1131caa',
 } as const
 
 /** The invented cast the unit and browser suites seed (`cast: 'full'`). */
@@ -100,14 +110,33 @@ const SEED_USER_IDS = {
  * them is replaced from `/admin/postavke/osoblje`, which is the only door that
  * writes a PIN nobody else has read.
  */
+/**
+ * **Testing-phase numbers, on a pattern, and every one of them different.**
+ *
+ * The owner asked for `1111` for the whole team while the café tries the app
+ * out. That is the one thing a PIN cannot be here: the pad has no names on it,
+ * so the number *is* the identity, and eleven people on 1111 is a pad that
+ * signs in whichever row SQLite happened to return first. The comment above
+ * `DEV_PINS` records that a `SANK_DEV_PIN` override doing exactly this was
+ * built once and deleted.
+ *
+ * So: the same idea, made possible. `1xxx` is an admin and `2xxx` is a radnik,
+ * counting up the roster in order, which is one rule to remember instead of
+ * eleven numbers — and every PIN in the venue still has four digits, which the
+ * pad requires (it fires on the last tap, so a venue may not mix lengths).
+ */
 export const STAFF_PINS: Record<keyof typeof STAFF_IDS, string> = {
-  Harun: '5240',
-  Vedran: '7715',
-  Emir: '5733',
-  Adin: '2055',
-  Muamer: '8759',
-  Benza: '5116',
-  Nidal: '9296',
+  Harun: '1001',
+  Vedran: '1002',
+  Adin: '1003',
+  Emir: '1004',
+  Muamer: '1005',
+  Nidal: '2001',
+  Tarik: '2002',
+  Benza: '2003',
+  Armin: '2004',
+  Faris: '2005',
+  Jan: '2006',
 }
 
 export const DEV_PINS: Record<keyof typeof SEED_USER_IDS, string> = {
@@ -163,11 +192,15 @@ export function roster(cast: 'default' | 'full'): RosterPerson[] {
   return [
     { id: STAFF_IDS.Harun, name: 'Harun', role: 'admin', pin: STAFF_PINS.Harun, email: STAFF_ADMIN_EMAIL, password: STAFF_ADMIN_PASSWORD },
     { id: STAFF_IDS.Vedran, name: 'Vedran', role: 'admin', pin: STAFF_PINS.Vedran },
-    { id: STAFF_IDS.Emir, name: 'Emir', role: 'admin', pin: STAFF_PINS.Emir },
     { id: STAFF_IDS.Adin, name: 'Adin', role: 'admin', pin: STAFF_PINS.Adin },
+    { id: STAFF_IDS.Emir, name: 'Emir', role: 'admin', pin: STAFF_PINS.Emir },
     { id: STAFF_IDS.Muamer, name: 'Muamer', role: 'admin', pin: STAFF_PINS.Muamer },
-    { id: STAFF_IDS.Benza, name: 'Benza', role: 'radnik', pin: STAFF_PINS.Benza },
     { id: STAFF_IDS.Nidal, name: 'Nidal', role: 'radnik', pin: STAFF_PINS.Nidal },
+    { id: STAFF_IDS.Tarik, name: 'Tarik', role: 'radnik', pin: STAFF_PINS.Tarik },
+    { id: STAFF_IDS.Benza, name: 'Benza', role: 'radnik', pin: STAFF_PINS.Benza },
+    { id: STAFF_IDS.Armin, name: 'Armin', role: 'radnik', pin: STAFF_PINS.Armin },
+    { id: STAFF_IDS.Faris, name: 'Faris', role: 'radnik', pin: STAFF_PINS.Faris },
+    { id: STAFF_IDS.Jan, name: 'Jan', role: 'radnik', pin: STAFF_PINS.Jan },
   ]
 }
 
