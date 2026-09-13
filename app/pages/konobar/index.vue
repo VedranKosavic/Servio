@@ -32,6 +32,7 @@ useHead({ title: 'Stolovi' })
 
 const api = useApi()
 const me = useMe()
+const route = useRoute()
 // Hydrates the outbox and the drafts off IndexedDB, and owns the flush timers.
 const { outbox, enqueue } = useOutbox()
 const cart = useCartStore()
@@ -59,6 +60,11 @@ const { refresh: refreshState } = useChanges({
     // leave the floor plan empty for the rest of the shift. The poll has just
     // reached the server, so the menu is one request away.
     if (!boot.value && !bootPending.value) void refreshBoot()
+    // A sheet that is open is looking at one of these tables. The poll only
+    // fires when something actually moved, so this is one request while a
+    // waiter is reading one table — and without it a round a colleague locked
+    // would be missing from a list he is about to take money against.
+    if (sheetFor.value) void loadSheetDetail()
   },
   menu: () => refreshBoot(),
   me: () => me.load(),
@@ -316,9 +322,10 @@ const zarBowls = computed(() => (zarDetail.value?.orders ?? []).flatMap((round, 
 async function openZar(tableId: string) {
   const state = shownStates.value.find(s => s.table_id === tableId)
   const tabId = state?.tab_id
-  // A table with no tab has no bowl on it; the long press simply opens it.
+  // A table with no tab has no bowl on it; the long press simply opens it,
+  // which is now the sheet or the menu exactly as an ordinary tap would be.
   if (!tabId || tabId.startsWith('local:')) {
-    navigateTo(`/konobar/sto/${tableId}`)
+    openTable(tableId)
     return
   }
   zarFor.value = { tableId, name: draftName(tableId), tabId }
@@ -421,19 +428,72 @@ const sheetDraftFen = computed(() => {
     (sum, line) => sum + (priceById.value.get(line.product_id) ?? 0) * line.qty, 0)
 })
 
-async function openSheet(tableId: string) {
+/**
+ * `/konobar?sto=<id>` — the sheet, asked for by the URL.
+ *
+ * Every other way to a table used to be a route to `/konobar/sto/<id>`: the
+ * back arrow out of *Dodaj*, the card at the top of it, the draft cards here,
+ * and the landing after a round is locked. Making the tap on the plan open a
+ * sheet fixed one of five, and a waiter who added a coffee still ended up on a
+ * page of his own — which is exactly what the owner asked not to happen.
+ *
+ * So the sheet has an address. Everything that used to push the page now comes
+ * back to the plan with the table named, and the plan opens it. The query is
+ * dropped again as soon as the sheet is closed, so the back button does not
+ * walk him through a reopening sheet.
+ */
+watch([() => route.query.sto, shownStates], () => {
+  const tableId = typeof route.query.sto === 'string' ? route.query.sto : null
+  if (!tableId || sheetFor.value?.tableId === tableId) return
+
+  // `shownStates` folds the outbox in, so a round locked ten seconds ago on a
+  // phone with no signal counts as something — which is the whole point of
+  // landing here after a lock.
+  const state = shownStates.value.find(s => s.table_id === tableId)
+  if (state?.tab_id || draftCount(tableId) > 0) {
+    openSheet(tableId)
+    return
+  }
+
+  // Nothing on it. A waiter who opened the menu at an empty table and backed
+  // out wants the plan, not a sheet telling him the table is empty — but only
+  // once the floor has actually arrived, or the first paint would drop the
+  // query before the poll could answer.
+  if (states.value.length > 0) void navigateTo({ path: '/konobar', query: {} }, { replace: true })
+}, { immediate: true })
+
+function openSheet(tableId: string) {
   sheetFor.value = { tableId, name: draftName(tableId) }
   sheetError.value = null
   sheetDetail.value = null
+  void loadSheetDetail()
+}
 
+/**
+ * The rounds, read when there is something to read them by.
+ *
+ * It is a watcher and not a line inside `openSheet` because the id can arrive
+ * *after* the sheet does, twice over: landing on `/konobar?sto=<id>` opens it
+ * before the first poll has answered, and a round locked offline gives the tab
+ * a server id only once the outbox has drained. Either way the sheet is
+ * already on screen, and this fills it in when the id turns up.
+ */
+watch(() => (sheetFor.value ? sheetState.value?.tab_id ?? null : null), () => {
+  void loadSheetDetail()
+})
+
+async function loadSheetDetail() {
+  if (!sheetFor.value) return
   const tabId = sheetState.value?.tab_id
   // A tab that lives only in the outbox has no server id to read, and that is
   // not an error: the sheet shows the draft and the queued chip instead.
   if (!tabId || tabId.startsWith('local:')) return
+  if (sheetLoading.value) return
 
   sheetLoading.value = true
   try {
     sheetDetail.value = await api.getTab(tabId)
+    sheetError.value = null
   } catch (err) {
     sheetError.value = apiErrorText(err, 'Nema veze — ture se ne mogu učitati')
   } finally {
@@ -445,6 +505,9 @@ function closeSheet() {
   sheetFor.value = null
   sheetDetail.value = null
   sheetError.value = null
+  // `replace`, so closing a sheet is not a step in the history a back gesture
+  // has to walk back through.
+  if (route.query.sto) void navigateTo({ path: '/konobar', query: {} }, { replace: true })
 }
 
 // -- Naplati, from the sheet -------------------------------------------------
@@ -495,7 +558,7 @@ async function onUnpaid(reason: 'walked_out' | 'dispute' | 'other') {
 function openTable(tableId: string) {
   const state = shownStates.value.find(s => s.table_id === tableId)
   const hasSomething = !!state?.tab_id || draftCount(tableId) > 0
-  if (hasSomething) void openSheet(tableId)
+  if (hasSomething) openSheet(tableId)
   else navigateTo(`/konobar/dodaj/${tableId}`)
 }
 
@@ -613,7 +676,9 @@ function openLoose() {
           </p>
           <div class="flex gap-2">
             <NuxtLink
-              :to="`/konobar/sto/${draft.table_id ?? 'bez-stola'}`"
+              :to="draft.table_id
+                ? { path: '/konobar', query: { sto: draft.table_id } }
+                : '/konobar/sto/bez-stola'"
               class="btn btn-primary flex-1"
             >
               Zaključi

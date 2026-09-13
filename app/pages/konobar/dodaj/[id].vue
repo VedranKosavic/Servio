@@ -64,6 +64,18 @@ const zoneLabel = computed(() => {
 
 useHead({ title: () => `Dodaj · ${tableName.value}` })
 
+/**
+ * Where every way out of this screen goes: the floor plan, with this table's
+ * sheet open on it.
+ *
+ * *Bez stola* is the exception and keeps its own page — the plan draws tables
+ * and there is no tile for the bar, so there is nothing for a sheet to sit
+ * over.
+ */
+const backTo = computed(() => (tableId.value === null
+  ? '/konobar/sto/bez-stola'
+  : `/konobar?sto=${tableId.value}`))
+
 // The one poll. Nothing on this screen needs the floor plan, but the catalogue
 // has to follow a price change made in `/admin` mid-evening.
 useChanges({
@@ -352,9 +364,11 @@ async function confirm() {
     confirmOpen.value = false
     toast.value = lockToast(tableName.value)
     wakeLock.hold(false)
-    // Back to the table, where the round is now a locked *tura* and the bar
-    // reads *Naplati*.
-    leaveTimer = setTimeout(() => navigateTo(`/konobar/sto/${route.params.id}`), 700)
+    // Back to the plan, with this table's sheet open on it: the round is now a
+    // locked *tura* and the button under it reads *Naplati*. It used to be the
+    // table's own page, which is the page the owner asked the waiter to stop
+    // being sent to.
+    leaveTimer = setTimeout(() => navigateTo(backTo.value), 700)
   } catch (err) {
     // Enqueueing barely fails — only storage can refuse. The draft is left
     // alone either way: retrying is the whole plan.
@@ -369,7 +383,7 @@ async function confirm() {
 <template>
   <ClientOnly>
     <div class="flex flex-1 flex-col">
-      <WaiterHeader title="Dodaj" :back-to="`/konobar/sto/${route.params.id}`">
+      <WaiterHeader title="Dodaj" :back-to="backTo">
         <template #right>
           <WaiterSyncChip compact />
         </template>
@@ -389,7 +403,7 @@ async function confirm() {
           a 56 px target with a chevron on it, not a 12 px caption.
         -->
         <NuxtLink
-          :to="`/konobar/sto/${route.params.id}`"
+          :to="backTo"
           class="card-2 flex min-h-14 items-center gap-3 px-4 py-2"
         >
           <span class="grow truncate text-body font-semibold">{{ tableName }} · {{ zoneLabel }}</span>
