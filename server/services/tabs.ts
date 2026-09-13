@@ -13,6 +13,7 @@ import { schema } from '../database/client'
 import { badRequest, conflict, forbidden, notFound } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
 import { clampEventAt } from '#shared/dates'
+import { mixLabels } from '#shared/flavours'
 import type {
   MarkUnpaidBody, DecideUnpaidBody, MoveTabBody, AssignTabBody,
   Tab, TabDetail, TabLine, TabMoney, TableState, TablesStateResponse, UnpaidResult,
@@ -341,7 +342,9 @@ export function getTab(q: Queryable, venueId: string, tabId: string, _actor: Act
       id: line.id,
       name_snapshot: line.nameSnapshot,
       note: line.note,
-      flavour_names: ids.map(id => flavourNames.get(id) ?? '—'),
+      // Folded: a 2 : 1 bowl is two `ice` entries, and the sheet reads
+      // "Ice 67%" once rather than "Ice" twice (`shared/flavours.ts`).
+      flavour_names: mixLabels(ids, id => flavourNames.get(id) ?? '—'),
       qty: line.qty,
       unit_price_fen: line.unitPriceFen,
       charged_fen: line.chargedFen,

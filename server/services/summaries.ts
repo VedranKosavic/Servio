@@ -28,6 +28,7 @@ import { schema } from '../database/client'
 import { SankError, forbidden } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
 import { countBowls } from '#shared/bowls'
+import { mixLabels } from '#shared/flavours'
 import type {
   CategoryLine, CountFen, LineRow, LineStatus, LineTotals, LinesPage, MyShift, MyShiftCounts,
   MyShiftRow, OwnerShift, ShiftCountBrief, ShiftSummary, StornoTotals, SummaryReason, UserSummary,
@@ -659,7 +660,7 @@ export function shiftLines(
     table_name: l.tableName,
     name_snapshot: l.nameSnapshot,
     note: l.note,
-    flavour_names: l.flavourIds.map(id => stockNames.get(id) ?? '—'),
+    flavour_names: mixLabels(l.flavourIds, id => stockNames.get(id) ?? '—'),
     qty: l.qty,
     charged_fen: l.chargedFen,
     unit_price_fen: l.unitPriceFen,

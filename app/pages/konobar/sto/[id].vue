@@ -130,11 +130,22 @@ const nameById = computed(() => new Map(products.value.map(p => [p.id, p.name]))
 const flavourNameById = computed(() =>
   new Map((boot.value?.flavours ?? []).map(f => [f.id, f.name])))
 
-const tabClientIdHere = computed(() =>
-  tabState.value?.tab_client_id ?? cart.tabClientIdFor(tableId.value))
+/**
+ * What the guests owe **on this phone**, and the marks that go with it.
+ *
+ * `useTabMoney` rather than five computeds here, because the floor plan's
+ * review sheet offers *Naplati* too now: two screens quoting a guest different
+ * numbers because one of them forgot to add the round still sitting in the
+ * outbox is not a bug this app is allowed to have.
+ */
+const money = useTabMoney({
+  tableId: () => tableId.value,
+  state: () => tabState.value,
+  priceOf: id => priceById.value.get(id) ?? 0,
+})
 
-const queuedHere = computed(() => outbox.pendingForTab(tabClientIdHere.value))
-const payQueued = computed(() => queuedHere.value.some(e => e.kind === 'pay'))
+const queuedHere = money.queued
+const payQueued = money.payQueued
 
 interface QueuedLine { name: string, qty: number, note: string | null, flavours: string[] }
 interface QueuedRound { clientId: string, lines: QueuedLine[], fen: number }
@@ -161,19 +172,10 @@ const queuedRounds = computed<QueuedRound[]>(() => queuedHere.value
     }
   }))
 
-const queuedOrdersFen = computed(() =>
-  queuedRounds.value.reduce((sum, round) => sum + round.fen, 0))
-const queuedPaidFen = computed(() => queuedHere.value
-  .filter(e => e.kind === 'pay')
-  .reduce((sum, entry) => sum + (entry.amount_fen ?? 0), 0))
-
-const localTotalFen = computed(() => (tabState.value?.total_fen ?? 0) + queuedOrdersFen.value)
-const localRemainingFen = computed(() => Math.max(
-  0,
-  (tabState.value?.remaining_fen ?? 0) + queuedOrdersFen.value - queuedPaidFen.value,
-))
-
-const hasTab = computed(() => !!tabState.value?.tab_id || queuedHere.value.length > 0)
+const queuedOrdersFen = money.queuedOrdersFen
+const localTotalFen = money.totalFen
+const localRemainingFen = money.remainingFen
+const hasTab = money.hasTab
 
 // -- The draft --------------------------------------------------------------
 
@@ -331,98 +333,38 @@ watch(detail, (value) => {
 
 const payOpen = ref(false)
 const payMode = ref<'main' | 'unpaid'>('main')
-const paying = ref(false)
-const payError = ref<string | null>(null)
 
 const paymentMethods = computed<PaymentMethod[]>(() =>
   me.settings.value?.payment_methods ?? ['cash'])
 
+/**
+ * Taking the money. The queueing itself is `useTabPay`, shared with the floor
+ * plan's review sheet; what stays here is what this screen does afterwards —
+ * the toast, and walking back to the plan once the table is settled.
+ */
+const { paying, payError, pay: payTab, markUnpaid: unpaidTab } = useTabPay({
+  tableId: () => tableId.value,
+  tableName: () => tableName.value,
+  tabId: () => tabState.value?.tab_id ?? null,
+  remainingFen: () => localRemainingFen.value,
+  refresh: () => refreshState(),
+})
+
 async function pay(payment: { method: PaymentMethod, amount_fen: number, received_fen?: number }) {
-  if (paying.value) return
-  const tabId = tabState.value?.tab_id ?? null
-  const clientTabId = cart.ensureTabClientId(tableId.value)
-
-  paying.value = true
-  payError.value = null
-  try {
-    // The change and what is left are arithmetic the phone can do itself; the
-    // server's answer would be identical, and waiting for it to hand back a
-    // guest's change is exactly what an outbox exists to stop.
-    const change = Math.max(0, (payment.received_fen ?? payment.amount_fen) - payment.amount_fen)
-    const remaining = Math.max(0, localRemainingFen.value - payment.amount_fen)
-
-    const clientId = crypto.randomUUID()
-    await enqueue({
-      kind: 'pay',
-      client_id: clientId,
-      tab_client_id: clientTabId,
-      label: tableName.value,
-      amount_fen: payment.amount_fen,
-      payload: {
-        client_id: clientId,
-        ...(tabId ? { tab_id: tabId } : {}),
-        tab_client_id: clientTabId,
-        method: payment.method,
-        amount_fen: payment.amount_fen,
-        ...(payment.received_fen !== undefined ? { received_fen: payment.received_fen } : {}),
-        tip_fen: 0,
-        covers_order_client_ids: [],
-        client_created_at: new Date().toISOString(),
-      },
-    })
-    payOpen.value = false
-    await refreshState()
-
-    if (remaining > 0) {
-      toast.value = `Naplaćeno · ostaje ${formatKm(remaining)}`
-      return
-    }
-    cart.closeTab(tableId.value)
-    toast.value = change > 0
-      ? `Naplaćeno · vrati ${formatKm(change)}`
-      : `Naplaćeno · ${tableName.value}`
-    leaveTimer = setTimeout(() => navigateTo('/konobar'), change > 0 ? 3500 : 2000)
-  } catch (err) {
-    payError.value = apiErrorText(err)
-    void me.handleAuthError(err)
-  } finally {
-    paying.value = false
-  }
+  const done = await payTab(payment)
+  if (!done) return
+  payOpen.value = false
+  toast.value = done.message
+  if (done.remainingFen > 0) return
+  // Long enough to read the change out to the guest before the plan comes back.
+  leaveTimer = setTimeout(() => navigateTo('/konobar'), done.changeFen > 0 ? 3500 : 2000)
 }
 
 async function markUnpaid(reason: 'walked_out' | 'dispute' | 'other') {
-  if (paying.value) return
-  const clientTabId = cart.ensureTabClientId(tableId.value)
-
-  paying.value = true
-  payError.value = null
-  try {
-    const clientId = crypto.randomUUID()
-    await enqueue({
-      kind: 'unpaid',
-      client_id: clientId,
-      // Keyed by the tab's own client id, not by a server id: a guest can walk
-      // out while the phone is offline, on a tab the server has never seen.
-      tab_client_id: clientTabId,
-      label: tableName.value,
-      payload: {
-        client_id: clientId,
-        tab_client_id: clientTabId,
-        reason,
-        client_created_at: new Date().toISOString(),
-      },
-    })
-    payOpen.value = false
-    await refreshState()
-    cart.closeTab(tableId.value)
-    toast.value = `Označeno: nije plaćeno · ${tableName.value}`
-    leaveTimer = setTimeout(() => navigateTo('/konobar'), 2500)
-  } catch (err) {
-    payError.value = apiErrorText(err)
-    void me.handleAuthError(err)
-  } finally {
-    paying.value = false
-  }
+  if (!await unpaidTab(reason)) return
+  payOpen.value = false
+  toast.value = `Označeno: nije plaćeno · ${tableName.value}`
+  leaveTimer = setTimeout(() => navigateTo('/konobar'), 2500)
 }
 
 function openPay(mode: 'main' | 'unpaid' = 'main') {
@@ -584,6 +526,19 @@ const compFor = ref<{ product: Product, lineId: string } | null>(null)
 const staffUsed = ref<number | null>(null)
 
 /** The ⋯ on a draft line in the *Potvrdi* sheet. */
+/**
+ * *Poništi turu* on the confirm sheet: the draft goes, the tab does not.
+ *
+ * `cart.clear()` is the same call the successful lock makes — it forgets the
+ * lines and the round's `client_id` and deliberately keeps the tab's, because
+ * the guests are still sitting there and the payment that follows has to be
+ * able to name their tab. The sheet asks twice before it gets here.
+ */
+function cancelDraft() {
+  cart.clear(tableId.value)
+  confirmOpen.value = false
+}
+
 function noteLine(lineId: string) {
   const line = lines.value.find(l => l.id === lineId)
   const product = products.value.find(p => p.id === line?.product_id)
@@ -1018,7 +973,7 @@ function lateWasNotPaid(row: TableState) {
       @confirm="lockDraft"
       @add="addOne"
       @remove="removeOne"
-      @note="noteLine"
+      @cancel="cancelDraft"
     />
 
     <WaiterPaySheet

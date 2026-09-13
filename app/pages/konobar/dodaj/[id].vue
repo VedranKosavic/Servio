@@ -298,10 +298,17 @@ function removeOne(lineId: string) {
   if (line) cart.removeOne(tableId.value, line.product_id)
 }
 
-function noteLine(lineId: string) {
-  const line = lineFor(lineId)
-  const product = products.value.find(p => p.id === line?.product_id)
-  if (line && product) noteFor.value = { product, lineId }
+/**
+ * *Poništi turu* on the confirm sheet: the draft goes, the tab does not.
+ *
+ * `cart.clear()` is the same call the successful lock makes — it forgets the
+ * lines and the round's `client_id` and deliberately keeps the tab's, because
+ * the guests are still sitting there and the payment that follows has to be
+ * able to name their tab. The sheet asks twice before it gets here.
+ */
+function cancelDraft() {
+  cart.clear(tableId.value)
+  confirmOpen.value = false
 }
 
 async function confirm() {
@@ -392,7 +399,7 @@ async function confirm() {
         </NuxtLink>
 
         <!-- The search, and the one chip that has to be true on this screen. -->
-        <div class="flex flex-col gap-3">
+        <div class="flex flex-col gap-2">
           <label class="input flex items-center gap-2.5">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="shrink-0 text-muted" aria-hidden="true">
               <circle cx="11" cy="11" r="7" />
@@ -425,8 +432,10 @@ async function confirm() {
         </div>
 
         <!-- The categories. A scroller, bled to the edges so the last one is
-             visibly cut off rather than looking like the end of the list. -->
-        <div v-if="!query" class="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+             visibly cut off rather than looking like the end of the list — and
+             with its scrollbar hidden, because a desktop browser drew a grey
+             rule under the pills that read as a stray divider on the screen. -->
+        <div v-if="!query" class="no-bar -mx-4 flex gap-2 overflow-x-auto px-4">
           <button
             v-for="item in tabs"
             :key="item.id"
@@ -439,7 +448,7 @@ async function confirm() {
           </button>
         </div>
 
-        <div v-if="boot" class="grid grid-cols-3 gap-3">
+        <div v-if="boot" class="grid grid-cols-3 gap-2.5">
           <ProductTile
             v-for="product in shown"
             :key="product.id"
@@ -466,7 +475,16 @@ async function confirm() {
         </p>
       </div>
 
-      <!-- The strip: what is on the round, and the two ways out of it. -->
+      <!--
+        The strip: what is on the round, and the one way out of it.
+
+        It used to be two rows and two buttons — *Pregled* beside the running
+        total, and *Zaključi* under it — and both opened the same sheet. One of
+        them was therefore a button that taught the waiter a second word for a
+        thing he already had, and it cost the grid a row of tiles on a phone.
+        *Zaključi* opens the review; the review is where *Potvrdi* lives; the
+        total rides beside it.
+      -->
       <div class="action-bar -mx-4 flex-col gap-2.5 border-t border-line px-4">
         <p v-if="sendError" class="note note-danger" role="alert">
           {{ sendError }}
@@ -479,27 +497,16 @@ async function confirm() {
           </span>
           <button
             type="button"
-            class="btn btn-secondary btn-sm"
-            :disabled="count === 0"
+            class="btn btn-primary btn-lg shrink-0 px-5"
+            :disabled="count === 0 || sending"
             @click="confirmOpen = true"
           >
-            Pregled
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 13l4 4L19 7" />
+            </svg>
+            Zaključi
           </button>
         </div>
-
-        <button
-          type="button"
-          class="btn btn-primary btn-lg"
-          :disabled="count === 0 || sending"
-          @click="confirmOpen = true"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M5 13l4 4L19 7" />
-          </svg>
-          <!-- The line above already says what the round comes to; the button
-               says what tapping it does, and gets the width to say it. -->
-          Zaključi
-        </button>
       </div>
     </div>
 
@@ -550,7 +557,7 @@ async function confirm() {
       @confirm="confirm"
       @add="addOne"
       @remove="removeOne"
-      @note="noteLine"
+      @cancel="cancelDraft"
     />
 
     <div v-if="toast" class="toast" role="status">

@@ -317,6 +317,24 @@ button,
   .hairline {
     border-bottom: 1px solid var(--line-soft);
   }
+
+  /**
+   * A horizontal scroller with no visible bar.
+   *
+   * iOS overlays its scrollbar and hides it again; a desktop browser reserves a
+   * gutter and paints a grey rule in it, which under a row of category pills
+   * reads as a divider somebody left behind. The content still scrolls, still
+   * bleeds off the edge, and a keyboard still reaches it — only the chrome is
+   * gone.
+   */
+  .no-bar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .no-bar::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /**

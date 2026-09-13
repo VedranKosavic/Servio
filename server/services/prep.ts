@@ -10,6 +10,7 @@ import { schema } from '../database/client'
 import { conflict, notFound } from '../utils/errors'
 import { nowIso } from '../utils/ids'
 import type { Prep, PrepOrder } from '#shared/types'
+import { mixLabels } from '#shared/flavours'
 import type { Actor, Db, Queryable } from './types'
 import { bump } from './contracts'
 import { changeTag } from './changes'
@@ -159,7 +160,9 @@ function loadOrders(db: Queryable, venueId: string, opts: LoadOptions): PrepOrde
     lines: (linesByOrder.get(row.id) ?? []).map(line => ({
       name_snapshot: line.nameSnapshot,
       qty: line.qty,
-      flavours: parseFlavours(line.flavoursJson).map(id => flavourNames.get(id) ?? id),
+      // The bartender packs the bowl, so he is the one who has to be told
+      // it is two parts to one (`shared/flavours.ts`).
+      flavours: mixLabels(parseFlavours(line.flavoursJson), id => flavourNames.get(id) ?? id),
       note: line.note,
     })),
   }))

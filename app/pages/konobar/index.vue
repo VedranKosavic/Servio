@@ -25,7 +25,7 @@
  *     whether he took the money for it.
  */
 import { formatAmount, formatKm } from '#shared/money'
-import type { ShiftBrief, TabDetail, TableState, Zone } from '#shared/types'
+import type { PaymentMethod, ShiftBrief, TabDetail, TableState, Zone } from '#shared/types'
 import { stavke } from '~/components/order/OrderText'
 
 useHead({ title: 'Stolovi' })
@@ -377,17 +377,126 @@ async function addZar(parentLineId: string) {
   }
 }
 
+// -- One table, over the plan ------------------------------------------------
+
+/**
+ * *Sto 4* as a sheet, not as a page.
+ *
+ * The owner asked for it in one sentence — *"lets not lead waiter to its own
+ * page, lets keep him always on the main screen"* — and the reason it is right
+ * is the walk: a waiter crossing the room looks at four tables in a row, and
+ * four page loads with four back-taps between them is a worse machine than one
+ * sheet he drops and opens again.
+ *
+ * The sheet carries the evening: what is owed, what was ordered, another round,
+ * the money. Everything that is *not* an ordinary evening — moving a tab,
+ * handing it over, a storno, žar, showing the guest his bill — still lives on
+ * `/konobar/sto/<id>`, one tap further in, because each of those is a decision
+ * with a PIN, a reason or a countdown on it.
+ */
+const sheetFor = ref<{ tableId: string, name: string } | null>(null)
+const sheetDetail = ref<TabDetail | null>(null)
+const sheetLoading = ref(false)
+const sheetError = ref<string | null>(null)
+
+/** The floor's own row for the table the sheet is about. */
+const sheetState = computed(() => (sheetFor.value
+  ? shownStates.value.find(s => s.table_id === sheetFor.value!.tableId) ?? null
+  : null))
+
+/**
+ * What the guests owe **on this phone** — the server's figure plus anything the
+ * outbox is still holding. Shared with the table's own page through
+ * `useTabMoney`, so the two screens can never quote a guest different numbers.
+ */
+const sheetMoney = useTabMoney({
+  tableId: () => sheetFor.value?.tableId ?? null,
+  state: () => sheetState.value,
+  priceOf: id => priceById.value.get(id) ?? 0,
+})
+
+const sheetDraftFen = computed(() => {
+  const id = sheetFor.value?.tableId ?? null
+  return cart.linesFor(id).reduce(
+    (sum, line) => sum + (priceById.value.get(line.product_id) ?? 0) * line.qty, 0)
+})
+
+async function openSheet(tableId: string) {
+  sheetFor.value = { tableId, name: draftName(tableId) }
+  sheetError.value = null
+  sheetDetail.value = null
+
+  const tabId = sheetState.value?.tab_id
+  // A tab that lives only in the outbox has no server id to read, and that is
+  // not an error: the sheet shows the draft and the queued chip instead.
+  if (!tabId || tabId.startsWith('local:')) return
+
+  sheetLoading.value = true
+  try {
+    sheetDetail.value = await api.getTab(tabId)
+  } catch (err) {
+    sheetError.value = apiErrorText(err, 'Nema veze — ture se ne mogu učitati')
+  } finally {
+    sheetLoading.value = false
+  }
+}
+
+function closeSheet() {
+  sheetFor.value = null
+  sheetDetail.value = null
+  sheetError.value = null
+}
+
+// -- Naplati, from the sheet -------------------------------------------------
+
+const payOpen = ref(false)
+
+/** The venue's own list, from the session context — the same source S2 reads. */
+const paymentMethods = computed<PaymentMethod[]>(() =>
+  me.settings.value?.payment_methods ?? ['cash'])
+
+const { paying, payError, pay: payTab, markUnpaid: unpaidTab } = useTabPay({
+  tableId: () => sheetFor.value?.tableId ?? null,
+  tableName: () => sheetFor.value?.name ?? 'Sto',
+  tabId: () => {
+    const id = sheetState.value?.tab_id ?? null
+    return id && !id.startsWith('local:') ? id : null
+  },
+  remainingFen: () => sheetMoney.remainingFen.value,
+  refresh: () => refreshState(),
+})
+
+async function onPay(payment: { method: PaymentMethod, amount_fen: number, received_fen?: number }) {
+  const done = await payTab(payment)
+  if (!done) return
+  payOpen.value = false
+  toast.value = done.message
+  // Settled tables leave the sheet: the plan behind it already shows the table
+  // free, and a sheet still saying *za naplatu 0,00* over it is a lie one poll
+  // long. A partial payment keeps it open — there is more to take.
+  if (done.remainingFen === 0) closeSheet()
+}
+
+async function onUnpaid(reason: 'walked_out' | 'dispute' | 'other') {
+  if (!await unpaidTab(reason)) return
+  payOpen.value = false
+  toast.value = `Označeno: nije plaćeno · ${sheetFor.value?.name ?? ''}`
+  closeSheet()
+}
+
 // -- Navigation -------------------------------------------------------------
 
 /**
  * Tapping a table. An empty one goes **straight to the menu**, because that is
  * the only thing a waiter ever does at an empty table, and the tap it saves is
- * the difference between five taps for two coffees and six.
+ * the difference between five taps for two coffees and six. One with guests at
+ * it opens the sheet, over the plan.
  */
 function openTable(tableId: string) {
   const state = shownStates.value.find(s => s.table_id === tableId)
   const hasSomething = !!state?.tab_id || draftCount(tableId) > 0
-  navigateTo(hasSomething ? `/konobar/sto/${tableId}` : `/konobar/dodaj/${tableId}`)
+  if (hasSomething) void openSheet(tableId)
+  else navigateTo(`/konobar/dodaj/${tableId}`)
 }
 
 const myOpenTabs = computed(() => shift.value?.my_open_tabs ?? 0)
@@ -645,6 +754,41 @@ function openLoose() {
       :error="zarError"
       @close="zarFor = null"
       @zar="addZar"
+    />
+
+    <!-- One table, over the plan. The sheet the owner asked for in place of a
+         page of its own. -->
+    <WaiterTableSheet
+      v-if="sheetFor && !payOpen"
+      :table-name="sheetFor.name"
+      :remaining-fen="sheetMoney.remainingFen.value"
+      :total-fen="sheetMoney.totalFen.value"
+      :detail="sheetDetail"
+      :loading="sheetLoading"
+      :error="sheetError"
+      :pending-review="sheetState?.pending_review ?? false"
+      :late-sync="sheetState?.late_sync ?? false"
+      :queued-fen="sheetMoney.queuedOrdersFen.value"
+      :pay-queued="sheetMoney.payQueued.value"
+      :draft-count="draftCount(sheetFor.tableId)"
+      :draft-fen="sheetDraftFen"
+      @close="closeSheet"
+      @add="navigateTo(`/konobar/dodaj/${sheetFor.tableId}`)"
+      @pay="payError = null; payOpen = true"
+      @details="navigateTo(`/konobar/sto/${sheetFor.tableId}`)"
+    />
+
+    <WaiterPaySheet
+      v-if="payOpen && sheetFor"
+      :table-name="sheetFor.name"
+      :remaining-fen="sheetMoney.remainingFen.value"
+      :total-fen="sheetMoney.totalFen.value"
+      :methods="paymentMethods"
+      :busy="paying"
+      :error="payError"
+      @close="payOpen = false"
+      @pay="onPay"
+      @unpaid="onUnpaid"
     />
 
     <WaiterAvatarSheet v-if="menuOpen" @close="menuOpen = false" />

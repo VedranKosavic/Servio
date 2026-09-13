@@ -94,9 +94,19 @@ function pick(value: string) {
   padding: 3px;
 }
 
+/**
+ * `justify-content: center` is not decoration — it is the repair.
+ *
+ * The item was a plain `<button>`, which centres its own text, until it became
+ * an `inline-flex` to hold the count beside the label. Flex packs at the start,
+ * so every segment in the app quietly went left-aligned — most visibly on the
+ * waiter's full-width *Unutra / Bašta*, where the words then sat against the
+ * left edge of a track three times their width.
+ */
 .a-seg-item {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 7px;
   height: calc(var(--tap) - 12px);
   padding: 0 14px;
@@ -137,6 +147,13 @@ function pick(value: string) {
 
 /* ---- the block shape: a real track with a moving part ------------------- */
 
+/**
+ * `--radius-control` and not `--radius-chip`. The two are 14 px and 999 px, and
+ * `main.css` names the first one "a button, a keypad key, **a segment**" — the
+ * track had the second, so a 56 px control the width of the screen came out as
+ * a stadium with a stadium sliding inside it. A segment is a control, and a
+ * control has corners.
+ */
 .a-seg.block {
   width: auto;
   position: relative;
@@ -144,7 +161,7 @@ function pick(value: string) {
   grid-template-columns: repeat(var(--seg-count), 1fr);
   gap: 0;
   padding: 4px;
-  border-radius: var(--radius-chip);
+  border-radius: var(--radius-control);
   background: var(--bg-2);
   border: 1px solid var(--line);
 }
@@ -159,7 +176,7 @@ function pick(value: string) {
   left: 4px;
   width: calc((100% - 8px) / var(--seg-count));
   transform: translateX(calc(var(--seg-index) * 100%));
-  border-radius: var(--radius-chip);
+  border-radius: calc(var(--radius-control) - 4px);
   background: var(--surface-3);
   border: 1px solid var(--line);
   transition: transform var(--dur-fast) var(--ease-out-soft);
@@ -177,7 +194,7 @@ function pick(value: string) {
   min-height: var(--tap);
   padding: 0 12px;
   white-space: nowrap;
-  border-radius: var(--radius-chip);
+  border-radius: calc(var(--radius-control) - 4px);
   background: transparent;
   box-shadow: none;
   color: var(--muted);
