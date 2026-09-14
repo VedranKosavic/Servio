@@ -25,7 +25,15 @@
  *     whether he took the money for it.
  */
 import { formatAmount, formatKm } from '#shared/money'
-import type { PaymentMethod, ShiftBrief, TabDetail, TableState, Zone } from '#shared/types'
+import type {
+  PaymentMethod, ShiftBrief, TabDetail, TabLine, TabOrder, TableState, User, VenueTable, Zone,
+} from '#shared/types'
+import type { AdjustmentOutcome } from '~/composables/useAdjustments'
+// Explicit, not auto-imported: Nuxt names a component after its path from the
+// components root, so `adjust/AdjVoidSheet.vue` would be `<AdjustAdjVoidSheet>`
+// — and an unresolved tag renders nothing at all in a production build,
+// silently.
+import AdjVoidSheet from '~/components/adjust/AdjVoidSheet.vue'
 import { stavke } from '~/components/order/OrderText'
 
 useHead({ title: 'Stolovi' })
@@ -35,6 +43,9 @@ const me = useMe()
 const route = useRoute()
 // Hydrates the outbox and the drafts off IndexedDB, and owns the flush timers.
 const { outbox, enqueue } = useOutbox()
+// *Premjesti* and *Predaj kolegi* are the two things on this screen that need
+// the server there and then, so the sheet says so rather than failing on tap.
+const { state: syncState } = useSync()
 const cart = useCartStore()
 
 const states = ref<TableState[]>([])
@@ -75,7 +86,9 @@ const { refresh: refreshState } = useChanges({
 const zone = useLocalStorage<Zone>('sank:zona', 'unutra')
 
 const menuOpen = ref(false)
-const toast = ref<string | null>(null)
+// One timer, in `useToast`: there is no way to set a message without also
+// starting the clock that takes it away.
+const { toast, say } = useToast()
 
 /** Tables a colleague has offered me and I have not taken yet (§6.2). */
 const offers = computed(() => {
@@ -236,7 +249,7 @@ async function discardDraft(tableId: string | null) {
       })
     }
     cart.clear(tableId)
-    toast.value = `Nacrt odbačen · ${draftName(tableId)}`
+    say(`Nacrt odbačen · ${draftName(tableId)}`)
   } catch (err) {
     banner.value = apiErrorText(err, 'Nema veze — nacrt ostaje na telefonu')
   } finally {
@@ -278,7 +291,7 @@ async function lateWasPaid(row: TableState) {
         client_created_at: new Date().toISOString(),
       },
     })
-    toast.value = `Naplaćeno · ${formatKm(row.remaining_fen)}`
+    say(`Naplaćeno · ${formatKm(row.remaining_fen)}`)
     await refreshState()
   } catch (err) {
     banner.value = apiErrorText(err)
@@ -375,7 +388,7 @@ async function addZar(parentLineId: string) {
       },
     })
     zarFor.value = null
-    toast.value = `Žar · ${target.name}`
+    say(`Žar · ${target.name}`)
     await refreshState()
   } catch (err) {
     zarError.value = apiErrorText(err)
@@ -528,6 +541,93 @@ const paymentMethods = computed<PaymentMethod[]>(() =>
  */
 const payAndClear = ref(true)
 const clearing = ref(false)
+const payMode = ref<'main' | 'unpaid'>('main')
+
+// -- Premjesti, Predaj kolegi, Pokaži gostu ---------------------------------
+// The three that used to be behind *Detalji stola* on a page of their own. All
+// three were already sheets once you got there, so the page was a route and a
+// back arrow around nothing.
+const moveOpen = ref(false)
+const guestOpen = ref(false)
+const moveError = ref<string | null>(null)
+const moving = ref(false)
+
+/** Only a table with nothing on it can take somebody else's guests. */
+const freeTables = computed<VenueTable[]>(() => (boot.value?.tables ?? [])
+  .filter(t => t.id !== sheetFor.value?.tableId)
+  .filter(t => !shownStates.value.some(s => s.table_id === t.id && s.tab_id)))
+
+const colleagues = computed<User[]>(() => (boot.value?.users ?? [])
+  .filter(u => u.id !== me.user.value?.id))
+
+async function moveToTable(targetId: string) {
+  const tabId = sheetState.value?.tab_id
+  if (!tabId || tabId.startsWith('local:') || moving.value) return
+  moving.value = true
+  moveError.value = null
+  try {
+    await api.moveTab(tabId, targetId)
+    moveOpen.value = false
+    // The draft and the tab id follow the guests to the new table.
+    cart.closeTab(sheetFor.value?.tableId ?? null)
+    const name = boot.value?.tables.find(t => t.id === targetId)?.name ?? 'sto'
+    say(`Premješteno na ${name}`)
+    await refreshState()
+    // The sheet follows them too, rather than sitting over a table they left.
+    openSheet(targetId)
+  } catch (err) {
+    moveError.value = apiErrorText(err)
+  } finally {
+    moving.value = false
+  }
+}
+
+// -- Storno ------------------------------------------------------------------
+/**
+ * Cancelling a line that has already been locked.
+ *
+ * It lived on the table page, and when *Detalji stola* went the page stopped
+ * being linked from anywhere — which would have left a waiter who rang up the
+ * wrong drink with no way to correct it at all. The two sheets it needs open
+ * over the plan like everything else now.
+ */
+const lockedLine = ref<{ line: TabLine, order: TabOrder, label: string } | null>(null)
+const stornoFor = ref<{ line: TabLine, order: TabOrder } | null>(null)
+
+function openLine(line: TabLine, round: TabOrder) {
+  const index = (sheetDetail.value?.orders ?? []).findIndex(o => o.id === round.id)
+  lockedLine.value = { line, order: round, label: `${index + 1}. tura` }
+}
+
+function askStorno() {
+  const open = lockedLine.value
+  lockedLine.value = null
+  if (open) stornoFor.value = { line: open.line, order: open.order }
+}
+
+async function stornoDone(outcome: AdjustmentOutcome) {
+  stornoFor.value = null
+  say(outcome.message)
+  await refreshState()
+  await loadSheetDetail()
+}
+
+async function handToColleague(userId: string) {
+  const tabId = sheetState.value?.tab_id
+  if (!tabId || tabId.startsWith('local:') || moving.value) return
+  moving.value = true
+  moveError.value = null
+  try {
+    await api.offerTab(tabId, userId)
+    moveOpen.value = false
+    say(`Ponuđeno: ${boot.value?.users.find(u => u.id === userId)?.name ?? 'kolegi'}`)
+    await refreshState()
+  } catch (err) {
+    moveError.value = apiErrorText(err)
+  } finally {
+    moving.value = false
+  }
+}
 
 const { paying, payError, pay: payTab, markUnpaid: unpaidTab } = useTabPay({
   tableId: () => sheetFor.value?.tableId ?? null,
@@ -544,7 +644,7 @@ async function onPay(payment: { method: PaymentMethod, amount_fen: number, recei
   const done = await payTab(payment)
   if (!done) return
   payOpen.value = false
-  toast.value = done.message
+  say(done.message)
   // A partial payment keeps the sheet open — there is more to take.
   if (done.remainingFen > 0) return
 
@@ -585,7 +685,7 @@ async function clearCurrentTable() {
 async function onUnpaid(reason: 'walked_out' | 'dispute' | 'other') {
   if (!await unpaidTab(reason)) return
   payOpen.value = false
-  toast.value = `Označeno: nije plaćeno · ${sheetFor.value?.name ?? ''}`
+  say(`Označeno: nije plaćeno · ${sheetFor.value?.name ?? ''}`)
   closeSheet()
 }
 
@@ -896,11 +996,66 @@ function openLoose() {
       :draft-fen="sheetDraftFen"
       :paid="sheetState?.paid ?? false"
       :clearing="clearing"
+      :has-tab="sheetMoney.hasTab.value"
       @close="closeSheet"
       @add="navigateTo(`/konobar/dodaj/${sheetFor.tableId}`)"
       @pay="(andClear) => { payAndClear = andClear; payError = null; payOpen = true }"
       @clear="clearCurrentTable"
-      @details="navigateTo(`/konobar/sto/${sheetFor.tableId}`)"
+      @move="moveError = null; moveOpen = true"
+      @guest="guestOpen = true"
+      @unpaid="payError = null; payMode = 'unpaid'; payOpen = true"
+      @line="openLine"
+    />
+
+    <OrderLockedLineSheet
+      v-if="lockedLine"
+      :line="lockedLine.line"
+      :round="lockedLine.label"
+      @close="lockedLine = null"
+      @storno="askStorno"
+    />
+
+    <!-- F6: the reason chips, the restock line, the countdown and the PIN -->
+    <AdjVoidSheet
+      v-if="stornoFor && sheetFor"
+      :line="{
+        id: stornoFor.line.id,
+        name: stornoFor.line.name_snapshot,
+        qty: stornoFor.line.qty,
+        amount_fen: stornoFor.line.charged_fen,
+      }"
+      :table-name="sheetFor.name"
+      :locked-at="stornoFor.order.at"
+      :mine="stornoFor.order.locked_by === me.user.value?.id"
+      :tab-paid="sheetDetail?.tab.status === 'paid'"
+      :tab-client-id="sheetMoney.tabClientId.value"
+      @close="stornoFor = null"
+      @done="stornoDone"
+    />
+
+    <!--
+      The three that used to live behind *Detalji stola*, on a page of their
+      own — and all three were sheets when you got there. They open over the
+      plan now, which is what the table sheet exists for.
+    -->
+    <OrderMoveSheet
+      v-if="moveOpen && sheetFor"
+      :table-name="sheetFor.name"
+      :free-tables="freeTables"
+      :colleagues="colleagues"
+      :offline="syncState === 'offline'"
+      :busy="moving"
+      :error="moveError"
+      @close="moveOpen = false"
+      @move="moveToTable"
+      @hand="handToColleague"
+    />
+
+    <OrderGuestView
+      v-if="guestOpen && sheetDetail && sheetFor"
+      :table-name="sheetFor.name"
+      :tab="sheetDetail"
+      @close="guestOpen = false"
     />
 
     <WaiterPaySheet
@@ -909,9 +1064,10 @@ function openLoose() {
       :remaining-fen="sheetMoney.remainingFen.value"
       :total-fen="sheetMoney.totalFen.value"
       :methods="paymentMethods"
+      :initial-mode="payMode"
       :busy="paying"
       :error="payError"
-      @close="payOpen = false"
+      @close="payOpen = false; payMode = 'main'"
       @pay="onPay"
       @unpaid="onUnpaid"
     />

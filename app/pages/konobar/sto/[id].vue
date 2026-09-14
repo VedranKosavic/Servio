@@ -216,7 +216,9 @@ function isBowl(line: TabLine): boolean {
 const confirmOpen = ref(false)
 const sending = ref(false)
 const sendError = ref<string | null>(null)
-const toast = ref<string | null>(null)
+// One timer, in `useToast`: there is no way to set a message without also
+// starting the clock that takes it away.
+const { toast, say } = useToast()
 
 let leaveTimer: ReturnType<typeof setTimeout> | null = null
 onBeforeUnmount(() => {
@@ -259,7 +261,7 @@ async function lockDraft() {
     quoted.value = { ...quoted.value, [draft.client_id]: totalAtLock }
     cart.clear(tableId.value)
     confirmOpen.value = false
-    toast.value = lockToast(tableName.value)
+    say(lockToast(tableName.value))
     await refreshState()
   } catch (err) {
     sendError.value = apiErrorText(err, 'Nema veze — pokušaj ponovo')
@@ -354,7 +356,7 @@ async function pay(payment: { method: PaymentMethod, amount_fen: number, receive
   const done = await payTab(payment)
   if (!done) return
   payOpen.value = false
-  toast.value = done.message
+  say(done.message)
   if (done.remainingFen > 0) return
   // Long enough to read the change out to the guest before the plan comes back.
   leaveTimer = setTimeout(() => navigateTo('/konobar'), done.changeFen > 0 ? 3500 : 2000)
@@ -363,7 +365,7 @@ async function pay(payment: { method: PaymentMethod, amount_fen: number, receive
 async function markUnpaid(reason: 'walked_out' | 'dispute' | 'other') {
   if (!await unpaidTab(reason)) return
   payOpen.value = false
-  toast.value = `Označeno: nije plaćeno · ${tableName.value}`
+  say(`Označeno: nije plaćeno · ${tableName.value}`)
   leaveTimer = setTimeout(() => navigateTo('/konobar'), 2500)
 }
 
@@ -403,7 +405,7 @@ async function moveToTable(targetId: string) {
     // The draft and the tab id follow the guests to the new table.
     cart.closeTab(tableId.value)
     const name = boot.value?.tables.find(t => t.id === targetId)?.name ?? 'sto'
-    toast.value = `Premješteno na ${name}`
+    say(`Premješteno na ${name}`)
     await refreshState()
     leaveTimer = setTimeout(() => navigateTo(`/konobar/sto/${targetId}`), 900)
   } catch (err) {
@@ -422,7 +424,7 @@ async function handToColleague(userId: string) {
     await api.offerTab(tabId, userId)
     moveOpen.value = false
     const name = boot.value?.users.find(u => u.id === userId)?.name ?? 'kolegi'
-    toast.value = `Ponuđeno: ${name}`
+    say(`Ponuđeno: ${name}`)
     await refreshState()
   } catch (err) {
     moveError.value = apiErrorText(err)
@@ -472,7 +474,7 @@ async function addZar(parentLineId: string) {
         }],
       },
     })
-    toast.value = lockToast(tableName.value, 'Žar')
+    say(lockToast(tableName.value, 'Žar'))
     await refreshState()
   } catch (err) {
     zarError.value = apiErrorText(err)
@@ -497,7 +499,7 @@ function askStorno() {
 
 async function stornoDone(outcome: AdjustmentOutcome) {
   stornoFor.value = null
-  toast.value = outcome.message
+  say(outcome.message)
   await refreshState()
   await loadDetail()
 }
@@ -638,7 +640,7 @@ async function lateWasPaid(row: TableState) {
         client_created_at: new Date().toISOString(),
       },
     })
-    toast.value = `Naplaćeno · ${formatKm(row.remaining_fen)}`
+    say(`Naplaćeno · ${formatKm(row.remaining_fen)}`)
     await refreshState()
   } catch (err) {
     payError.value = apiErrorText(err)

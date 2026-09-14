@@ -275,7 +275,9 @@ function applyComp(reason: CompReason) {
 const confirmOpen = ref(false)
 const sending = ref(false)
 const sendError = ref<string | null>(null)
-const toast = ref<string | null>(null)
+// One timer, in `useToast`: there is no way to set a message without also
+// starting the clock that takes it away.
+const { toast, say } = useToast()
 
 /**
  * What the tiles said this round comes to, remembered against the round's own
@@ -362,7 +364,7 @@ async function confirm() {
     quoted.value = { ...quoted.value, [draft.client_id]: totalAtLock }
     cart.clear(tableId.value)
     confirmOpen.value = false
-    toast.value = lockToast(tableName.value)
+    say(lockToast(tableName.value))
     wakeLock.hold(false)
     // Back to the plan, with this table's sheet open on it: the round is now a
     // locked *tura* and the button under it reads *Naplati*. It used to be the

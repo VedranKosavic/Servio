@@ -26,7 +26,7 @@
  * of every drink the guests have had.
  */
 import { formatKm } from '#shared/money'
-import type { TabDetail, TabLine } from '#shared/types'
+import type { TabDetail, TabLine, TabOrder } from '#shared/types'
 
 const props = withDefaults(defineProps<{
   tableName: string
@@ -48,6 +48,8 @@ const props = withDefaults(defineProps<{
   /** Settled and still occupied — the only thing left to do is clear it. */
   paid?: boolean
   clearing?: boolean
+  /** There is a tab here at all: the three secondary actions need one. */
+  hasTab?: boolean
 }>(), {
   loading: false,
   error: null,
@@ -59,6 +61,7 @@ const props = withDefaults(defineProps<{
   draftFen: 0,
   paid: false,
   clearing: false,
+  hasTab: false,
 })
 
 const emit = defineEmits<{
@@ -73,7 +76,17 @@ const emit = defineEmits<{
   pay: [andClear: boolean]
   /** *Očisti sto* — give the table back, with no money involved. */
   clear: []
-  details: []
+  /** The three that used to be behind *Detalji stola* on a page of their own. */
+  move: []
+  guest: []
+  unpaid: []
+  /**
+   * A locked line was tapped — the way to a storno. It came over from the table
+   * page with the rest: a waiter who rings up the wrong drink has to be able to
+   * cancel it from wherever he is looking at the table, and after *Detalji
+   * stola* went that was here or nowhere.
+   */
+  line: [line: TabLine, round: TabOrder]
 }>()
 
 useSheetDismiss(() => emit('close'))
@@ -105,17 +118,47 @@ const rounds = computed(() => props.detail?.orders ?? [])
     <div class="sheet-scrim" @click="emit('close')" />
 
     <div
-      class="sheet-panel absolute inset-x-0 bottom-0 mx-auto flex max-h-[88dvh] w-full max-w-3xl flex-col gap-4 overflow-y-auto px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-3"
+      class="sheet-panel absolute inset-x-0 bottom-0 mx-auto flex max-h-[94dvh] min-h-[62dvh] w-full max-w-3xl flex-col gap-4 overflow-y-auto px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-3"
       role="dialog"
       :aria-label="tableName"
     >
       <span class="mx-auto h-1 w-10 shrink-0 rounded-full bg-line" />
 
+      <!--
+        The corners: the way out on the left, the thing he came to do on the
+        right.
+
+        *+ Dodaj* was a button beside the copper one, which made the row read as
+        a choice between adding and paying — two things that are not
+        alternatives. Up here it is out of the way of the decision and still the
+        easiest target on the sheet. The × is the twin of tapping the scrim,
+        which still closes it: a thumb holding a tray does not always find the
+        strip of screen above a sheet.
+      -->
+      <div class="flex items-center gap-3">
+        <button
+          type="button"
+          class="flex size-11 shrink-0 items-center justify-center rounded-control bg-surface-2 text-text-2"
+          aria-label="Zatvori"
+          @click="emit('close')"
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+
+        <span class="section-title grow truncate">{{ tableName }}</span>
+
+        <button type="button" class="btn btn-secondary shrink-0 px-4" @click="emit('add')">
+          + Dodaj
+        </button>
+      </div>
+
       <!-- What is owed. The one number the sheet exists to show, at the size
            the table page showed it — a waiter reads it across a room. -->
       <div class="flex flex-col gap-1">
         <div class="flex items-baseline gap-3">
-          <span class="eyebrow grow">{{ tableName }} · za naplatu</span>
+          <span class="eyebrow grow">Za naplatu</span>
         </div>
         <p class="metric num">{{ formatKm(remainingFen) }}</p>
         <p v-if="remainingFen !== totalFen" class="num text-label text-text-2">
@@ -172,20 +215,23 @@ const rounds = computed(() => props.detail?.orders ?? [])
           </button>
 
           <ul v-if="openRounds.has(round.id)" class="flex flex-col border-t border-line-soft px-3">
-            <li
-              v-for="line in round.lines"
-              :key="line.id"
-              class="flex items-baseline gap-2 border-b border-line-soft py-2.5 last:border-b-0"
-            >
-              <span class="min-w-0 grow text-body" :class="line.status === 'storno' ? 'text-muted line-through' : ''">
-                <span class="num font-semibold">{{ line.qty }}×</span>
-                {{ line.name_snapshot }}
-                <small v-if="line.flavour_names.length" class="text-text-2">
-                  · {{ line.flavour_names.join(' + ') }}
-                </small>
-                <small v-if="line.note" class="text-warn">· {{ line.note }}</small>
-              </span>
-              <span class="num shrink-0 text-label">{{ formatKm(line.charged_fen) }}</span>
+            <li v-for="line in round.lines" :key="line.id" class="border-b border-line-soft last:border-b-0">
+              <!-- Tappable: a locked line is where a storno starts. -->
+              <button
+                type="button"
+                class="flex w-full items-baseline gap-2 py-2.5 text-left"
+                @click="emit('line', line, round)"
+              >
+                <span class="min-w-0 grow text-body" :class="line.status === 'storno' ? 'text-muted line-through' : ''">
+                  <span class="num font-semibold">{{ line.qty }}×</span>
+                  {{ line.name_snapshot }}
+                  <small v-if="line.flavour_names.length" class="text-text-2">
+                    · {{ line.flavour_names.join(' + ') }}
+                  </small>
+                  <small v-if="line.note" class="text-warn">· {{ line.note }}</small>
+                </span>
+                <span class="num shrink-0 text-label">{{ formatKm(line.charged_fen) }}</span>
+              </button>
             </li>
           </ul>
         </li>
@@ -196,69 +242,75 @@ const rounds = computed(() => props.detail?.orders ?? [])
       </p>
 
       <!--
-        The buttons, in the order the evening goes.
+        The buttons: how the table ends, and then everything else.
 
-        **Serving is one group and finishing is another**, with a rule between
-        them, because they are not alternatives a waiter weighs against each
-        other: while the guests are drinking there is only *+ Dodaj*, and when
-        they are done there are only the two ways the table ends. Four buttons
-        in one undifferentiated stack made him read all four every time.
+        *+ Dodaj* is gone from here — it is in the header, out of the way of a
+        decision it was never an alternative to. What is left below the rounds
+        is the two ways a table finishes and, quieter under them, the three
+        things that used to need a page of their own.
 
-        **The amount is off the buttons.** It is set in display type forty-eight
-        pixels above them and has not changed since he opened the sheet; saying
-        it again inside a copper button only made the label long enough to
-        squeeze *+ Dodaj* into a corner.
-
-        *Naplati i očisti* against *Samo naplati* is the whole distinction in
-        two words: the first gives the table back, the second takes the money
-        and leaves the guests sitting there behind a checkmark until somebody
-        clears it. A table that is already settled has one move left, so that is
-        all it is offered — but *+ Dodaj* stays, because guests who have paid
-        order again and that round opens a fresh tab in whichever shift is
-        running, which is what turns the tile from orange to blue.
+        **Nothing leads anywhere any more.** *Detalji stola* pushed
+        `/konobar/sto/<id>` for three actions that were all sheets when you got
+        there; they open from here instead, over the plan, which is the whole
+        point of the sheet existing.
       -->
-      <div class="flex flex-col gap-2">
-        <!-- Still drinking. The most frequent thing a waiter does at a table,
-             so it gets the full width and sits first. -->
-        <button type="button" class="btn btn-secondary btn-lg" @click="emit('add')">
-          + Dodaj
+      <div class="flex flex-col gap-2 border-t border-line pt-3">
+        <button
+          v-if="paid"
+          type="button"
+          class="btn btn-primary btn-lg"
+          :disabled="clearing"
+          @click="emit('clear')"
+        >
+          {{ clearing ? 'Čistim…' : 'Očisti sto' }}
         </button>
 
-        <div class="flex flex-col gap-2 border-t border-line pt-3">
+        <template v-else>
           <button
-            v-if="paid"
             type="button"
             class="btn btn-primary btn-lg"
-            :disabled="clearing"
-            @click="emit('clear')"
+            :disabled="remainingFen <= 0"
+            @click="emit('pay', true)"
           >
-            {{ clearing ? 'Čistim…' : 'Očisti sto' }}
+            Naplati i očisti
           </button>
+          <button
+            type="button"
+            class="btn btn-secondary btn-lg"
+            :disabled="remainingFen <= 0"
+            @click="emit('pay', false)"
+          >
+            Samo naplati — gosti ostaju
+          </button>
+        </template>
 
-          <template v-else>
-            <button
-              type="button"
-              class="btn btn-primary btn-lg"
-              :disabled="remainingFen <= 0"
-              @click="emit('pay', true)"
-            >
-              Naplati i očisti
-            </button>
-            <button
-              type="button"
-              class="btn btn-secondary btn-lg"
-              :disabled="remainingFen <= 0"
-              @click="emit('pay', false)"
-            >
-              Samo naplati — gosti ostaju
-            </button>
-          </template>
+        <!-- The rest of what a table can need, one step quieter. -->
+        <div class="grid grid-cols-3 gap-2 pt-1">
+          <button
+            type="button"
+            class="btn btn-secondary px-2 text-label"
+            :disabled="!hasTab"
+            @click="emit('move')"
+          >
+            Premjesti
+          </button>
+          <button
+            type="button"
+            class="btn btn-secondary px-2 text-label"
+            :disabled="!detail"
+            @click="emit('guest')"
+          >
+            Pokaži gostu
+          </button>
+          <button
+            type="button"
+            class="btn btn-secondary px-2 text-label"
+            :disabled="!hasTab || paid"
+            @click="emit('unpaid')"
+          >
+            Nije plaćeno
+          </button>
         </div>
-
-        <!-- Everything that is not an ordinary evening. -->
-        <button type="button" class="btn btn-ghost" @click="emit('details')">
-          Detalji stola
-        </button>
       </div>
     </div>
   </div>

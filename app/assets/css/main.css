@@ -740,10 +740,18 @@ button,
   }
 
   /** A transient confirmation, above everything, out of the thumb's way. */
+  /**
+   * **At the top**, where a confirmation belongs.
+   *
+   * It sat above the bottom bar, which on the floor plan put it over *+ Bez
+   * stola* and under the thumb that had just tapped something — and on a sheet
+   * it landed on the buttons. The top of the screen is empty on every waiter
+   * screen and is where a phone puts this kind of message anyway.
+   */
   .toast {
     position: fixed;
     left: 50%;
-    bottom: calc(24px + env(safe-area-inset-bottom));
+    top: calc(12px + env(safe-area-inset-top));
     transform: translateX(-50%);
     z-index: 60;
     max-width: min(420px, calc(100vw - 32px));
@@ -815,6 +823,6 @@ button,
 }
 
 @keyframes toast-in {
-  from { transform: translate(-50%, 8px); opacity: 0; }
+  from { transform: translate(-50%, -8px); opacity: 0; }
   to { transform: translate(-50%, 0); opacity: 1; }
 }
