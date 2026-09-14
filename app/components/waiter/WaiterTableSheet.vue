@@ -196,55 +196,64 @@ const rounds = computed(() => props.detail?.orders ?? [])
       </p>
 
       <!--
-        What happens next, and it is two different things.
+        The buttons, in the order the evening goes.
 
-        Taking the money and giving the table back used to be one act. In a
-        shisha lounge they are not: a bowl is an hour and a half and the bill is
-        often settled long before anybody stands up. So *Naplati i očisti* is the
-        common case and carries the number the guest is about to hand over, and
-        *Naplati* below it takes the money and leaves them sitting — the tile
-        keeps its shift's colour and gains a checkmark until somebody clears it.
+        **Serving is one group and finishing is another**, with a rule between
+        them, because they are not alternatives a waiter weighs against each
+        other: while the guests are drinking there is only *+ Dodaj*, and when
+        they are done there are only the two ways the table ends. Four buttons
+        in one undifferentiated stack made him read all four every time.
 
-        A table that is already settled has only one move left, so that is all
-        it is offered. *+ Dodaj* stays either way: guests who have paid often
-        order again, and that round opens a fresh tab in whichever shift is
-        running — which is what turns the tile from orange to blue.
+        **The amount is off the buttons.** It is set in display type forty-eight
+        pixels above them and has not changed since he opened the sheet; saying
+        it again inside a copper button only made the label long enough to
+        squeeze *+ Dodaj* into a corner.
+
+        *Naplati i očisti* against *Samo naplati* is the whole distinction in
+        two words: the first gives the table back, the second takes the money
+        and leaves the guests sitting there behind a checkmark until somebody
+        clears it. A table that is already settled has one move left, so that is
+        all it is offered — but *+ Dodaj* stays, because guests who have paid
+        order again and that round opens a fresh tab in whichever shift is
+        running, which is what turns the tile from orange to blue.
       -->
       <div class="flex flex-col gap-2">
-        <div class="flex gap-2">
-          <button type="button" class="btn btn-secondary btn-lg shrink-0 px-4" @click="emit('add')">
-            + Dodaj
-          </button>
+        <!-- Still drinking. The most frequent thing a waiter does at a table,
+             so it gets the full width and sits first. -->
+        <button type="button" class="btn btn-secondary btn-lg" @click="emit('add')">
+          + Dodaj
+        </button>
 
+        <div class="flex flex-col gap-2 border-t border-line pt-3">
           <button
             v-if="paid"
             type="button"
-            class="btn btn-primary btn-lg grow"
+            class="btn btn-primary btn-lg"
             :disabled="clearing"
             @click="emit('clear')"
           >
             {{ clearing ? 'Čistim…' : 'Očisti sto' }}
           </button>
-          <button
-            v-else
-            type="button"
-            class="btn btn-primary btn-lg grow"
-            :disabled="remainingFen <= 0"
-            @click="emit('pay', true)"
-          >
-            Naplati i očisti ·<span class="num">{{ formatKm(remainingFen) }}</span>
-          </button>
-        </div>
 
-        <button
-          v-if="!paid"
-          type="button"
-          class="btn btn-secondary btn-lg"
-          :disabled="remainingFen <= 0"
-          @click="emit('pay', false)"
-        >
-          Naplati — gosti ostaju
-        </button>
+          <template v-else>
+            <button
+              type="button"
+              class="btn btn-primary btn-lg"
+              :disabled="remainingFen <= 0"
+              @click="emit('pay', true)"
+            >
+              Naplati i očisti
+            </button>
+            <button
+              type="button"
+              class="btn btn-secondary btn-lg"
+              :disabled="remainingFen <= 0"
+              @click="emit('pay', false)"
+            >
+              Samo naplati — gosti ostaju
+            </button>
+          </template>
+        </div>
 
         <!-- Everything that is not an ordinary evening. -->
         <button type="button" class="btn btn-ghost" @click="emit('details')">
