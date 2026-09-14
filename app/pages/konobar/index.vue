@@ -543,12 +543,11 @@ const payAndClear = ref(true)
 const clearing = ref(false)
 const payMode = ref<'main' | 'unpaid'>('main')
 
-// -- Premjesti, Predaj kolegi, Pokaži gostu ---------------------------------
-// The three that used to be behind *Detalji stola* on a page of their own. All
-// three were already sheets once you got there, so the page was a route and a
-// back arrow around nothing.
+// -- Premjesti, Predaj kolegi ------------------------------------------------
+// What is left of the three that were behind *Detalji stola*. *Pokaži gostu*
+// and *Nije plaćeno* went at the owner's word — see the note in the reply about
+// what *Nije plaćeno* was holding up.
 const moveOpen = ref(false)
-const guestOpen = ref(false)
 const moveError = ref<string | null>(null)
 const moving = ref(false)
 
@@ -1002,8 +1001,6 @@ function openLoose() {
       @pay="(andClear) => { payAndClear = andClear; payError = null; payOpen = true }"
       @clear="clearCurrentTable"
       @move="moveError = null; moveOpen = true"
-      @guest="guestOpen = true"
-      @unpaid="payError = null; payMode = 'unpaid'; payOpen = true"
       @line="openLine"
     />
 
@@ -1049,13 +1046,6 @@ function openLoose() {
       @close="moveOpen = false"
       @move="moveToTable"
       @hand="handToColleague"
-    />
-
-    <OrderGuestView
-      v-if="guestOpen && sheetDetail && sheetFor"
-      :table-name="sheetFor.name"
-      :tab="sheetDetail"
-      @close="guestOpen = false"
     />
 
     <WaiterPaySheet

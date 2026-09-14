@@ -76,10 +76,8 @@ const emit = defineEmits<{
   pay: [andClear: boolean]
   /** *Očisti sto* — give the table back, with no money involved. */
   clear: []
-  /** The three that used to be behind *Detalji stola* on a page of their own. */
+  /** *Premjesti sto · Predaj kolegi* — the one that stayed of the three. */
   move: []
-  guest: []
-  unpaid: []
   /**
    * A locked line was tapped — the way to a storno. It came over from the table
    * page with the rest: a waiter who rings up the wrong drink has to be able to
@@ -284,31 +282,21 @@ const rounds = computed(() => props.detail?.orders ?? [])
           </button>
         </template>
 
-        <!-- The rest of what a table can need, one step quieter. -->
-        <div class="grid grid-cols-3 gap-2 pt-1">
+        <!--
+          The rest of what a table can need, one step quieter.
+
+          *Pokaži gostu* and *Nije plaćeno* left at the owner's word; the row
+          they were in is where *Policija* and *Rashod* are going, once the
+          shift's deduction categories exist to put them in.
+        -->
+        <div class="flex pt-1">
           <button
             type="button"
-            class="btn btn-secondary px-2 text-label"
+            class="btn btn-secondary px-4 text-label"
             :disabled="!hasTab"
             @click="emit('move')"
           >
             Premjesti
-          </button>
-          <button
-            type="button"
-            class="btn btn-secondary px-2 text-label"
-            :disabled="!detail"
-            @click="emit('guest')"
-          >
-            Pokaži gostu
-          </button>
-          <button
-            type="button"
-            class="btn btn-secondary px-2 text-label"
-            :disabled="!hasTab || paid"
-            @click="emit('unpaid')"
-          >
-            Nije plaćeno
           </button>
         </div>
       </div>
