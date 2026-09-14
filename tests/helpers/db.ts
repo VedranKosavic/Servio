@@ -20,7 +20,7 @@
  * assert the same columns come out. Two helpers, one shape, no package waiting
  * on another's stub.
  */
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, isNull, sql } from 'drizzle-orm'
 import { randomUUID } from 'node:crypto'
 import { expect } from 'vitest'
 import type Database from 'better-sqlite3'
@@ -212,6 +212,20 @@ export function makeFixture(): Fixture {
       ))
       .get()?.id
     if (!tabId) {
+      // A settled tab keeps its table until somebody clears it, and
+      // `tabs_one_live_per_table_uq` will refuse a second one while it does.
+      // `createOrder` releases it in the same transaction; this mirrors that,
+      // so a fixture behaves the way the app does.
+      db.update(schema.tabs)
+        .set({ clearedAt: at, clearedBy: uid })
+        .where(and(
+          eq(schema.tabs.venueId, venueId),
+          eq(schema.tabs.tableId, tblId),
+          eq(schema.tabs.status, 'paid'),
+          isNull(schema.tabs.clearedAt),
+        ))
+        .run()
+
       tabId = id()
       db.insert(schema.tabs).values({
         id: tabId, venueId, tableId: tblId, clientId: id(), status: 'open',

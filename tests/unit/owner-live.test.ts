@@ -148,9 +148,22 @@ describe('the live numbers are the shift summary\'s numbers', () => {
   it('counts open tables by what the guests still owe, not by what they were charged', () => {
     const { amarTab, openTab } = aNight()
 
-    // A tab that is paid has left the floor plan; Sto 3, 4 and 5 are still on it.
+    /**
+     * **The invariant that moved: a paid tab no longer leaves the floor plan.**
+     *
+     * It holds its tile until somebody says *Očisti sto*, because guests pay
+     * and then sit for another hour and the shift walking in has to tell an
+     * empty table from a settled one. So the owner's plan still shows it — as
+     * occupied, owing nothing — and it still counts against *X od 27 zauzeto*,
+     * which is the honest answer to "how many tables have people at them".
+     *
+     * The money is untouched by the change: `open.total_fen` sums what is still
+     * owed, and a settled table owes zero.
+     */
     const live = getLive(f.db, f.venueId, f.adminActor(), f.clock.now())
-    expect(live.tables.find(t => t.tab_id === amarTab)).toBeUndefined()
+    const settled = live.tables.find(t => t.tab_id === amarTab)!
+    expect(settled.paid).toBe(true)
+    expect(settled.remaining_fen).toBe(0)
     expect(live.tables.find(t => t.tab_id === openTab)!.remaining_fen).toBe(1500)
 
     expect(live.open.tables).toBe(live.tables.filter(t => t.tab_id !== null).length)

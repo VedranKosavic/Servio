@@ -518,6 +518,17 @@ const payOpen = ref(false)
 const paymentMethods = computed<PaymentMethod[]>(() =>
   me.settings.value?.payment_methods ?? ['cash'])
 
+/**
+ * *Naplati* or *Naplati i očisti* — which of the two the waiter tapped.
+ *
+ * The money is the same either way; the difference is whether the table comes
+ * back afterwards. Held here rather than passed through the pay sheet because
+ * the pay sheet is about the note in the guest's hand and has no business
+ * knowing what happens to the tile.
+ */
+const payAndClear = ref(true)
+const clearing = ref(false)
+
 const { paying, payError, pay: payTab, markUnpaid: unpaidTab } = useTabPay({
   tableId: () => sheetFor.value?.tableId ?? null,
   tableName: () => sheetFor.value?.name ?? 'Sto',
@@ -534,10 +545,41 @@ async function onPay(payment: { method: PaymentMethod, amount_fen: number, recei
   if (!done) return
   payOpen.value = false
   toast.value = done.message
-  // Settled tables leave the sheet: the plan behind it already shows the table
-  // free, and a sheet still saying *za naplatu 0,00* over it is a lie one poll
-  // long. A partial payment keeps it open — there is more to take.
-  if (done.remainingFen === 0) closeSheet()
+  // A partial payment keeps the sheet open — there is more to take.
+  if (done.remainingFen > 0) return
+
+  // Settled. *Naplati i očisti* gives the table back in the same breath;
+  // *Naplati* leaves the guests sitting there behind a checkmark, so the sheet
+  // stays open on the table they are still at.
+  if (payAndClear.value) await clearCurrentTable()
+  else await loadSheetDetail()
+}
+
+/**
+ * *Očisti sto* — the table given back.
+ *
+ * Unlike a payment this is **not** queued through the outbox: it needs the
+ * server's id for the tab, and a phone with no signal has nothing useful to
+ * queue against a tab the server has never seen. It fails loudly instead, and
+ * the table stays as it was until it is tapped again.
+ */
+async function clearCurrentTable() {
+  const tabId = sheetState.value?.tab_id
+  if (!tabId || tabId.startsWith('local:')) {
+    closeSheet()
+    return
+  }
+  clearing.value = true
+  try {
+    await api.clearTab(tabId)
+    await refreshState()
+    closeSheet()
+  } catch (err) {
+    sheetError.value = apiErrorText(err, 'Sto se nije očistio — pokušaj ponovo')
+    void me.handleAuthError(err)
+  } finally {
+    clearing.value = false
+  }
 }
 
 async function onUnpaid(reason: 'walked_out' | 'dispute' | 'other') {
@@ -561,6 +603,20 @@ function openTable(tableId: string) {
   if (hasSomething) openSheet(tableId)
   else navigateTo(`/konobar/dodaj/${tableId}`)
 }
+
+/**
+ * Which shift of the business day is running — the colour a draft wears before
+ * it is locked and has a shift of its own.
+ *
+ * Read off the tiles rather than fetched: the floor already carries every live
+ * tab's `shift_seq`, and the one that is running is the highest of them. With
+ * no tables occupied at all there is nothing to colour yet, and the first
+ * locked round answers the question for good.
+ */
+const currentShiftSeq = computed<number | null>(() => {
+  const seqs = shownStates.value.map(s => s.shift_seq).filter((n): n is number => n !== null)
+  return seqs.length ? Math.max(...seqs) : null
+})
 
 const myOpenTabs = computed(() => shift.value?.my_open_tabs ?? 0)
 
@@ -767,6 +823,7 @@ function openLoose() {
           :my-user-id="me.user.value?.id ?? null"
           :draft-tables="draftTables"
           :draft-label="draftLabel"
+          :current-shift-seq="currentShiftSeq"
           @select="openTable"
           @long="openZar"
         />
@@ -837,9 +894,12 @@ function openLoose() {
       :pay-queued="sheetMoney.payQueued.value"
       :draft-count="draftCount(sheetFor.tableId)"
       :draft-fen="sheetDraftFen"
+      :paid="sheetState?.paid ?? false"
+      :clearing="clearing"
       @close="closeSheet"
       @add="navigateTo(`/konobar/dodaj/${sheetFor.tableId}`)"
-      @pay="payError = null; payOpen = true"
+      @pay="(andClear) => { payAndClear = andClear; payError = null; payOpen = true }"
+      @clear="clearCurrentTable"
       @details="navigateTo(`/konobar/sto/${sheetFor.tableId}`)"
     />
 

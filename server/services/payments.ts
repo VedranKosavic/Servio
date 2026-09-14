@@ -174,6 +174,19 @@ export function createPayment(
         patch.closedAt = at
         patch.closedBy = actor.userId
       }
+      /**
+       * **A *Bez stola* tab clears itself; a table's does not.**
+       *
+       * Holding a settled tab until somebody says *Očisti sto* is a rule about
+       * a tile: the next shift has to tell an empty table from one nobody has
+       * wiped down. Guests at the bar have no tile, and the screen that lists
+       * them has no *Očisti* on it — so a paid loose tab that waited to be
+       * cleared would simply pile up there with no way to shift it.
+       */
+      if (tab.tableId === null) {
+        patch.clearedAt = at
+        patch.clearedBy = actor.userId
+      }
     }
     if (Object.keys(patch).length > 0) {
       tx.update(schema.tabs).set(patch).where(eq(schema.tabs.id, tab.id)).run()

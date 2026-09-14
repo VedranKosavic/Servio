@@ -344,6 +344,18 @@ export const LOG = {
   }),
 
   // -- Stolovi --------------------------------------------------------------
+  /**
+   * *Očisti sto* — the table was given back, which since the shift rework is a
+   * different act from taking the money. Quiet: it happens a hundred times a
+   * night and is only ever read as context under something else.
+   */
+  table_cleared: defineLog({
+    group: 'novac',
+    quiet: true,
+    body: body({ tab_id: id, table_id: id.nullish(), status: z.string() }),
+    title: (b, n) => `Sto očišćen · ${n.table(b.table_id)}`,
+  }),
+
   tab_moved: defineLog({
     group: 'novac',
     quiet: true,

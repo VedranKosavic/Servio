@@ -327,8 +327,17 @@ function who(
   )
   const settled = new Map(waiters.map(w => [w.user_id, w.settled]))
 
+  /**
+   * Tables still on him — and a **settled** one is not.
+   *
+   * Since a paid tab holds its tile until somebody clears it, `tab_id !== null`
+   * stopped meaning "owes money and is still his problem". *Ko radi* is asking
+   * how many tables he still has to collect from, so a table he has already
+   * taken the money for drops off the moment he takes it, exactly as it did
+   * before the tile learned to stay.
+   */
   const openTabsOf = (userId: string): number =>
-    tables.filter(t => t.tab_id !== null && t.assigned_to === userId).length
+    tables.filter(t => t.tab_id !== null && !t.paid && t.assigned_to === userId).length
 
   return summary.by_user.map(u => ({
     user_id: u.user_id,

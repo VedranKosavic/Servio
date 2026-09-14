@@ -37,16 +37,32 @@
 withDefaults(defineProps<{
   /** The number alone: "Sto 7" is stripped to "7" before it gets here. */
   label: string
-  /** The second line: an amount for my tables, initials for a colleague's. */
+  /** The second line: the amount owed, or the initials of whoever holds it. */
   sub?: string | null
-  variant: 'free' | 'mine' | 'other' | 'offered'
+  /**
+   * **The shift serving this table, not whose table it is.**
+   *
+   * Copper used to mean "mine" and grey "a colleague's". The owner asked for
+   * the colour to say which shift the table belongs to instead — *"we can
+   * remove the gray, so gray should be just an empty table. If someone is
+   * second shift, then assign him blue"* — because the question a waiter asks
+   * walking in at three is not *is this mine* (there are one or two of them on
+   * a shift) but *is this the morning's or mine*.
+   */
+  variant: 'free' | 'shift-a' | 'shift-b' | 'offered'
+  /**
+   * The money is in and the guests are still here: the tile keeps its shift
+   * colour and gains a checkmark, and the only thing left to do to it is
+   * *Očisti sto*.
+   */
+  paid?: boolean
   /** `pending_review`: naplata čeka. */
   attention?: boolean
   /** `late_sync`: the round reached the server long after it happened. */
   late?: boolean
   /** A round on this table is still on the phone — dashed, "nacrt" or "čeka". */
   draft?: boolean
-}>(), { sub: null, attention: false, late: false, draft: false })
+}>(), { sub: null, paid: false, attention: false, late: false, draft: false })
 
 const emit = defineEmits<{ select: [], long: [] }>()
 
@@ -101,7 +117,7 @@ function onClick() {
   <button
     type="button"
     class="table-tile"
-    :class="[variant, { draft, attention }]"
+    :class="[variant, { draft, attention, paid }]"
     @pointerdown="onPointerDown"
     @pointermove="onPointerMove"
     @pointerup="clear"
@@ -111,7 +127,14 @@ function onClick() {
     @click="onClick"
   >
     <span class="tile-no">{{ label }}</span>
-    <small v-if="sub" class="tile-sub num">{{ sub }}</small>
+
+    <!-- Settled: the amount it came to is history, so the tile says the one
+         thing still true about it. -->
+    <svg
+      v-if="paid" class="tile-tick" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-label="Naplaćeno"
+    ><path d="M5 13l4 4L19 7" /></svg>
+    <small v-else-if="sub" class="tile-sub num">{{ sub }}</small>
 
     <!-- The round arrived late. One dot; the tab sheet explains it. -->
     <span v-if="late" class="tile-late" aria-label="Kasno sinhronizovano" />
@@ -168,24 +191,46 @@ function onClick() {
    and nothing else. */
 .table-tile.free .tile-no { color: var(--ink-2); }
 
-/* A colleague's: raised material with an edge you can see. */
-.table-tile.other {
-  background: var(--surface-2);
-  border-color: var(--line);
-  color: var(--ink-2);
-}
-
-.table-tile.other .tile-no { color: var(--ink); }
-
-/* Mine: the only copper on the plan. */
-.table-tile.mine {
+/**
+ * **The first shift: copper. The second: blue.**
+ *
+ * The grey "a colleague's" tile is gone — grey is an empty table and nothing
+ * else now. What a filled tile says is which shift is serving it, which is the
+ * question at a handover; whose it is has moved to the second line, where a
+ * colleague's initials already were.
+ */
+.table-tile.shift-a {
   background: var(--accent);
   border-color: transparent;
   color: var(--on-accent);
 }
 
-.table-tile.mine .tile-no,
-.table-tile.mine .tile-sub { color: var(--on-accent); }
+.table-tile.shift-a .tile-no,
+.table-tile.shift-a .tile-sub,
+.table-tile.shift-a .tile-tick { color: var(--on-accent); }
+
+.table-tile.shift-b {
+  background: var(--shift-b);
+  border-color: transparent;
+  color: var(--on-shift-b);
+}
+
+.table-tile.shift-b .tile-no,
+.table-tile.shift-b .tile-sub,
+.table-tile.shift-b .tile-tick { color: var(--on-shift-b); }
+
+/**
+ * Paid and still sitting there.
+ *
+ * The colour does not change — it is still that shift's table — so the tile is
+ * dimmed a step and the amount is replaced by a checkmark. Dimmed rather than
+ * recoloured because "settled" is a *state of* this shift's table, not a fourth
+ * kind of table, and a waiter scanning the room should still see the shift
+ * first.
+ */
+.table-tile.paid { opacity: 0.62; }
+
+.tile-tick { width: 22px; height: 22px; }
 
 /* Offered and not taken: copper, but not filled — it is not yours yet. */
 .table-tile.offered {

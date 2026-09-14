@@ -145,6 +145,7 @@ function bodyFor(kind: LogKind, f: Fixture): Record<string, unknown> {
       tab_id: uid(), table_id: table, user_id: user, paid_by: f.userId('Lejla'),
     },
     pay_uncovered: { tab_id: uid(), table_id: table, user_id: user },
+    table_cleared: { tab_id: uid(), table_id: table, status: 'paid' },
     tab_moved: {
       tab_id: uid(), user_id: user, from_table_id: table, to_table_id: f.tableId('Sto 8'),
     },

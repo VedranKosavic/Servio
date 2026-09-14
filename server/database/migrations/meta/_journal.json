@@ -50,6 +50,13 @@
       "when": 1789196483968,
       "tag": "0006_pin_reveal",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789374644326,
+      "tag": "0007_tab_cleared",
+      "breakpoints": true
     }
   ]
 }

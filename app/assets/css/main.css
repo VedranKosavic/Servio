@@ -69,6 +69,25 @@
 
   --color-scrim: rgb(6 8 11 / 0.72);
 
+  /**
+   * **The second shift.**
+   *
+   * The floor plan's tiles are coloured by the shift that is serving them, so a
+   * waiter taking over at three can see at a glance which tables are the
+   * morning's and which are his. The first shift gets the copper the app
+   * already has; the second needs a hue that is none of the meaning colours —
+   * not `--good` (that is "fine"), not `--warn`, not `--danger`, and not the
+   * copper itself. A cool blue is as far from all four as the palette goes, and
+   * it reads as a *different* shift rather than as a worse one.
+   *
+   * The three steps mirror the accent's exactly: the fill, the soft fill behind
+   * a dashed or unfilled state, and the line between them.
+   */
+  --color-shift-b: #5c8fd0;
+  --color-shift-b-soft: #16273a;
+  --color-shift-b-line: #2d4a6d;
+  --color-on-shift-b: #08131f;
+
   /* A chart's categories are not meanings. A stacked bar that reaches for
      `--accent` for its first slice and `--good` for its second says "this one
      is mine" and "this one is fine" about two categories whose only difference
@@ -219,6 +238,12 @@
   --accent-line: var(--color-accent-line);
   /* What goes *on* an accent fill. Dark ink here, white on `/admin`. */
   --on-accent: var(--color-accent-ink);
+
+  /* The second shift's tiles — the same three steps as the accent above. */
+  --shift-b: var(--color-shift-b);
+  --shift-b-soft: var(--color-shift-b-soft);
+  --shift-b-line: var(--color-shift-b-line);
+  --on-shift-b: var(--color-on-shift-b);
 
   --good: var(--color-good);
   --good-soft: var(--color-good-soft);

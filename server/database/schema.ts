@@ -597,6 +597,18 @@ export const tabs = sqliteTable('tabs', {
   pendingReview: integer('pending_review').notNull().default(0),
   /** The replay key of the queueable *nije plaćeno* mark. */
   unpaidClientId: text('unpaid_client_id'),
+  /**
+   * When the table was given back — and **this, not `status`, is what the floor
+   * plan reads**.
+   *
+   * Taking the money and freeing the table used to be one act. They are two: in
+   * a shisha lounge guests pay and then sit for another hour, and a shift
+   * walking in needs to tell an empty table from a settled one nobody has wiped
+   * down yet. *Naplati* sets `status = 'paid'`; *Očisti sto* sets this. A tab
+   * holds its tile while this is NULL and the status is `open` or `paid`.
+   */
+  clearedAt: text('cleared_at'),
+  clearedBy: text('cleared_by').references(() => users.id),
   /** Reserved: there is no fiscal device (CLAUDE.md). Never written in Korak 2. */
   fiscalStatus: text('fiscal_status').notNull().default('none'),
   fiscalRef: text('fiscal_ref'),
@@ -607,6 +619,12 @@ export const tabs = sqliteTable('tabs', {
   uniqueIndex('tabs_one_open_per_table_uq')
     .on(t.venueId, t.tableId)
     .where(sql`status = 'open'`),
+  // One *live* tab per table — the rule the floor plan actually depends on now
+  // that a paid tab keeps its tile until it is cleared. The `open` index above
+  // is the stricter, older half of the same rule and is kept.
+  uniqueIndex('tabs_one_live_per_table_uq')
+    .on(t.venueId, t.tableId)
+    .where(sql`cleared_at IS NULL AND status IN ('open', 'paid')`),
   uniqueIndex('tabs_unpaid_client_uq')
     .on(t.venueId, t.unpaidClientId)
     .where(sql`unpaid_client_id IS NOT NULL`),

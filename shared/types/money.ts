@@ -56,6 +56,20 @@ export interface TableState {
   last_order_at: string | null
   /** Yellow tile: *naplata čeka* — somebody has to look at this one. */
   pending_review: boolean
+  /**
+   * The money is in and the guests are still sitting there.
+   *
+   * Paying and freeing the table used to be one act; they are two now. A paid
+   * tab keeps its tile — same colour, plus a checkmark — until *Očisti sto*,
+   * which is what lets a shift walking in tell an empty table from one that has
+   * been settled and not yet wiped down.
+   */
+  paid: boolean
+  /**
+   * Which shift of its own business day this tab belongs to — **the colour of
+   * the tile**. 1 is the morning and 2 the evening; null on a free table.
+   */
+  shift_seq: number | null
   /** Amber *kasno* badge: the round arrived long after it happened. */
   late_sync: boolean
   /** Set → "Nudi ti: Sto 7 · Prihvati" for that user. */

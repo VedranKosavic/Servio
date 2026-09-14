@@ -45,6 +45,9 @@ const props = withDefaults(defineProps<{
   /** Lines tapped on this phone and not yet locked. */
   draftCount?: number
   draftFen?: number
+  /** Settled and still occupied — the only thing left to do is clear it. */
+  paid?: boolean
+  clearing?: boolean
 }>(), {
   loading: false,
   error: null,
@@ -54,12 +57,22 @@ const props = withDefaults(defineProps<{
   payQueued: false,
   draftCount: 0,
   draftFen: 0,
+  paid: false,
+  clearing: false,
 })
 
 const emit = defineEmits<{
   close: []
   add: []
-  pay: []
+  /**
+   * Take the money. `andClear` is the difference the owner asked for: the
+   * common case is that the guests pay and go, so *Naplati i očisti* is the
+   * primary button; *Naplati* takes the money and leaves them sitting there
+   * with a checkmark on their table until somebody clears it.
+   */
+  pay: [andClear: boolean]
+  /** *Očisti sto* — give the table back, with no money involved. */
+  clear: []
   details: []
 }>()
 
@@ -182,22 +195,56 @@ const rounds = computed(() => props.detail?.orders ?? [])
         Još nijedna tura nije poslana.
       </p>
 
-      <!-- The evening's two moves. *Naplati* carries the number, because it is
-           the one the guest is about to hand over. -->
+      <!--
+        What happens next, and it is two different things.
+
+        Taking the money and giving the table back used to be one act. In a
+        shisha lounge they are not: a bowl is an hour and a half and the bill is
+        often settled long before anybody stands up. So *Naplati i očisti* is the
+        common case and carries the number the guest is about to hand over, and
+        *Naplati* below it takes the money and leaves them sitting — the tile
+        keeps its shift's colour and gains a checkmark until somebody clears it.
+
+        A table that is already settled has only one move left, so that is all
+        it is offered. *+ Dodaj* stays either way: guests who have paid often
+        order again, and that round opens a fresh tab in whichever shift is
+        running — which is what turns the tile from orange to blue.
+      -->
       <div class="flex flex-col gap-2">
         <div class="flex gap-2">
           <button type="button" class="btn btn-secondary btn-lg shrink-0 px-4" @click="emit('add')">
             + Dodaj
           </button>
+
           <button
+            v-if="paid"
+            type="button"
+            class="btn btn-primary btn-lg grow"
+            :disabled="clearing"
+            @click="emit('clear')"
+          >
+            {{ clearing ? 'Čistim…' : 'Očisti sto' }}
+          </button>
+          <button
+            v-else
             type="button"
             class="btn btn-primary btn-lg grow"
             :disabled="remainingFen <= 0"
-            @click="emit('pay')"
+            @click="emit('pay', true)"
           >
-            Naplati ·<span class="num">{{ formatKm(remainingFen) }}</span>
+            Naplati i očisti ·<span class="num">{{ formatKm(remainingFen) }}</span>
           </button>
         </div>
+
+        <button
+          v-if="!paid"
+          type="button"
+          class="btn btn-secondary btn-lg"
+          :disabled="remainingFen <= 0"
+          @click="emit('pay', false)"
+        >
+          Naplati — gosti ostaju
+        </button>
 
         <!-- Everything that is not an ordinary evening. -->
         <button type="button" class="btn btn-ghost" @click="emit('details')">

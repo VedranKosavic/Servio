@@ -8,7 +8,7 @@
  * 23:00 needs no correcting write anywhere: the number simply comes out
  * different the next time somebody asks.
  */
-import { and, asc, eq, inArray, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { badRequest, conflict, forbidden, notFound } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
@@ -153,15 +153,52 @@ export function getTablesState(
     .orderBy(asc(schema.tables.sort))
     .all()
 
-  // Open tabs only: a paid tab frees the table, and so does an unpaid one.
+  /**
+   * **Live tabs, not open ones.**
+   *
+   * A tab holds its table until somebody clears it, which is no longer the same
+   * moment as taking the money: guests pay and then sit for another hour, and
+   * the shift walking in has to tell an empty table from a settled one. So the
+   * filter is `cleared_at IS NULL` over `open` **and** `paid` — an *unpaid* or
+   * *voided* tab still frees the table, because in both of those the guests
+   * have gone.
+   */
   const openTabs = q.select({
     tab: schema.tabs,
     openedByName: schema.users.name,
   })
     .from(schema.tabs)
     .innerJoin(schema.users, eq(schema.users.id, schema.tabs.openedBy))
-    .where(and(eq(schema.tabs.venueId, venueId), eq(schema.tabs.status, 'open')))
+    .where(and(
+      eq(schema.tabs.venueId, venueId),
+      isNull(schema.tabs.clearedAt),
+      inArray(schema.tabs.status, ['open', 'paid']),
+    ))
     .all()
+
+  /**
+   * Which shift of its own business day a tab belongs to — 1 for the morning,
+   * 2 for the evening — which is the **colour of its tile**.
+   *
+   * Ranked by when the shift was opened rather than read off a template,
+   * because that is the question the plan is answering: *is this table the
+   * shift before mine, or mine?* A café that opens only the evening shift on a
+   * quiet Monday gets 1 for it, which is right — it is that day's first.
+   */
+  const shiftSeq = new Map<string, number>()
+  {
+    const shifts = q.select({ id: schema.shifts.id, date: schema.shifts.businessDate })
+      .from(schema.shifts)
+      .where(eq(schema.shifts.venueId, venueId))
+      .orderBy(asc(schema.shifts.openedAt))
+      .all()
+    const perDay = new Map<string, number>()
+    for (const shift of shifts) {
+      const n = (perDay.get(shift.date) ?? 0) + 1
+      perDay.set(shift.date, n)
+      shiftSeq.set(shift.id, n)
+    }
+  }
 
   const money = tabMoneyMany(q, venueId, openTabs.map(t => t.tab.id))
 
@@ -209,6 +246,10 @@ export function getTablesState(
       pending_review: tab.pendingReview === 1,
       late_sync: tab.lateSync === 1,
       offered_to: tab.offeredTo,
+      // Settled and still sitting there: the tile keeps its colour and gains a
+      // checkmark, and the only thing left to do to it is *Očisti sto*.
+      paid: tab.status === 'paid',
+      shift_seq: tab.shiftId ? shiftSeq.get(tab.shiftId) ?? null : null,
     }
   }
 
@@ -229,6 +270,8 @@ export function getTablesState(
         pending_review: false,
         late_sync: false,
         offered_to: null,
+        paid: false,
+        shift_seq: null,
       }
     }
     return stateOf(found.tab, found.openedByName)

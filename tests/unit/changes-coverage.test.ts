@@ -38,6 +38,7 @@ import {
   acknowledgeFloat, decideCashMovement, moveFloat, pickup, requestPayout, setOpeningFloat,
 } from '../../server/services/cash'
 import { acceptSettlement, settle } from '../../server/services/settlements'
+import { clearTab } from '../../server/services/clearTable'
 import { putStaffNote } from '../../server/services/summaries'
 import { resetPin } from '../../server/services/auth'
 import {
@@ -289,6 +290,11 @@ const CALLS: Record<string, () => void | Promise<void>> = {
     const order = lockOn('Sto 15')
     assignTab(f.db, f.venueId, f.actor('Amar'), order.tab_id, { user_id: f.userId('Lejla') })
     acceptTab(f.db, f.venueId, f.actor('Lejla'), order.tab_id)
+  },
+
+  [join('tabs', '[id]', 'clear.post.ts')]: () => {
+    const order = lockOn('Sto 16')
+    clearTab(f.db, f.venueId, f.actor('Amar'), order.tab_id)
   },
 
   [join('adjustments', 'index.post.ts')]: () => {

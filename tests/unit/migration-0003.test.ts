@@ -218,7 +218,8 @@ describe('0003 on a database that already holds a night', () => {
       expect(sqlite.prepare('PRAGMA integrity_check').get()).toEqual({ integrity_check: 'ok' })
 
       expect(names(sqlite, 'index', 'tabs')).toEqual([
-        'tabs_assigned_idx', 'tabs_client_uq', 'tabs_one_open_per_table_uq',
+        'tabs_assigned_idx', 'tabs_client_uq', 'tabs_one_live_per_table_uq',
+        'tabs_one_open_per_table_uq',
         'tabs_shift_idx', 'tabs_unpaid_client_uq', 'tabs_venue_status_idx',
       ])
 

@@ -23,7 +23,7 @@
  *   - **a late round is accepted, recorded and flagged — never refused.**
  *     Refusing loses the sale entirely: the guest has already drunk the coffee.
  */
-import { and, count, desc, eq, isNotNull, sql } from 'drizzle-orm'
+import { and, count, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { badRequest, conflict, forbidden, notFound } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
@@ -427,6 +427,32 @@ function resolveTab(
       crossWaiter,
       assignedTo: existing.assignedTo!,
     }
+  }
+
+  /**
+   * **Guests who have paid and then order again get a new tab, and the table
+   * changes colour to the shift that took the new round.**
+   *
+   * The lookup above asks for an `open` tab, so a settled one is never found
+   * and a fresh tab is what happens next — which is the right ledger: a paid
+   * tab is closed and counted and is never reopened, and the second bill is its
+   * own. What has to happen first is releasing the table: a paid tab holds its
+   * tile until it is cleared, and `tabs_one_live_per_table_uq` would refuse the
+   * insert while it does.
+   *
+   * The clear is attributed to whoever is ordering, because he is the person
+   * standing at the table.
+   */
+  if (tableId !== null) {
+    tx.update(schema.tabs)
+      .set({ clearedAt: at, clearedBy: actor.userId })
+      .where(and(
+        eq(schema.tabs.venueId, venueId),
+        eq(schema.tabs.tableId, tableId),
+        eq(schema.tabs.status, 'paid'),
+        isNull(schema.tabs.clearedAt),
+      ))
+      .run()
   }
 
   const id = newId()

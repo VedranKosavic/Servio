@@ -100,6 +100,9 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   'POST /api/tabs/:id/move': AR,
   'POST /api/tabs/:id/assign': AR,
   'POST /api/tabs/:id/accept': AR,
+  // *Očisti sto* — giving the table back, which is not the same act as
+  // taking the money and is open to whoever is standing at the table.
+  'POST /api/tabs/:id/clear': AR,
   'POST /api/adjustments': AR,
   'POST /api/adjustments/:id/decide': AR_APPROVE,
   'GET /api/adjustments/pending': AR,

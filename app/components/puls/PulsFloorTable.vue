@@ -54,6 +54,7 @@ const label = computed(() => {
     cell.name,
     formatKm(cell.remaining_fen),
     cell.age,
+    cell.paid ? 'naplaćeno' : '',
     cell.pending_review ? 'naplata čeka' : '',
   ].filter(Boolean).join(', ')
 })
@@ -69,7 +70,14 @@ const label = computed(() => {
     @click="cell.tab_id && $emit('open')"
   >
     <span class="a-tbl-no">{{ cell.label }}</span>
-    <small v-if="cell.tab_id" class="a-tbl-amt num">{{ formatAmount(cell.remaining_fen) }}</small>
+
+    <!-- Settled and still sitting there: the bill is history, so the tile says
+         the one thing still true about it rather than "0,00". -->
+    <svg
+      v-if="cell.paid" class="a-tbl-tick" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-label="Naplaćeno"
+    ><path d="M5 13l4 4L19 7" /></svg>
+    <small v-else-if="cell.tab_id" class="a-tbl-amt num">{{ formatAmount(cell.remaining_fen) }}</small>
   </component>
 </template>
 
@@ -180,6 +188,8 @@ button.a-tbl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
   box-shadow: var(--shadow-raise);
   color: var(--accent-ink);
 }
+
+.a-tbl-tick { width: 20px; height: 20px; color: var(--accent-ink); }
 
 .a-tbl.busy .a-tbl-no { color: var(--ink); }
 .a-tbl.busy .a-tbl-amt { color: var(--accent-ink); }

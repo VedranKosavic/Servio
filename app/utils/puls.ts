@@ -510,6 +510,13 @@ export interface PulsFloorCell {
   waiter: string
   /** *naplata čeka* — somebody has to look at this one. */
   pending_review: boolean
+  /**
+   * Settled and still occupied. The waiter's plan colours it by shift and adds
+   * a checkmark; here it keeps the one occupied fill every busy table gets and
+   * shows the checkmark in place of the amount, because "0,00" on a table with
+   * people at it reads as a table that has ordered nothing.
+   */
+  paid: boolean
 }
 
 /** The VIP pair and anything like it: its own dashed box under its column. */
@@ -602,6 +609,7 @@ export function floorZones(
       name: table.name,
       age: openedAt ? durationBs((nowMs - Date.parse(openedAt)) / 1000) : '',
       remaining_fen: live?.remaining_fen ?? 0,
+      paid: live?.paid ?? false,
       waiter: live?.assigned_to_initials ?? live?.opened_by_name ?? '',
       pending_review: live?.pending_review ?? false,
     }

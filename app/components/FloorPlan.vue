@@ -51,9 +51,16 @@ const props = withDefaults(defineProps<{
   draftTables?: string[]
   /** "nacrt 3 · 8,50" for one of those tables. */
   draftLabel?: (tableId: string) => string
+  /**
+   * Which shift of the business day is running — 1 the morning, 2 the evening.
+   * The colour a *draft* wears, since a round nobody has locked yet has no
+   * shift of its own.
+   */
+  currentShiftSeq?: number | null
 }>(), {
   draftTables: () => [],
   draftLabel: undefined,
+  currentShiftSeq: null,
 })
 
 defineEmits<{ select: [tableId: string], long: [tableId: string] }>()
@@ -62,7 +69,9 @@ interface Cell {
   id: string
   label: string
   sub: string | null
-  variant: 'free' | 'mine' | 'other' | 'offered'
+  variant: 'free' | 'shift-a' | 'shift-b' | 'offered'
+  /** Settled and still occupied: the checkmark. */
+  paid: boolean
   attention: boolean
   late: boolean
   /** A round on this table has not left the phone yet. */
@@ -80,19 +89,20 @@ function toCell(table: VenueTable): Cell {
   const state = stateById.value.get(table.id)
   const label = shortLabel(table.name)
   const draft = props.draftTables.includes(table.id)
-  const base = { id: table.id, label, attention: false, late: false, draft }
+  const base = { id: table.id, label, paid: false, attention: false, late: false, draft }
 
   if (!state?.tab_id) {
     // A table with nothing on the server but a draft on this phone is not free:
     // it is drawn dashed with what the draft comes to, so a colleague does not
     // seat guests at it and so the waiter can find his own unlocked round.
     return draft
-      ? { ...base, sub: props.draftLabel?.(table.id) ?? 'nacrt', variant: 'mine' }
+      ? { ...base, sub: props.draftLabel?.(table.id) ?? 'nacrt', variant: shiftVariant(null) }
       : { ...base, sub: null, variant: 'free' }
   }
 
   const common = {
     ...base,
+    paid: state.paid,
     attention: state.pending_review,
     late: state.late_sync,
   }
@@ -102,13 +112,35 @@ function toCell(table: VenueTable): Cell {
     return { ...common, sub: 'nudi', variant: 'offered' }
   }
 
-  if (state.assigned_to && state.assigned_to === props.myUserId) {
+  /**
+   * The colour is the **shift**, not the person. Whose table it is moved to the
+   * second line: my own tables show what is still owed on them, a colleague's
+   * his initials — which is where that badge already was.
+   */
+  const variant = shiftVariant(state.shift_seq)
+  const mine = state.assigned_to === props.myUserId
+
+  if (mine) {
     // The amount without " KM": the currency on every tile is noise, and the
     // tile now has the width to set the number itself at a readable size.
-    return { ...common, sub: formatAmount(state.remaining_fen), variant: 'mine' }
+    return { ...common, sub: formatAmount(state.remaining_fen), variant }
   }
 
-  return { ...common, sub: state.assigned_to_initials, variant: 'other' }
+  return { ...common, sub: state.assigned_to_initials, variant }
+}
+
+/**
+ * Which shift's colour a tile wears.
+ *
+ * `shift_seq` is the tab's shift ranked within its own business day — 1 the
+ * morning, 2 the evening — and a café that grows a third shift alternates from
+ * there rather than needing a third hue nobody could name. A draft that has not
+ * been locked yet has no shift of its own, so it wears the shift the phone is
+ * working now, which for the person looking at it is the truthful answer.
+ */
+function shiftVariant(seq: number | null): 'shift-a' | 'shift-b' {
+  const n = seq ?? props.currentShiftSeq ?? 1
+  return n % 2 === 0 ? 'shift-b' : 'shift-a'
 }
 
 const zoneTables = computed(() => props.tables.filter(t => t.zone === props.zone))
@@ -147,6 +179,7 @@ const columns = computed(() => {
             :label="cell.label"
             :sub="cell.sub"
             :variant="cell.variant"
+            :paid="cell.paid"
             :attention="cell.attention"
             :late="cell.late"
             :draft="cell.draft"
@@ -166,6 +199,7 @@ const columns = computed(() => {
                 :label="cell.label"
                 :sub="cell.sub"
                 :variant="cell.variant"
+                :paid="cell.paid"
                 :attention="cell.attention"
                 :late="cell.late"
                 :draft="cell.draft"
@@ -181,8 +215,9 @@ const columns = computed(() => {
     <!-- The caption on the plan: colour never carries a meaning on its own, so
          every marker is drawn beside the word it stands for. -->
     <ul class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 border-t border-line-soft pt-3 text-caption tracking-normal text-muted">
-      <li class="flex items-center gap-1.5"><i class="key key-mine" />moj sto</li>
-      <li class="flex items-center gap-1.5"><i class="key key-other" />kolegin</li>
+      <li class="flex items-center gap-1.5"><i class="key key-shift-a" />prva smjena</li>
+      <li class="flex items-center gap-1.5"><i class="key key-shift-b" />druga smjena</li>
+      <li class="flex items-center gap-1.5"><i class="key key-paid" />naplaćen</li>
       <li class="flex items-center gap-1.5"><i class="key key-free" />slobodan</li>
       <li class="flex items-center gap-1.5"><i class="key key-draft" />nacrt</li>
       <li class="flex items-center gap-1.5"><i class="key key-wait" />čeka</li>
@@ -203,8 +238,10 @@ const columns = computed(() => {
   background: var(--surface);
 }
 
-.key-mine { background: var(--accent); border-color: transparent; }
-.key-other { background: var(--surface-2); border-color: var(--line); }
+.key-shift-a { background: var(--accent); border-color: transparent; }
+.key-shift-b { background: var(--shift-b); border-color: transparent; }
+/* Settled: the same dimming the tile itself takes. */
+.key-paid { background: var(--accent); border-color: transparent; opacity: 0.62; }
 .key-draft { background: transparent; border-color: var(--accent-line); border-style: dashed; }
 .key-wait { background: transparent; border-color: var(--warn); }
 </style>

@@ -28,6 +28,7 @@ export const MONEY_ERRORS = {
   TAB_NOT_FOUND: 'Taj račun ne postoji.',
   TAB_CLOSED: 'Račun je zatvoren.',
   TAB_ALREADY_PAID: 'Račun je već naplaćen.',
+  TAB_ALREADY_CLEARED: 'Sto je već očišćen.',
   TAB_VOIDED: 'Račun je storniran.',
   TAB_TABLE_MISMATCH: 'Taj račun je na drugom stolu. Osvježi stolove.',
 

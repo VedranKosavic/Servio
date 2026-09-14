@@ -21,6 +21,7 @@ import { requestAdjustment } from '../../server/services/adjustments'
 import {
   acceptTab, assignTab, decideUnpaid, getTab, getTablesState, markUnpaid, moveTab, tabMoney,
 } from '../../server/services/tabs'
+import { clearTab } from '../../server/services/clearTable'
 import { summarizeUser } from '../../server/services/summaries'
 import { expectedCash } from '../../server/services/cash'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
@@ -509,5 +510,96 @@ describe('bez stola', () => {
     refuses(() => moveTab(f.db, f.venueId, f.actor('Amar'), loose.tab_id, {
       table_id: f.tableId('Sto 7'),
     }), 'TABLE_OCCUPIED')
+  })
+})
+
+// ===========================================================================
+
+/**
+ * **A tab holds its table until somebody clears it.**
+ *
+ * The invariant that moved, and the whole of this feature: paying used to free
+ * the tile, and in a shisha lounge that is wrong. A bowl is an hour and a half,
+ * the bill is often settled long before anybody stands up, and a shift walking
+ * in at three has to tell an empty table from one that was paid and not yet
+ * wiped down. `cleared_at`, not `status`, is what the floor plan reads.
+ */
+describe('naplati, and očisti sto', () => {
+  function paidTable(waiter: string, table: string) {
+    const order = f.lock(waiter, table, [{ product: 'Kafa', qty: 2 }])
+    const paid = payCash(waiter, order.tabId, 300)
+    expect(paid.tab_status).toBe('paid')
+    return order
+  }
+
+  const tileFor = (table: string) =>
+    getTablesState(f.db, f.venueId, f.actor('Amar'))
+      .tables.find(t => t.table_id === f.tableId(table))!
+
+  it('keeps a settled table on the plan, owing nothing, with the paid mark', () => {
+    paidTable('Amar', 'Sto 3')
+    const tile = tileFor('Sto 3')
+
+    expect(tile.tab_id).not.toBeNull()
+    expect(tile.paid).toBe(true)
+    expect(tile.remaining_fen).toBe(0)
+  })
+
+  it('frees it on Očisti sto, and refuses a second clear', () => {
+    const order = paidTable('Amar', 'Sto 4')
+
+    clearTab(f.db, f.venueId, f.actor('Amar'), order.tabId)
+    expect(tileFor('Sto 4').tab_id).toBeNull()
+
+    // The second clear would rewrite who gave the table back and when.
+    refuses(
+      () => clearTab(f.db, f.venueId, f.actor('Amar'), order.tabId),
+      'TAB_ALREADY_CLEARED',
+    )
+  })
+
+  it('clears a table that still owes money — the guests walked out', () => {
+    // *Očisti sto* takes no money and is not a payment; a tab with a balance on
+    // it can be cleared and stays owed. `Nije plaćeno` is the sentence for that.
+    const order = f.lock('Amar', 'Sto 5', [{ product: 'Kafa' }])
+    clearTab(f.db, f.venueId, f.actor('Amar'), order.tabId)
+    expect(tileFor('Sto 5').tab_id).toBeNull()
+  })
+
+  /**
+   * The owner's answer, in his words: *"Start a new tab, clear the orange
+   * colour and assign blue. They are now the second shift table since they
+   * ordered in second shift."*
+   */
+  it('opens a fresh tab when settled guests order again, and releases the old one', () => {
+    const first = paidTable('Amar', 'Sto 6')
+
+    // Through `createOrder`, not the fixture: releasing the settled tab is the
+    // service's job and this is the assertion that it does it.
+    const round = createOrder(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(),
+      table_id: f.tableId('Sto 6'),
+      lines: [{ id: randomUUID(), product_id: f.productId('Coca-Cola'), qty: 1 }],
+    })
+    const second = { tabId: round.tab_id }
+    expect(second.tabId).not.toBe(first.tabId)
+
+    const tile = tileFor('Sto 6')
+    expect(tile.tab_id).toBe(second.tabId)
+    expect(tile.paid).toBe(false)
+    expect(tile.remaining_fen).toBeGreaterThan(0)
+
+    // And the settled one is off the table for good — one live tab per table is
+    // a unique index, so this is also what stops the insert above throwing.
+    const old = f.db.select().from(schema.tabs)
+      .where(eq(schema.tabs.id, first.tabId)).get()!
+    expect(old.status).toBe('paid')
+    expect(old.clearedAt).not.toBeNull()
+  })
+
+  it('gives every live tile the shift it belongs to, which is its colour', () => {
+    f.lock('Amar', 'Sto 7', [{ product: 'Kafa' }])
+    expect(tileFor('Sto 7').shift_seq).toBe(1)
+    expect(tileFor('Sto 8').shift_seq).toBeNull()
   })
 })

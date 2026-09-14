@@ -377,6 +377,16 @@ export function useApi() {
     acceptTab: (tabId: string) =>
       request<Tab>(`/api/tabs/${tabId}/accept`, { method: 'POST', body: {} }),
 
+    /**
+     * *Očisti sto* — the table given back, which since the shift rework is a
+     * different act from taking the money. A settled tab keeps its tile until
+     * this lands.
+     */
+    clearTab: (tabId: string) =>
+      request<{ tab_id: string, table_id: string | null, cleared_at: string }>(
+        `/api/tabs/${tabId}/clear`, { method: 'POST', body: {} },
+      ),
+
     // -- Šank ---------------------------------------------------------------
 
     /** The bartender's tickets: `open` oldest first, `done` the last ten. */

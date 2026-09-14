@@ -237,8 +237,8 @@ describe('GET /api/tables/state', () => {
     for (const row of tables) {
       expect(Object.keys(row).sort()).toEqual([
         'assigned_to', 'assigned_to_initials', 'last_order_at', 'late_sync', 'offered_to',
-        'opened_at', 'opened_by_name', 'pending_review', 'remaining_fen', 'tab_client_id',
-        'tab_id', 'table_id', 'total_fen',
+        'opened_at', 'opened_by_name', 'paid', 'pending_review', 'remaining_fen', 'shift_seq',
+        'tab_client_id', 'tab_id', 'table_id', 'total_fen',
       ])
     }
   })
@@ -278,8 +278,8 @@ describe('GET /api/tables/state', () => {
     // Same shape as a tile: one component renders both.
     expect(Object.keys(loose).sort()).toEqual([
       'assigned_to', 'assigned_to_initials', 'last_order_at', 'late_sync', 'offered_to',
-      'opened_at', 'opened_by_name', 'pending_review', 'remaining_fen', 'tab_client_id',
-      'tab_id', 'table_id', 'total_fen',
+      'opened_at', 'opened_by_name', 'paid', 'pending_review', 'remaining_fen', 'shift_seq',
+      'tab_client_id', 'tab_id', 'table_id', 'total_fen',
     ])
   })
 
