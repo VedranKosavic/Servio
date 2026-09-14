@@ -14,6 +14,7 @@ import { badRequest, conflict, forbidden, notFound } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
 import { clampEventAt } from '#shared/dates'
 import { mixLabels } from '#shared/flavours'
+import { isAuthorisedUnpaid } from '#shared/schemas/money'
 import type {
   MarkUnpaidBody, DecideUnpaidBody, MoveTabBody, AssignTabBody,
   Tab, TabDetail, TabLine, TabMoney, TableState, TablesStateResponse, UnpaidResult,
@@ -528,10 +529,25 @@ export function markUnpaid(
     const at = nowIso()
     const clientAt = clampEventAt(body.client_created_at, at, settings.max_sync_lag_h)
 
+    /**
+     * **`pending_review` is the whole of the difference.**
+     *
+     * A police coffee, an admin's drink and a worker's own allowance were
+     * authorised before they were poured: there is nothing for the owner to
+     * decide, so they are not flagged — which is what takes them off the
+     * waiter's expected cash (`expectedCash` counts only flagged unpaid tabs)
+     * and keeps them out of *Zahtijeva pažnju* (`pendingFor` filters the same
+     * way). They come off the shift by category at the settlement instead.
+     *
+     * A walk-out is not authorised and stays flagged: the money is gone and
+     * only the owner says who eats it.
+     */
+    const authorised = isAuthorisedUnpaid(body.reason)
+
     tx.update(schema.tabs)
       .set({
         status: 'unpaid',
-        pendingReview: 1,
+        pendingReview: authorised ? 0 : 1,
         unpaidBy: actor.userId,
         unpaidReason: body.reason,
         unpaidClientId: body.client_id,
@@ -559,7 +575,9 @@ export function markUnpaid(
     })
 
     bump(tx, venueId, 'table', tab.id)
-    // The owner's *Zahtijeva pažnju* counts unpaid tabs beside the pending voids.
+    // The owner's *Zahtijeva pažnju* counts unpaid tabs beside the pending
+    // voids — an authorised one never appears there, but the shift's own
+    // numbers still move, so the bump is not conditional.
     bump(tx, venueId, 'adjustment', tab.id)
 
     return { tab: tabView(tx, venueId, tab.id), already_applied: false }

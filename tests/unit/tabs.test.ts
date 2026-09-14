@@ -19,7 +19,8 @@ import { createOrder } from '../../server/services/orders'
 import { createPayment } from '../../server/services/payments'
 import { requestAdjustment } from '../../server/services/adjustments'
 import {
-  acceptTab, assignTab, decideUnpaid, getTab, getTablesState, markUnpaid, moveTab, tabMoney,
+  acceptTab, assignTab, decideUnpaid, getTab, getTablesState, markUnpaid, moveTab,
+  pendingFor, tabMoney,
 } from '../../server/services/tabs'
 import { clearTab } from '../../server/services/clearTable'
 import { summarizeUser } from '../../server/services/summaries'
@@ -601,5 +602,65 @@ describe('naplati, and očisti sto', () => {
     f.lock('Amar', 'Sto 7', [{ product: 'Kafa' }])
     expect(tileFor('Sto 7').shift_seq).toBe(1)
     expect(tileFor('Sto 8').shift_seq).toBeNull()
+  })
+})
+
+// ===========================================================================
+
+/**
+ * **Consumed, authorised, and off the waiter's line.**
+ *
+ * A police coffee and an admin's drink are rung up like any other round — the
+ * stock moves, the promet counts them — and then the tab closes with the money
+ * still on it, because nobody was ever going to pay. The owner's model is that
+ * everything goes into the night's total and the categories come off at the
+ * settlement, which is what these two assert.
+ *
+ * The whole of the difference is `pending_review`: `expectedCash` counts only
+ * flagged unpaid tabs against a waiter, and `pendingFor` shows only flagged
+ * ones to the owner. An authorised category is not flagged, so it is on neither.
+ */
+describe('policija, rashod and osoblje', () => {
+  function closeAs(reason: string, table: string) {
+    const order = f.lock('Amar', table, [{ product: 'Kafa', qty: 2 }])
+    const tab = f.db.select().from(schema.tabs).where(eq(schema.tabs.id, order.tabId)).get()!
+    markUnpaid(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(),
+      tab_client_id: tab.clientId,
+      reason: reason as 'policija',
+    })
+    return f.db.select().from(schema.tabs).where(eq(schema.tabs.id, order.tabId)).get()!
+  }
+
+  it('closes the tab without flagging it for the owner', () => {
+    for (const reason of ['policija', 'rashod', 'osoblje']) {
+      const tab = closeAs(reason, reason === 'policija' ? 'Sto 20' : reason === 'rashod' ? 'Sto 21' : 'Sto 22')
+      expect(tab.status).toBe('unpaid')
+      expect(tab.unpaidReason).toBe(reason)
+      expect(tab.pendingReview).toBe(0)
+    }
+  })
+
+  it('leaves it off the waiter and off the owner\'s attention list', () => {
+    const shiftId = f.openShift({ members: ['Amar'] })
+    const before = expectedCash(f.db, f.venueId, shiftId, f.userId('Amar'))
+      .waiters[0]?.expected_fen ?? 0
+
+    closeAs('policija', 'Sto 23')
+
+    const after = expectedCash(f.db, f.venueId, shiftId, f.userId('Amar')).waiters[0]!
+    expect(after.expected_fen).toBe(before)
+    expect(after.unpaid_fen).toBe(0)
+    expect(pendingFor(f.db, f.venueId, f.clock.now())).toEqual([])
+  })
+
+  it('still puts a walk-out on his line, because nobody authorised that', () => {
+    const shiftId = f.openShift({ members: ['Amar'] })
+    const tab = closeAs('walked_out', 'Sto 24')
+
+    expect(tab.pendingReview).toBe(1)
+    const waiter = expectedCash(f.db, f.venueId, shiftId, f.userId('Amar')).waiters[0]!
+    expect(waiter.unpaid_fen).toBeGreaterThan(0)
+    expect(pendingFor(f.db, f.venueId, f.clock.now())).toHaveLength(1)
   })
 })

@@ -144,10 +144,36 @@ export const createPaymentBody = z.object({
  * Queueable, and therefore keyed by `tab_client_id` rather than by a tab id the
  * phone may never have seen: a guest can walk out while the phone is offline.
  */
+/**
+ * Why a tab closed with money still on it — and the list has two halves.
+ *
+ * **Owed, and somebody has to decide.** `walked_out`, `dispute` and `other` are
+ * a loss nobody authorised: the tab stays on the waiter's line until the owner
+ * says *otpis* or *naplatiti*, which is what `pending_review` is for.
+ *
+ * **Consumed, and authorised in advance.** `policija`, `rashod` (an admin
+ * drinking) and `osoblje` (a worker's own allowance) were never going to be
+ * paid for and everybody knew it. The drink is rung up like any other, so the
+ * stock moves and the promet counts it, and the amount comes off at the shift's
+ * settlement by category rather than sitting on anybody's line. There is
+ * nothing to decide, so they are not flagged for review and never reach the
+ * owner's *Zahtijeva pažnju*.
+ */
+export const UNPAID_REASONS = [
+  'walked_out', 'dispute', 'other', 'policija', 'rashod', 'osoblje',
+] as const
+
+/** The three that are authorised in advance: no review, and off the waiter. */
+export const AUTHORISED_UNPAID_REASONS = ['policija', 'rashod', 'osoblje'] as const
+
+export function isAuthorisedUnpaid(reason: string): boolean {
+  return (AUTHORISED_UNPAID_REASONS as readonly string[]).includes(reason)
+}
+
 export const markUnpaidBody = z.object({
   client_id: uuid,
   tab_client_id: uuid,
-  reason: z.enum(['walked_out', 'dispute', 'other']),
+  reason: z.enum(UNPAID_REASONS),
   note: shortNote.optional(),
   client_created_at: clientAt.optional(),
 }).strict()

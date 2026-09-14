@@ -1,5 +1,5 @@
 import { formatKm } from '#shared/money'
-import type { PaymentMethod } from '#shared/types'
+import type { PaymentMethod, UnpaidReason } from '#shared/types'
 
 /**
  * Taking the money for one tab — the one implementation, used from two screens.
@@ -127,7 +127,7 @@ export function useTabPay(ctx: TabPayContext) {
    * waiter picked rides with it. The tab's client id is forgotten all the same
    * — the table is free, and whatever happens to the money happens off it.
    */
-  async function markUnpaid(reason: 'walked_out' | 'dispute' | 'other'): Promise<boolean> {
+  async function markUnpaid(reason: UnpaidReason): Promise<boolean> {
     if (paying.value) return false
     const clientTabId = cart.ensureTabClientId(ctx.tableId())
 

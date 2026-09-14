@@ -29,6 +29,8 @@ import type {
   PaymentMethod, ShiftBrief, TabDetail, TabLine, TabOrder, TableState, User, VenueTable, Zone,
 } from '#shared/types'
 import type { AdjustmentOutcome } from '~/composables/useAdjustments'
+import { unpaidWordBs } from '#shared/logTemplates'
+import type { UnpaidReason } from '#shared/types'
 // Explicit, not auto-imported: Nuxt names a component after its path from the
 // components root, so `adjust/AdjVoidSheet.vue` would be `<AdjustAdjVoidSheet>`
 // — and an unresolved tag renders nothing at all in a production build,
@@ -681,10 +683,11 @@ async function clearCurrentTable() {
   }
 }
 
-async function onUnpaid(reason: 'walked_out' | 'dispute' | 'other') {
+async function onUnpaid(reason: UnpaidReason) {
+  const table = sheetFor.value?.name ?? ''
   if (!await unpaidTab(reason)) return
   payOpen.value = false
-  say(`Označeno: nije plaćeno · ${sheetFor.value?.name ?? ''}`)
+  say(`${unpaidWordBs(reason)} · ${table}`)
   closeSheet()
 }
 
@@ -1001,6 +1004,7 @@ function openLoose() {
       @pay="(andClear) => { payAndClear = andClear; payError = null; payOpen = true }"
       @clear="clearCurrentTable"
       @move="moveError = null; moveOpen = true"
+      @unpaid="onUnpaid"
       @line="openLine"
     />
 

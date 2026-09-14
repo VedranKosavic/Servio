@@ -79,6 +79,13 @@ const emit = defineEmits<{
   /** *Premjesti sto · Predaj kolegi* — the one that stayed of the three. */
   move: []
   /**
+   * The table was drunk and nobody is paying for it, and everybody knew that
+   * before it was poured — the police, or an admin. The round is rung up like
+   * any other, so the stock moves and the promet counts it; the amount comes
+   * off the shift by category at the settlement rather than off the waiter.
+   */
+  unpaid: [reason: 'policija' | 'rashod']
+  /**
    * A locked line was tapped — the way to a storno. It came over from the table
    * page with the rest: a waiter who rings up the wrong drink has to be able to
    * cancel it from wherever he is looking at the table, and after *Detalji
@@ -289,14 +296,30 @@ const rounds = computed(() => props.detail?.orders ?? [])
           they were in is where *Policija* and *Rashod* are going, once the
           shift's deduction categories exist to put them in.
         -->
-        <div class="flex pt-1">
+        <div class="grid grid-cols-3 gap-2 pt-1">
           <button
             type="button"
-            class="btn btn-secondary px-4 text-label"
+            class="btn btn-secondary px-2 text-label"
             :disabled="!hasTab"
             @click="emit('move')"
           >
             Premjesti
+          </button>
+          <button
+            type="button"
+            class="btn btn-secondary px-2 text-label"
+            :disabled="!hasTab || paid || remainingFen <= 0"
+            @click="emit('unpaid', 'policija')"
+          >
+            Policija
+          </button>
+          <button
+            type="button"
+            class="btn btn-secondary px-2 text-label"
+            :disabled="!hasTab || paid || remainingFen <= 0"
+            @click="emit('unpaid', 'rashod')"
+          >
+            Rashod
           </button>
         </div>
       </div>

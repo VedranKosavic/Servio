@@ -35,6 +35,13 @@ export type TabLineStatus = 'ok' | 'storno' | 'storno_na_cekanju' | 'gratis'
  * stolovi* it appears on and who may mark it *nije plaćeno*. `offered_to` set
  * means a colleague has been offered the table and has not taken it yet.
  */
+/**
+ * Why a tab closed with money still on it — see `UNPAID_REASONS` for the two
+ * halves of the list and which of them a waiter is still on the hook for.
+ */
+export type UnpaidReason =
+  | 'walked_out' | 'dispute' | 'other' | 'policija' | 'rashod' | 'osoblje'
+
 export interface TableState {
   /**
    * `null` only inside `loose_tabs`: a *Bez stola* tab belongs to guests at the

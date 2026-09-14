@@ -138,6 +138,23 @@ const PAYOUT_REASON_BS: Record<string, string> = {
 // The list
 // ---------------------------------------------------------------------------
 
+/**
+ * What a closed-without-payment tab is called, in the café's own words.
+ *
+ * The authorised three name themselves; the rest are a loss, which is one word
+ * with the reason after it.
+ */
+export function unpaidWordBs(reason: string): string {
+  switch (reason) {
+    case 'policija': return 'Policija'
+    case 'rashod': return 'Rashod'
+    case 'osoblje': return 'Osoblje'
+    case 'walked_out': return 'Nije plaćeno · otišli'
+    case 'dispute': return 'Nije plaćeno · spor'
+    default: return 'Nije plaćeno'
+  }
+}
+
 export const LOG = {
   // -- Smjena ---------------------------------------------------------------
   shift_opened: defineLog({
@@ -288,13 +305,19 @@ export const LOG = {
   }),
 
   // -- Naplata --------------------------------------------------------------
+  /**
+   * Two different entries share this kind, because they are the same act: a tab
+   * closed with money still on it. What differs is whether anybody authorised
+   * it — *Policija*, *Rashod* and *Osoblje* were agreed in advance and read as
+   * themselves; a walk-out is a loss and says so.
+   */
   unpaid_marked: defineLog({
     group: 'novac',
     quiet: true,
     body: body({ tab_id: id, table_id: id.nullish(), user_id: id, remaining_fen: fen, reason: z.string() }),
     title: (b, n) =>
-      `Nije plaćeno · ${n.user(b.user_id)} · ${n.table(b.table_id)}`
-      + ` · ${n.formatKm(b.remaining_fen)} · ${b.reason}`,
+      `${unpaidWordBs(b.reason)} · ${n.user(b.user_id)} · ${n.table(b.table_id)}`
+      + ` · ${n.formatKm(b.remaining_fen)}`,
   }),
 
   unpaid_decided: defineLog({
