@@ -3,20 +3,20 @@
  * *Smjena* — one night, top to bottom.
  *
  * Everything on this page comes from **one** read, `GET /api/owner/shift/:id`,
- * which answers the shift, its written summary, the per-waiter fold, the
- * šanker's closing and what arrived after closing. The second read is
- * `GET /api/admin/settings`, which the waiter strip judges against.
+ * which answers the shift, its written summary, the šanker's closing and what
+ * arrived after closing.
  *
- * **The owner's cut.** The tiles are down to *Pazar*: gotovina/kartica, gratis
- * and storna, razlika gotovine, manjak robe and lule went, and so did *Popisi*
- * and the review form (*Ukupno s terminala*, *Pregledano*). *Kasa* is no longer
+ * **The owner's cut.** The tiles are down to *Pazar* and *Predano*:
+ * gotovina/kartica, gratis and storna, razlika gotovine, manjak robe and lule
+ * went, and so did *Popisi*, *Po konobaru* and the review form
+ * (*Ukupno s terminala*, *Pregledano*). *Kasa* is no longer
  * the drawer reconciliation — nobody counts cash any more — it is the šanker's
  * *Zaključi smjenu*: Sav prihod, the deductions and *Za predati*, as stored.
  *
  * The refetch is the shell's poll (`useAdminChanges`), narrowed to the entities
  * that can change what is on this page. There is no `setInterval` here.
  */
-import type { OwnerShift, Settings } from '#shared/types'
+import type { OwnerShift } from '#shared/types'
 
 definePageMeta({ middleware: 'admin', layout: 'admin' })
 
@@ -32,18 +32,12 @@ useAdminChanges({
 const shiftId = computed(() => String(route.params.id))
 
 const data = ref<OwnerShift | null>(null)
-const settings = ref<Settings | null>(null)
 const loading = ref(true)
 const error = ref('')
 
 async function load() {
   try {
-    const [shift, config] = await Promise.all([
-      api.getShift(shiftId.value),
-      settings.value ? Promise.resolve(settings.value) : api.getSettings(),
-    ])
-    data.value = shift
-    settings.value = config
+    data.value = await api.getShift(shiftId.value)
     error.value = ''
   } catch (err) {
     error.value = apiErrorText(err)
@@ -86,24 +80,13 @@ const names = computed<Record<string, string>>(() => {
   return map
 })
 
-/**
- * `category_id` → name, from the one fold that has them: `summary.by_category`
- * comes back named, `by_user[].by_category` does not.
- */
-const categoryNames = computed<Record<string, string>>(() => {
-  const map: Record<string, string> = {}
-  for (const line of data.value?.summary.by_category ?? []) {
-    if (line.name) map[line.category_id] = line.name
-  }
-  return map
-})
 </script>
 
 <template>
   <div class="a-page">
     <p v-if="error" class="a-error">{{ error }}</p>
 
-    <template v-if="data && settings">
+    <template v-if="data">
       <SmjenaHeader :shift="data.shift" :names="names" />
 
       <div class="a-tiles">
@@ -120,14 +103,6 @@ const categoryNames = computed<Record<string, string>>(() => {
 
       <!-- *Kasa* is the šanker's close: Sav prihod, the deductions, Za predati. -->
       <SmjenaClosingCard :closing="data.closing ?? null" />
-
-      <SmjenaWaiterStrip
-        :shift-id="data.shift.id"
-        :users="data.by_user"
-        :settlements="data.settlements"
-        :settings="settings"
-        :category-names="categoryNames"
-      />
 
       <SmjenaCategoryBar :shift-id="data.shift.id" :categories="data.summary.by_category" />
 
