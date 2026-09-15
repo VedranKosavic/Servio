@@ -41,8 +41,7 @@ useHead({
  * so a Phase 4 package adding *Razgovor* edits one file instead of this one and
  * `vise.vue` both. The badges stay here, because they are this shell's state.
  *
- * Empty on purpose: *Puls* used to count the *Zahtijeva pažnju* list here, and
- * that list is gone from the app on the owner's call.
+ * Empty on purpose: no row carries a count today.
  */
 const badge: Record<string, () => number> = {}
 /**

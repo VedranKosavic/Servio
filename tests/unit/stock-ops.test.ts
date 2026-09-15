@@ -36,7 +36,7 @@ import {
 } from '../../server/services/stock'
 import { retireUncountedItems } from '../../server/database/retire'
 import {
-  confirmCount, listCounts, pendingCounts, submitCount, witnessCount,
+  confirmCount, listCounts, submitCount, witnessCount,
 } from '../../server/services/counts'
 import { summarizeShift, summarizeUser } from '../../server/services/summaries'
 import { createDeliveryBody, logWasteBody } from '#shared/schemas'
@@ -885,7 +885,7 @@ describe('a count', () => {
     // at 50 000 mfen is +1,00 KM.
     expect(count.totals.variance_fen).toBe(-400 + 100)
     expect(count.lines.every(l => l.applied_adjust === null)).toBe(true)
-    expect(pendingCounts(f.db, f.venueId)).toHaveLength(1)
+    expect(listCounts(f.db, f.venueId, { status: 'submitted' })).toHaveLength(1)
 
     f.clock.advance(300)
     const result = confirmCount(f.db, f.venueId, f.adminActor(), count.id, {})

@@ -255,13 +255,8 @@ function listCountBriefs(db: Queryable, venueId: string): CountBrief[] {
 /**
  * The queues, as counts.
  *
- * These are `count(*)`s over the ledgers rather than calls into each package's
- * `pendingFor()` — the *decidable list* is `owner.ts`'s job (§6.10) and needs
- * titles, amounts and route pairs; the feed needs only "is there anything", so
- * a badge can appear on a phone that is not the owner's.
- *
- * Every queue `attentionItems()` assembles has to be counted here, or the nav
- * badge on a page that has not read *Puls* is smaller than the list it counts.
+ * These are `count(*)`s over the ledgers: the feed needs only "is there
+ * anything", so a badge can appear on a phone that is not the owner's.
  */
 export function pendingCounts(db: Queryable, venueId: string): PendingCounts {
   const count = (n: number | null | undefined) => n ?? 0

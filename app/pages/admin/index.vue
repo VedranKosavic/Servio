@@ -9,10 +9,11 @@
  *   3. who is working the shift that is running;
  *   4. the floor, drawn the way the waiter's screen draws it.
  *
- * The six tiles, the *Zahtijeva pažnju* list, the flags, the feed and — as of
- * tonight — the *Čeka odluku* row are all gone by the owner's own instruction.
- * What that last one cost is written down in the report and in the comment above
- * `decisionBody()`: two decide routes now have no door on any screen.
+ * The six tiles, the *Zahtijeva pažnju* list, the flags, the feed and the
+ * *Čeka odluku* row are all gone by the owner's own instruction, and so is the
+ * server side of that list. Two decide routes
+ * (`POST /api/tabs/:id/unpaid/decide`, `POST /api/shifts/:id/force-close`) are
+ * still served but have no door on any screen.
  *
  * **Two cards and never an empty state.** *"Nema otvorene smjene"* was the honest
  * answer to "what is the promet" and the wrong thing to put on a screen at four in

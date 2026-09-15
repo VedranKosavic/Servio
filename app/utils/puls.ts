@@ -5,15 +5,12 @@
  * `fetch`, no `ref`, no component. That is what makes it testable in
  * `tests/unit/puls.test.ts` without a browser, and it is where the rules that
  * are easy to get quietly wrong live — which shift the café is in now, which one
- * it just finished and which one comes next; what a shift actually sold; and
- * which body a decide route wants.
+ * it just finished and which one comes next; and what a shift actually sold.
  *
  * Files in `app/utils/` are auto-imported by Nuxt exactly like composables, so
  * no component below writes an `import` line for any of this.
  */
 import type {
-  AttentionAction,
-  AttentionRefType,
   ChangeEntity,
   LineRow,
   LiveRostered,
@@ -24,83 +21,6 @@ import type {
   Zone,
 } from '#shared/types'
 import { durationBs } from './adminFormat'
-
-// ---------------------------------------------------------------------------
-// The one-tap decisions
-// ---------------------------------------------------------------------------
-
-/**
- * **Nothing on `/admin` calls the three functions below tonight.**
- *
- * *Puls* used to end in one row — `PulsOdluke` — that opened the decisions
- * waiting to be made, and the owner asked for that row and its whole logic to
- * go. Two of its buttons were the only door in the app to their route
- * (`POST /api/tabs/:id/unpaid/decide` and `POST /api/shifts/:id/force-close`),
- * so those two decisions now have nowhere to be made from a screen.
- *
- * What is kept here is the *vocabulary*, because it is the part that cannot be
- * re-derived by reading a route: three decide routes that each mean something
- * different by *Odobri*, and one that refuses to run without a written sentence.
- * It is under test in `tests/unit/puls.test.ts`, so whichever screen is given
- * those doors deliberately later finds the contract intact rather than guessing
- * at it a second time. Nothing here posts anything, and nothing here is
- * rendered.
- */
-
-/**
- * What the route behind *Odobri* / *Odbij* / *Bilješka* wants in its body.
- *
- * The **path** comes from `attentionTarget()` in `shared/attention.ts` and is
- * never written here; this is the other half — the one field each of those
- * routes validates. They do not share a vocabulary, and that is deliberate
- * rather than untidy: a storno is `applied | rejected` because it either
- * happened or it did not, a payout is `approved | rejected` because it is a
- * request, and an unpaid tab is `otpis | naplatiti` because the owner is not
- * approving anything — he is choosing whether the café eats the money or goes
- * after it. Approving *the waiter's request* to write a tab off is `otpis`;
- * refusing it means somebody has to collect, which is `naplatiti`.
- *
- * A `waiter_settlement` note is `POST /api/shifts/:id/force-close`, whose body
- * requires a written reason — see `decisionNeedsNote`.
- */
-export function decisionBody(
-  refType: AttentionRefType, action: AttentionAction, note?: string,
-): Record<string, unknown> {
-  const written = note?.trim() ? { note: note.trim() } : {}
-
-  switch (refType) {
-    case 'line_adjustment':
-      return { outcome: action === 'approve' ? 'applied' : 'rejected', ...written }
-    case 'tab':
-      return { outcome: action === 'approve' ? 'otpis' : 'naplatiti', ...written }
-    case 'cash_movement':
-      return { outcome: action === 'approve' ? 'approved' : 'rejected', ...written }
-    case 'waiter_settlement':
-      // `approve` accepts an envelope (an empty body); `note` force-closes the
-      // shift over a waiter who went home, and that one is not optional.
-      return action === 'note' ? { note: note?.trim() ?? '' } : {}
-    case 'stock_count':
-    case 'waste_event':
-      return written
-  }
-}
-
-/**
- * True when the route refuses to run without a written reason, so the screen
- * has to ask for one before it posts anything.
- *
- * Exactly one pair qualifies: closing a shift over a waiter who has not handed
- * his envelope in. `forceCloseBody` requires three characters or more, and a
- * decision that heavy should carry a sentence anyway.
- */
-export function decisionNeedsNote(
-  refType: AttentionRefType, action: AttentionAction,
-): boolean {
-  return refType === 'waiter_settlement' && action === 'note'
-}
-
-/** The shortest note `POST /api/shifts/:id/force-close` will take. */
-export const NOTE_MIN = 3
 
 // ---------------------------------------------------------------------------
 // Which shift it is

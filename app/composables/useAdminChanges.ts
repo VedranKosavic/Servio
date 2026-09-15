@@ -48,7 +48,7 @@ const EMPTY_PENDING: PendingCounts = {
 /**
  * **There is one timer, not one per caller.**
  *
- * The layout reads the badges and the page reads its entities, so on any given
+ * The layout and the page both subscribe, so on any given
  * screen `useAdminChanges()` is called twice — and two `useChanges()` calls
  * would be two `setInterval`s asking the server the same question, which is the
  * exact thing the one-poll rule exists to prevent. So the first caller opens the
@@ -75,12 +75,14 @@ export function useAdminChanges(handlers: AdminChangeHandlers = {}) {
   const registry = pollRegistry()
 
   /**
-   * The nav's badges live in `useState`, not in a local `ref`.
+   * The poll's shared state lives in `useState`, not in a local `ref`.
    *
-   * `useState` is Nuxt's per-request shared store: the layout draws the badge
-   * and the page decides its value, and both reach the same object without
-   * either importing the other. (It is also why a server render never leaks one
-   * visitor's numbers into the next one's page.)
+   * `useState` is Nuxt's per-request shared store: the layout and the page both
+   * reach the same object without either importing the other. (It is also why a
+   * server render never leaks one visitor's numbers into the next one's page.)
+   *
+   * `pending` is the feed's queue counts, kept as it arrives; no screen on
+   * `/admin` draws it since the *Zahtijeva pažnju* list was deleted.
    */
   const pending = useState<PendingCounts>('sank:a:pending', () => ({ ...EMPTY_PENDING }))
   const logMaxAt = useState<string | null>('sank:a:log-max', () => null)

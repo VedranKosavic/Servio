@@ -47,7 +47,7 @@ import { maxSeq } from './changes'
 import { emitChange } from '../utils/bus'
 import { tabMoney } from './tabs'
 import { insertReversal } from './payments'
-import { type AttentionItem, requireApprover, userNames } from './shifts'
+import { requireApprover, userNames } from './shifts'
 import { staffDrinkAllowed } from './orders'
 
 type AdjustmentRow = typeof schema.lineAdjustments.$inferSelect
@@ -408,29 +408,6 @@ export function listPending(
     .all()
 
   return rows.map(row => adjustmentView(q, venueId, actor, row, settings))
-}
-
-export function pendingFor(q: Queryable, venueId: string, _now: string): AttentionItem[] {
-  const names = userNames(q, venueId)
-  return q.select({ adj: schema.lineAdjustments, line: schema.orderLines.nameSnapshot })
-    .from(schema.lineAdjustments)
-    .innerJoin(schema.orderLines, eq(schema.orderLines.id, schema.lineAdjustments.orderLineId))
-    .where(and(
-      eq(schema.lineAdjustments.venueId, venueId),
-      eq(schema.lineAdjustments.status, 'pending'),
-    ))
-    .orderBy(asc(schema.lineAdjustments.createdAt))
-    .all()
-    .map(({ adj, line }) => ({
-      kind: adj.kind === 'void' ? 'void' as const : 'comp' as const,
-      ref_type: 'line_adjustment' as const,
-      ref_id: adj.id,
-      title_bs: `${adj.kind === 'void' ? 'Traži storno' : 'Traži gratis'}`
-        + ` · ${names.get(adj.requestedBy) ?? '—'} · ${line}`,
-      amount_fen: adj.amountFen,
-      at: adj.createdAt,
-      actions: ['approve', 'reject'] as ('approve' | 'reject' | 'note')[],
-    }))
 }
 
 // ===========================================================================

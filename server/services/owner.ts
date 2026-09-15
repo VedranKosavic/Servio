@@ -2,7 +2,7 @@
  * The owner dashboard's reads: *Puls*, the shift list, *Smjena* and the
  * drill-down (`docs/BACKEND.md` §6.10).
  *
- * Three rules shape this file.
+ * Two rules shape this file.
  *
  * **It re-reads nothing.** Every number here comes out of the function that owns
  * the ledger it describes — `summarizeShift` for promet and the per-person
@@ -14,46 +14,31 @@
  * `live.promet_danas_fen === summary.promet_fen` to the fen: they are the same
  * call.
  *
- * **`attention[]` is assembled, never queried.** Each package exports one
- * `pendingFor(q, venueId, now): AttentionItem[]` over its own tables and writes
- * its own Bosnian sentence; this file concatenates them and sorts by age. The
- * one adapter is `counts.ts`, which deliberately returns a plain row shape (it
- * must not define WP7's type) and is mapped here — its own comment says so.
- *
- * **Two lists, and the second one clears itself.** In-app acknowledgement is
- * Korak 3 (§1), so *Puls* must never show a row that no tap can clear.
- * `attention[]` holds only rows with a decide route; everything informational is
- * a `Flag`, recomputed from a time window on every read and gone the moment the
- * condition ends. Nothing accumulates and no `acknowledged_at` column exists.
+ * **Flags clear themselves.** Everything informational is a `Flag`, recomputed
+ * from a time window on every read and gone the moment the condition ends.
+ * Nothing accumulates and no `acknowledged_at` column exists.
  */
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { nowIso } from '../utils/ids'
 import { businessDate } from '#shared/dates'
 import type {
-  Actor, AttentionAction, AttentionItem, AttentionRefType, Flag, LineRow, LiveCountFen,
-  LiveWho, OwnerLive, OwnerShift, OwnerShiftRow, PendingCount, Settings, ShiftSummary,
-  StaleDevice, TableState,
+  Actor, Flag, LineRow, LiveCountFen, LiveWho, OwnerLive, OwnerShift, OwnerShiftRow,
+  Settings, ShiftSummary, StaleDevice, TableState,
 } from '#shared/types'
-import { ATTENTION_ROUTES } from '#shared/types/owner'
 import type { Queryable } from './types'
 import { getSettings } from './contracts'
-import { expectedCash, pendingFor as cashPending } from './cash'
+import { expectedCash } from './cash'
 import { maxSeq, pendingCounts as pendingBadges } from './changes'
-import { pendingCounts as submittedCounts } from './counts'
 import { listDevices } from './devices'
 import { maxAt as logMaxAt, listLog } from './log'
-import { pendingFor as adjustmentsPending } from './adjustments'
 import { ownerStock } from './reports'
 import { plannedOn } from './roster'
-import { pendingFor as settlementsPending } from './settlements'
-import {
-  hasSubmittedCount, listOwnerShifts as listShifts, pendingFor as shiftsPending, shiftBrief,
-} from './shifts'
+import { hasSubmittedCount, listOwnerShifts as listShifts, shiftBrief } from './shifts'
 import {
   getOwnerShift as ownerShift, latestSummary, shiftLines, summarizeShift,
 } from './summaries'
-import { getTablesState, pendingFor as tabsPending } from './tabs'
+import { getTablesState } from './tabs'
 
 // The route files import from here so `api/owner/**` has one import target
 // (§6.10); the read itself belongs to the package that owns the ledger.
@@ -136,8 +121,6 @@ export function getLive(
   const tablesState = getTablesState(q, venueId, actor)
   const devices = listDevices(q, venueId).filter(d => d.revoked_at === null)
 
-  const attention = attentionItems(q, venueId, now)
-
   return {
     seq: maxSeq(q, venueId),
     shift: shiftBrief(q, venueId, actor),
@@ -160,7 +143,6 @@ export function getLive(
     rostered: plannedOn(q, venueId, today),
     unsent: unsentDevices(devices),
     pending: pendingBadges(q, venueId),
-    attention,
     flags: flags(q, venueId, settings, focus, ec, devices, tablesState.tables, now),
     last_lines: lastLines(q, venueId, focus?.id ?? null),
     tables: tablesState.tables,
@@ -187,59 +169,6 @@ export function listOwnerShifts(
     return { ...row, promet_fen: summarizeShift(q, venueId, row.id, now).promet_fen }
   })
 }
-
-/**
- * The six `pendingFor()`s and the one adapter, oldest first.
- *
- * Oldest first is the product rule, not a tie-break: a void that has been
- * waiting since half past ten belongs above one from a minute ago, and an owner
- * who works down the list from the top is working down it in the order the
- * people at the bar have been waiting.
- */
-export function attentionItems(
-  q: Queryable, venueId: string, now = nowIso(),
-): AttentionItem[] {
-  return [
-    ...adjustmentsPending(q, venueId, now),
-    ...tabsPending(q, venueId, now),
-    ...cashPending(q, venueId, now),
-    ...shiftsPending(q, venueId, now),
-    ...settlementsPending(q, venueId, now),
-    ...submittedCounts(q, venueId).map(countAttention),
-  ].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))
-}
-
-/**
- * A submitted count, as a row of the owner's list.
- *
- * `counts.ts` returns a plain `PendingCount` on purpose — it must not declare
- * WP7's type — and its own comment says *Puls* turns each one into an
- * `AttentionItem` with the confirm route behind it. This is that function.
- * A count is confirmed or left alone; Korak 2 has no reject, so one action.
- */
-function countAttention(c: PendingCount): AttentionItem {
-  const kind = c.kind === 'full' ? 'Popis' : 'Brzi popis'
-  return {
-    kind: 'count',
-    ref_type: 'stock_count',
-    ref_id: c.count_id,
-    title_bs: `${kind} čeka potvrdu · ${c.counted_by_name}`
-      + (c.out_of_tolerance > 0 ? ` · ${c.out_of_tolerance} van tolerancije` : ''),
-    amount_fen: c.variance_fen,
-    at: c.submitted_at,
-    actions: ['approve'],
-  }
-}
-
-/**
- * The route one button on an attention row posts to, with the ids filled in.
- *
- * The logic moved to `shared/attention.ts` in Phase 2, because `UiAttentionRow`
- * in `/admin` fills the same paths in the browser and one rule must not exist
- * twice. It is re-exported here so every server caller — and
- * `owner-live.test.ts` — keeps importing it from the file that owns *Puls*.
- */
-export { attentionTarget } from '#shared/attention'
 
 // ===========================================================================
 // The pieces of Puls
@@ -449,8 +378,7 @@ function flags(
   }
 
   // A round somebody else locked that this payment did not claim to cover.
-  // `tabs.pendingFor()` already owns the *unpaid* ones as decisions; these are
-  // still open at a table, so they are a look-at rather than a decide.
+  // These are still open at a table, so they are a look-at rather than a decide.
   for (const t of tables) {
     if (t.pending_review && t.tab_id) {
       out.push({

@@ -261,19 +261,6 @@ export interface ConfirmResult {
   lines: ConfirmResultLine[]
 }
 
-/** A submitted count waiting for an admin — WP7's *Puls* reads this (§6.10). */
-export interface PendingCount {
-  count_id: string
-  kind: 'spot' | 'full'
-  phase: 'open' | 'close' | 'adhoc'
-  shift_id: string | null
-  counted_by: string
-  counted_by_name: string
-  submitted_at: string
-  variance_fen: number
-  out_of_tolerance: number
-}
-
 // ===========================================================================
 // The owner's stock reads (§6.8 "Reports")
 // ===========================================================================
