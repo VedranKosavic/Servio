@@ -57,6 +57,13 @@
       "when": 1789374644326,
       "tag": "0007_tab_cleared",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1789477956819,
+      "tag": "0008_product_waste",
+      "breakpoints": true
     }
   ]
 }

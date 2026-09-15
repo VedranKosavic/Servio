@@ -533,24 +533,7 @@ function insertLine(
     .get()
   if (!product) throw notFound('PRODUCT_NOT_FOUND', `product ${line.product_id} not found`)
 
-  const flavourIds = line.flavour_ids ?? []
-  if (product.kind === 'shisha') {
-    if (flavourIds.length < 1) throw badRequest('FLAVOURS_REQUIRED', `${product.name} needs 1–3 aromas`)
-  } else if (flavourIds.length > 0) {
-    throw badRequest('FLAVOURS_NOT_ALLOWED', `${product.name} is not a shisha product`)
-  }
-
-  const flavours = flavourIds.map((id) => {
-    const item = tx.select().from(schema.stockItems)
-      .where(and(
-        eq(schema.stockItems.id, id),
-        eq(schema.stockItems.venueId, venueId),
-        eq(schema.stockItems.kind, 'duhan'),
-      ))
-      .get()
-    if (!item) throw notFound('FLAVOUR_NOT_FOUND', `flavour ${id} is not a tobacco stock item`)
-    return item
-  })
+  const flavours = requireFlavours(tx, venueId, product, line.flavour_ids ?? [])
 
   /**
    * *Dodatni žar* points at the bowl it tops up, and the bowl has to be on
@@ -708,7 +691,37 @@ export function staffDrinkAllowed(
   return locked + granted < s.staff_drinks_per_shift
 }
 
-interface PendingMovement { stockItemId: string, qtyDelta: number, unitCostMfen: number }
+/**
+ * A nargila needs 1–3 aromas and nothing else may carry one. Shared with the
+ * menu-article otpis (`logWaste`), which deducts a spilled bowl exactly as a
+ * sold one.
+ */
+export function requireFlavours(
+  tx: Tx,
+  venueId: string,
+  product: typeof schema.products.$inferSelect,
+  flavourIds: string[],
+) {
+  if (product.kind === 'shisha') {
+    if (flavourIds.length < 1) throw badRequest('FLAVOURS_REQUIRED', `${product.name} needs 1–3 aromas`)
+  } else if (flavourIds.length > 0) {
+    throw badRequest('FLAVOURS_NOT_ALLOWED', `${product.name} is not a shisha product`)
+  }
+
+  return flavourIds.map((id) => {
+    const item = tx.select().from(schema.stockItems)
+      .where(and(
+        eq(schema.stockItems.id, id),
+        eq(schema.stockItems.venueId, venueId),
+        eq(schema.stockItems.kind, 'duhan'),
+      ))
+      .get()
+    if (!item) throw notFound('FLAVOUR_NOT_FOUND', `flavour ${id} is not a tobacco stock item`)
+    return item
+  })
+}
+
+export interface PendingMovement { stockItemId: string, qtyDelta: number, unitCostMfen: number }
 
 /**
  * What one line takes off the shelf. Three ways, and a product may use more
@@ -733,8 +746,12 @@ interface PendingMovement { stockItemId: string, qtyDelta: number, unitCostMfen:
  * deducted the moment it is switched off, whatever still points at it. A *Kafa*
  * whose whole normativ is gone therefore locks, charges and deducts nothing,
  * which is exactly what "we don't count coffee" means.
+ *
+ * **Exported for the otpis.** A spilled Coca-Cola or a dropped bowl leaves the
+ * shelf exactly as a sold one would, so `logWaste` calls this and writes the
+ * result as `waste` movements rather than restating the three rules.
  */
-function resolveStock(
+export function resolveStock(
   tx: Tx,
   venueId: string,
   product: typeof schema.products.$inferSelect,

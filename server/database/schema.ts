@@ -913,6 +913,49 @@ export const wasteEvents = sqliteTable('waste_events', {
 ])
 
 /**
+ * *Otpis* of a **menu article** — what staff write since 0008.
+ *
+ * The owner values an otpis at the menu price, not the purchase cost ("a
+ * spilled Coca-Cola is 3 KM"), and staff pick what was spilled from the menu.
+ * `waste_events` could not hold that: its `stock_item_id` is NOT NULL, a product
+ * with no stock link has no stock item to name, and dropping a NOT NULL in
+ * SQLite is a table rebuild (forbidden, see the note at the top). So this is a
+ * table of its own, and `waste_events` stays readable as history.
+ *
+ * `unit_price_fen` is the product's price **at the moment of writing** and
+ * `value_fen = round(unit_price_fen × qty)`; a later price change moves neither.
+ * The stock that came off is the `stock_movements` rows with
+ * `type='waste'`, `ref_type='product_waste'`, `ref_id = id` — the same
+ * deduction a sale of this product makes (`resolveStock`), and none at all for
+ * a product with no stock link.
+ */
+export const productWaste = sqliteTable('product_waste', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  clientId: text('client_id').notNull(),
+  productId: text('product_id').notNull().references(() => products.id),
+  qty: real('qty').notNull(),
+  reason: text('reason', {
+    enum: ['razbijeno', 'isteklo', 'prosuto', 'degustacija', 'ostalo'],
+  }).notNull(),
+  note: text('note'),
+  unitPriceFen: integer('unit_price_fen').notNull(),
+  valueFen: integer('value_fen').notNull(),
+  /** A nargila's aromas, as ids — the same shape `order_lines.flavours_json` holds. */
+  flavoursJson: text('flavours_json'),
+  shiftId: text('shift_id').references(() => shifts.id),
+  userId: text('user_id').notNull().references(() => users.id),
+  needsApproval: integer('needs_approval').notNull().default(0),
+  approvedBy: text('approved_by'),
+  approvedAt: text('approved_at'),
+  createdAt: text('created_at').notNull(),
+}, t => [
+  uniqueIndex('product_waste_client_uq').on(t.venueId, t.clientId),
+  index('product_waste_shift_idx').on(t.venueId, t.shiftId),
+  index('product_waste_created_idx').on(t.venueId, t.createdAt),
+])
+
+/**
  * A count: *popis*. Submitted by whoever counted, confirmed by an admin — and
  * only the confirm writes stock. `witnessed_by` / `witnessed_at` are reserved
  * columns so Korak 3 adds a route and no migration.

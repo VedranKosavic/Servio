@@ -256,21 +256,23 @@ test.describe('WP2 — Brzi popis, Potvrđujem stanje, Otpis', () => {
    * not offer the owner — `ADMIN_PIN_FOREIGN_DEVICE` refuses Haris on a phone
    * that is not his, and a button that always fails is worse than no button.
    */
-  test('a 12 KM bottle asks for a PIN, a 2 KM one does not', async () => {
+  test('a 15 KM otpis asks for a PIN, a 5 KM one does not', async () => {
     const page = await floor.newPage()
 
     await page.goto('/konobar/otpis')
     await expect(page.getByRole('heading', { name: 'Šta se otpisuje' })).toBeVisible()
 
-    // Red Bull costs 2,00 KM on the seed — under the 10 KM threshold.
+    // Otpis is valued at the menu price since 0008: one Red Bull is 5,00 KM on
+    // the seed's menu — under the 10 KM threshold. Four taps, as before.
     await page.getByRole('button', { name: /^Red Bull/ }).click()
     await page.getByRole('button', { name: 'razbijeno' }).click()
     await expect(page.getByText('Ovaj otpis traži odobrenje')).toHaveCount(0)
     await page.getByRole('button', { name: 'Sačuvaj' }).click()
     await expect(page.getByText(/Otpisano · Red Bull/)).toBeVisible()
 
-    // One bottle of syrup is 12,00 KM, and that one wants a witness.
-    await page.getByRole('button', { name: /^Sirup/ }).click()
+    // Three of them are 15,00 KM, and that one wants a witness.
+    await page.getByRole('button', { name: /^Red Bull/ }).click()
+    await page.getByRole('textbox', { name: 'Količina' }).fill('3')
     await page.getByRole('button', { name: 'razbijeno' }).click()
     await expect(page.getByText('Ovaj otpis traži odobrenje')).toBeVisible()
     await page.getByRole('button', { name: 'Sačuvaj', exact: true }).click()
@@ -286,7 +288,7 @@ test.describe('WP2 — Brzi popis, Potvrđujem stanje, Otpis', () => {
     for (const digit of '123456') await page.getByRole('button', { name: digit, exact: true }).click()
     await page.getByRole('button', { name: 'Odobri i sačuvaj' }).click()
 
-    await expect(page.getByText(/Otpisano · Sirup/)).toBeVisible()
+    await expect(page.getByText(/Otpisano · Red Bull/)).toBeVisible()
     await expect(page.getByText('čeka odobrenje')).toHaveCount(0)
 
     await page.close()

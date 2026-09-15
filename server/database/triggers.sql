@@ -630,6 +630,40 @@ BEGIN
   SELECT RAISE(ABORT, 'append-only');
 END;
 
+-- The menu-article otpis (0008) keeps the same rule: the price snapshot and
+-- the value are history the moment they are written; only the approval moves.
+DROP TRIGGER IF EXISTS product_waste_update_guard;
+CREATE TRIGGER product_waste_update_guard
+BEFORE UPDATE ON product_waste
+WHEN NOT (
+  OLD.id IS NEW.id
+  AND OLD.venue_id IS NEW.venue_id
+  AND OLD.client_id IS NEW.client_id
+  AND OLD.product_id IS NEW.product_id
+  AND OLD.qty IS NEW.qty
+  AND OLD.reason IS NEW.reason
+  AND OLD.note IS NEW.note
+  AND OLD.unit_price_fen IS NEW.unit_price_fen
+  AND OLD.value_fen IS NEW.value_fen
+  AND OLD.flavours_json IS NEW.flavours_json
+  AND OLD.shift_id IS NEW.shift_id
+  AND OLD.user_id IS NEW.user_id
+  AND OLD.needs_approval IS NEW.needs_approval
+  AND OLD.created_at IS NEW.created_at
+  AND OLD.approved_by IS NULL AND NEW.approved_by IS NOT NULL
+  AND OLD.approved_at IS NULL AND NEW.approved_at IS NOT NULL
+)
+BEGIN
+  SELECT RAISE(ABORT, 'product_waste: only approved_by/approved_at, once');
+END;
+
+DROP TRIGGER IF EXISTS product_waste_no_delete;
+CREATE TRIGGER product_waste_no_delete
+BEFORE DELETE ON product_waste
+BEGIN
+  SELECT RAISE(ABORT, 'append-only');
+END;
+
 -- ===========================================================================
 -- LOG, ALERTS, PRICES, AUTH
 -- ===========================================================================

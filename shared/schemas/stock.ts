@@ -109,16 +109,27 @@ export const WASTE_REASONS = ['razbijeno', 'isteklo', 'prosuto', 'degustacija', 
  * Queueable from a phone, so it carries a `client_id` and a `client_created_at`.
  * The `pin` pair is in `PIN_BEARING_ROUTES`: a bartender standing beside the
  * waiter can acknowledge a big breakage on the spot.
+ *
+ * **Exactly one of `product_id` or `stock_item_id`.** Staff write off a menu
+ * article (`product_id`), valued at its menu price — the owner's call. The
+ * `stock_item_id` shape is the old one: no screen sends it any more, but a
+ * phone may still hold one in its outbox from before the update, and the
+ * outbox posts a body unchanged however late, so the server keeps accepting it.
+ * `flavour_ids` is a nargila's aromas, exactly as on an order line.
  */
 export const logWasteBody = z.object({
   client_id: uuid,
-  stock_item_id: uuid,
+  product_id: uuid.optional(),
+  flavour_ids: z.array(uuid).min(1).max(3).optional(),
+  stock_item_id: uuid.optional(),
   qty: z.number().positive().max(1_000_000),
   reason: z.enum(WASTE_REASONS),
   note: shortNote.optional(),
   approver_user_id: uuid.optional(),
   pin: pin.optional(),
   client_created_at: clientAt.optional(),
+}).refine(b => (b.product_id === undefined) !== (b.stock_item_id === undefined), {
+  message: 'exactly one of product_id or stock_item_id',
 })
 
 /** `POST /api/stock/waste/:id/approve` — acknowledgement, never gating. */

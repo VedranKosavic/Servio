@@ -62,6 +62,8 @@ export const TRIGGER_NAMES = [
   'payments_reversal_needs_approver',
   'payments_shift_required',
   'price_history_no_delete',
+  'product_waste_no_delete',
+  'product_waste_update_guard',
   'price_history_update_guard',
   'roster_assignments_frozen_cols',
   'roster_assignments_status_guard',

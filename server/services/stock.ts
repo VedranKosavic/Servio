@@ -35,6 +35,7 @@ import type { Actor, Role } from '#shared/types'
 import type { Db, Queryable, Tx } from './types'
 import { bump, currentShift, getSettings, log, verifyPinMetered } from './contracts'
 import { listStockItems } from './admin'
+import { requireFlavours, resolveStock } from './orders'
 import { applyScan } from './scan'
 
 type StockItemRow = typeof schema.stockItems.$inferSelect
@@ -931,6 +932,11 @@ function requireWasteApprover(
  * have been a keypad that changed nothing. When they arrive and check out, the
  * row is born acknowledged — a bartender standing beside the waiter with the
  * broken bottle in his hand is the whole point of the sheet.
+ *
+ * **Two shapes since 0008.** A body with `product_id` is the menu-article otpis
+ * staff write now, valued at the menu price (`writeProductWaste`). A body with
+ * `stock_item_id` is the old one, valued at purchase cost — kept only so an
+ * entry still sitting in a phone's outbox from before the update lands.
  */
 export function logWaste(
   db: Db, venueId: string, actor: Actor, body: LogWasteBody, now = nowIso(),
@@ -952,12 +958,9 @@ export function logWaste(
   }
 
   const wasteId = db.transaction((tx) => {
-    const replay = tx.select({ id: schema.wasteEvents.id }).from(schema.wasteEvents)
-      .where(and(
-        eq(schema.wasteEvents.venueId, venueId),
-        eq(schema.wasteEvents.clientId, body.client_id),
-      ))
-      .get()
+    // Replay first, across **both** tables: the `client_id` is the phone's and
+    // it does not know which table its otpis landed in.
+    const replay = findWaste(tx, venueId, { clientId: body.client_id })
     if (replay) return { id: replay.id, replayed: true }
 
     const settings = getSettings(tx, venueId)
@@ -966,10 +969,6 @@ export function logWaste(
     if (!isApprover && !WAITER_REASONS.has(body.reason)) {
       throw forbidden('REASON_FORBIDDEN', `reason ${body.reason} needs a bartender`)
     }
-
-    const item = requireItem(tx, venueId, body.stock_item_id)
-    const cost = unitCost(item)
-    const costFen = valueFen(body.qty, cost.mfen)
 
     const skewS = actor.deviceId
       ? tx.select({ skew: schema.devices.clockSkewS }).from(schema.devices)
@@ -988,17 +987,22 @@ export function logWaste(
 
     // How many this person has already logged this shift — the cap is per
     // person per shift, so it resets with the night and never accumulates.
-    const already = shift
-      ? tx.select({ n: sql<number>`count(*)` }).from(schema.wasteEvents)
-        .where(and(
-          eq(schema.wasteEvents.venueId, venueId),
-          eq(schema.wasteEvents.shiftId, shift.id),
-          eq(schema.wasteEvents.userId, actor.userId),
-        ))
-        .get()?.n ?? 0
-      : 0
-
+    const already = shift ? wasteCountFor(tx, venueId, shift.id, actor.userId) : 0
     const overCap = already >= settings.waste_events_per_shift_per_user
+
+    if (body.product_id !== undefined) {
+      const id = writeProductWaste(tx, venueId, actor, body, body.product_id, {
+        now, occurredAt, shiftId: shift?.id ?? null, isApprover, overCap, already,
+        approverId: approver?.id ?? null,
+        threshold: settings.waste_pin_threshold_fen,
+      })
+      return { id, replayed: false }
+    }
+
+    const item = requireItem(tx, venueId, body.stock_item_id!)
+    const cost = unitCost(item)
+    const costFen = valueFen(body.qty, cost.mfen)
+
     const overThreshold = costFen >= settings.waste_pin_threshold_fen
     // A `kom` drink is a bottle off the shelf, which is the one waste a person
     // could quietly turn into a free round for a friend.
@@ -1078,23 +1082,197 @@ export function logWaste(
   return { ...getWaste(db, venueId, wasteId.id), already_applied: wasteId.replayed }
 }
 
-/** `POST /api/stock/waste/:id/approve` — acknowledged, once. */
+/**
+ * The menu-article half of `logWaste`, inside its transaction.
+ *
+ * **Valued at the menu price, snapshotted.** `unit_price_fen` is copied off the
+ * product now and `value_fen = round(price × qty)` — rounded once, to the
+ * nearest fening, so half a 3,00 KM Coca-Cola is 1,50 KM and a third of one is
+ * 1,00 KM. A price change tomorrow moves neither column; the triggers make
+ * sure nothing else does either.
+ *
+ * **The shelf moves exactly as a sale would.** `resolveStock` is the one
+ * function that turns "product × qty" into movements — 1:1, normativ, nargila
+ * grams and coal — and each comes back here as a `waste` movement at its own
+ * purchase cost (the ledger's cost column stays a cost). A product with no
+ * stock link resolves to nothing and writes the otpis row alone.
+ */
+function writeProductWaste(
+  tx: Tx, venueId: string, actor: Actor, body: LogWasteBody, productId: string,
+  ctx: {
+    now: string, occurredAt: string, shiftId: string | null, isApprover: boolean,
+    overCap: boolean, already: number, approverId: string | null, threshold: number,
+  },
+): string {
+  const product = tx.select().from(schema.products)
+    .where(and(
+      eq(schema.products.id, productId),
+      eq(schema.products.venueId, venueId),
+      eq(schema.products.active, 1),
+    ))
+    .get()
+  if (!product) throw notFound('PRODUCT_NOT_FOUND', `product ${productId} not found`)
+
+  const flavours = requireFlavours(tx, venueId, product, body.flavour_ids ?? [])
+  const flavourIds = flavours.map(f => f.id)
+  const moves = resolveStock(tx, venueId, product, body.qty, flavourIds)
+
+  const unitPriceFen = product.priceFen
+  const value = Math.round(unitPriceFen * body.qty)
+
+  // The same three reasons a stock-item otpis waits for a yes, with the
+  // threshold now read against the menu value. A bottle is a product sold 1:1
+  // off a `kom` drink — the same shelf item the old rule looked at.
+  const sold = product.sellsStockItemId
+    ? tx.select({ kind: schema.stockItems.kind, baseUnit: schema.stockItems.baseUnit })
+      .from(schema.stockItems).where(eq(schema.stockItems.id, product.sellsStockItemId)).get()
+    : undefined
+  const bottleByWaiter = !ctx.isApprover && sold?.kind === 'pice' && sold.baseUnit === 'kom'
+  const needsApproval = (value >= ctx.threshold || bottleByWaiter || ctx.overCap) && !ctx.approverId
+
+  const id = newId()
+  tx.insert(schema.productWaste).values({
+    id,
+    venueId,
+    clientId: body.client_id,
+    productId: product.id,
+    qty: body.qty,
+    reason: body.reason,
+    note: body.note ?? null,
+    unitPriceFen,
+    valueFen: value,
+    flavoursJson: flavourIds.length > 0 ? JSON.stringify(flavourIds) : null,
+    shiftId: ctx.shiftId,
+    userId: actor.userId,
+    needsApproval: needsApproval ? 1 : 0,
+    approvedBy: ctx.approverId,
+    approvedAt: ctx.approverId ? ctx.now : null,
+    createdAt: ctx.now,
+  }).run()
+
+  for (const m of moves) {
+    insertMovement(tx, venueId, {
+      stockItemId: m.stockItemId,
+      // `resolveStock` answers in sale deltas, which are already negative.
+      type: 'waste',
+      qtyDelta: m.qtyDelta,
+      unitCostMfen: m.unitCostMfen,
+      refType: 'product_waste',
+      refId: id,
+      userId: actor.userId,
+      shiftId: ctx.shiftId,
+      note: body.note ?? body.reason,
+      occurredAt: ctx.occurredAt,
+      createdAt: ctx.now,
+    })
+  }
+
+  log(tx, venueId, {
+    kind: 'product_waste_logged',
+    body: {
+      waste_id: id,
+      product_id: product.id,
+      user_id: actor.userId,
+      qty: body.qty,
+      value_fen: value,
+      reason: body.reason,
+      needs_approval: needsApproval,
+      ...(ctx.approverId ? { approved_by: ctx.approverId } : {}),
+    },
+    actorId: actor.userId,
+    deviceId: actor.deviceId,
+    ref: { type: 'product_waste', id },
+    shiftId: ctx.shiftId,
+    at: ctx.now,
+  })
+
+  if (ctx.overCap) {
+    log(tx, venueId, {
+      kind: 'waste_capped',
+      body: { waste_id: id, user_id: actor.userId, count: ctx.already + 1 },
+      actorId: actor.userId,
+      deviceId: actor.deviceId,
+      ref: { type: 'product_waste', id },
+      shiftId: ctx.shiftId,
+      at: ctx.now,
+    })
+  }
+
+  bump(tx, venueId, 'stock')
+  return id
+}
+
+/**
+ * How many otpisi this person has written in this shift, in either table —
+ * the per-shift cap counts breakage, not which screen version logged it.
+ */
+export function wasteCountFor(q: Queryable, venueId: string, shiftId: string, userId: string): number {
+  const old = q.select({ n: sql<number>`count(*)` }).from(schema.wasteEvents)
+    .where(and(
+      eq(schema.wasteEvents.venueId, venueId),
+      eq(schema.wasteEvents.shiftId, shiftId),
+      eq(schema.wasteEvents.userId, userId),
+    ))
+    .get()?.n ?? 0
+  const menu = q.select({ n: sql<number>`count(*)` }).from(schema.productWaste)
+    .where(and(
+      eq(schema.productWaste.venueId, venueId),
+      eq(schema.productWaste.shiftId, shiftId),
+      eq(schema.productWaste.userId, userId),
+    ))
+    .get()?.n ?? 0
+  return old + menu
+}
+
+/** Which table an otpis lives in, by its id or by the phone's `client_id`. */
+function findWaste(
+  q: Queryable, venueId: string, by: { id?: string, clientId?: string },
+): { id: string, table: 'waste_events' | 'product_waste', approvedBy: string | null } | null {
+  const old = q.select({ id: schema.wasteEvents.id, approvedBy: schema.wasteEvents.approvedBy })
+    .from(schema.wasteEvents)
+    .where(and(
+      eq(schema.wasteEvents.venueId, venueId),
+      by.id !== undefined
+        ? eq(schema.wasteEvents.id, by.id)
+        : eq(schema.wasteEvents.clientId, by.clientId!),
+    ))
+    .get()
+  if (old) return { ...old, table: 'waste_events' }
+
+  const menu = q.select({ id: schema.productWaste.id, approvedBy: schema.productWaste.approvedBy })
+    .from(schema.productWaste)
+    .where(and(
+      eq(schema.productWaste.venueId, venueId),
+      by.id !== undefined
+        ? eq(schema.productWaste.id, by.id)
+        : eq(schema.productWaste.clientId, by.clientId!),
+    ))
+    .get()
+  return menu ? { ...menu, table: 'product_waste' } : null
+}
+
+/** `POST /api/stock/waste/:id/approve` — acknowledged, once, in whichever table. */
 export function approveWaste(
   db: Db, venueId: string, actor: Actor, wasteId: string, now = nowIso(),
 ): WasteView {
   db.transaction((tx) => {
-    const row = tx.select().from(schema.wasteEvents)
-      .where(and(eq(schema.wasteEvents.venueId, venueId), eq(schema.wasteEvents.id, wasteId)))
-      .get()
+    const row = findWaste(tx, venueId, { id: wasteId })
     if (!row) throw notFound('WASTE_NOT_FOUND', `waste event ${wasteId} not found`)
     if (row.approvedBy) {
       throw conflict('WASTE_ALREADY_APPROVED', `waste event ${wasteId} is already approved`)
     }
 
-    tx.update(schema.wasteEvents)
-      .set({ approvedBy: actor.userId, approvedAt: now })
-      .where(and(eq(schema.wasteEvents.venueId, venueId), eq(schema.wasteEvents.id, wasteId)))
-      .run()
+    if (row.table === 'waste_events') {
+      tx.update(schema.wasteEvents)
+        .set({ approvedBy: actor.userId, approvedAt: now })
+        .where(and(eq(schema.wasteEvents.venueId, venueId), eq(schema.wasteEvents.id, wasteId)))
+        .run()
+    } else {
+      tx.update(schema.productWaste)
+        .set({ approvedBy: actor.userId, approvedAt: now })
+        .where(and(eq(schema.productWaste.venueId, venueId), eq(schema.productWaste.id, wasteId)))
+        .run()
+    }
 
     bump(tx, venueId, 'stock')
   })
@@ -1103,6 +1281,37 @@ export function approveWaste(
 }
 
 export function getWaste(q: Queryable, venueId: string, wasteId: string): WasteView {
+  const menu = q.select({
+    w: schema.productWaste,
+    productName: schema.products.name,
+    approvedByName: schema.users.name,
+  })
+    .from(schema.productWaste)
+    .innerJoin(schema.products, eq(schema.products.id, schema.productWaste.productId))
+    .leftJoin(schema.users, eq(schema.users.id, schema.productWaste.approvedBy))
+    .where(and(eq(schema.productWaste.venueId, venueId), eq(schema.productWaste.id, wasteId)))
+    .get()
+  if (menu) {
+    return {
+      id: menu.w.id,
+      product_id: menu.w.productId,
+      stock_item_id: null,
+      item_name: menu.productName,
+      qty: menu.w.qty,
+      reason: menu.w.reason,
+      note: menu.w.note,
+      cost_fen: menu.w.valueFen,
+      unit_price_fen: menu.w.unitPriceFen,
+      estimated: false,
+      needs_approval: menu.w.needsApproval === 1,
+      approved_by: menu.w.approvedBy,
+      approved_by_name: menu.approvedByName ?? null,
+      created_at: menu.w.createdAt,
+      on_hand: null,
+      already_applied: false,
+    }
+  }
+
   const row = q.select({
     w: schema.wasteEvents,
     item: schema.stockItems,
@@ -1117,12 +1326,14 @@ export function getWaste(q: Queryable, venueId: string, wasteId: string): WasteV
 
   return {
     id: row.w.id,
+    product_id: null,
     stock_item_id: row.w.stockItemId,
     item_name: row.item.name,
     qty: row.w.qty,
     reason: row.w.reason,
     note: row.w.note,
     cost_fen: row.w.costFen,
+    unit_price_fen: null,
     estimated: unitCost(row.item).estimated,
     needs_approval: row.w.needsApproval === 1,
     approved_by: row.w.approvedBy,
