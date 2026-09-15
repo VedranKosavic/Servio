@@ -51,13 +51,11 @@ import {
   deleteMessage, forwardMessage, muteUser, postMessage, setPin,
 } from '../../server/services/chat'
 import {
-  addAssignment, createTemplate, decideSwap, patchAssignment,
-  publishWeek, removeAssignment, requestSwap, updateTemplate,
+  addToPattern, createTemplate, removeFromPattern, updateTemplate,
 } from '../../server/services/roster'
 import { ackRules, publishRules } from '../../server/services/rules'
 import { discardScan, linkAlias, scanDelivery, setScanModel, stubScanModel } from '../../server/services/scan'
 import { createUpload } from '../../server/services/uploads'
-import { businessDate, addDays, weekStart } from '../../shared/dates'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 
@@ -551,48 +549,19 @@ const CALLS: Record<string, () => void | Promise<void>> = {
     muteUser(f.db, f.venueId, f.adminActor(), f.userId('Amar'), null)
   },
 
-  // Phase 4 — Raspored. `bump('roster')`, and the publish also bumps `chat`
-  // because it posts one *Svi* line.
-  [join('roster', 'weeks', 'publish.post.ts')]: () => {
-    publishWeek(f.db, f.venueId, f.adminActor(), nextWeek())
-  },
-
-  [join('roster', 'assignments', 'index.post.ts')]: () => {
-    addAssignment(f.db, f.venueId, f.adminActor(), {
-      work_date: soon(), template_id: templateId(), user_id: f.userId('Amar'),
+  // Phase 4 — Raspored, one weekly pattern since 0010. `bump('roster')` on every
+  // add and remove (and `chat` for the day's one *Svi* line).
+  [join('roster', 'pattern', 'index.post.ts')]: () => {
+    addToPattern(f.db, f.venueId, f.adminActor(), {
+      weekday: 5, template_id: templateId(), user_id: f.userId('Amar'),
     })
   },
 
-  [join('roster', 'assignments', '[id].patch.ts')]: () => {
-    patchAssignment(f.db, f.venueId, f.adminActor(), assignment('Amar'), { note: 'dolazi kasnije' })
-  },
-
-  [join('roster', 'assignments', '[id].delete.ts')]: () => {
-    removeAssignment(f.db, f.venueId, f.adminActor(), assignment('Amar'))
-  },
-
-  [join('roster', 'swaps', 'index.post.ts')]: () => {
-    requestSwap(f.db, f.venueId, f.actor('Amar'), {
-      assignment_id: assignment('Amar'), reason: 'zamjena',
+  [join('roster', 'pattern', '[id].delete.ts')]: () => {
+    const row = addToPattern(f.db, f.venueId, f.adminActor(), {
+      weekday: 6, template_id: templateId(), user_id: f.userId('Lejla'),
     })
-  },
-
-  [join('roster', 'swaps', '[id]', 'accept.post.ts')]: () => {
-    decideSwap(f.db, f.venueId, f.actor('Lejla'), swap('Amar'), 'accept')
-  },
-
-  [join('roster', 'swaps', '[id]', 'decline.post.ts')]: () => {
-    decideSwap(f.db, f.venueId, f.actor('Lejla'), swap('Amar', f.userId('Lejla')), 'decline')
-  },
-
-  [join('roster', 'swaps', '[id]', 'cancel.post.ts')]: () => {
-    decideSwap(f.db, f.venueId, f.actor('Amar'), swap('Amar'), 'cancel')
-  },
-
-  [join('roster', 'swaps', '[id]', 'assign.post.ts')]: () => {
-    decideSwap(f.db, f.venueId, f.adminActor(), swap('Amar'), 'assign', {
-      to_user_id: f.userId('Dino'),
-    })
+    removeFromPattern(f.db, f.venueId, f.adminActor(), row.id)
   },
 
   [join('admin', 'shift-templates', 'index.post.ts')]: () => {
@@ -643,34 +612,6 @@ const RULES_MD = '# Pravila\n\nOvo je tekst pravila koji svi vide na telefonu.'
 function templateId(): string {
   return f.db.select().from(schema.shiftTemplates).all()
     .find(t => t.name === 'Druga smjena')!.id
-}
-
-/** A date the roster will accept: today, in business-day terms. */
-function soon(): string {
-  return businessDate(f.clock.now())
-}
-
-function nextWeek(): string {
-  return addDays(weekStart(soon()), 7)
-}
-
-/** One planned row for `name`, created if this fixture has not made one yet. */
-function assignment(name: string): string {
-  const existing = f.db.select().from(schema.rosterAssignments).all()
-    .find(a => a.userId === f.userId(name) && a.status === 'planned')
-  if (existing) return existing.id
-  return addAssignment(f.db, f.venueId, f.adminActor(), {
-    work_date: soon(), template_id: templateId(), user_id: f.userId(name),
-  }).id
-}
-
-/** One live request from `name`, optionally named at somebody. */
-function swap(name: string, toUserId?: string): string {
-  return requestSwap(f.db, f.venueId, f.actor(name), {
-    assignment_id: assignment(name),
-    ...(toUserId ? { to_user_id: toUserId } : {}),
-    reason: 'zamjena',
-  }).id
 }
 
 /**

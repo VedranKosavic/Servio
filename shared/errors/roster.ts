@@ -1,29 +1,17 @@
 /**
- * WP0 owns this fragment: *Raspored*, zamjene i šabloni (PHASE4 §2.7).
+ * *Raspored* i šabloni smjena.
  *
- * Two of these are refusals with an override and one is a refusal without one,
- * and the wording says which: *Dupla smjena* offers a retry, *preklapaju se*
- * does not, because one person cannot be in two places at once.
+ * The roster is one weekly pattern with at most two people per shift, so the
+ * refusals are about a cell: it is full, the person is already in it, or the
+ * person or the template is no longer active.
  */
 export const ROSTER_ERRORS = {
-  ASSIGNMENT_NOT_FOUND: 'Ta smjena ne postoji.',
   TEMPLATE_NOT_FOUND: 'Taj šablon smjene ne postoji.',
   TEMPLATE_EXISTS: 'Šablon s tim nazivom već postoji.',
-
-  // -- Sedmica --------------------------------------------------------------
-  ALREADY_PUBLISHED: 'Raspored za ovu sedmicu je već objavljen.',
-  ROSTER_CHANGED: 'Raspored se u međuvremenu promijenio — osvježi i pokušaj ponovo.',
+  TEMPLATE_NOT_ACTIVE: 'Taj šablon smjene više nije aktivan.',
 
   // -- Ćelija ---------------------------------------------------------------
-  OVERLAP: 'Ta osoba već radi smjenu koja se preklapa tog dana.',
-  DOUBLE_SHIFT: 'Dupla smjena — potvrdi ako je namjerno.',
-  ROSTER_LOCKED: 'Prošli dani se ne mijenjaju.',
-  PAST_LOCKED: 'Za prošli dan se može označiti samo "nije došao" ili bolovanje.',
-
-  // -- Zamjene --------------------------------------------------------------
-  NOT_YOUR_ROW: 'Zamjena se traži za svoju smjenu.',
-  NOT_YOUR_SWAP: 'Ova zamjena je ponuđena nekom drugom.',
-  SWAP_NOT_FOUND: 'Ta zamjena ne postoji.',
-  SWAP_EXISTS: 'Za ovu smjenu već je tražena zamjena.',
-  SAME_PERSON: 'Smjenu ne možeš predati sam sebi.',
+  PATTERN_NOT_FOUND: 'Ta osoba više nije u rasporedu.',
+  SHIFT_FULL: 'U ovoj smjeni su već dvije osobe.',
+  ALREADY_IN_SHIFT: 'Ta osoba je već u ovoj smjeni.',
 }

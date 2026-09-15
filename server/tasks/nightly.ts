@@ -35,7 +35,6 @@ import { getSettings } from '../services/contracts'
 import { queueAlert } from '../services/alerts'
 import { pruneChanges } from '../services/changes'
 import { expireChatImages, gcOrphans } from '../services/uploads'
-import { unfilledSwaps } from '../services/roster'
 import { alertTaskFailure, claimTaskRun, recordTaskRun, tasksDisabled, venueIds } from '../utils/tasks'
 
 /** `changes` is a cursor, not history: a week is longer than any phone is offline. */
@@ -101,31 +100,6 @@ export function checkOpenShifts(db: Db, venueId: string, at = nowIso()): string[
 }
 
 /**
- * A *Traži zamjenu* nobody has taken and the shift has arrived.
- *
- * The alert dedupes on the request id, so this fires once however many hours it
- * runs — and it goes onto the in-app *Zahtijeva pažnju* list and **nowhere
- * else**: there is no sender in this application (CLAUDE.md).
- */
-export function checkUnfilledSwaps(db: Db, venueId: string, at = nowIso()): string[] {
-  const settings = getSettings(db, venueId)
-  const today = businessDate(at, settings.timezone, settings.business_day_start_hour)
-  const open = unfilledSwaps(db, venueId, today)
-
-  for (const request of open) {
-    db.transaction((tx) => {
-      queueAlert(tx, venueId, {
-        ruleKey: 'swap_unfilled',
-        ref: { type: 'swap_request', id: request.id },
-        payload: { title_bs: 'Zamjena još nije preuzeta.', swap_request_id: request.id },
-        at,
-      })
-    })
-  }
-  return open.map(r => r.id)
-}
-
-/**
  * The daily half: throw away what nobody will ask for again. Both deletes are
  * plain SQL on tables `shared/constants.ts` lists as deliberately unguarded —
  * a cursor and a credential, not a ledger.
@@ -150,7 +124,6 @@ export function nightlyRun(db: Db, at = nowIso()): void {
 
     try {
       checkOpenShifts(db, venueId, at)
-      checkUnfilledSwaps(db, venueId, at)
       // Hourly, like the shift check and for the same reason: an orphan is a
       // send that failed, and a failed send should not cost the venue a photo's
       // worth of disk until tomorrow morning.

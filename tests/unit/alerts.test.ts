@@ -162,10 +162,8 @@ describe('the rule keys and the log templates agree', () => {
     // is no log kind behind it: nobody closed the night. `log()` records events,
     // and an absence is not one.
     shift_not_closed: 'server/tasks/nightly.ts — still open past closing + 3 h (§10)',
-    // Phase 4, and the same shape as the two above: the alert is about a swap
-    // nobody *has* taken, and `log()` records events. `roster_sick` is not here
-    // because it is a real event with a real kind behind it.
-    swap_unfilled: 'server/tasks/nightly.ts — a pending swap whose shift has arrived (PHASE4 §2.11)',
+    // `swap_unfilled` was the third, and left with the swap code when *Raspored*
+    // became one weekly pattern: there is no swap left for it to be about.
   }
 
   it.each(LOG_KINDS)('%s: its alert rule is a declared key', (kind) => {

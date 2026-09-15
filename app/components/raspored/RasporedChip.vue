@@ -1,44 +1,22 @@
 <script setup lang="ts">
 /**
- * One person in one cell — `/admin`, light kit.
+ * One person in one cell of the weekly pattern — `/admin`, light kit.
  *
  * The whole chip is the button, because on a phone the target is the chip and
- * not a caret hidden inside it. What it draws is only ever three things:
- *
- * - **a name on the plan** — plain, the ordinary case, so a full week is quiet;
- * - **removed** — the word *uklonjeno*, on a row the owner unfolded;
- * - **the drift note** — "staro 15–00" when this row's snapshotted hours differ
- *   from what the template says today.
- *
- * No swap and no sick or absent badge: those are gone from the app ("Ne trebaju
- * nam zamjene i bolovanje").
+ * not a caret hidden inside it. It opens the small sheet whose one action is
+ * *Ukloni sa smjene*.
  */
-import type { Assignment, ShiftTemplateView } from '#shared/types'
+import type { PatternEntry } from '#shared/types'
 
-const props = defineProps<{
-  person: Assignment
-  /** The template as it stands today, to spot a row left on old hours. */
-  template?: ShiftTemplateView
-}>()
+defineProps<{ person: PatternEntry }>()
 
 defineEmits<{ open: [] }>()
-
-/** The row kept its own hours and the template has since moved. */
-const drift = computed(() => {
-  const t = props.template
-  if (!t) return null
-  if (t.start_time === props.person.start_time && t.end_time === props.person.end_time) return null
-  return `staro ${timeSpanBs(props.person.start_time, props.person.end_time)}`
-})
 </script>
 
 <template>
   <button type="button" class="r-chip" @click="$emit('open')">
     <span class="r-in">{{ person.user_initials }}</span>
     <span class="r-nm">{{ person.user_name }}</span>
-
-    <small v-if="person.status === 'removed'" class="r-tag">{{ STATUS_BS.removed }}</small>
-    <small v-if="drift" class="r-tag r-drift">{{ drift }}</small>
   </button>
 </template>
 
@@ -75,8 +53,6 @@ const drift = computed(() => {
 }
 
 .r-nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.r-tag { color: var(--ink-2); font-size: var(--text-caption); white-space: nowrap; }
-.r-drift { color: var(--muted); }
 
 @media (max-width: 1023px) {
   /* A thumb, not a mouse pointer. */

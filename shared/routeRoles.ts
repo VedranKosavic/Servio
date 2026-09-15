@@ -231,21 +231,11 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   'GET /api/uploads/:id': AR,
 
   // -- Phase 4: Raspored ---------------------------------------------------
-  'GET /api/roster': AR,
+  // One weekly pattern, no dates: the owner edits it, everybody reads it.
+  'GET /api/roster/pattern': A,
+  'POST /api/roster/pattern': A,
+  'DELETE /api/roster/pattern/:id': A,
   'GET /api/me/roster': AR,
-  'GET /api/me/roster/hours': AR,
-  'POST /api/roster/weeks/publish': A,
-  'POST /api/roster/assignments': A,
-  'PATCH /api/roster/assignments/:id': A,
-  'DELETE /api/roster/assignments/:id': A,
-  'GET /api/roster/swaps': A,
-  // Own row only — the service refuses a swap on anybody else's shift.
-  'POST /api/roster/swaps': AR,
-  'POST /api/roster/swaps/:id/accept': AR,
-  'POST /api/roster/swaps/:id/decline': AR,
-  'POST /api/roster/swaps/:id/cancel': AR,
-  'POST /api/roster/swaps/:id/assign': A,
-  'GET /api/roster/hours': A,
   'GET /api/admin/shift-templates': A,
   'POST /api/admin/shift-templates': A,
   'PATCH /api/admin/shift-templates/:id': A,

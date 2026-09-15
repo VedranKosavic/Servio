@@ -1001,9 +1001,8 @@ export function updateUser(
     }
 
     /**
-     * Phase 4: a plan that still names somebody who no longer works here is a
-     * plan nobody trusts. Deactivating turns his future `planned` rows into
-     * `removed` (note "deaktiviran") and cancels his live swap requests — in
+     * A plan that still names somebody who no longer works here is a plan
+     * nobody trusts. Deactivating takes him out of the weekly *Raspored* — in
      * **this** transaction, so a failed user patch leaves the roster alone.
      */
     if (deactivated) onUserDeactivated(tx, venueId, actor, userId, now)

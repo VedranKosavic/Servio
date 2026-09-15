@@ -1283,6 +1283,33 @@ export const shiftTemplates = sqliteTable('shift_templates', {
   createdAt: text('created_at').notNull(),
 }, t => [uniqueIndex('shift_templates_name_uq').on(t.venueId, t.name)])
 
+/**
+ * *Raspored* since 0010: one weekly pattern with no dates in it — "po danima
+ * maksimalno 2 osobe po smjeni i taj raspored ostaje zauvijek".
+ *
+ * One row is one person in one cell (`weekday` × `template_id`). `weekday` is
+ * ISO: Monday = 1 … Sunday = 7. The UNIQUE index is "the same person twice in
+ * one cell"; the cap of two per cell is a count in `services/roster.ts`, because
+ * SQLite has no constraint that counts.
+ *
+ * Configuration, not a ledger: a removal is a hard DELETE, and the history is
+ * the `roster_changed` log entry written in the same transaction. No trigger.
+ *
+ * `roster_weeks`, `roster_assignments` and `swap_requests` below are the dated
+ * roster this replaced. They stay in the database, unread, so nothing is lost.
+ */
+export const rosterPattern = sqliteTable('roster_pattern', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  weekday: integer('weekday').notNull(),
+  templateId: text('template_id').notNull().references(() => shiftTemplates.id),
+  userId: text('user_id').notNull().references(() => users.id),
+  createdBy: text('created_by').notNull(),
+  createdAt: text('created_at').notNull(),
+}, t => [
+  uniqueIndex('roster_pattern_cell_uq').on(t.venueId, t.weekday, t.templateId, t.userId),
+])
+
 /** One Monday-anchored week of the plan. `published_at` is what staff may see. */
 export const rosterWeeks = sqliteTable('roster_weeks', {
   id: text('id').primaryKey(),

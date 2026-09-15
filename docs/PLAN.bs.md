@@ -124,7 +124,7 @@ Tokom smjene samo brojevi: ture, stolovi, "Nargila 34 · Kafa 52", storna, grati
 
 ### Raspored i zamjena
 
-**"Raspored"**: **"Ova sedmica"** | **"Sljedeća"**, ponude i moji zahtjevi na vrhu (s **"Povuci"**); otvara se i bez mreže. Svoja smjena → **"Traži zamjenu"** → kolega ili otvoreno → *zamjena* / *bolest* → **"Pošalji"** (5–6 dodira); kolega **"Preuzimam"** (3) i svi vide novi raspored za 15 sekundi. Detalji u odjeljku 9.
+**"Raspored"**: sedam dana u sedmici (ponedjeljak … nedjelja), bez datuma, i ko radi koju smjenu; svoje smjene su istaknute. Samo za čitanje, otvara se i bez mreže. Zamjena se dogovara s vlasnikom. Detalji u odjeljku 9.
 
 ### Razgovor sa slikama
 
@@ -160,7 +160,7 @@ Proizvodi s cijenom koja važi odmah ("mijenjaj cijene prije otvaranja smjene"),
 
 ### Raspored
 
-Telefon: kartice dana s **"+"** za osobu (2 dodira); laptop: mreža šabloni × dani; **"Objavi raspored"** — objavljeni raspored važi svake sedmice dok se ne objavi novi, pa se sedmica ne kopira; četiri ispravke i objava 9–13 dodira. Zamjene i bolovanje nisu u aplikaciji. Detalji u odjeljku 9.
+Jedan sedmični raspored bez datuma: telefon — dani u sedmici (pon … ned) i za odabrani dan smjene s najviše **dvije osobe**, **"+"** dok ima mjesta (2 dodira); laptop: mreža smjene × dani. Izmjena se čuva odmah i važi svake sedmice — nema objave ni nacrta. Zamjene, bolovanje i "Sati" nisu u aplikaciji. Detalji u odjeljku 9.
 
 ### Razgovor
 
@@ -279,6 +279,8 @@ Jedan zapis "ko je šta uradio", nastao spajanjem stare "Aktivnosti" i zapisa ra
 "Tihi" zapisi (zahtjevi, polozi, potvrde pravila, promjene rasporeda, sitni otpis) skriveni su pod **"Važno"**; zahtjev i odluka su jedna kartica, pa petak ima 25–35 kartica, ne 80. Filteri **"Osoba"** (za "ko je ovo uradio?", ne za nečiju vremensku liniju), **"Vrsta"** (Smjene · Novac · Roba · Meni i cijene · Ljudi i uređaji · Raspored · Razgovor · Sistem), **"Period"**; nove kartice stižu iza "3 nove"; laptop ima tabelu Vrijeme · Ko · Šta · Objekat. Vremena stavki su vrijeme zaključenja na telefonu, ispravljeno za kašnjenje sata.
 
 ### Raspored
+
+**Izmjena 15.09.2026.** Vlasnik: "Ne trebaju nam datumi za raspored, samo nam treba da dodamo po danima maksimalno 2 osobe po smjeni i taj raspored ostaje zauvijek." Raspored je sada **jedan sedmični plan**: sedam dana × smjene, najviše dvije osobe po smjeni (treća se odbija: "U ovoj smjeni su već dvije osobe."), ista osoba ne može dvaput u istu smjenu. Dodavanje i uklanjanje se čuva odmah i važi svake sedmice; nema datuma, sedmica, nacrta ni "Objavi raspored". Deaktivirana osoba izlazi iz rasporeda. Na "Pulsu" je današnji dan u sedmici (dan počinje u 06:00). Pri prelasku, raspored je jednom popunjen iz posljednje objavljene sedmice. Ono što slijedi o sedmicama, zamjenama, bolovanju i "Satima" opisuje stari raspored i više ne važi.
 
 **Model.** Šablon je imenovani raspon: **"Dnevna"** 08–16 i **"Večernja"** 16–01; još jedan ("Vikend večernja" 18–03) je jedan unos. Sedmica je **"Nacrt"** do **"Objavi raspored"**, poslije svaka izmjena važi odmah. Vrijeme se kopira iz šablona pri dodjeli; svaka izmjena ostavlja zapis s prije/poslije; zamjena ne prepisuje ime (davalac "zamijenjen", primalac novi red); uklanjanje nakon objave je status s bilješkom. Planirani sati su nominalni, odrađeni od prve radnje do odjave.
 

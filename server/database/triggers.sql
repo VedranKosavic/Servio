@@ -795,6 +795,14 @@ END;
 --     roster write still goes through `services/roster.ts`, which writes a
 --     `log_entries` row with before/after in the same transaction — that is
 --     where the history of the plan lives.
+--
+--   roster_pattern (0010)
+--     — the weekly *Raspored*: seven weekdays × shift templates, at most two
+--     people per cell. It is configuration, not a ledger: removing a person is
+--     a hard DELETE, and the `roster_changed` log entry written in the same
+--     transaction is the record that he was there. The dated tables below
+--     (`roster_assignments`, `swap_requests`) keep their guards and are no
+--     longer written by anything.
 
 -- chat_messages — the identity of a message never moves. A body may change on
 -- exactly one path: the Phase 5 retention rewrite, together with `redacted_at`.

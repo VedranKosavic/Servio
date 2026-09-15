@@ -1,1015 +1,358 @@
 /**
- * *Raspored* (PHASE4 §2.7) — the constraints, the swap, and the two rules that
- * make the whole feature fair.
+ * *Raspored* — one weekly pattern, at most two people per shift, no dates.
  *
- * The two are worth naming, because everything else is bookkeeping around them:
+ * The owner's rule (2026-09-15): "Ne trebaju nam datumi za raspored, samo nam
+ * treba da dodamo po danima maksimalno 2 osobe po smjeni i taj raspored ostaje
+ * zauvijek." Everything below is a way that rule could quietly stop being true:
  *
- *   **A colleague's sickness is a hole.** A waiter's response object never held
- *   it — the staff read is a different query. If that ever becomes a filter, the
- *   `sick`/`absent` cases below fail.
- *
- *   **"Prva akcija nije dolazak."** `late_min` is evidence for a conversation
- *   and never a flag, so the number is the raw minutes and the grace only
- *   decides whether it is printed at all (PLAN §8).
+ *   - a **third person** in a cell, or the same person twice;
+ *   - an edit that does not reach every screen (no `bump`) or leaves no record
+ *     (no `roster_changed` entry) — a DELETE forgets, so the log is the history;
+ *   - a deactivated person or template still drawn on somebody's phone;
+ *   - *Puls* asking the **calendar** day which weekday it is, when at 02:00 on
+ *   Saturday the café is still working Friday;
+ *   - and 0010's one-time seed from the dated roster it replaced.
  */
-import { and, eq } from 'drizzle-orm'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { eq } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
 import { expectCode } from '../helpers/phase4'
-import { addDays, businessDate, plannedHours, weekStart } from '#shared/dates'
+import { businessDate, isoWeekday } from '#shared/dates'
+import { ROSTER_ERRORS } from '#shared/errors/roster'
+import { ROUTE_ROLES } from '#shared/routeRoles'
+import { patternBody } from '#shared/schemas'
 import {
-  addAssignment, decideSwap, getMyRoster, getRoster, listSwaps,
-  genitiveBs, overlaps, patchAssignment, plannedOn, projectForStaff, publishWeek, removeAssignment,
-  requestSwap, rosterHours, updateTemplate,
+  MAX_PER_SHIFT, addToPattern, getPattern, plannedOn, removeFromPattern, updateTemplate,
 } from '../../server/services/roster'
 import { updateUser } from '../../server/services/admin'
 import { getLive } from '../../server/services/owner'
-import type { Assignment } from '#shared/types'
-import { ROUTE_ROLES } from '#shared/routeRoles'
 
 let f: Fixture
 
 beforeEach(() => { f = makeFixture() })
 afterEach(() => { f.close() })
 
-const today = () => businessDate(f.clock.now())
-/**
- * Next week's Monday. Every date inside it is in the future, which is what
- * `ROSTER_LOCKED` requires — *this* week's Monday is usually already behind us.
- */
-const futureWeek = () => weekStart(addDays(today(), 7))
+const PON = 1
+const SRI = 3
+const PET = 5
+const SUB = 6
+const NED = 7
 
-/**
- * A row dated in the past, written straight through SQL.
- *
- * There is no service call that can produce one: `addAssignment` refuses a past
- * date and `roster_assignments_frozen_cols` refuses moving `work_date`
- * afterwards — which is the pair of rules under test, so the fixture has to go
- * around both rather than through either.
- */
-function planPast(name: string, date: string, templateName = 'Druga smjena'): string {
-  const t = template(templateName)
-  const id = crypto.randomUUID()
-  f.sqlite.exec(
-    `INSERT INTO roster_assignments (id, venue_id, work_date, template_id, user_id,`
-    + ` start_time, end_time, status, origin, created_by, created_at)`
-    + ` VALUES ('${id}', '${f.venueId}', '${date}', '${t.id}', '${f.userId(name)}',`
-    + ` '${t.startTime}', '${t.endTime}', 'planned', 'owner', '${f.userId('Haris')}',`
-    + ` '${f.clock.now()}')`,
-  )
-  return id
-}
 const template = (name: string) =>
   f.db.select().from(schema.shiftTemplates).all().find(t => t.name === name)!
 
-function plan(name: string, opts: { date?: string, template?: string, force?: boolean } = {}) {
-  return addAssignment(f.db, f.venueId, f.adminActor(), {
-    work_date: opts.date ?? today(),
-    template_id: template(opts.template ?? 'Druga smjena').id,
-    user_id: f.userId(name),
-    ...(opts.force ? { force_double: true } : {}),
+function add(name: string, weekday: number, templateName = 'Druga smjena') {
+  return addToPattern(f.db, f.venueId, f.adminActor(), {
+    weekday, template_id: template(templateName).id, user_id: f.userId(name),
   }, f.clock.now())
 }
 
-const rowOf = (id: string) =>
-  f.db.select().from(schema.rosterAssignments)
-    .where(eq(schema.rosterAssignments.id, id)).get()!
+const rows = () => f.db.select().from(schema.rosterPattern).all()
+const rosterBumps = () => f.db.select().from(schema.changes).all().filter(c => c.entity === 'roster').length
+const rosterEntries = () => f.db.select().from(schema.logEntries).all().filter(e => e.kind === 'roster_changed')
 
 // ---------------------------------------------------------------------------
-// The cell constraints
-// ---------------------------------------------------------------------------
 
-describe('the same person twice in one cell', () => {
-  it('is refused — DOUBLE_SHIFT on the same template, not a second row', () => {
-    plan('Amar')
-    expectCode(() => plan('Amar'), 'DOUBLE_SHIFT')
-    expect(f.db.select().from(schema.rosterAssignments).all()).toHaveLength(1)
+describe('the weekday of a business date', () => {
+  it('is ISO: Monday is 1 and Sunday is 7', () => {
+    expect(isoWeekday('2026-09-14')).toBe(PON)
+    expect(isoWeekday('2026-09-18')).toBe(PET)
+    expect(isoWeekday('2026-09-20')).toBe(NED)
   })
 
-  it('is also refused by the database, whatever the service does', () => {
-    const first = plan('Amar')
-    const row = rowOf(first.id)
+  it('puts 02:00 on Saturday in Friday, because the café\'s day starts at 06:00', () => {
+    // 00:00 UTC is 02:00 in Sarajevo in September.
+    const day = businessDate('2026-09-19T00:00:00.000Z')
+    expect(day).toBe('2026-09-18')
+    expect(isoWeekday(day)).toBe(PET)
+  })
+
+  it('refuses a weekday outside 1–7 at the body', () => {
+    const body = { template_id: template('Druga smjena').id, user_id: f.userId('Amar') }
+    expect(patternBody.safeParse({ ...body, weekday: 0 }).success).toBe(false)
+    expect(patternBody.safeParse({ ...body, weekday: 8 }).success).toBe(false)
+    expect(patternBody.safeParse({ ...body, weekday: 7 }).success).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+
+describe('adding a person to the pattern', () => {
+  it('saves the cell and reads back as weekday × template, with names', () => {
+    const amar = add('Amar', PON)
+    add('Lejla', PET, 'Prva smjena')
+
+    expect(amar).toMatchObject({
+      weekday: PON, template_id: template('Druga smjena').id,
+      user_id: f.userId('Amar'), user_name: 'Amar',
+    })
+
+    const view = getPattern(f.db, f.venueId)
+    expect(view.max_per_shift).toBe(2)
+    expect(view.templates.map(t => t.name)).toEqual(['Prva smjena', 'Druga smjena'])
+    expect(view.entries.map(e => [e.weekday, e.user_name])).toEqual([[PON, 'Amar'], [PET, 'Lejla']])
+  })
+
+  it('refuses a third person with 409 SHIFT_FULL, in Bosnian, and writes nothing', () => {
+    expect(MAX_PER_SHIFT).toBe(2)
+    add('Amar', PET)
+    add('Lejla', PET)
+
+    expectCode(() => add('Dino', PET), 'SHIFT_FULL')
+    let thrown: unknown
+    try { add('Dino', PET) } catch (err) { thrown = err }
+    expect((thrown as { status?: number } | undefined)?.status).toBe(409)
+    expect(ROSTER_ERRORS.SHIFT_FULL).toBe('U ovoj smjeni su već dvije osobe.')
+    expect(rows()).toHaveLength(2)
+
+    // The cap is per cell: the other shift and the next day still have room.
+    add('Dino', PET, 'Prva smjena')
+    add('Dino', SUB)
+    expect(rows()).toHaveLength(4)
+  })
+
+  it('refuses the same person twice in one cell — the service and the database', () => {
+    const first = add('Amar', SRI)
+    expectCode(() => add('Amar', SRI), 'ALREADY_IN_SHIFT')
+    expect(rows()).toHaveLength(1)
+
+    const row = rows()[0]!
     f.expectRefused(
-      `INSERT INTO roster_assignments (id, venue_id, work_date, template_id, user_id,`
-      + ` start_time, end_time, status, origin, created_by, created_at)`
-      + ` VALUES ('dup', '${f.venueId}', '${row.workDate}', '${row.templateId}', '${row.userId}',`
-      + ` '16:00', '01:00', 'planned', 'owner', '${row.createdBy}', '${row.createdAt}')`,
+      `INSERT INTO roster_pattern (id, venue_id, weekday, template_id, user_id, created_by, created_at)`
+      + ` VALUES ('dup', '${f.venueId}', ${row.weekday}, '${row.templateId}', '${row.userId}',`
+      + ` '${row.createdBy}', '${row.createdAt}')`,
       /UNIQUE constraint failed/,
     )
-  })
-})
-
-describe('editing a template', () => {
-  it('refuses a rename onto another template\'s name with TEMPLATE_EXISTS, not a 500', () => {
-    expectCode(() => updateTemplate(f.db, f.venueId, f.adminActor(), template('Prva smjena').id, {
-      name: 'Druga smjena',
-    }, f.clock.now()), 'TEMPLATE_EXISTS')
-
-    // Saving a template under its own name is not a clash.
-    const same = updateTemplate(f.db, f.venueId, f.adminActor(), template('Prva smjena').id, {
-      name: 'Prva smjena', start_time: '07:30',
-    }, f.clock.now())
-    expect(same.start_time).toBe('07:30')
-  })
-})
-
-describe('overlapping and double shifts', () => {
-  it('knows a wrap-around shift overlaps the morning after', () => {
-    expect(overlaps('16:00', '01:00', '08:00', '16:00')).toBe(false)
-    expect(overlaps('22:00', '06:00', '05:00', '13:00')).toBe(true)
-    expect(overlaps('08:00', '16:00', '15:00', '23:00')).toBe(true)
+    expect(first.id).toBe(row.id)
   })
 
-  it('refuses two overlapping templates on one date, with no override', () => {
-    updateTemplate(f.db, f.venueId, f.adminActor(), template('Prva smjena').id, {
-      start_time: '15:00', end_time: '23:00',
-    }, f.clock.now())
-
-    plan('Amar', { template: 'Druga smjena' })
-    expectCode(() => plan('Amar', { template: 'Prva smjena' }), 'OVERLAP')
-    // …and `force_double` does not help: one person cannot be in two places.
-    expectCode(() => plan('Amar', { template: 'Prva smjena', force: true }), 'OVERLAP')
+  it('allows one person on both shifts of a weekday', () => {
+    add('Amar', SRI, 'Prva smjena')
+    add('Amar', SRI, 'Druga smjena')
+    expect(rows()).toHaveLength(2)
   })
 
-  it('asks once about a non-overlapping second shift and takes the retry', () => {
-    plan('Amar', { template: 'Prva smjena' })
-    expectCode(() => plan('Amar', { template: 'Druga smjena' }), 'DOUBLE_SHIFT')
-
-    const forced = plan('Amar', { template: 'Druga smjena', force: true })
-    expect(forced.status).toBe('planned')
-    expect(f.db.select().from(schema.rosterAssignments).all()).toHaveLength(2)
-  })
-})
-
-describe('past dates', () => {
-  it('refuses a create and a delete on yesterday', () => {
-    const yesterday = addDays(today(), -1)
-    expectCode(() => plan('Amar', { date: yesterday }), 'ROSTER_LOCKED')
-
-    const id = planPast('Amar', yesterday)
-    expectCode(() => removeAssignment(f.db, f.venueId, f.adminActor(), id, f.clock.now()),
-      'ROSTER_LOCKED')
-  })
-
-  it('allows Nije došao on yesterday and refuses removed — 422 PAST_LOCKED', () => {
-    const yesterday = addDays(today(), -1)
-    const row = { id: planPast('Amar', yesterday) }
-
-    const absent = patchAssignment(f.db, f.venueId, f.adminActor(), row.id, {
-      status: 'absent',
-    }, f.clock.now())
-    expect(absent.status).toBe('absent')
-    expect(f.db.select().from(schema.logEntries).all().some(e => e.kind === 'roster_absent')).toBe(true)
-
-    // …and back again, because a mistake is a mistake.
-    expect(patchAssignment(f.db, f.venueId, f.adminActor(), row.id, {
-      status: 'planned',
-    }, f.clock.now()).status).toBe('planned')
-
-    expectCode(() => patchAssignment(f.db, f.venueId, f.adminActor(), row.id, {
-      status: 'removed',
-    }, f.clock.now()), 'PAST_LOCKED')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// Copy, publish and the system line
-// ---------------------------------------------------------------------------
-
-/**
- * "Kada se objavi raspored, taj raspored važi zauvijek osim ako se objavi novi
- * raspored." A published week is the pattern of every later week that has no
- * rows of its own, until a newer week is published.
- *
- * (*Kopiraj prošlu sedmicu* and its two tests are gone with the button: the
- * invariant they held — the regular people carry forward, one-off covers do
- * not — is asserted below on the inheritance that replaced the copy.)
- */
-describe('a published week repeats until a newer one is published', () => {
-  const cells = (weeks: { days: { assignments: Assignment[] }[] }[]) =>
-    weeks[0]!.days.flatMap(d => d.assignments)
-  const adminWeek = (week: string) => getRoster(f.db, f.venueId, f.adminActor(), week, week)[0]!
-  const staffWeek = (name: string, week: string) => projectForStaff(
-    getRoster(f.db, f.venueId, f.actor(name), week, week), f.userId(name),
-  )[0]!
-  const rowsIn = (week: string) => f.db.select().from(schema.rosterAssignments).all()
-    .filter(a => a.workDate >= week && a.workDate <= addDays(week, 6))
-  const headerOf = (week: string) => f.db.select().from(schema.rosterWeeks).all()
-    .find(w => w.weekStart === week)
-
-  /** W: Lejla on Monday (Druga), Amar on Friday (Druga), published. */
-  function publishedPattern(): { week: string, lejla: Assignment, amar: Assignment } {
-    const week = futureWeek()
-    const lejla = plan('Lejla', { date: week })
-    const amar = plan('Amar', { date: addDays(week, 4) })
-    publishWeek(f.db, f.venueId, f.adminActor(), week, f.clock.now())
-    return { week, lejla, amar }
-  }
-
-  /** A published header for a week in the past, written around the service. */
-  function publishPast(date: string): void {
-    f.sqlite.exec(
-      `INSERT INTO roster_weeks (id, venue_id, week_start, published_at, published_by,`
-      + ` created_by, created_at) VALUES ('${crypto.randomUUID()}', '${f.venueId}',`
-      + ` '${weekStart(date)}', '${f.clock.now()}', '${f.userId('Haris')}',`
-      + ` '${f.userId('Haris')}', '${f.clock.now()}')`,
-    )
-  }
-
-  it('shows the owner every later week as the published pattern, marked and unwritten', () => {
-    const { week } = publishedPattern()
-    const before = f.db.select().from(schema.rosterAssignments).all().length
-
-    for (const later of [addDays(week, 7), addDays(week, 28)]) {
-      const view = adminWeek(later)
-      expect(view.inherited_from).toBe(week)
-      expect(view.published_at).not.toBeNull()
-      expect(view.published_by_name).toBe('Haris')
-      const people = view.days.flatMap(d => d.assignments)
-      expect(people.map(a => [a.user_name, a.work_date])).toEqual([
-        ['Lejla', later],
-        ['Amar', addDays(later, 4)],
-      ])
-      expect(people.every(a => a.inherited && a.status === 'planned')).toBe(true)
-    }
-
-    // Read time, not write time: not one row exists for those weeks.
-    expect(f.db.select().from(schema.rosterAssignments).all()).toHaveLength(before)
-    expect(headerOf(addDays(week, 7))).toBeUndefined()
-  })
-
-  it('shows staff the same pattern on /api/roster', () => {
-    const { week } = publishedPattern()
-    const later = staffWeek('Dino', addDays(week, 14))
-    expect(later.inherited_from).toBe(week)
-    expect(later.published_at).not.toBeNull()
-    expect(later.days.flatMap(d => d.assignments).map(a => a.user_name)).toEqual(['Lejla', 'Amar'])
-  })
-
-  it('shows S17\'s next week as this week repeated', () => {
-    const today_ = today()
-    const thisWeek = weekStart(today_)
-    plan('Tarik', { date: today_, template: 'Prva smjena' })
-    publishWeek(f.db, f.venueId, f.adminActor(), thisWeek, f.clock.now())
-    const mine = getMyRoster(f.db, f.venueId, f.actor('Tarik'), f.clock.now())
-    expect(mine.next_week.inherited_from).toBe(thisWeek)
-    expect(mine.next_week.days.flatMap(d => d.assignments)
-      .map(a => [a.user_name, a.work_date])).toEqual([['Tarik', addDays(today_, 7)]])
-  })
-
-  it('puts tonight\'s inherited plan on Puls and in Sati', () => {
-    const today_ = today()
-    // Last week, published, with Lejla on today's weekday.
-    planPast('Lejla', addDays(today_, -7))
-    publishPast(addDays(today_, -7))
-
-    expect(plannedOn(f.db, f.venueId, today_).map(r => r.name)).toEqual(['Lejla'])
-    expect(getLive(f.db, f.venueId, f.adminActor()).rostered.map(r => r.name)).toContain('Lejla')
-
-    const lejla = rosterHours(f.db, f.venueId, today_.slice(0, 7), f.userId('Lejla'))[0]!
-    expect(lejla.days.map(d => d.business_date)).toContain(today_)
-  })
-
-  it('inherits nothing before the first publish, and nothing backwards', () => {
-    const week = futureWeek()
-    plan('Amar', { date: week })
-    // A draft is not a pattern.
-    expect(cells([adminWeek(addDays(week, 7))])).toEqual([])
-    expect(adminWeek(addDays(week, 7)).inherited_from).toBeNull()
-    expect(staffWeek('Amar', addDays(week, 7)).published_at).toBeNull()
-
-    // A publish two weeks later reaches forward only.
-    plan('Lejla', { date: addDays(week, 14) })
-    publishWeek(f.db, f.venueId, f.adminActor(), addDays(week, 14), f.clock.now())
-    expect(cells([adminWeek(addDays(week, 7))])).toEqual([])
-    expect(cells([adminWeek(addDays(week, 21))]).map(a => a.user_name)).toEqual(['Lejla'])
-  })
-
-  it('lets a newer publish take over from its own week on', () => {
-    const { week } = publishedPattern()
-    const newer = addDays(week, 14)
-    // The owner rewrites that week: both regulars off, Dino on. The first removal
-    // writes the inherited week down as a draft; the second is an ordinary row.
-    for (const name of ['Lejla', 'Amar']) {
-      const cell = cells([adminWeek(newer)]).find(a => a.user_name === name)!
-      removeAssignment(f.db, f.venueId, f.adminActor(), cell.id, f.clock.now(),
-        cell.inherited ? cell.work_date : undefined)
-    }
-    plan('Dino', { date: addDays(newer, 2) })
-    publishWeek(f.db, f.venueId, f.adminActor(), newer, f.clock.now())
-
-    expect(adminWeek(addDays(week, 7)).inherited_from).toBe(week)
-    expect(cells([adminWeek(addDays(week, 7))]).map(a => a.user_name)).toEqual(['Lejla', 'Amar'])
-    for (const later of [addDays(newer, 7), addDays(newer, 70)]) {
-      expect(adminWeek(later).inherited_from).toBe(newer)
-      expect(cells([adminWeek(later)]).map(a => a.user_name)).toEqual(['Dino'])
-    }
-  })
-
-  it('carries the regular people and not a one-off cover', () => {
-    const week = futureWeek()
-    const amar = plan('Amar', { date: addDays(week, 4) })
-    publishWeek(f.db, f.venueId, f.adminActor(), week, f.clock.now())
-    const request = requestSwap(f.db, f.venueId, f.actor('Amar'), {
-      assignment_id: amar.id, reason: 'zamjena',
-    }, f.clock.now())
-    decideSwap(f.db, f.venueId, f.actor('Lejla'), request.id, 'accept', {}, f.clock.now())
-
-    // Amar handed over one Friday; he is still the Friday person.
-    expect(cells([adminWeek(addDays(week, 7))]).map(a => a.user_name)).toEqual(['Amar'])
-  })
-
-  it('turns the first edit into a draft of that week, still invisible to staff', () => {
-    const { week } = publishedPattern()
-    const next = addDays(week, 7)
-
-    plan('Dino', { date: addDays(next, 1) })
-
-    const rows = rowsIn(next)
-    expect(rows.map(r => [f.db.select().from(schema.users).all().find(u => u.id === r.userId)!.name, r.origin]).sort())
-      .toEqual([['Amar', 'copy'], ['Dino', 'owner'], ['Lejla', 'copy']])
-    expect(headerOf(next)!.publishedAt).toBeNull()
-
-    const owner = adminWeek(next)
-    expect([owner.inherited_from, owner.published_at]).toEqual([null, null])
-    expect(cells([owner]).every(a => !a.inherited)).toBe(true)
-
-    // Staff keep the published pattern until the owner publishes the draft.
-    const staff = staffWeek('Dino', next)
-    expect(staff.inherited_from).toBe(week)
-    expect(cells([staff]).map(a => a.user_name)).toEqual(['Lejla', 'Amar'])
-    // …and the week after still repeats the published week, not the draft.
-    expect(cells([adminWeek(addDays(next, 7))]).map(a => a.user_name)).toEqual(['Lejla', 'Amar'])
-
-    // The edit before publish posted nothing to *Svi*.
-    expect(f.db.select().from(schema.chatMessages).all()
-      .filter(m => m.systemKey === 'roster_changed')).toHaveLength(0)
-  })
-
-  it('makes the published draft the pattern from its week on', () => {
-    const { week } = publishedPattern()
-    const next = addDays(week, 7)
-    plan('Dino', { date: addDays(next, 1) })
-    publishWeek(f.db, f.venueId, f.adminActor(), next, f.clock.now())
-
-    expect(cells([staffWeek('Tarik', next)]).map(a => a.user_name)).toEqual(['Lejla', 'Dino', 'Amar'])
-    const after = adminWeek(addDays(next, 14))
-    expect(after.inherited_from).toBe(next)
-    expect(cells([after]).map(a => a.user_name)).toEqual(['Lejla', 'Dino', 'Amar'])
-    expect(f.db.select().from(schema.chatMessages).all()
-      .filter(m => m.systemKey === 'roster_published')).toHaveLength(2)
-  })
-
-  it('writes an inherited week down before publishing it, so later weeks keep the people', () => {
-    const { week } = publishedPattern()
-    const next = addDays(week, 7)
-    publishWeek(f.db, f.venueId, f.adminActor(), next, f.clock.now())
-
-    expect(rowsIn(next)).toHaveLength(2)
-    expect(cells([adminWeek(addDays(next, 7))]).map(a => a.user_name)).toEqual(['Lejla', 'Amar'])
-  })
-
-  it('removes a person from an inherited cell as a draft of that week', () => {
-    const { week, amar } = publishedPattern()
-    const next = addDays(week, 7)
-    const cell = cells([adminWeek(next)]).find(a => a.user_name === 'Amar')!
-    expect([cell.id, cell.inherited]).toEqual([amar.id, true])
-
-    removeAssignment(f.db, f.venueId, f.adminActor(), cell.id, f.clock.now(), cell.work_date)
-
-    // A draft: the row is gone outright, Lejla was written down, the phones
-    // still see Amar.
-    expect(rowsIn(next).map(r => r.userId)).toEqual([f.userId('Lejla')])
-    expect(headerOf(next)!.publishedAt).toBeNull()
-    expect(cells([staffWeek('Amar', next)]).map(a => a.user_name)).toEqual(['Lejla', 'Amar'])
-    // The source row itself is untouched.
-    expect(rowOf(amar.id).status).toBe('planned')
-  })
-
-  it('refuses a stale inherited tap with ROSTER_CHANGED, and writes nothing', () => {
-    const { week } = publishedPattern()
-    const cell = cells([adminWeek(addDays(week, 14))]).find(a => a.user_name === 'Amar')!
-
-    // A newer publish in between: week+14 no longer repeats week.
-    plan('Dino', { date: addDays(week, 7) })
-    publishWeek(f.db, f.venueId, f.adminActor(), addDays(week, 7), f.clock.now())
-    const before = f.db.select().from(schema.rosterAssignments).all().length
-
-    expectCode(() => removeAssignment(f.db, f.venueId, f.adminActor(), cell.id,
-      f.clock.now(), cell.work_date), 'ROSTER_CHANGED')
-    // Not a whole number of weeks after the source row.
-    expectCode(() => removeAssignment(f.db, f.venueId, f.adminActor(), cell.id,
-      f.clock.now(), addDays(cell.work_date, 3)), 'ROSTER_CHANGED')
-
-    expect(f.db.select().from(schema.rosterAssignments).all()).toHaveLength(before)
-    expect(headerOf(addDays(week, 14))).toBeUndefined()
-  })
-
-  /**
-   * Swaps and sick days are gone from the UI ("Ne trebaju nam zamjene i
-   * bolovanje"). Their routes survive, unused, and act on real rows only: an
-   * inherited cell's id is the **source** week's row, so a swap or a status patch
-   * aimed at it lands on that source row and never writes a later week down.
-   */
-  it('never materialises a week for a swap or a status change', () => {
-    const { week, amar } = publishedPattern()
-    const later = addDays(week, 14)
-    const cell = cells([adminWeek(later)]).find(a => a.user_name === 'Amar')!
-    expect(cell.id).toBe(amar.id)
-
-    patchAssignment(f.db, f.venueId, f.adminActor(), cell.id, { note: 'napomena' }, f.clock.now())
-    requestSwap(f.db, f.venueId, f.actor('Amar'), {
-      assignment_id: cell.id, reason: 'zamjena',
-    }, f.clock.now())
-
-    expect(rowsIn(later)).toEqual([])
-    expect(headerOf(later)).toBeUndefined()
-    expect(adminWeek(later).inherited_from).toBe(week)
-  })
-
-  it('hides a deactivated template from inherited weeks, and keeps the past', () => {
-    const today_ = today()
-    // Two weeks ago, published, Amar on today's weekday. Last week and this week
-    // only ever inherited it.
-    planPast('Amar', addDays(today_, -14))
-    publishPast(addDays(today_, -14))
-    const druga = template('Druga smjena')
-
-    updateTemplate(f.db, f.venueId, f.adminActor(), druga.id, { active: false }, f.clock.now())
-
-    // The weeks that already happened were written down with the template…
-    for (const past of [addDays(today_, -7), today_]) {
-      expect(rowsIn(weekStart(past)).map(r => [r.workDate, r.templateId]))
-        .toEqual([[past, druga.id]])
-      expect(headerOf(weekStart(past))!.publishedAt).not.toBeNull()
-    }
-    // …and no week after this one carries it.
-    expect(cells([adminWeek(weekStart(addDays(today_, 7)))])).toEqual([])
-    expect(cells([adminWeek(weekStart(addDays(today_, 35)))])).toEqual([])
-  })
-
-  it('drops a deactivated person from inherited weeks and keeps the days he worked', () => {
-    const today_ = today()
-    planPast('Dino', addDays(today_, -14))
-    publishPast(addDays(today_, -14))
-
+  it('refuses a deactivated person and a switched-off template', () => {
     updateUser(f.db, f.venueId, f.adminActor(), f.userId('Dino'), { active: false }, f.clock.now())
+    expectCode(() => add('Dino', PON), 'USER_NOT_ACTIVE')
 
-    // Last week keeps him; tonight's row became `removed` like any future row.
-    expect(rowsIn(weekStart(addDays(today_, -7))).map(r => r.status)).toEqual(['planned'])
-    expect(rowsIn(weekStart(today_)).map(r => [r.status, r.note])).toEqual([['removed', 'deaktiviran']])
-    expect(cells([adminWeek(weekStart(addDays(today_, 14)))])).toEqual([])
-  })
-
-  it('writes nothing on any read — GET is not a mutation', () => {
-    const today_ = today()
-    planPast('Lejla', addDays(today_, -7))
-    publishPast(addDays(today_, -7))
-    plan('Amar', { date: addDays(futureWeek(), 7) }) // a draft further on
-
-    const count = (table: string) =>
-      (f.sqlite.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n
-    const tables = ['roster_assignments', 'roster_weeks', 'changes', 'log_entries', 'chat_messages']
-    const before = tables.map(count)
-
-    getRoster(f.db, f.venueId, f.adminActor(), today_, addDays(today_, 60))
-    getRoster(f.db, f.venueId, f.actor('Amar'), today_, addDays(today_, 60))
-    getMyRoster(f.db, f.venueId, f.actor('Lejla'), f.clock.now())
-    plannedOn(f.db, f.venueId, today_)
-    getLive(f.db, f.venueId, f.adminActor())
-    rosterHours(f.db, f.venueId, today_.slice(0, 7))
-    rosterHours(f.db, f.venueId, today_.slice(0, 7), f.userId('Lejla'))
-
-    expect(tables.map(count)).toEqual(before)
+    updateTemplate(f.db, f.venueId, f.adminActor(), template('Prva smjena').id, { active: false }, f.clock.now())
+    expectCode(() => add('Amar', PON, 'Prva smjena'), 'TEMPLATE_NOT_ACTIVE')
+    expect(rows()).toHaveLength(0)
   })
 })
 
-describe('publishWeek', () => {
-  it('publishes once, posts one Svi line, and refuses a second publish', () => {
-    const week = futureWeek()
-    plan('Amar', { date: week })
-    publishWeek(f.db, f.venueId, f.adminActor(), week, f.clock.now())
+describe('removing a person', () => {
+  it('hard-deletes the row and frees the seat', () => {
+    const amar = add('Amar', PET)
+    add('Lejla', PET)
 
-    const lines = f.db.select().from(schema.chatMessages).all()
-      .filter(m => m.systemKey === 'roster_published')
-    expect(lines).toHaveLength(1)
-    expect(lines[0]!.body).toMatch(/Raspored za \d{2}\.\d{2}\.–\d{2}\.\d{2}\. je objavljen/)
+    removeFromPattern(f.db, f.venueId, f.adminActor(), amar.id, f.clock.now())
+    expect(rows().map(r => r.userId)).toEqual([f.userId('Lejla')])
 
-    expectCode(() => publishWeek(f.db, f.venueId, f.adminActor(), week, f.clock.now()),
-      'ALREADY_PUBLISHED')
+    add('Dino', PET)
+    expect(getPattern(f.db, f.venueId).entries.map(e => e.user_name).sort()).toEqual(['Dino', 'Lejla'])
   })
 
-  it('posts nothing before publish, and at most one line per owner per day after', () => {
-    const week = futureWeek()
-    plan('Amar', { date: week })
-    // Before publish: a draft nobody has seen has nothing to announce.
-    expect(f.db.select().from(schema.chatMessages).all()
-      .filter(m => m.systemKey === 'roster_changed')).toHaveLength(0)
+  it('says PATTERN_NOT_FOUND for a row that is already gone', () => {
+    const amar = add('Amar', PET)
+    removeFromPattern(f.db, f.venueId, f.adminActor(), amar.id, f.clock.now())
+    expectCode(() => removeFromPattern(f.db, f.venueId, f.adminActor(), amar.id, f.clock.now()), 'PATTERN_NOT_FOUND')
+  })
+})
 
-    publishWeek(f.db, f.venueId, f.adminActor(), week, f.clock.now())
-    const quietBefore = f.db.select().from(schema.logEntries).all()
-      .filter(e => e.kind === 'roster_changed').length
+describe('every edit reaches every screen and leaves a record', () => {
+  it('bumps roster and writes roster_changed on add and on remove', () => {
+    const bumps = rosterBumps()
+    const amar = add('Amar', PET)
+    expect(rosterBumps()).toBe(bumps + 1)
 
-    const names = ['Lejla', 'Dino', 'Tarik', 'Emir']
-    for (const name of names) plan(name, { date: week })
-    plan('Amar', { date: week, template: 'Prva smjena', force: true })
-    plan('Lejla', { date: week, template: 'Prva smjena', force: true })
+    removeFromPattern(f.db, f.venueId, f.adminActor(), amar.id, f.clock.now())
+    expect(rosterBumps()).toBe(bumps + 2)
 
-    // Six edits after publish, six quiet entries — the Dnevnik keeps every one.
-    const quiet = f.db.select().from(schema.logEntries).all()
-      .filter(e => e.kind === 'roster_changed')
-    expect(quiet.length - quietBefore).toBe(6)
+    const entries = rosterEntries()
+    expect(entries.map(e => JSON.parse(e.bodyJson).what)).toEqual(['dodan', 'uklonjen'])
+    expect(JSON.parse(entries[0]!.bodyJson)).toMatchObject({ weekday: PET, user_id: f.userId('Amar') })
+    expect(entries[0]!.titleBs).toContain('pet')
+    expect(entries[0]!.titleBs).toContain('Amar')
+  })
 
-    const chatLines = f.db.select().from(schema.chatMessages).all()
+  it('posts one Svi line per owner per business day, however many edits', () => {
+    add('Amar', PON)
+    add('Lejla', PON)
+    add('Dino', SRI)
+    const lines = f.db.select().from(schema.chatMessages).all()
       .filter(m => m.systemKey === 'roster_changed')
-    // A Friday of six fixes is one line.
-    expect(chatLines).toHaveLength(1)
+    expect(lines).toHaveLength(1)
   })
 })
 
 // ---------------------------------------------------------------------------
-// Swaps
-// ---------------------------------------------------------------------------
 
-describe('requestSwap and decideSwap', () => {
-  it('moves the giver to swapped and the taker in, in one transaction', () => {
-    const giver = plan('Amar')
-    const request = requestSwap(f.db, f.venueId, f.actor('Amar'), {
-      assignment_id: giver.id, reason: 'zamjena',
-    }, f.clock.now())
-
-    decideSwap(f.db, f.venueId, f.actor('Lejla'), request.id, 'accept', {}, f.clock.now())
-
-    expect(rowOf(giver.id).status).toBe('swapped')
-    const taker = f.db.select().from(schema.rosterAssignments).all()
-      .find(a => a.userId === f.userId('Lejla'))!
-    expect([taker.status, taker.origin, taker.swapRequestId])
-      .toEqual(['planned', 'swap', request.id])
-
-    const decided = f.db.select().from(schema.swapRequests).all()[0]!
-    expect([decided.status, decided.decidedBy]).toEqual(['accepted', f.userId('Lejla')])
+describe('what staff read', () => {
+  it('is the same weekly pattern, on a route every worker may call', () => {
+    add('Amar', PET)
+    expect(ROUTE_ROLES['GET /api/me/roster']).toEqual(expect.arrayContaining(['admin', 'radnik']))
+    // The service has no reader argument: there is nothing on a pattern row a
+    // colleague may not see.
+    expect(getPattern(f.db, f.venueId).entries.map(e => e.user_name)).toEqual(['Amar'])
+    expect(readFileSync(join('server', 'api', 'me', 'roster', 'index.get.ts'), 'utf8')).toContain('getPattern')
   })
 
-  it('leaves zero rows and zero entries when the transaction fails half-way', () => {
-    const giver = plan('Amar')
-    const request = requestSwap(f.db, f.venueId, f.actor('Amar'), {
-      assignment_id: giver.id, reason: 'zamjena',
-    }, f.clock.now())
-
-    const before = {
-      assignments: f.db.select().from(schema.rosterAssignments).all().length,
-      entries: f.db.select().from(schema.logEntries).all().length,
-    }
-
-    // Lejla already works an overlapping shift, so the taker's own constraint
-    // check throws **inside** the accept transaction, after the giver's row has
-    // been touched. Nothing may survive that.
-    updateTemplate(f.db, f.venueId, f.adminActor(), template('Prva smjena').id, {
-      start_time: '15:00', end_time: '23:00',
-    }, f.clock.now())
-    addAssignment(f.db, f.venueId, f.adminActor(), {
-      work_date: today(), template_id: template('Prva smjena').id, user_id: f.userId('Lejla'),
-    }, f.clock.now())
-
-    const entriesAfterSetup = f.db.select().from(schema.logEntries).all().length
-    expectCode(
-      () => decideSwap(f.db, f.venueId, f.actor('Lejla'), request.id, 'accept', {}, f.clock.now()),
-      'OVERLAP',
-    )
-
-    expect(rowOf(giver.id).status).toBe('planned')
-    expect(f.db.select().from(schema.swapRequests).all()[0]!.status).toBe('pending')
-    expect(f.db.select().from(schema.rosterAssignments).all().length)
-      .toBe(before.assignments + 1) // Lejla's own setup row, and nothing else
-    expect(f.db.select().from(schema.logEntries).all().length).toBe(entriesAfterSetup)
-  })
-
-  it('refuses a second accept and a stranger taking a named offer', () => {
-    const giver = plan('Amar')
-    const named = requestSwap(f.db, f.venueId, f.actor('Amar'), {
-      assignment_id: giver.id, to_user_id: f.userId('Lejla'), reason: 'zamjena',
-    }, f.clock.now())
-
-    expectCode(
-      () => decideSwap(f.db, f.venueId, f.actor('Dino'), named.id, 'accept', {}, f.clock.now()),
-      'NOT_YOUR_SWAP',
-    )
-
-    decideSwap(f.db, f.venueId, f.actor('Lejla'), named.id, 'accept', {}, f.clock.now())
-    expectCode(
-      () => decideSwap(f.db, f.venueId, f.actor('Dino'), named.id, 'accept', {}, f.clock.now()),
-      'ALREADY_DECIDED',
-    )
-  })
-
-  it('refuses one live request per shift', () => {
-    const giver = plan('Amar')
-    requestSwap(f.db, f.venueId, f.actor('Amar'), {
-      assignment_id: giver.id, reason: 'zamjena',
-    }, f.clock.now())
-    expectCode(() => requestSwap(f.db, f.venueId, f.actor('Amar'), {
-      assignment_id: giver.id, reason: 'zamjena',
-    }, f.clock.now()), 'SWAP_EXISTS')
-  })
-
-  it('refuses a staff accept on a past shift and lets the owner assign one afterwards', () => {
-    const yesterday = addDays(today(), -1)
-    const giver = { id: planPast('Amar', yesterday) }
-    const request = requestSwapPast(giver.id, 'Amar')
-
-    expectCode(
-      () => decideSwap(f.db, f.venueId, f.actor('Lejla'), request.id, 'accept', {}, f.clock.now()),
-      'ROSTER_LOCKED',
-    )
-
-    // The owner's *Dodijeli* reaches a week back — "dodijeljeno naknadno".
-    decideSwap(f.db, f.venueId, f.adminActor(), request.id, 'assign', {
-      to_user_id: f.userId('Dino'),
-    }, f.clock.now())
-    const cover = f.db.select().from(schema.rosterAssignments).all()
-      .find(a => a.userId === f.userId('Dino'))!
-    expect(cover.note).toBe('dodijeljeno naknadno')
-  })
-
-  /**
-   * A live request on a past row, written straight through SQL for the same
-   * reason `planPast` exists: `requestSwap` refuses a past shift, and the rule
-   * under test is what happens to a request that was made *before* the day
-   * arrived.
-   */
-  function requestSwapPast(assignmentId: string, from: string): { id: string } {
-    const id = crypto.randomUUID()
-    f.sqlite.exec(
-      `INSERT INTO swap_requests (id, venue_id, assignment_id, from_user_id, reason,`
-      + ` status, created_at) VALUES ('${id}', '${f.venueId}', '${assignmentId}',`
-      + ` '${f.userId(from)}', 'zamjena', 'pending', '${f.clock.now()}')`,
-    )
-    return { id }
-  }
-
-  it('cancels the live request when the owner edits the cell', () => {
-    const giver = plan('Amar')
-    const request = requestSwap(f.db, f.venueId, f.actor('Amar'), {
-      assignment_id: giver.id, reason: 'zamjena',
-    }, f.clock.now())
-
-    patchAssignment(f.db, f.venueId, f.adminActor(), giver.id, { status: 'removed' }, f.clock.now())
-
-    const after = f.db.select().from(schema.swapRequests).all()[0]!
-    expect(after.status).toBe('cancelled')
-    const entry = f.db.select().from(schema.logEntries).all()
-      .find(e => e.kind === 'swap_cancelled')!
-    expect(JSON.parse(entry.bodyJson).note).toBe('vlasnik promijenio ćeliju')
-  })
-})
-
-/**
- * *Bolovanje*. The word appears on `/admin` *Zamjene* and in *Dnevnik*, and
- * **nowhere else** — the *Svi* line an accepted sick-cover posts is byte for byte
- * the line a plain `zamjena` posts, because a distinct wording would itself be
- * the reason (PLAN §8, PHASE4 §2.5).
- */
-describe('bolest', () => {
-  function sick() {
-    const giver = plan('Amar')
-    const request = requestSwap(f.db, f.venueId, f.actor('Amar'), {
-      assignment_id: giver.id, reason: 'bolest', note: 'temperatura',
-    }, f.clock.now())
-    return { giver, request }
-  }
-
-  it('marks the row sick in the same transaction and raises the owner\'s alert', () => {
-    const { giver } = sick()
-    expect(rowOf(giver.id).status).toBe('sick')
-    expect(f.db.select().from(schema.alertEvents).all().map(a => a.ruleKey))
-      .toContain('roster_sick')
-  })
-
-  it('leaves the giver sick after an accept, so Sati still counts the day', () => {
-    const { giver, request } = sick()
-    decideSwap(f.db, f.venueId, f.actor('Lejla'), request.id, 'accept', {}, f.clock.now())
-    expect(rowOf(giver.id).status).toBe('sick')
-  })
-
-  it('returns the row to planned when the request is withdrawn', () => {
-    const { giver, request } = sick()
-    decideSwap(f.db, f.venueId, f.actor('Amar'), request.id, 'cancel', {}, f.clock.now())
-    expect(rowOf(giver.id).status).toBe('planned')
-  })
-
-  it('declines the giver\'s name, because "umjesto Amar" is not a sentence', () => {
-    expect(genitiveBs('Amar')).toBe('Amara')
-    expect(genitiveBs('Dino')).toBe('Dine')
-    expect(genitiveBs('Lejla')).toBe('Lejle')
-    expect(genitiveBs('Emir')).toBe('Emira')
-    expect(genitiveBs('Tarik')).toBe('Tarika')
-    expect(genitiveBs('Haris')).toBe('Harisa')
-
-    const { request } = sick()
-    decideSwap(f.db, f.venueId, f.actor('Lejla'), request.id, 'accept', {}, f.clock.now())
-    const line = f.db.select().from(schema.chatMessages).all()
-      .find(m => m.systemKey === 'swap_accepted')!
-    expect(line.body).toContain('Lejla umjesto Amara')
-  })
-
-  it('says neither "bolest" nor "bolovanje" in the resulting Svi line', () => {
-    const { request } = sick()
-    decideSwap(f.db, f.venueId, f.actor('Lejla'), request.id, 'accept', {}, f.clock.now())
-
-    const lines = f.db.select().from(schema.chatMessages).all()
-      .filter(m => m.systemKey === 'swap_requested' || m.systemKey === 'swap_accepted')
-    expect(lines.length).toBeGreaterThan(0)
-    for (const line of lines) {
-      const text = `${line.body ?? ''} ${line.systemPayloadJson ?? ''}`.toLowerCase()
-      expect(text).not.toContain('bolest')
-      expect(text).not.toContain('bolovanje')
-      expect(text).not.toContain('temperatura')
+  it('leaves the edits to the owner and has no dated routes left', () => {
+    expect(ROUTE_ROLES['GET /api/roster/pattern']).toEqual(['admin'])
+    expect(ROUTE_ROLES['POST /api/roster/pattern']).toEqual(['admin'])
+    expect(ROUTE_ROLES['DELETE /api/roster/pattern/:id']).toEqual(['admin'])
+    const keys = Object.keys(ROUTE_ROLES)
+    for (const gone of ['weeks', 'assignments', 'swaps', 'hours']) {
+      expect(keys.filter(k => k.includes('/roster') && k.includes(gone))).toEqual([])
     }
   })
 })
 
-// ---------------------------------------------------------------------------
-// The staff projection
-// ---------------------------------------------------------------------------
-
-describe('what a waiter is allowed to see', () => {
-  it('shows a colleague\'s sick day as a hole and keeps his own', () => {
-    const week = futureWeek()
-    const lejla = plan('Lejla', { date: week })
-    const amar = plan('Amar', { date: week, template: 'Prva smjena' })
-    publishWeek(f.db, f.venueId, f.adminActor(), week, f.clock.now())
-
-    patchAssignment(f.db, f.venueId, f.adminActor(), lejla.id, { status: 'sick' }, f.clock.now())
-    patchAssignment(f.db, f.venueId, f.adminActor(), amar.id, { status: 'sick' }, f.clock.now())
-
-    const forAmar = projectForStaff(
-      getRoster(f.db, f.venueId, f.actor('Amar'), week, week), f.userId('Amar'),
-    )
-    const cells = forAmar[0]!.days.flatMap(d => d.assignments)
-    expect(cells.map(c => c.user_name)).toEqual(['Amar'])
-    expect(cells[0]!.status).toBe('sick')
-    // The owner-only fields are not there to be dropped later: they were never
-    // selected.
-    expect(cells[0]!.note).toBeUndefined()
-    expect(cells[0]!.swap_request_id).toBeUndefined()
-  })
-
-  it('shows an unpublished next week as empty', () => {
-    const next = addDays(futureWeek(), 7)
-    plan('Amar', { date: next })
-
-    const mine = getMyRoster(f.db, f.venueId, f.actor('Amar'), f.clock.now())
-    expect(mine.next_week.published_at).toBeNull()
-    expect(mine.next_week.days.flatMap(d => d.assignments)).toEqual([])
-
-    // The owner sees his draft, which is the point of a draft.
-    const owner = getRoster(f.db, f.venueId, f.adminActor(), next, next)
-    expect(owner[0]!.days.flatMap(d => d.assignments)).toHaveLength(1)
-  })
-
-  it('gives the owner the reason and a colleague nothing but the shift', () => {
-    const giver = plan('Amar')
-    requestSwap(f.db, f.venueId, f.actor('Amar'), {
-      assignment_id: giver.id, reason: 'bolest', note: 'temperatura',
-    }, f.clock.now())
-
-    const forOwner = listSwaps(f.db, f.venueId)
-    expect(forOwner[0]!.reason).toBe('bolest')
-    expect(forOwner[0]!.note).toBe('temperatura')
-
-    const forLejla = getMyRoster(f.db, f.venueId, f.actor('Lejla'), f.clock.now())
-    expect(forLejla.offers).toHaveLength(1)
-    expect(forLejla.offers[0]!.reason).toBeUndefined()
-    expect(forLejla.offers[0]!.note).toBeUndefined()
-  })
-
-  /**
-   * "Staff never PATCH a status" is enforced by the **coarse** gate: the three
-   * assignment routes are `['admin']` in `ROUTE_ROLES`, so `tenant.ts` 403s a
-   * waiter before any handler runs. Asserting that here rather than inside the
-   * service is not a shortcut — it is where the rule actually lives.
-   *
-   * What *is* open to a waiter is `POST /api/roster/swaps`, and that door has
-   * its own lock: his own row only.
-   */
-  it('leaves the roster writes to the owner, and a swap to its own row', () => {
-    for (const key of [
-      'POST /api/roster/assignments',
-      'PATCH /api/roster/assignments/:id',
-      'DELETE /api/roster/assignments/:id',
-    ]) {
-      expect([key, ROUTE_ROLES[key]]).toEqual([key, ['admin']])
-    }
-    expect(ROUTE_ROLES['POST /api/roster/swaps']).toEqual(['admin', 'radnik'])
-
-    const lejla = plan('Lejla')
-    expectCode(() => requestSwap(f.db, f.venueId, f.actor('Amar'), {
-      assignment_id: lejla.id, reason: 'zamjena',
-    }, f.clock.now()), 'NOT_YOUR_ROW')
-  })
-})
-
-describe('deactivating a person', () => {
-  it('removes his future shifts and cancels his live requests', () => {
-    const row = plan('Dino')
-    requestSwap(f.db, f.venueId, f.actor('Dino'), {
-      assignment_id: row.id, reason: 'zamjena',
-    }, f.clock.now())
+describe('deactivating', () => {
+  it('takes a person out of the pattern and frees his seats', () => {
+    add('Amar', PET)
+    add('Dino', PET)
+    add('Dino', SUB)
+    const bumps = rosterBumps()
 
     updateUser(f.db, f.venueId, f.adminActor(), f.userId('Dino'), { active: false }, f.clock.now())
 
-    expect(rowOf(row.id).status).toBe('removed')
-    expect(rowOf(row.id).note).toBe('deaktiviran')
-    expect(f.db.select().from(schema.swapRequests).all()[0]!.status).toBe('cancelled')
+    expect(rows().map(r => r.userId)).toEqual([f.userId('Amar')])
+    expect(rosterBumps()).toBe(bumps + 1)
+    expect(plannedOn(f.db, f.venueId, '2026-09-18').map(r => r.name)).toEqual(['Amar'])
+    add('Lejla', PET)
+  })
+
+  it('hides a switched-off template and brings its people back with it', () => {
+    add('Amar', PET, 'Prva smjena')
+    add('Lejla', PET)
+    const prva = template('Prva smjena').id
+
+    updateTemplate(f.db, f.venueId, f.adminActor(), prva, { active: false }, f.clock.now())
+    const hidden = getPattern(f.db, f.venueId)
+    expect(hidden.templates.map(t => t.name)).toEqual(['Druga smjena'])
+    expect(hidden.entries.map(e => e.user_name)).toEqual(['Lejla'])
+    expect(plannedOn(f.db, f.venueId, '2026-09-18').map(r => r.name)).toEqual(['Lejla'])
+
+    updateTemplate(f.db, f.venueId, f.adminActor(), prva, { active: true }, f.clock.now())
+    expect(getPattern(f.db, f.venueId).entries.map(e => e.user_name)).toEqual(['Amar', 'Lejla'])
   })
 })
 
 // ---------------------------------------------------------------------------
-// Sati
+
+describe('Puls reads today\'s weekday', () => {
+  it('maps a date to its weekday, ordered by shift and then name, with the template\'s hours', () => {
+    add('Lejla', PET)
+    add('Amar', PET)
+    add('Emir', PET, 'Prva smjena')
+    add('Tarik', SUB)
+
+    const friday = plannedOn(f.db, f.venueId, '2026-09-18')
+    expect(friday.map(r => [r.template_name, r.name])).toEqual([
+      ['Prva smjena', 'Emir'], ['Druga smjena', 'Amar'], ['Druga smjena', 'Lejla'],
+    ])
+    const druga = template('Druga smjena')
+    expect(friday[1]).toMatchObject({ start_time: druga.startTime, end_time: druga.endTime })
+    // Every Friday, not one date.
+    expect(plannedOn(f.db, f.venueId, '2026-10-02').map(r => r.name)).toEqual(['Emir', 'Amar', 'Lejla'])
+  })
+
+  it('at 02:00 on Saturday still shows Friday\'s people on the live screen', () => {
+    add('Amar', PET)
+    add('Tarik', SUB)
+    const live = getLive(f.db, f.venueId, f.adminActor(), '2026-09-19T00:00:00.000Z')
+    expect(live.rostered.map(r => r.name)).toEqual(['Amar'])
+
+    const morning = getLive(f.db, f.venueId, f.adminActor(), '2026-09-19T08:00:00.000Z')
+    expect(morning.rostered.map(r => r.name)).toEqual(['Tarik'])
+  })
+})
+
 // ---------------------------------------------------------------------------
 
-describe('rosterHours', () => {
-  const month = () => today().slice(0, 7)
+/**
+ * 0010 seeds the pattern once from the dated roster. The hand-written INSERT is
+ * the migration's last statement; it is replayed here on a fixture that has the
+ * old rows in it, so the rules are asserted rather than trusted.
+ */
+describe('0010 seeds the pattern from the last published week', () => {
+  const SEED = readFileSync(
+    join('server', 'database', 'migrations', '0010_roster_pattern.sql'), 'utf8',
+  ).split('--> statement-breakpoint').at(-1)!
 
-  /** A `shift_members` row for `name` on `date`, joined at `hhmm` local. */
-  function worked(name: string, date: string, hhmm: string, leftHhmm?: string): void {
-    const shiftId = f.openShift({ members: [], businessDate: date, at: iso(date, '12:00') })
-    f.db.insert(schema.shiftMembers).values({
-      id: crypto.randomUUID(), venueId: f.venueId, shiftId,
-      userId: f.userId(name), role: 'radnik',
-      joinedAt: iso(date, hhmm),
-      leftAt: leftHhmm ? iso(date, leftHhmm, true) : null,
-      leftAtSource: leftHhmm ? 'manual' : null,
-    }).run()
-    // One open shift per venue is a database rule; close it so the next date can
-    // open its own.
-    f.sqlite.exec(`UPDATE shifts SET status = 'closed', closed_at = '${iso(date, '23:59')}',`
-      + ` closed_by = '${f.userId('Haris')}', closed_kind = 'normal' WHERE id = '${shiftId}'`)
+  function week(start: string, published: boolean): void {
+    const at = `${start}T09:00:00.000Z`
+    f.sqlite.exec(
+      `INSERT INTO roster_weeks (id, venue_id, week_start, published_at, published_by, created_by, created_at)`
+      + ` VALUES ('${crypto.randomUUID()}', '${f.venueId}', '${start}',`
+      + ` ${published ? `'${at}'` : 'NULL'}, ${published ? `'${f.userId('Haris')}'` : 'NULL'},`
+      + ` '${f.userId('Haris')}', '${at}')`,
+    )
   }
 
-  /** `YYYY-MM-DD` + a Sarajevo wall clock → the UTC instant. Summer is +2. */
-  function iso(date: string, hhmm: string, nextDay = false): string {
-    const [h, m] = hhmm.split(':').map(Number)
-    const base = Date.parse(`${date}T00:00:00.000Z`) + (nextDay ? 86_400_000 : 0)
-    return new Date(base + ((h! - 2) * 60 + m!) * 60_000).toISOString()
+  function row(name: string, date: string, opts: {
+    template?: string, origin?: string, status?: string, at?: string
+  } = {}): void {
+    const t = template(opts.template ?? 'Druga smjena')
+    f.sqlite.exec(
+      `INSERT INTO roster_assignments (id, venue_id, work_date, template_id, user_id,`
+      + ` start_time, end_time, status, origin, created_by, created_at)`
+      + ` VALUES ('${crypto.randomUUID()}', '${f.venueId}', '${date}', '${t.id}', '${f.userId(name)}',`
+      + ` '${t.startTime}', '${t.endTime}', '${opts.status ?? 'planned'}', '${opts.origin ?? 'owner'}',`
+      + ` '${f.userId('Haris')}', '${opts.at ?? `${date}T08:00:00.000Z`}')`,
+    )
   }
 
-  it('counts nominal planned hours with no timezone maths', () => {
-    expect(plannedHours('16:00', '01:00')).toBe(9)
-    expect(plannedHours('22:00', '06:00')).toBe(8)
-    expect(plannedHours('08:00', '16:00')).toBe(8)
+  it('carries the regular people onto their weekdays, two per cell at most', () => {
+    updateUser(f.db, f.venueId, f.adminActor(), f.userId('Dino'), { active: false }, f.clock.now())
+
+    week('2026-08-31', true)
+    row('Tarik', '2026-09-01') // an older published week — not the plan in force
+
+    week('2026-09-07', true) // the latest published week
+    row('Amar', '2026-09-07') // pon
+    row('Lejla', '2026-09-13', { template: 'Prva smjena' }) // ned → 7
+    row('Tarik', '2026-09-11', { origin: 'swap' }) // a one-off cover
+    row('Emir', '2026-09-11', { status: 'removed' }) // taken off
+    row('Dino', '2026-09-12') // deactivated since
+    row('Emir', '2026-09-09', { at: '2026-09-01T10:00:00.000Z' }) // sri, first
+    row('Lejla', '2026-09-09', { at: '2026-09-01T11:00:00.000Z' }) // sri, second
+    row('Tarik', '2026-09-09', { at: '2026-09-01T12:00:00.000Z' }) // sri, third — dropped
+
+    week('2026-09-14', false) // a later draft nobody published
+    row('Tarik', '2026-09-17')
+
+    f.sqlite.exec('DELETE FROM roster_pattern')
+    f.sqlite.exec(SEED)
+
+    const seeded = getPattern(f.db, f.venueId).entries
+      .map(e => [e.weekday, template('Prva smjena').id === e.template_id ? 'Prva' : 'Druga', e.user_name])
+    expect(seeded).toEqual([
+      [PON, 'Druga', 'Amar'],
+      [SRI, 'Druga', 'Emir'],
+      [SRI, 'Druga', 'Lejla'],
+      [NED, 'Prva', 'Lejla'],
+    ])
+    // Only the pattern's rows, and ids `routeKey` will turn into `:id`.
+    expect(rows()).toHaveLength(4)
+    for (const r of rows()) {
+      expect(r.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-8[0-9a-f]{3}-[0-9a-f]{12}$/)
+      expect(r.createdBy).toBe(f.userId('Haris'))
+    }
   })
 
-  it('reports a late first action above the grace, and the raw minutes', () => {
-    const date = today()
-    plan('Amar', { date })
-    worked('Amar', date, '15:40')
-
-    const rows = rosterHours(f.db, f.venueId, month(), f.userId('Amar'))
-    const day = rows[0]!.days.find(d => d.business_date === date)!
-    // 40, not 10: the grace decides whether it is printed, not what it says.
-    expect(day.late_min).toBe(40)
-    expect(rows[0]!.late_min).toBe(40)
-  })
-
-  it('says nothing when the first action is inside the grace', () => {
-    const date = today()
-    plan('Amar', { date })
-    worked('Amar', date, '15:20')
-    expect(rosterHours(f.db, f.venueId, month(), f.userId('Amar'))[0]!.late_min).toBe(0)
-  })
-
-  it('flags a planned row with no shift row, and an unplanned person who was there', () => {
-    const date = today()
-    plan('Amar', { date })
-    worked('Lejla', date, '16:00')
-
-    const rows = rosterHours(f.db, f.venueId, month())
-    const amar = rows.find(r => r.user_name === 'Amar')!
-    const lejla = rows.find(r => r.user_name === 'Lejla')!
-
-    expect(amar.no_shift_rows).toBe(1)
-    expect(lejla.unplanned_rows).toBe(1)
-    expect(lejla.days[0]!.status).toBe('unplanned')
-  })
-
-  it('does not flag the šanker who submitted a count and locked nothing', () => {
-    const date = today()
-    plan('Emir', { date })
-    worked('Emir', date, '15:00', '23:00')
-
-    const emir = rosterHours(f.db, f.venueId, month(), f.userId('Emir'))[0]!
-    expect(emir.late_min).toBe(0)
-    expect(emir.early_leave_min).toBe(0)
-    expect(emir.no_shift_rows).toBe(0)
-    expect(emir.worked_h).toBeGreaterThan(8)
-  })
-
-  it('counts a sick day, an absence, and swaps on both sides', () => {
-    const date = today()
-    const giver = plan('Amar', { date })
-    const request = requestSwap(f.db, f.venueId, f.actor('Amar'), {
-      assignment_id: giver.id, reason: 'bolest',
-    }, f.clock.now())
-    decideSwap(f.db, f.venueId, f.actor('Lejla'), request.id, 'accept', {}, f.clock.now())
-
-    const dino = plan('Dino', { date, template: 'Prva smjena' })
-    patchAssignment(f.db, f.venueId, f.adminActor(), dino.id, { status: 'absent' }, f.clock.now())
-
-    const rows = rosterHours(f.db, f.venueId, month())
-    expect(rows.find(r => r.user_name === 'Amar')!.sick_days).toBe(1)
-    expect(rows.find(r => r.user_name === 'Lejla')!.swaps_taken).toBe(1)
-    expect(rows.find(r => r.user_name === 'Dino')!.absent_days).toBe(1)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// The triggers
-// ---------------------------------------------------------------------------
-
-describe('roster_assignments and swap_requests, at the database level', () => {
-  it('refuses swapped → planned: a taken shift is history', () => {
-    const giver = plan('Amar')
-    const request = requestSwap(f.db, f.venueId, f.actor('Amar'), {
-      assignment_id: giver.id, reason: 'zamjena',
-    }, f.clock.now())
-    decideSwap(f.db, f.venueId, f.actor('Lejla'), request.id, 'accept', {}, f.clock.now())
-
-    f.expectRefused(
-      `UPDATE roster_assignments SET status = 'planned' WHERE id = '${giver.id}'`,
-      /illegal transition/,
-    )
-  })
-
-  it('refuses moving a cell to another person or another date', () => {
-    const row = plan('Amar')
-    f.expectRefused(
-      `UPDATE roster_assignments SET user_id = '${f.userId('Lejla')}' WHERE id = '${row.id}'`,
-      /frozen column changed/,
-    )
-    f.expectRefused(
-      `UPDATE roster_assignments SET work_date = '2030-01-01' WHERE id = '${row.id}'`,
-      /frozen column changed/,
-    )
-  })
-
-  it('refuses accepted → pending and declined → accepted', () => {
-    const giver = plan('Amar')
-    const request = requestSwap(f.db, f.venueId, f.actor('Amar'), {
-      assignment_id: giver.id, reason: 'zamjena',
-    }, f.clock.now())
-    decideSwap(f.db, f.venueId, f.actor('Lejla'), request.id, 'accept', {}, f.clock.now())
-
-    f.expectRefused(
-      `UPDATE swap_requests SET status = 'pending' WHERE id = '${request.id}'`,
-      /only pending ->/,
-    )
-
-    const second = plan('Dino')
-    const declined = requestSwap(f.db, f.venueId, f.actor('Dino'), {
-      assignment_id: second.id, reason: 'zamjena',
-    }, f.clock.now())
-    decideSwap(f.db, f.venueId, f.actor('Tarik'), declined.id, 'decline', {}, f.clock.now())
-    f.expectRefused(
-      `UPDATE swap_requests SET status = 'accepted' WHERE id = '${declined.id}'`,
-      /only pending ->/,
-    )
-  })
-
-  it('refuses a DELETE of a swap request', () => {
-    const giver = plan('Amar')
-    const request = requestSwap(f.db, f.venueId, f.actor('Amar'), {
-      assignment_id: giver.id, reason: 'zamjena',
-    }, f.clock.now())
-    f.expectRefused(`DELETE FROM swap_requests WHERE id = '${request.id}'`, /append-only/)
-  })
-
-  it('allows a hard delete while the week is a draft, and turns it into removed after publish', () => {
-    const week = futureWeek()
-    const draft = plan('Amar', { date: week })
-    removeAssignment(f.db, f.venueId, f.adminActor(), draft.id, f.clock.now())
-    expect(f.db.select().from(schema.rosterAssignments)
-      .where(eq(schema.rosterAssignments.id, draft.id)).get()).toBeUndefined()
-
-    const kept = plan('Lejla', { date: week })
-    publishWeek(f.db, f.venueId, f.adminActor(), week, f.clock.now())
-    removeAssignment(f.db, f.venueId, f.adminActor(), kept.id, f.clock.now())
-    expect(rowOf(kept.id).status).toBe('removed')
-  })
-})
-
-describe('the week header', () => {
-  it('is one row per venue per Monday', () => {
-    const week = futureWeek()
-    plan('Amar', { date: week })
-    plan('Lejla', { date: addDays(week, 3) })
-
-    const weeks = f.db.select().from(schema.rosterWeeks)
-      .where(and(
-        eq(schema.rosterWeeks.venueId, f.venueId),
-        eq(schema.rosterWeeks.weekStart, week),
-      ))
-      .all()
-    expect(weeks).toHaveLength(1)
+  it('leaves the pattern empty for a venue that never published', () => {
+    week('2026-09-07', false)
+    row('Amar', '2026-09-07')
+    f.sqlite.exec('DELETE FROM roster_pattern')
+    f.sqlite.exec(SEED)
+    expect(rows()).toEqual([])
+    expect(f.db.select().from(schema.rosterPattern).where(eq(schema.rosterPattern.venueId, f.venueId)).all())
+      .toHaveLength(0)
   })
 })

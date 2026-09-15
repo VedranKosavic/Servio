@@ -422,12 +422,10 @@ export function whoShifts(
     })
   }
 
+  // `rostered` is today's weekday of the weekly *Raspored* pattern — somebody
+  // the plan does not name and who signs on anyway appears below as
+  // `van-rasporeda`, like anyone else off the plan.
   for (const person of rostered) {
-    // Sick and absent marks are gone from the app ("Ne trebaju nam zamjene i
-    // bolovanje"). An old `sick`/`absent` row is somebody the plan no longer
-    // counts on tonight, so it draws no row and no word — and if he signs on
-    // anyway he appears below as `van-rasporeda`, like anyone else off the plan.
-    if (person.status !== 'planned') continue
     const shift = shifts.get(person.template_id) ?? {
       template_id: person.template_id,
       name: person.template_name,

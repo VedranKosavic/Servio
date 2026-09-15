@@ -1,25 +1,19 @@
 <script setup lang="ts">
 /**
- * What the owner can do to one person in one cell — `/admin`, light kit.
+ * One person in one cell of the weekly pattern — `/admin`, light kit.
  *
- * **One action, and only before the day.** The roster has no swaps and no sick
- * or absent marks ("Ne trebaju nam zamjene i bolovanje"), so a cell is a plan,
- * and the one thing to do with a name on it is take it off. After the day the
- * server refuses that (`409 ROSTER_LOCKED`) — an owner cannot retroactively take
- * somebody off the night the stock went missing — so the past sheet only says
- * who was on the plan and why nothing can change, rather than showing a button
- * that will be refused.
- *
- * An **inherited** cell (the published raspored repeating) says so: taking a name
- * off there writes this week down as a draft of its own first.
+ * **One action.** A cell is a plan with no dates, so the only thing to do with a
+ * name on it is take it off, and that is saved for every week at once. The sheet
+ * is the small confirm in front of it: a stray tap on a chip removes nobody.
  */
-import type { Assignment } from '#shared/types'
+import { weekdayLongBs } from '#shared/dates'
+import { timeSpanBs } from '~/composables/useRoster'
+import type { PatternEntry, ShiftTemplateView } from '#shared/types'
 
 const props = defineProps<{
   open: boolean
-  person: Assignment | null
-  /** `work_date < today` — the business date, resolved by the page. */
-  past: boolean
+  person: PatternEntry | null
+  template?: ShiftTemplateView
   pending?: boolean
   error?: string | null
 }>()
@@ -30,43 +24,26 @@ const emit = defineEmits<{
 }>()
 
 const title = computed(() => props.person
-  ? `${props.person.user_name} · ${dayLabelBs(props.person.work_date)}`
+  ? `${props.person.user_name} · ${weekdayLongBs(props.person.weekday)}`
   : 'Smjena')
 
-const span = computed(() => props.person
-  ? `${props.person.template_name} ${timeSpanBs(props.person.start_time, props.person.end_time)}`
+const span = computed(() => props.template
+  ? `${props.template.name} ${timeSpanBs(props.template.start_time, props.template.end_time)}`
   : '')
 </script>
 
 <template>
   <UiSheet :open="open" :title="title" @close="emit('close')">
     <div v-if="person" class="r-cell">
-      <p class="r-span">{{ span }}</p>
+      <p v-if="span" class="r-span">{{ span }}</p>
 
-      <p v-if="person.status === 'removed'" class="r-now">
-        Sada: <strong>{{ STATUS_BS.removed }}</strong>
-      </p>
+      <p class="r-note">Uklanjanje važi za svaku sedmicu.</p>
 
-      <p v-if="person.inherited" class="r-note">
-        Ova smjena dolazi iz objavljenog rasporeda koji se ponavlja svake sedmice.
-        Ako je ukloniš, ova sedmica postaje nacrt.
-      </p>
-
-      <p v-if="person.note" class="r-note">{{ person.note }}</p>
-
-      <p v-if="person.updated_by_name && person.updated_at" class="r-quiet">
-        izmijenjeno {{ dateBs(person.updated_at) }} · {{ person.updated_by_name }}
-      </p>
-
-      <div v-if="!past && person.status !== 'removed'" class="r-acts">
+      <div class="r-acts">
         <UiButton variant="danger" :pending="pending" @click="emit('remove')">
           Ukloni sa smjene
         </UiButton>
       </div>
-
-      <p v-if="past" class="r-quiet">
-        Prošli dan se ne mijenja — ostaje zapisano ko je bio na rasporedu.
-      </p>
 
       <p v-if="error" class="r-error" role="alert">{{ error }}</p>
     </div>
@@ -76,9 +53,7 @@ const span = computed(() => props.person
 <style scoped>
 .r-cell { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .r-span { margin: 0; font-weight: 600; }
-.r-now { margin: 0; color: var(--ink-2); }
 .r-note { margin: 0; color: var(--ink-2); font-size: var(--text-label); }
-.r-quiet { margin: 0; color: var(--muted); font-size: var(--text-micro); }
 .r-error { margin: 0; color: var(--danger); font-weight: 500; }
 
 .r-acts { display: flex; flex-wrap: wrap; gap: 8px; }

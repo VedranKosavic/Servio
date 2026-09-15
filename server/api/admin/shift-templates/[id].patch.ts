@@ -1,9 +1,9 @@
 /**
  * `PATCH /api/admin/shift-templates/:id`.
  *
- * Editing a template never rewrites an existing assignment: the times were
- * snapshotted at insert, and the grid shows "16–01 (staro 15–00)" for the week
- * that kept the old ones.
+ * The weekly *Raspored* reads a template's hours as they stand, so an edit here
+ * shows on every weekday at once. Switching a template off hides its cells and
+ * keeps its people for the day it is switched back on.
  */
 import { shiftTemplatePatch } from '#shared/schemas'
 import { useDb } from '../../../utils/db'
