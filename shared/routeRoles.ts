@@ -142,8 +142,6 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   // -- Stock ---------------------------------------------------------------
   'GET /api/stock': AR,
   'POST /api/stock/opening': A,
-  // Admin always; a radnik only when `bartender_can_receive_goods` is on,
-  // which the service checks — this row is the coarse half of that rule.
   // Admin only: a šanker reads Stanje šanka and never receives goods.
   'POST /api/stock/deliveries': A,
   'GET /api/stock/deliveries': AR_APPROVE,
