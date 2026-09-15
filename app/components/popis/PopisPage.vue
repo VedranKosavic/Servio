@@ -35,7 +35,7 @@ const props = defineProps<{
 
 const me = useMe()
 const counts = useCounts()
-const { data: boot } = useBootstrapData()
+const { data: boot, refresh: refreshBoot } = useBootstrapData()
 // The bartender queues stock from here too (an otpis mid-count), so this screen
 // runs the same flush timers every other `/konobar` and `/sanker` screen runs.
 useOutbox()
@@ -96,6 +96,9 @@ const { refresh } = useChanges({
       void loadShiftCounts()
     }
   },
+  // The catalogue this screen holds is the bootstrap; it goes stale only when
+  // `menu_version` moves (a table, a product or a setting was edited).
+  menu: () => refreshBoot(),
   me: () => me.load(),
 }, { intervalMs: 15_000 })
 

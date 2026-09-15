@@ -14,6 +14,7 @@
 import type {
   AttentionAction,
   AttentionRefType,
+  ChangeEntity,
   LineRow,
   LiveRostered,
   LiveWho,
@@ -592,6 +593,20 @@ function shortLabel(name: string): string {
  */
 const FIXTURES: Partial<Record<Zone, Record<number, string>>> = {
   unutra: { 1: 'Šank' },
+}
+
+/**
+ * Did this entity make the bootstrap stale?
+ *
+ * The server's `menu_version` is the newest `menu` or `settings` bump, and
+ * editing a table on *Stolovi* bumps `menu` beside `table` for exactly this
+ * reason. A phone reacts to `menu_version` through `useChanges`' `menu`
+ * handler; an owner page sees entities instead (`useAdminChanges`), so *Puls*
+ * asks this. Without it a table added on a laptop stayed off the owner's plan
+ * until a reload.
+ */
+export function catalogueMoved(entity: ChangeEntity): boolean {
+  return entity === 'menu' || entity === 'settings'
 }
 
 export function floorZones(

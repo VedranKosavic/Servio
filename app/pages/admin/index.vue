@@ -68,7 +68,7 @@ const loadError = ref('')
 const updatedAt = ref<string | null>(null)
 
 /** The floor plan's names, zones and coordinates. Cached by `useAsyncData`. */
-const { data: bootstrap } = useBootstrapData()
+const { data: bootstrap, refresh: refreshBootstrap } = useBootstrapData()
 
 /** *Prva smjena* 07–15 and *Druga* 15–23, as the roster holds them. */
 const { data: templates } = useAsyncData(
@@ -101,7 +101,12 @@ const clock = computed(() => shiftClock(templates.value ?? [], wallClock.value))
 
 // One timer for the whole dashboard; this page only subscribes to its tick.
 // `load` is a function declaration, so it is hoisted above this line.
-const changes = useAdminChanges({ raw: () => { void load() } })
+// The plan's names and squares are the bootstrap, which the tick above does not
+// reread: it is refetched only when a table or the menu was edited.
+const changes = useAdminChanges({
+  raw: () => { void load() },
+  onEntity: (entity) => { if (catalogueMoved(entity)) void refreshBootstrap() },
+})
 
 /** One read at a time: the mount and the first tick must not both fetch. */
 let inFlight = false
