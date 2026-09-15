@@ -103,6 +103,7 @@ const BACK_ROOTS = new Set([
   '/admin/smjene',
   '/admin/roba',
   '/admin/roba/prijem',
+  '/admin/roba/artikli',
   '/admin/raspored',
   '/admin/kontrola',
   '/admin/vise',

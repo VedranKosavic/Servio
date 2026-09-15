@@ -304,14 +304,14 @@ describe('the way back', () => {
 
   it('offers nothing on a screen a tab reaches directly', () => {
     for (const root of ['/admin', '/admin/smjene', '/admin/roba', '/admin/roba/prijem',
-      '/admin/kontrola', '/admin/raspored']) {
+      '/admin/roba/artikli', '/admin/kontrola', '/admin/raspored']) {
       expect(adminBack(root, exists), root).toBeNull()
     }
   })
 
   it('sends every screen Kontrolna ploča links to back to it', () => {
     for (const path of ['/admin/meni', '/admin/postavke/kategorije',
-      '/admin/postavke/osoblje', '/admin/postavke/uredaji', '/admin/kontrola/artikli',
+      '/admin/postavke/osoblje', '/admin/postavke/uredaji',
       '/admin/kontrola/sabloni', '/admin/kontrola/podesavanja']) {
       expect(adminBack(path, exists), path).toBe('/admin/kontrola')
     }
@@ -324,10 +324,9 @@ describe('the way back', () => {
       .filter(link => !existsSync(`app/pages${link.to}.vue`) && !existsSync(`app/pages${link.to}/index.vue`))
       .map(link => link.to)
     expect(missing).toEqual([])
-    // Artikli zalihe is built; a row that is ready carries no "uskoro".
-    const artikli = links.find(link => link.id === 'artikli')
-    expect(artikli?.ready).toBe(true)
-    expect(artikli?.soon).toBeUndefined()
+    // Artikli zalihe left the hub for its own tab on Roba.
+    expect(links.find(link => link.id === 'artikli')).toBeUndefined()
+    expect(existsSync('app/pages/admin/roba/artikli.vue')).toBe(true)
   })
 
   it('climbs to the nearest ancestor that is really a page', () => {

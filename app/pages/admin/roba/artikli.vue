@@ -136,15 +136,13 @@ async function setActive(item: StockItemAdmin, active: boolean) {
 
 <template>
   <div class="k-page">
-    <UiPageHead
-      title="Artikli zalihe"
-      sub="Jedinica, nabavna cijena, tolerancija"
-      :stale="error ?? undefined"
-    >
+    <RobaTabs sub="artikli · jedinica, nabavna cijena, tolerancija">
       <template #actions>
         <UiButton variant="primary" @click="open(null)">Novi artikal</UiButton>
       </template>
-    </UiPageHead>
+    </RobaTabs>
+
+    <p v-if="error" class="k-error">{{ error }}</p>
 
     <!-- ---- the phone ------------------------------------------------- -->
     <RobaArtikliList
@@ -223,6 +221,7 @@ async function setActive(item: StockItemAdmin, active: boolean) {
 
 <style scoped>
 .k-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.k-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
 
 .k-filters { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .k-off-count { font-size: var(--text-micro); color: var(--muted); margin-left: auto; }

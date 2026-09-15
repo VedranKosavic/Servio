@@ -4,7 +4,7 @@
  *
  * Two screens create or edit an article and both draw this sheet:
  *
- * - *Artikli zalihe* (`/admin/kontrola/artikli`) with `full`: every field the
+ * - *Artikli zalihe* (`/admin/roba/artikli`) with `full`: every field the
  *   owner may set, for a new article or an existing one.
  * - *Prijem robe*, from the article picker, **short**: an unknown article is on
  *   the bar and the owner has a delivery note in his hand, so the sheet asks only

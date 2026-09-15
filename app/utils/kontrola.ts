@@ -49,15 +49,6 @@ export const KONTROLA: KontrolaSection[] = [
     ],
   },
   {
-    id: 'zaliha',
-    title: 'Zaliha',
-    links: [
-      { id: 'artikli', to: '/admin/kontrola/artikli', label: 'Artikli zalihe', sub: 'Jedinica, nabavna cijena, tolerancija', ready: true },
-      { id: 'prijem', to: '/admin/roba/prijem', label: 'Prijem robe', sub: 'Šta je stiglo na policu', ready: true },
-      { id: 'pocetno', to: '/admin/roba/pocetno-stanje', label: 'Početno stanje', sub: 'Prvi popis sa cijenama', ready: true },
-    ],
-  },
-  {
     id: 'lokal',
     title: 'Lokal',
     links: [

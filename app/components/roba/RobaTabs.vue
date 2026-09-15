@@ -34,9 +34,12 @@ const TABS: Tab[] = [
     // `/admin/roba/popisi/<id>` is here because the count a *Smjena* links to
     // still opens, and the shelf is what it is about — the *Popisi* list it used
     // to belong under is gone.
-    owns: ['/admin/roba/artikal', '/admin/roba/pocetno-stanje', '/admin/roba/popisi'],
+    owns: ['/admin/roba/artikal', '/admin/roba/popisi'],
   },
   { to: '/admin/roba/prijem', label: 'Prijem robe' },
+  // *Artikli zalihe*, moved here from *Kontrolna ploča* on the owner's call: the
+  // one place a stock article is added or edited now sits beside the shelf.
+  { to: '/admin/roba/artikli', label: 'Artikli' },
 ]
 
 defineProps<{
