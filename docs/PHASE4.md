@@ -188,6 +188,8 @@ Two jobs join `server/tasks/nightly.ts` (no-ops under vitest, as the existing on
 
 ### 2.7 `server/services/roster.ts`
 
+> **Revised 2026-09-15 (0010) — one weekly pattern, no dates.** Everything below about weeks, assignments, publishing, swaps, status and `rosterHours` describes the dated roster that was replaced; see PLAN F14 (0). The service is now `getPattern`, `addToPattern` (max two per weekday × template, `409 SHIFT_FULL` / `409 ALREADY_IN_SHIFT`), `removeFromPattern` (hard delete), `plannedOn` (the business date's ISO weekday, for *Puls*), `onUserDeactivated` (deletes his pattern rows) and the template CRUD. Each edit writes `roster_changed`, bumps `roster`, and posts at most one "Raspored je izmijenjen" line in *Svi* per owner per business day.
+
 ```ts
 export function getRoster(db: Queryable, venueId: string, actor: Actor,
                           from: string, to: string): RosterWeekView[]
@@ -299,20 +301,10 @@ Every row is declared in `shared/routeRoles.ts`; `AWB` = all three roles, `AB` =
 | `POST /api/chat/users/:id/mute` | A | `{until \| null}` |
 | `POST /api/uploads` | AWB | multipart; `kind='delivery'` gated inside |
 | `GET /api/uploads/:id` | AWB | access-checked stream; 404, never 403 |
-| `GET /api/roster?from=&to=` | AWB | staff projection for non-admins |
-| `GET /api/me/roster` | AWB | my week + offers and requests awaiting me |
-| `GET /api/me/roster/hours?month=` | AWB | *Moji sati*, own rows only |
-| `POST /api/roster/weeks/publish` | A | `{week_start}` |
-| `POST /api/roster/assignments` | A | `{work_date, template_id, user_id, force_double?}` |
-| `PATCH /api/roster/assignments/:id` | A | status and note only |
-| `DELETE /api/roster/assignments/:id` | A | unpublished weeks and future dates only |
-| `GET /api/roster/swaps?status=` | A | the *Zamjene* panel |
-| `POST /api/roster/swaps` | AWB | own row only |
-| `POST /api/roster/swaps/:id/accept` | AWB | `{force_double?}` |
-| `POST /api/roster/swaps/:id/decline` | AWB | the named colleague |
-| `POST /api/roster/swaps/:id/cancel` | AWB | the requester's *Povuci* |
-| `POST /api/roster/swaps/:id/assign` | A | *Dodijeli*, `{to_user_id, force_double?}` |
-| `GET /api/roster/hours?month=` | A | *Sati* |
+| `GET /api/roster/pattern` | A | the weekly pattern with names *(0010; replaces the week, assignment, publish, swap and hours routes)* |
+| `POST /api/roster/pattern` | A | `{weekday, template_id, user_id}`; 409 `SHIFT_FULL` / `ALREADY_IN_SHIFT` |
+| `DELETE /api/roster/pattern/:id` | A | hard delete |
+| `GET /api/me/roster` | AWB | the same weekly pattern, read-only |
 | `GET /api/admin/shift-templates` · `POST` · `PATCH /:id` | A | *Šabloni smjena* |
 | `GET /api/rules` | AWB | latest + `must_ack` |
 | `POST /api/me/rules/ack` | AWB | `{version}` |

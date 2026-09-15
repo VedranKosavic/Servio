@@ -24,7 +24,6 @@
 import { ApiSideError } from '~/composables/useApi'
 import type { ChannelKind } from '#shared/chat'
 import type {
-  Assignment,
   CategoriesReport,
   ChatPage,
   ChatSince,
@@ -50,11 +49,11 @@ import type {
   OwnerLive,
   OwnerShift,
   OwnerShiftRow,
-  HoursRow,
   OwnerStockReport,
+  PatternEntry,
   PinResetResult,
   PostMessageResult,
-  RosterWeekView,
+  RosterPatternView,
   RuleVersion,
   RulesView,
   ScanDraft,
@@ -78,10 +77,10 @@ import type {
 // that sends it — one definition, two uses.
 import type {
   AdminLoginBody,
-  AssignmentBody,
   CreateCategoryBody,
   DiscardScanBody,
   LinkAliasBody,
+  PatternBody,
   PostMessageBody,
   PublishRulesBody,
   SetPinBody,
@@ -482,29 +481,15 @@ export function useAdminApi() {
 
     // -- Raspored (Phase 4) --------------------------------------------------
 
-    getRoster: (from: string, to: string) =>
-      request<RosterWeekView[]>(`/api/roster${qs({ from, to })}`),
+    /** The weekly pattern: weekdays × active shifts, with names. No dates. */
+    getRosterPattern: () => request<RosterPatternView>('/api/roster/pattern'),
 
-    publishRosterWeek: (weekStart: string) =>
-      request<RosterWeekView>('/api/roster/weeks/publish', {
-        method: 'POST', body: { week_start: weekStart },
-      }),
+    /** One person into one cell, saved for every week. 409 `SHIFT_FULL` at the third. */
+    addToPattern: (body: PatternBody) =>
+      request<PatternEntry>('/api/roster/pattern', { method: 'POST', body }),
 
-    addAssignment: (body: AssignmentBody) =>
-      request<Assignment>('/api/roster/assignments', { method: 'POST', body }),
-
-    /**
-     * `workDate` only for an inherited cell: `id` is then the source week's row
-     * and the server writes the week down as a draft before it removes anyone.
-     */
-    removeAssignment: (id: string, workDate?: string) =>
-      request<{ ok: true }>(`/api/roster/assignments/${id}${qs({ work_date: workDate })}`, {
-        method: 'DELETE',
-      }),
-
-    /** *Sati* — planned against worked. "Prva akcija nije dolazak." */
-    getRosterHours: (month: string) =>
-      request<HoursRow[]>(`/api/roster/hours${qs({ month })}`),
+    removeFromPattern: (id: string) =>
+      request<{ ok: true }>(`/api/roster/pattern/${id}`, { method: 'DELETE' }),
 
     getShiftTemplates: () => request<ShiftTemplateView[]>('/api/admin/shift-templates'),
     createShiftTemplate: (body: ShiftTemplateBody) =>

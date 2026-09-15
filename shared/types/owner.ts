@@ -163,10 +163,9 @@ export interface LiveWho {
  * be behind the bar — and the gap between the two lists is the thing worth
  * seeing, so the screen draws both against each other instead of picking one.
  *
- * `swapped` and `removed` rows are not here: they have been superseded by
- * another row and are history, which lives in `log_entries`. `sick` and
- * `absent` are, because a hole in tonight's plan is exactly what *Ko radi* is
- * for. Both are owner-only, which this read already is.
+ * It is the weekly *Raspored* pattern for today's **business** weekday (the café's
+ * day starts at 06:00, so at 02:00 on Saturday this is still Friday's plan),
+ * active people on active templates only.
  */
 export interface LiveRostered {
   user_id: string
@@ -174,10 +173,9 @@ export interface LiveRostered {
   initials: string
   template_id: string
   template_name: string
-  /** Snapshotted on the assignment, so an edited template never moves history. */
+  /** The template's hours as they stand — the pattern has no dated snapshot. */
   start_time: string
   end_time: string
-  status: 'planned' | 'sick' | 'absent'
 }
 
 /**

@@ -4,25 +4,19 @@
  *
  * One component, two routes (`/konobar/raspored`, `/sanker/raspored`): the
  * šanker's back arrow returns to the ticket queue and the waiter's to the floor
- * plan, and that is the only difference between them — the `/sanker/popis`
- * precedent.
+ * plan, and that is the only difference between them.
  *
- * **Nothing here writes.** Swaps and sick days are gone from the app ("Ne trebaju
- * nam zamjene i bolovanje"): this screen shows the owner's plan, and a change to
- * it is a conversation with him rather than a button. The last answer is cached
- * in IndexedDB (`roster:last`) so a phone in the cellar still shows tonight's
- * shift.
- *
- * **A published raspored repeats every week until a newer one is published**, so
- * a week the owner never touched still has a plan, and the line above the days
- * says which published week it repeats.
- *
- * **A colleague's absence is a hole.** The server sends a waiter a different
- * query, not a filtered one: a colleague the plan no longer counts was never in
- * this response.
+ * **One weekly pattern, no dates.** The owner's plan is seven weekdays × shifts
+ * and it repeats every week until he changes it, so this screen is seven day
+ * cards, Monday first, with my own shifts in the accent colour. Nothing here
+ * writes. The last answer is cached in IndexedDB so a phone in the cellar still
+ * shows tonight's shift — under a new key (`roster:pattern`), because the dated
+ * roster's old cache has a different shape.
  */
 import { get as idbGet, set as idbSet } from 'idb-keyval'
-import type { Assignment, MyRoster, RosterWeekView } from '#shared/types'
+import { WEEKDAYS, businessDate, isoWeekday, weekdayLongBs } from '#shared/dates'
+import { dayCells, myPatternShifts, timeSpanBs } from '~/composables/useRoster'
+import type { RosterPatternView } from '#shared/types'
 
 const props = defineProps<{
   /** Where the back arrow goes: `/konobar` for a waiter, `/sanker` for the šanker. */
@@ -33,25 +27,21 @@ const api = useApi()
 const me = useMe()
 
 /** The last good answer, so the screen opens with no signal. */
-const CACHE_KEY = 'roster:last'
+const CACHE_KEY = 'roster:pattern'
 
-const data = ref<MyRoster | null>(null)
+const data = ref<RosterPatternView | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
 const stale = ref(false)
 
-const which = ref<'ova' | 'sljedeca'>('ova')
-const SEGMENTS = [
-  { value: 'ova', label: 'Ova sedmica' },
-  { value: 'sljedeca', label: 'Sljedeća' },
-] as const
-
-const week = computed<RosterWeekView | null>(() => {
-  if (!data.value) return null
-  return which.value === 'ova' ? data.value.this_week : data.value.next_week
-})
-
 const myId = computed(() => me.user.value?.id ?? '')
+
+/** Today's weekday on the café's business day: at 01:30 it is still yesterday. */
+const today = computed(() => isoWeekday(businessDate(
+  new Date().toISOString(),
+  me.settings.value?.timezone,
+  me.settings.value?.business_day_start_hour,
+)))
 
 async function load() {
   try {
@@ -73,8 +63,8 @@ async function load() {
 onMounted(async () => {
   if (!(await me.requireSession())) return
 
-  const cached = await idbGet<MyRoster>(CACHE_KEY)
-  if (cached) {
+  const cached = await idbGet<RosterPatternView>(CACHE_KEY)
+  if (cached?.entries && cached.templates) {
     data.value = cached
     stale.value = true
     loading.value = false
@@ -90,23 +80,15 @@ useChanges({
   },
 })
 
-// -- the day rows -----------------------------------------------------------
+const days = computed(() => WEEKDAYS.map(weekday => ({
+  weekday,
+  label: weekdayLongBs(weekday),
+  isToday: weekday === today.value,
+  // Only the shifts somebody is on: an empty shift is noise on a staff phone.
+  cells: data.value ? dayCells(data.value, weekday).filter(c => c.people.length) : [],
+})))
 
-interface DayRow {
-  work_date: string
-  rows: Assignment[]
-}
-
-const days = computed<DayRow[]>(() =>
-  (week.value?.days ?? []).map(day => ({
-    work_date: day.work_date,
-    // Newest template first would be wrong: a day reads morning to night.
-    rows: [...day.assignments].sort((a, b) => a.start_time.localeCompare(b.start_time)),
-  })))
-
-const unpublished = computed(() => !!week.value && week.value.published_at === null)
-
-const mine = computed(() => (week.value ? myShifts(week.value, myId.value) : []))
+const mine = computed(() => (data.value ? myPatternShifts(data.value, myId.value) : []))
 </script>
 
 <template>
@@ -127,43 +109,27 @@ const mine = computed(() => (week.value ? myShifts(week.value, myId.value) : [])
             Nema veze — prikazan je posljednji preuzeti raspored
           </p>
 
-          <!-- Which week. A control, not two primary actions. -->
-          <UiSeg
-            block
-            label="Sedmica"
-            :options="SEGMENTS"
-            :model-value="which"
-            @update:model-value="which = $event as typeof which"
-          />
-
-          <p v-if="unpublished" class="empty">
-            {{ which === 'sljedeca'
-              ? 'Raspored za sljedeću sedmicu još nije objavljen.'
-              : 'Raspored za ovu sedmicu još nije objavljen.' }}
+          <p class="text-caption text-muted">Raspored važi svake sedmice.</p>
+          <p class="text-label text-text-2">
+            Moje smjene u sedmici:
+            <strong class="num text-text">{{ mine.length }}</strong>
           </p>
 
-          <template v-else>
-            <!-- A published raspored repeats until a newer one is published, so a
-                 week nobody wrote still has a plan — and says whose. -->
-            <p v-if="week?.inherited_from" class="text-caption text-muted">
-              Važi raspored objavljen za {{ weekRangeBs(week.inherited_from) }}.
-            </p>
-            <p class="text-label text-text-2">
-              {{ which === 'ova' ? 'Moje smjene ove sedmice' : 'Moje smjene sljedeće sedmice' }}:
-              <strong class="num text-text">{{ mine.length }}</strong>
-            </p>
+          <section
+            v-for="day in days"
+            :key="day.weekday"
+            class="card flex flex-col gap-2 p-3"
+          >
+            <h3 class="flex items-center gap-2 text-label font-semibold text-text-2">
+              {{ day.label }}
+              <span v-if="day.isToday" class="chip">danas</span>
+            </h3>
 
-            <section
-              v-for="day in days"
-              :key="day.work_date"
-              class="card flex flex-col gap-2 p-3"
-            >
-              <h3 class="text-label font-semibold text-text-2">{{ dayLabelBs(day.work_date) }}</h3>
+            <p v-if="!day.cells.length" class="text-label text-muted">Niko nije na rasporedu.</p>
 
-              <p v-if="!day.rows.length" class="text-label text-muted">Niko nije na rasporedu.</p>
-
+            <template v-for="cell in day.cells" :key="cell.template.id">
               <div
-                v-for="person in day.rows"
+                v-for="person in cell.people"
                 :key="person.id"
                 class="flex min-h-12 items-center gap-3 rounded-control px-2"
                 :class="person.user_id === myId
@@ -179,15 +145,15 @@ const mine = computed(() => (week.value ? myShifts(week.value, myId.value) : [])
 
                 <span class="grow truncate">
                   {{ person.user_name }}
-                  <small class="block text-caption tracking-normal text-muted">{{ person.template_name }}</small>
+                  <small class="block text-caption tracking-normal text-muted">{{ cell.template.name }}</small>
                 </span>
 
                 <span v-if="person.user_id === myId" class="num shrink-0 text-label font-semibold">
-                  {{ timeSpanBs(person.start_time, person.end_time) }}
+                  {{ timeSpanBs(cell.template.start_time, cell.template.end_time) }}
                 </span>
               </div>
-            </section>
-          </template>
+            </template>
+          </section>
         </template>
       </main>
     </div>

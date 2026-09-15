@@ -239,6 +239,33 @@ export function weekdayBs(businessDay: string): string {
   return DAY_NAMES_BS[new Date(Date.UTC(year!, month! - 1, day!)).getUTCDay()]!
 }
 
+/**
+ * ISO weekday of a `YYYY-MM-DD` date: Monday is 1, Sunday is 7.
+ *
+ * *Raspored* is one weekly pattern with no dates in it, so the only thing a date
+ * is asked on its way to the plan is which weekday it is. Pass a **business
+ * date** (`businessDate(iso)`), never a raw timestamp: at 02:00 on Saturday the
+ * café is still working Friday, and Friday's plan is the one on *Puls*.
+ */
+export function isoWeekday(businessDay: string): number {
+  const [year, month, day] = businessDay.split('-').map(Number)
+  const dow = new Date(Date.UTC(year!, month! - 1, day!)).getUTCDay()
+  return dow === 0 ? 7 : dow
+}
+
+/** The seven weekdays of the pattern, Monday first, as `isoWeekday` numbers them. */
+export const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const
+
+/** `1` → `"pon"` … `7` → `"ned"` — the chip over a pattern column. */
+export function weekdayShortBs(weekday: number): string {
+  return ['pon', 'uto', 'sri', 'čet', 'pet', 'sub', 'ned'][weekday - 1] ?? ''
+}
+
+/** `1` → `"Ponedjeljak"` … `7` → `"Nedjelja"` — ijekavian, as a heading. */
+export function weekdayLongBs(weekday: number): string {
+  return ['Ponedjeljak', 'Utorak', 'Srijeda', 'Četvrtak', 'Petak', 'Subota', 'Nedjelja'][weekday - 1] ?? ''
+}
+
 /** `"2026-09-18"` → `"18.09."` — the short written date the roster grid uses. */
 export function shortDateBs(businessDay: string): string {
   const [, month, day] = businessDay.split('-')

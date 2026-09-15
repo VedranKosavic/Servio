@@ -459,7 +459,6 @@ function planned(patch: Partial<LiveRostered> & { user_id: string }): LiveRoster
     template_name: 'Druga smjena',
     start_time: '15:00',
     end_time: '23:00',
-    status: 'planned',
     ...patch,
   }
 }
@@ -508,23 +507,17 @@ describe('whoShifts', () => {
   })
 
   /**
-   * Moved: this used to assert the words *bolest* and *nije došao* on the card.
-   * Sick and absent marks are gone from the app ("Ne trebaju nam zamjene i
-   * bolovanje"), so an old `sick`/`absent` row is simply not on tonight's plan —
-   * no row, no word — and a person who works anyway is named like any cover.
+   * Moved (0010): this asserted that an old `sick`/`absent` row drew no row.
+   * `LiveRostered` has no `status` any more — `rostered` is today's weekday of
+   * the weekly pattern, and every row in it is planned — so what is left to
+   * assert is the half that still means something: an empty plan, and whoever
+   * works anyway named as a cover.
    */
-  it('draws no sick or absent row, and names who works anyway as a cover', () => {
-    const [shift] = whoShifts([
-      planned({ user_id: 'a', status: 'sick' }),
-      planned({ user_id: 'b', name: 'Nidal', status: 'absent' }),
-    ], [], DRUGA)
+  it('draws an empty plan as no rows, and names who works anyway as a cover', () => {
+    const [shift] = whoShifts([], [], DRUGA)
     expect(shift!.rows).toEqual([])
 
-    const [again] = whoShifts(
-      [planned({ user_id: 'a', status: 'sick' })],
-      [person({ user_id: 'a' })],
-      DRUGA,
-    )
+    const [again] = whoShifts([], [person({ user_id: 'a' })], DRUGA)
     expect(again!.rows.map(r => r.state)).toEqual(['van-rasporeda'])
   })
 

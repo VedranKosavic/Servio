@@ -1,16 +1,16 @@
 /**
- * *Raspored* — the shapes `server/services/roster.ts` answers with (PHASE4 §2.7).
+ * *Raspored* — the shapes `server/services/roster.ts` answers with.
  *
- * **The staff projection is a different query, not a filter** (§2.7). A waiter's
- * response object never held a colleague's `sick` and then dropped it: `note`,
- * `updated_by` and `swap_request_id` are simply not selected, and a colleague's
- * `sick | absent | removed` row is mapped to a hole before it becomes an
- * `Assignment` at all. The optional fields below are what an admin gets extra.
+ * **One weekly pattern, no dates.** The owner's rule (2026-09-15): "Ne trebaju
+ * nam datumi za raspored, samo nam treba da dodamo po danima maksimalno 2 osobe
+ * po smjeni i taj raspored ostaje zauvijek." So the plan is seven weekdays ×
+ * the active shift templates, at most `max_per_shift` people in each cell, and
+ * an edit applies to every week from the moment it is saved. There is nothing
+ * to publish and nothing to copy.
+ *
+ * The owner and staff read the same shape: with no sick days and no swaps left
+ * there is nothing on a pattern row a colleague may not see.
  */
-export type AssignmentStatus = 'planned' | 'swapped' | 'sick' | 'absent' | 'removed'
-export type AssignmentOrigin = 'owner' | 'copy' | 'swap'
-export type SwapReason = 'zamjena' | 'bolest'
-export type SwapStatus = 'pending' | 'accepted' | 'declined' | 'cancelled'
 
 export interface ShiftTemplateView {
   id: string
@@ -21,130 +21,28 @@ export interface ShiftTemplateView {
   active: boolean
 }
 
-export interface Assignment {
+/** One person in one cell of the pattern. */
+export interface PatternEntry {
+  /** The `roster_pattern` row — what `DELETE /api/roster/pattern/:id` takes. */
   id: string
-  work_date: string
+  /** ISO weekday, Monday = 1 … Sunday = 7. */
+  weekday: number
   template_id: string
-  template_name: string
-  /** Snapshotted at insert: the grid shows "16–01 (staro 15–00)" from these. */
-  start_time: string
-  end_time: string
   user_id: string
   user_name: string
   user_initials: string
-  status: AssignmentStatus
-  origin: AssignmentOrigin
-  /** Admin only. */
-  note?: string | null
-  /** Admin only — the "izmijenjeno 10.09. · Haris" chip. */
-  updated_by_name?: string | null
-  updated_at?: string | null
-  /** Admin only: the live request on this row, if any. */
-  swap_request_id?: string | null
-  /** True on a row with a `pending` request — the amber chip, on both sides. */
-  swap_pending: boolean
-  /**
-   * True when this cell is not a row of its own week but the published pattern
-   * carried forward (`RosterWeekView.inherited_from`). `id` is then the **source
-   * row's** id, and a write on it sends `work_date` with it, so the server can
-   * write the week's rows before it acts.
-   */
-  inherited: boolean
-}
-
-export interface RosterDayView {
-  work_date: string
-  assignments: Assignment[]
-}
-
-export interface RosterWeekView {
-  week_start: string
-  /** On an inherited week, the source week's publish — the plan in force. */
-  published_at: string | null
-  published_by_name: string | null
-  /**
-   * The Monday of the published week this one repeats, or `null` when the week
-   * shows its own rows (or nothing at all, before the first publish).
-   *
-   * "Kada se objavi raspored, taj raspored važi zauvijek osim ako se objavi
-   * novi": a week with no rows of its own shows the most recent published week
-   * before it, shifted by whole weeks.
-   */
-  inherited_from: string | null
-  days: RosterDayView[]
-  /** The templates this week's grid draws rows for. */
-  templates: ShiftTemplateView[]
-}
-
-/** One open offer or one of my own requests, as S17's top cards draw it. */
-export interface SwapRequestView {
-  id: string
-  assignment_id: string
-  work_date: string
-  template_name: string
-  start_time: string
-  end_time: string
-  from_user_id: string
-  from_user_name: string
-  to_user_id: string | null
-  to_user_name: string | null
-  status: SwapStatus
-  /** Admin only — *Zamjene* is the one screen besides *Dnevnik* that says "bolest". */
-  reason?: SwapReason
-  note?: string | null
-  decided_by_name?: string | null
-  decided_at?: string | null
-  at: string
-}
-
-/** `GET /api/me/roster` — my week, the offers awaiting me, and my own requests. */
-export interface MyRoster {
-  this_week: RosterWeekView
-  next_week: RosterWeekView
-  /** Open offers and offers named at me. */
-  offers: SwapRequestView[]
-  /** My own live requests, each with its *Povuci*. */
-  mine: SwapRequestView[]
 }
 
 /**
- * One person, one month, on *Sati*.
+ * `GET /api/roster/pattern` (owner) and `GET /api/me/roster` (staff).
  *
- * `first_action` is not the arrival, and the page prints that sentence rather
- * than hiding it in a tooltip (PLAN §8): "prva tura 16:40 (+40 min)" is evidence
- * for a conversation, never a flag.
+ * `templates` are the **active** ones in their own `sort` order; `entries` only
+ * ever name active people on active templates — a deactivated person or
+ * template simply stops showing.
  */
-export interface HoursRow {
-  user_id: string
-  user_name: string
-  planned_shifts: number
-  planned_h: number
-  worked_h: number
-  late_min: number
-  early_leave_min: number
-  sick_days: number
-  absent_days: number
-  swaps_given: number
-  swaps_taken: number
-  /** A `planned` row with no `shift_members` row behind it. */
-  no_shift_rows: number
-  /** He was there and is not on the plan. */
-  unplanned_rows: number
-  days: HoursDay[]
-}
-
-export interface HoursDay {
-  business_date: string
-  template_name: string | null
-  start_time: string | null
-  end_time: string | null
-  status: AssignmentStatus | 'unplanned'
-  planned_h: number
-  first_action: string | null
-  left_at: string | null
-  left_auto: boolean
-  worked_h: number
-  late_min: number
-  early_leave_min: number
-  no_shift_row: boolean
+export interface RosterPatternView {
+  templates: ShiftTemplateView[]
+  entries: PatternEntry[]
+  /** The server's cap, so a screen hides its `+` at the same number it refuses. */
+  max_per_shift: number
 }

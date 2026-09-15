@@ -128,21 +128,17 @@ export type {
 // Phase 4's bodies, the same way.
 export type {
   AckRulesBody,
-  AssignmentBody,
-  AssignmentPatch,
-  DecideSwapBody,
   DiscardScanBody,
   LinkAliasBody,
   MarkReadBody,
   MuteUserBody,
+  PatternBody,
   PostMessageBody,
   PublishRulesBody,
   ScanDeliveryBody,
   SetPinBody,
   ShiftTemplateBody,
   ShiftTemplatePatch,
-  SwapBody,
-  WeekBody,
 } from './schemas'
 
 // --- the shared constants and settings --------------------------------------

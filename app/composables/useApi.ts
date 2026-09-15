@@ -49,8 +49,7 @@ import type {
   PaymentResult,
   PendingAdjustment,
   PinLoginResult,
-  MyRoster,
-  HoursRow,
+  RosterPatternView,
   PostMessageResult,
   Prep,
   PrepOrder,
@@ -525,15 +524,8 @@ export function useApi() {
 
     // -- Raspored (Phase 4) --------------------------------------------------
 
-    /**
-     * S17, read-only. Swaps and sick days are gone from the app ("Ne trebaju nam
-     * zamjene i bolovanje"); their routes still exist and no screen calls them.
-     */
-    getMyRoster: () => request<MyRoster>('/api/me/roster'),
-
-    /** *Moji sati* — own rows only; the route never takes a user id. */
-    getMyHours: (month: string) =>
-      request<HoursRow[]>(`/api/me/roster/hours?month=${encodeURIComponent(month)}`),
+    /** S17, read-only: the weekly pattern, the same answer the owner's grid gets. */
+    getMyRoster: () => request<RosterPatternView>('/api/me/roster'),
 
     // -- Pravila (Phase 4) ---------------------------------------------------
 

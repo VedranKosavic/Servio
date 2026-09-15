@@ -137,6 +137,9 @@ describe('the triggers survived the migration', () => {
       // learned alias are plans and bookmarks, not ledgers (triggers.sql says
       // so at the top). The roster's history is `log_entries`.
       'chat_channels', 'chat_reads', 'shift_templates', 'roster_weeks', 'supplier_aliases',
+      // 0010: the weekly *Raspored* pattern is configuration; a removal is a DELETE
+      // and its record is the `roster_changed` log entry.
+      'roster_pattern',
     ]) {
       expect(guarded).not.toContain(table)
     }

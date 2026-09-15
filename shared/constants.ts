@@ -106,10 +106,14 @@ export const TRIGGER_NAMES = [
  * header and a learned supplier alias are all things somebody is meant to
  * rewrite. The roster's *history* is `log_entries`, written by
  * `services/roster.ts` inside the same transaction as every change.
+ *
+ * `roster_pattern` (0010) is the weekly plan itself — configuration a removal
+ * hard-deletes, with a `roster_changed` log entry in the same transaction.
  */
 export const UNGUARDED_TABLES = [
   'changes', 'sessions', 'enrol_codes', 'task_runs',
   'chat_channels', 'chat_reads', 'shift_templates', 'roster_weeks', 'supplier_aliases',
+  'roster_pattern',
 ] as const
 
 /** Tables allowed to have no `venue_id` column. */
@@ -177,12 +181,10 @@ export const ALERT_RULE_KEYS = [
   /** Nobody closed the night: still `open` three hours past `closing_time`. */
   'shift_not_closed',
   /**
-   * Phase 4. A *Traži zamjenu* nobody has taken and the shift is upon us, and a
-   * waiter who reported sick. Both surface **inside the app**, on the *Puls*
-   * attention list, and the reason is on `/admin` *Zamjene* and in *Dnevnik* —
-   * never in chat (PLAN §8: "Bolovanje vidi samo vlasnik").
+   * Phase 4: a waiter who reported sick. Kept because `LOG.roster_sick` still
+   * names it for the entries already written; nothing raises a new one since
+   * swaps and sick days left the app. (`swap_unfilled` went with the swap code.)
    */
-  'swap_unfilled',
   'roster_sick',
   /** A backup or a nightly task that failed. */
   'health',

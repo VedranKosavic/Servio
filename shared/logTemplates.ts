@@ -33,7 +33,7 @@ import { z } from 'zod'
 // Dates are written the Bosnian way everywhere the owner reads them — a raw
 // `2026-09-14` in a Dnevnik title is the same event dated two different ways
 // in two places, because the Razgovor line for it already says "sub 19.09.".
-import { shortDateBs, weekdayBs } from './dates'
+import { shortDateBs, weekdayBs, weekdayShortBs } from './dates'
 import type { AlertRuleKey } from './constants'
 import type { Settings } from './settings'
 
@@ -769,10 +769,23 @@ export const LOG = {
   roster_changed: defineLog({
     group: 'ekipa',
     quiet: true,
-    body: body({ work_date: z.string().optional(), week_start: z.string().optional(), what: z.string() }),
-    title: b => `Raspored izmijenjen · ${b.work_date
-      ? `${weekdayBs(b.work_date)} ${shortDateBs(b.work_date)}`
-      : b.week_start ? `sedmica od ${shortDateBs(b.week_start)}` : ''} · ${b.what}`,
+    // `work_date` / `week_start` are the dated roster's entries, kept readable.
+    // Since 0010 an edit names a `weekday` (ISO, pon = 1) and the person instead.
+    body: body({
+      work_date: z.string().optional(),
+      week_start: z.string().optional(),
+      weekday: z.int().min(1).max(7).optional(),
+      user_id: id.optional(),
+      what: z.string(),
+    }),
+    title: (b, n) => {
+      const when = b.work_date
+        ? `${weekdayBs(b.work_date)} ${shortDateBs(b.work_date)}`
+        : b.week_start ? `sedmica od ${shortDateBs(b.week_start)}`
+          : b.weekday ? weekdayShortBs(b.weekday) : ''
+      return `Raspored izmijenjen${suffix(Boolean(when), when)}`
+        + `${suffix(Boolean(b.user_id), n.user(b.user_id))} · ${b.what}`
+    },
   }),
 
   /** *Nije došao*. Important on purpose: it is the start of a conversation. */

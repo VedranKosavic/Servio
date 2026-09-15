@@ -31,10 +31,10 @@ import { getLive, getOwnerShift, listOwnerShifts, shiftLines } from '../../serve
 import { listLoginUsers, listMySessions } from '../../server/services/auth'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
 import { jpegBytes, scratchUploads } from '../helpers/phase4'
-import { businessDate } from '../../shared/dates'
+import { businessDate, isoWeekday } from '../../shared/dates'
 import { ROLE_LABELS } from '../../shared/landing'
 import { chatSince, postMessage } from '../../server/services/chat'
-import { addAssignment, getMyRoster, listTemplates, rosterHours } from '../../server/services/roster'
+import { addToPattern, getPattern, listTemplates } from '../../server/services/roster'
 import { latestRules, publishRules } from '../../server/services/rules'
 import { scanDelivery, setScanModel, stubScanModel } from '../../server/services/scan'
 import { createUpload } from '../../server/services/uploads'
@@ -514,18 +514,17 @@ describe('GET /api/owner/live', () => {
       'initials', 'joined_at', 'name', 'open_tabs', 'promet_fen', 'settled', 'user_id',
     ])
 
-    // And one row per person today's *Raspored* has on — the plan, which *Ko
-    // radi* lays the list above against. No note, no `updated_by`: this is the
-    // owner's screen, but the card draws a name, a badge and a shift and there
-    // is no reason for the rest of an assignment to cross the wire.
-    addAssignment(f.db, f.venueId, f.adminActor(), {
-      work_date: businessDate(new Date().toISOString()),
+    // And one row per person today's weekday of *Raspored* has on — the plan,
+    // which *Ko radi* lays the list above against. `status` left with sick days
+    // and swaps (0010): a pattern row is only ever planned.
+    addToPattern(f.db, f.venueId, f.adminActor(), {
+      weekday: isoWeekday(businessDate(new Date().toISOString())),
       template_id: listTemplates(f.db, f.venueId)[0]!.id,
       user_id: f.userId('Lejla'),
     })
     const withPlan = getLive(f.db, f.venueId, f.adminActor())
     expect(Object.keys(withPlan.rostered[0]!).sort()).toEqual([
-      'end_time', 'initials', 'name', 'start_time', 'status', 'template_id',
+      'end_time', 'initials', 'name', 'start_time', 'template_id',
       'template_name', 'user_id',
     ])
 
@@ -660,29 +659,23 @@ describe('GET /api/chat/since', () => {
   })
 })
 
-describe('GET /api/me/roster and GET /api/roster/hours', () => {
-  it('carries two weeks, the offers and my own requests', () => {
-    const mine = getMyRoster(f.db, f.venueId, f.actor('Amar'))
-    expect(Object.keys(mine).sort()).toEqual(['mine', 'next_week', 'offers', 'this_week'])
-    expect(Object.keys(mine.this_week).sort())
-      // `inherited_from`: the published week this one repeats, or null.
-      .toEqual(['days', 'inherited_from', 'published_at', 'published_by_name', 'templates', 'week_start'])
-    // Seven day rows, always — an empty week is seven empty days, not no days.
-    expect(mine.this_week.days).toHaveLength(7)
-    expect(Object.keys(mine.this_week.templates[0]!).sort())
+/**
+ * Moved (0010): this block asserted the dated roster's two weeks, offers and
+ * requests, and *Sati*'s planned-against-worked row. Both are gone — *Raspored*
+ * is one weekly pattern and the hours reports went with the dated rows they
+ * counted — so it asserts the pattern envelope both readers get instead.
+ */
+describe('GET /api/me/roster and GET /api/roster/pattern', () => {
+  it('carries the active templates, the entries with names, and the cap', () => {
+    addToPattern(f.db, f.venueId, f.adminActor(), {
+      weekday: 5, template_id: listTemplates(f.db, f.venueId)[0]!.id, user_id: f.userId('Amar'),
+    })
+    const view = getPattern(f.db, f.venueId)
+    expect(Object.keys(view).sort()).toEqual(['entries', 'max_per_shift', 'templates'])
+    expect(Object.keys(view.entries[0]!).sort())
+      .toEqual(['id', 'template_id', 'user_id', 'user_initials', 'user_name', 'weekday'])
+    expect(Object.keys(view.templates[0]!).sort())
       .toEqual(['active', 'end_time', 'id', 'name', 'sort', 'start_time'])
-  })
-
-  it('carries the planned-against-worked row *Sati* prints', () => {
-    const shiftId = f.openShift({ members: ['Amar'] })
-    expect(shiftId).toBeTruthy()
-
-    const rows = rosterHours(f.db, f.venueId, businessDate(f.clock.now()).slice(0, 7))
-    expect(Object.keys(rows[0]!).sort()).toEqual([
-      'absent_days', 'days', 'early_leave_min', 'late_min', 'no_shift_rows',
-      'planned_h', 'planned_shifts', 'sick_days', 'swaps_given', 'swaps_taken',
-      'unplanned_rows', 'user_id', 'user_name', 'worked_h',
-    ])
   })
 })
 
@@ -728,13 +721,15 @@ describe('POST /api/stock/deliveries/scan', () => {
 })
 
 describe('no Phase 4 response carries a secret either', () => {
-  it('sweeps the four new envelopes', () => {
+  it('sweeps the new envelopes', () => {
     publishRules(f.db, f.venueId, f.adminActor(), { body_md: '# Pravila\n\nTekst.' })
+    addToPattern(f.db, f.venueId, f.adminActor(), {
+      weekday: 1, template_id: listTemplates(f.db, f.venueId)[0]!.id, user_id: f.userId('Amar'),
+    })
     const payloads = [
       chatSince(f.db, f.venueId, f.actor('Amar'), null),
-      getMyRoster(f.db, f.venueId, f.actor('Amar')),
+      getPattern(f.db, f.venueId),
       latestRules(f.db, f.venueId, f.actor('Amar')),
-      rosterHours(f.db, f.venueId, businessDate(f.clock.now()).slice(0, 7)),
     ]
     for (const payload of payloads) {
       expect(JSON.stringify(payload)).not.toMatch(/_hash|token|password|pepper|email/i)
