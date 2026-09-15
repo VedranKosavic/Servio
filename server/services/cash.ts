@@ -17,8 +17,10 @@ import { schema } from '../database/client'
 import { conflict, forbidden, notFound } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
 import type { Settings } from '#shared/settings'
+import { isAuthorisedUnpaid } from '#shared/schemas/money'
 import type {
   CashMovement, CashMovementType, ExpectedCash, ExpectedCashWaiter, OpeningFloat, Shift,
+  UnpaidReason,
 } from '#shared/types'
 import type { Actor, Db, Queryable, Tx } from './types'
 import { getSettings, joinShift, log, bump } from './contracts'
@@ -341,6 +343,74 @@ export function expectedCash(
     opening_float_known: float.source !== 'unknown',
     waiters: userId ? waiters.filter(w => w.user_id === userId) : waiters,
   }
+}
+
+/**
+ * **What the shift gave away** — the categories that come off the night's total.
+ *
+ * The owner's model: everything is rung up, so the promet is the truth and the
+ * stock moved for all of it; then the things nobody paid for come off by
+ * category. *Policija*, *Rashod*, *Osoblje* and *Otpis* are those things, and
+ * they are all one shape in the ledger — a tab closed with money still on it
+ * and nobody owing it.
+ *
+ * **This is deliberately not part of the shift summary.** The summary
+ * reconciles three ways and has an invariant test holding it to that; these are
+ * a reading *of* tabs, recomputed on every call, and adding them to a written
+ * row would put a fifth number inside an identity that does not need one. Both
+ * screens that show the breakdown — the waiter's settlement and the owner's
+ * shift detail — call this.
+ *
+ * The undecided half of the list (`walked_out`, `dispute`, `other`) is here
+ * too, and separately: the owner has to see it, but it is money somebody may
+ * still be asked for rather than money the café has given away.
+ */
+export interface ShiftCategory {
+  reason: UnpaidReason
+  /** How many tabs closed this way. */
+  count: number
+  /** What they came to — what is left owed on each, at the moment it closed. */
+  fen: number
+  /** Authorised in advance, so it is off the waiter and off the owner's list. */
+  authorised: boolean
+}
+
+export function shiftCategories(
+  q: Queryable, venueId: string, shiftId: string,
+): ShiftCategory[] {
+  const tabs = q.select({
+    id: schema.tabs.id,
+    reason: schema.tabs.unpaidReason,
+  })
+    .from(schema.tabs)
+    .where(and(
+      eq(schema.tabs.venueId, venueId),
+      eq(schema.tabs.shiftId, shiftId),
+      eq(schema.tabs.status, 'unpaid'),
+      isNotNull(schema.tabs.unpaidReason),
+    ))
+    .all()
+
+  if (tabs.length === 0) return []
+
+  const remaining = tabRemaining(q, venueId, tabs.map(t => t.id))
+  const byReason = new Map<string, ShiftCategory>()
+
+  for (const tab of tabs) {
+    const reason = tab.reason as UnpaidReason
+    const row = byReason.get(reason) ?? {
+      reason, count: 0, fen: 0, authorised: isAuthorisedUnpaid(reason),
+    }
+    row.count += 1
+    row.fen += remaining.get(tab.id) ?? 0
+    byReason.set(reason, row)
+  }
+
+  // Authorised first and biggest first inside each half: what the café gave
+  // away is the half a settlement is about, and the largest line is the one
+  // somebody asks about.
+  return [...byReason.values()].sort((a, b) =>
+    Number(b.authorised) - Number(a.authorised) || b.fen - a.fen)
 }
 
 /**

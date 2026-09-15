@@ -149,6 +149,7 @@ export function unpaidWordBs(reason: string): string {
     case 'policija': return 'Policija'
     case 'rashod': return 'Rashod'
     case 'osoblje': return 'Osoblje'
+    case 'otpis': return 'Otpis'
     case 'walked_out': return 'Nije plaćeno · otišli'
     case 'dispute': return 'Nije plaćeno · spor'
     default: return 'Nije plaćeno'

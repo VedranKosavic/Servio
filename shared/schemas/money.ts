@@ -152,19 +152,33 @@ export const createPaymentBody = z.object({
  * says *otpis* or *naplatiti*, which is what `pending_review` is for.
  *
  * **Consumed, and authorised in advance.** `policija`, `rashod` (an admin
- * drinking) and `osoblje` (a worker's own allowance) were never going to be
- * paid for and everybody knew it. The drink is rung up like any other, so the
- * stock moves and the promet counts it, and the amount comes off at the shift's
- * settlement by category rather than sitting on anybody's line. There is
- * nothing to decide, so they are not flagged for review and never reach the
- * owner's *Zahtijeva pažnju*.
+ * drinking), `osoblje` (a worker's own allowance) and `otpis` (spilled,
+ * dropped, or rung up by mistake) were never going to be paid for and everybody
+ * knew it. The drink is rung up like any other, so the stock moves and the
+ * promet counts it, and the amount comes off at the shift's settlement by
+ * category rather than sitting on anybody's line. There is nothing to decide,
+ * so they are not flagged for review and never reach the owner's *Zahtijeva
+ * pažnju*.
+ *
+ * **`otpis` is here rather than in `waste_events`**, and that is the owner's
+ * own description of it: *"it records a product, same as it would if it has
+ * been sold — basically it's spent, but wrongly, so we need to update the
+ * article in stanje šanka."* Ringing it up is what moves the stock, and it
+ * answers by construction the two questions a stock-item-shaped otpis could
+ * not: a spilled nargila is rung up through the aroma picker, so the right
+ * tobacco comes off; and a dropped kafa, which has no normativ left to move, is
+ * still counted and still visible. `waste_events` keeps its own job — the
+ * bartender's *Otpis* screen, where a box breaks in the store room and no
+ * product was ever involved.
  */
 export const UNPAID_REASONS = [
-  'walked_out', 'dispute', 'other', 'policija', 'rashod', 'osoblje',
+  'walked_out', 'dispute', 'other', 'policija', 'rashod', 'osoblje', 'otpis',
 ] as const
 
-/** The three that are authorised in advance: no review, and off the waiter. */
-export const AUTHORISED_UNPAID_REASONS = ['policija', 'rashod', 'osoblje'] as const
+/** The four that are authorised in advance: no review, and off the waiter. */
+export const AUTHORISED_UNPAID_REASONS = [
+  'policija', 'rashod', 'osoblje', 'otpis',
+] as const
 
 export function isAuthorisedUnpaid(reason: string): boolean {
   return (AUTHORISED_UNPAID_REASONS as readonly string[]).includes(reason)
