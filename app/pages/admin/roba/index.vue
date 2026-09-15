@@ -56,7 +56,9 @@ import {
   buildStanjeRows, groupStanjeRows, matchesFilter,
   type StanjeFilter, type StanjeRow,
 } from '~/components/roba/RobaStanjeTable.vue'
-import type { CountView, OwnerStockReport, StockItem } from '#shared/types'
+import type { CategoryAdmin, CountView, OwnerStockReport, StockItem } from '#shared/types'
+import type { CreateStockItemBody } from '#shared/schemas'
+import { linkedProductBody, menuLinkError } from '~/utils/stanjeNovi'
 
 definePageMeta({ middleware: 'admin', layout: 'admin' })
 
@@ -162,6 +164,77 @@ const visibleChips = computed(() => (isPhone.value
 function toggle(key: StanjeFilter) {
   filter.value = filter.value === key ? 'sve' : key
 }
+
+// -- Novi artikal --------------------------------------------------------------
+//
+// The shelf article is the short `RobaArtikalSheet`; *Prodaje se na meniju* adds
+// the menu article in the same step, linked 1:1 (`app/utils/stanjeNovi.ts`), so a
+// sale deducts it with no normativ. This page is admin-only (`middleware: 'admin'`);
+// the staff's `/stanje` has no such button.
+
+const newOpen = ref(false)
+const newPending = ref(false)
+const newError = ref<string | null>(null)
+const menuCategories = ref<CategoryAdmin[]>([])
+const onMenu = ref(true)
+const menuCategoryId = ref('')
+const menuPriceFen = ref<number | null>(null)
+
+const menuCategoryOptions = computed(() => [
+  { value: '', label: 'Izaberi kategoriju' },
+  ...menuCategories.value.map(category => ({ value: category.id, label: category.name })),
+])
+
+async function openNew() {
+  newError.value = null
+  onMenu.value = true
+  menuCategoryId.value = ''
+  menuPriceFen.value = null
+  newOpen.value = true
+  try {
+    menuCategories.value = (await api.getAdminCategories()).filter(category => category.active)
+  } catch (err) {
+    newError.value = apiErrorText(err, 'Kategorije se nisu učitale.')
+  }
+}
+
+async function createArticle(body: CreateStockItemBody) {
+  const link = { categoryId: menuCategoryId.value, priceFen: menuPriceFen.value }
+  if (onMenu.value) {
+    const problem = menuLinkError(link, body.base_unit)
+    if (problem) {
+      newError.value = problem
+      return
+    }
+  }
+
+  newPending.value = true
+  newError.value = null
+  try {
+    const item = await api.createStockItem({
+      ...body,
+      // The *Roba* report groups a shelf article under its menu category.
+      category_id: onMenu.value ? link.categoryId : null,
+    })
+    if (onMenu.value) {
+      try {
+        await api.createProduct(linkedProductBody(item.id, body.name, link))
+      } catch (err) {
+        // The shelf half landed; saving the sheet again would add it twice.
+        newOpen.value = false
+        error.value = `„${item.name}“ je dodan na stanje, ali ne i na meni: ${apiErrorText(err)}`
+        await load()
+        return
+      }
+    }
+    newOpen.value = false
+    await load()
+  } catch (err) {
+    newError.value = apiErrorText(err, 'Artikal nije dodan.')
+  } finally {
+    newPending.value = false
+  }
+}
 </script>
 
 <template>
@@ -171,6 +244,7 @@ function toggle(key: StanjeFilter) {
         <UiButton variant="ghost" @click="navigateTo('/admin/roba/pocetno-stanje')">
           Početno stanje
         </UiButton>
+        <UiButton variant="primary" @click="openNew">Novi artikal</UiButton>
       </template>
     </RobaTabs>
 
@@ -237,6 +311,44 @@ function toggle(key: StanjeFilter) {
       :row="sheetRow"
       @close="sheetId = null"
     />
+
+    <RobaArtikalSheet
+      :open="newOpen"
+      action="Dodaj"
+      :pending="newPending"
+      :error="newError"
+      @close="newOpen = false"
+      @create="createArticle"
+    >
+      <template #note>
+        <div class="n-menu">
+          <div class="n-row">
+            <span class="n-text">
+              <strong>Prodaje se na meniju</strong>
+              <small>Konobar ga naručuje, a svaki poslani komad skida 1 sa stanja.</small>
+            </span>
+            <PostavkeToggle v-model="onMenu" label="Prodaje se na meniju" words />
+          </div>
+          <template v-if="onMenu">
+            <UiField
+              :model-value="menuCategoryId"
+              label="Kategorija na meniju"
+              kind="select"
+              :options="menuCategoryOptions"
+              @update:model-value="value => menuCategoryId = String(value ?? '')"
+            />
+            <PostavkeNumField
+              label="Cijena na meniju"
+              :model-value="menuPriceFen"
+              kind="money"
+              suffix="KM"
+              @input="value => menuPriceFen = value"
+              @commit="value => menuPriceFen = value"
+            />
+          </template>
+        </div>
+      </template>
+    </RobaArtikalSheet>
   </div>
 </template>
 
@@ -244,6 +356,20 @@ function toggle(key: StanjeFilter) {
 .a-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
 .a-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
+
+/* The menu half of *Novi artikal*: set apart from the shelf fields by one rule. */
+.n-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.n-row { display: flex; align-items: center; gap: 12px; }
+.n-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex-grow: 1; }
+.n-text strong { font-size: var(--text-body); font-weight: 600; color: var(--ink); }
+.n-text small { font-size: var(--text-micro); color: var(--muted); }
 
 /* `.a-chips` and `.a-chip` are one definition in `admin.css`. */
 
