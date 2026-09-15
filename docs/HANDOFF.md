@@ -49,10 +49,9 @@ itself on first boot. To start clean, delete the file and restart.
 `db:roster` is the one to run against a database created before a change to the
 staff or to Phase 4's seed rows. It creates the people the database does not
 have, deactivates (never deletes) everybody else so their history stays
-readable, and backfills the three *Razgovor* channels and the two shift
-templates — rows a migration cannot write, and whose absence is why *Razgovor*
-opened on an empty list and *Raspored* said "Nema nijednog šablona smjene" on
-every day of the week.
+readable, and backfills the two shift templates — rows a migration cannot
+write, and whose absence is why *Raspored* said "Nema nijednog šablona smjene"
+on every day of the week.
 
 The browser suite runs against a production build on its own database and port;
 `tests/e2e/helpers.ts` documents how, and every spec file resets the rate limiter
@@ -91,8 +90,8 @@ not secrets.** Before a real install, set real PINs in `/admin/postavke/osoblje`
 ## The routes
 
 - `/` — the PIN pad, then the screen chooser for a worker
-- `/konobar` — floor plan, table, order, payment, storno, count, waste, chat, schedule, rules. The waiter has no end of shift any more; `/konobar/smjena` redirects to *Moja smjena*
-- `/sanker` — tickets, approval queue, count, chat, schedule, and *Zaključi smjenu* (`/sanker/zakljuci`, from the avatar menu, šanker mode only) — the one end of a night; `/stanje` — stock and deliveries
+- `/konobar` — floor plan, table, order, payment, storno, count, waste, schedule, rules. The waiter has no end of shift any more; `/konobar/smjena` redirects to *Moja smjena*
+- `/sanker` — tickets, approval queue, count, schedule, and *Zaključi smjenu* (`/sanker/zakljuci`, from the avatar menu, šanker mode only) — the one end of a night; `/stanje` — stock and deliveries
 - `/admin` — Puls, Smjena, Roba, Raspored, Meni i postavke. Four nav rows, and
   that is the whole dashboard.
 
@@ -107,8 +106,12 @@ the staff acknowledgement flow has no way to get a new version.
 `log_entries` is still written inside every admin transaction — the record
 survived, only the screen that read it is gone.
 
-*Razgovor* is not in the nav either: it is `ChatDock`, the copper button in the
-corner of every dashboard screen, with the full page still at `/admin/razgovor`.
+**Razgovor (chat) is gone too** — "Ukini chat, ne treba nam nikako ni chat ni
+poruke." Every chat screen, route, service and system line was deleted,
+including the *Svi* lines roster edits and rule publishing used to post. The
+`chat_channels`, `chat_messages` and `chat_reads` tables and their triggers stay
+in the database (no migration); nothing reads or writes them. Old chat photos
+stay on disk untouched: uploads serve and collect `kind='delivery'` only.
 
 **`/admin/postavke/uredaji` has no tab but still has its URL**, and that is
 deliberate: it is the only screen that mints a device enrolment code, and a
@@ -189,7 +192,7 @@ sides.
 
 Phases 1 to 4 are complete and pushed: the backend contract, the admin dashboard,
 the waiter and bartender screens with an offline queue and installable app, and
-Ekipa — chat with photos, the schedule with swaps, receipt scanning for
+Ekipa — chat with photos (since removed), the schedule with swaps, receipt scanning for
 deliveries, and house rules with acknowledgements. After that came a design system
 pass across all three areas, and the sign-in rework described above.
 

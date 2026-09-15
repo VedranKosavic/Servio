@@ -80,9 +80,9 @@ export interface Actor {
 export type ChangeEntity =
   | 'table' | 'prep' | 'stock' | 'count' | 'shift' | 'adjustment'
   | 'menu' | 'settings' | 'user' | 'device' | 'log'
-  // Phase 4. A chat write bumps `chat` and nothing else — never `table`,
-  // `shift` or anything a waiter's floor plan reads.
-  | 'chat' | 'roster' | 'rules'
+  // Phase 4. (`chat` went with *Razgovor*; old `changes` rows naming it are
+  // pruned within a week and read by nothing.)
+  | 'roster' | 'rules'
 
 export type { LogKind } from './logTemplates'
 
@@ -90,7 +90,7 @@ export type { LogKind } from './logTemplates'
 
 export type * from './types/admin'
 export type * from './types/auth'
-export type * from './types/chat'
+export type * from './types/uploads'
 export type * from './types/money'
 export type * from './types/owner'
 export type * from './types/roster'
@@ -130,20 +130,15 @@ export type {
   AckRulesBody,
   DiscardScanBody,
   LinkAliasBody,
-  MarkReadBody,
-  MuteUserBody,
   PatternBody,
-  PostMessageBody,
   PublishRulesBody,
   ScanDeliveryBody,
-  SetPinBody,
   ShiftTemplateBody,
   ShiftTemplatePatch,
 } from './schemas'
 
 // --- the shared constants and settings --------------------------------------
 
-export type { ChannelKind } from './chat'
 export type { Settings, SettingsPatch } from './settings'
 export type { AlertRuleKey } from './constants'
 export type { RouteRole } from './routeRoles'

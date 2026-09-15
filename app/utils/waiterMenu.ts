@@ -57,10 +57,7 @@ export const WAITER_MENU: WaiterMenuItem[] = [
   // WP0 — this package.
   { id: 'install', label: 'Instalacija', to: '/konobar/instalacija', roles: ['radnik'], ready: true },
   { id: 'wakelock', label: 'Drži ekran upaljen', action: 'wakelock', roles: ['radnik'], ready: true },
-  // Phase 4. The routes are written on day one and the rows stay disabled until
-  // their screens land — WP1 flips `chat`, WP2 flips `roster`, one line each,
-  // and nothing else in this file moves.
-  { id: 'chat', label: 'Razgovor', to: '/konobar/razgovor', toBartender: '/sanker/razgovor', roles: ['radnik'], ready: true },
+  // Phase 4. *Razgovor* was removed on the owner's call (15.09.2026).
   { id: 'roster', label: 'Raspored', to: '/konobar/raspored', toBartender: '/sanker/raspored', roles: ['radnik'], ready: true },
   // The screen is a choice on the session, not a property of the account, so
   // moving from the floor to the bar at midnight is one row and no sign-out.

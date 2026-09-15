@@ -181,12 +181,9 @@ describe('the seed', () => {
     }
   })
 
-  it('seeds the three chat channels and the two shift templates', () => {
-    const channels = f.db.select().from(schema.chatChannels).all()
-    expect(channels.map(c => c.kind).sort()).toEqual(['admini', 'konobari', 'svi'])
-    // Names are Bosnian and are what every screen prints; nobody creates,
-    // renames or deletes a channel.
-    expect(channels.find(c => c.kind === 'svi')?.name).toBe('Svi')
+  it('seeds the two shift templates and no chat channels', () => {
+    // *Razgovor* was removed; its tables stay, empty on a fresh database.
+    expect(f.db.select().from(schema.chatChannels).all()).toHaveLength(0)
 
     const templates = f.db.select().from(schema.shiftTemplates).all()
     expect(templates.map(t => `${t.name} ${t.startTime}-${t.endTime}`).sort())

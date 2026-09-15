@@ -18,7 +18,6 @@
  * accepted role value anywhere after the Korak 2 migration.
  */
 import type { Role } from './types'
-import { CHANNEL_KINDS } from './chat'
 
 export type RouteRole = Role[] | 'public' | 'any'
 
@@ -41,25 +40,10 @@ const A: Role[] = ['admin']
  */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-/**
- * Phase 4 adds one more rule, and it is not decoration: `svi` is not a uuid, so
- * `POST /api/chat/svi/messages` would normalise to itself, find no key, and be
- * 403'd by `tenant.ts` — deny-by-default doing exactly its job against a route
- * that is perfectly legitimate. A segment in `CHANNEL_KINDS` **immediately after
- * `/api/chat`** therefore becomes `:channel`. Position matters: only that one
- * slot, so a message id that happened to be the word `svi` somewhere deeper
- * could never be mistaken for a channel.
- */
 export function routeKey(method: string, path: string): string {
   const clean = (path.split('?')[0] ?? '').replace(/\/+$/, '') || '/'
-  const segments = clean.split('/')
-  const normalised = segments
-    .map((seg, i) => {
-      if (UUID.test(seg)) return ':id'
-      const isChannelSlot = i === 3 && segments[1] === 'api' && segments[2] === 'chat'
-      if (isChannelSlot && (CHANNEL_KINDS as string[]).includes(seg)) return ':channel'
-      return seg
-    })
+  const normalised = clean.split('/')
+    .map(seg => (UUID.test(seg) ? ':id' : seg))
     .join('/')
   return `${method.toUpperCase()} ${normalised}`
 }
@@ -211,19 +195,6 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   'POST /api/admin/enrol-codes': A,
   'GET /api/admin/settings': A,
   'PATCH /api/admin/settings': A,
-
-  // -- Phase 4: Razgovor ---------------------------------------------------
-  // Every row here is AR and the *channel* is what decides access, through
-  // `canSee` inside the service — the coarse gate cannot express "an admin may
-  // open two of the three rooms".
-  'GET /api/chat/since': AR,
-  'GET /api/chat/:channel/messages': AR,
-  'POST /api/chat/:channel/messages': AR,
-  'POST /api/chat/:channel/pin': AR,
-  'POST /api/chat/messages/:id/delete': AR,
-  'POST /api/chat/messages/:id/forward': AR,
-  'POST /api/chat/read': AR,
-  'POST /api/chat/users/:id/mute': A,
 
   // -- Phase 4: slike ------------------------------------------------------
   // `kind='delivery'` is admin-only inside the service, like `POST /api/stock/deliveries`.

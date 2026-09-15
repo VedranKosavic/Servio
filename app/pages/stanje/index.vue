@@ -88,7 +88,7 @@ const lastSale = computed<{ table: string, at: string, items: StockItem[] } | nu
  * The avatar sheet, on the third tab too.
  *
  * *Narudžbe* and *Na čekanju* have always had it; this one did not, so a šanker
- * standing at the shelf had to walk back a tab to reach *Razgovor*, *Brzi popis*
+ * standing at the shelf had to walk back a tab to reach *Brzi popis*
  * or *Odjavi se*. Every tab now opens the same sheet.
  */
 const menuOpen = ref(false)

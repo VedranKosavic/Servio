@@ -20,7 +20,6 @@ import type { PublishRulesBody, RuleAck, RuleVersion, RulesView } from '#shared/
 import type { Actor, Db, Queryable } from './types'
 import { bump } from './changes'
 import { log } from './log'
-import { postSystem } from './chat'
 
 /** `GET /api/rules` — the latest version and whether this reader owes an ack. */
 export function latestRules(q: Queryable, venueId: string, actor: Actor): RulesView {
@@ -70,7 +69,8 @@ export function listRuleVersions(q: Queryable, venueId: string): RuleVersion[] {
 }
 
 /**
- * `POST /api/admin/rules` — a new version, and one *Svi* line.
+ * `POST /api/admin/rules` — a new version and its log entry. The `rules` bump
+ * is how every phone learns of it; nothing is posted to chat.
  *
  * Append-only: `rules_no_update` refuses an edit, so a correction is v4 and the
  * question "what did the rules say when Amar acknowledged them?" stays a row.
@@ -94,10 +94,6 @@ export function publishRules(
       publishedBy: actor.userId,
     }).run()
 
-    postSystem(tx, venueId, 'svi', 'rules_published',
-      `Objavljena su nova Pravila (v${version})`,
-      { link: { label: 'Pravila →', route: '/konobar/pravila' }, version }, now)
-
     log(tx, venueId, {
       kind: 'rules_published',
       body: { version, chars: body.body_md.length },
@@ -107,7 +103,6 @@ export function publishRules(
     })
 
     bump(tx, venueId, 'rules', String(version))
-    bump(tx, venueId, 'chat')
   })
 
   return latestRules(db, venueId, actor)

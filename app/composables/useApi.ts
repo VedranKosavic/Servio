@@ -26,8 +26,6 @@ import type {
   AdjustmentResult,
   ApiError,
   Bootstrap,
-  ChatPage,
-  ChatSince,
   ChangesResult,
   CreateDeliveryBody,
   CreateOrderBody,
@@ -50,11 +48,9 @@ import type {
   PendingAdjustment,
   PinLoginResult,
   RosterPatternView,
-  PostMessageResult,
   Prep,
   PrepOrder,
   RulesView,
-  UploadResult,
   SettleResult,
   StockResponse,
   Tab,
@@ -72,8 +68,6 @@ import type {
 } from '#shared/schemas'
 import type { closeByBarBody } from '#shared/schemas'
 import type { z } from 'zod'
-import type { PostMessageBody, SetPinBody } from '#shared/schemas'
-import type { ChannelKind } from '#shared/chat'
 import { errorMessage } from '#shared/errors'
 
 export class ApiSideError extends Error implements ApiError {
@@ -465,62 +459,6 @@ export function useApi() {
       ),
 
     getHealth: () => request<Health>('/api/health'),
-
-    // -- Razgovor (Phase 4) --------------------------------------------------
-
-    /**
-     * Bootstrap, catch-up or `reset`. S16 calls this on mount, after every own
-     * send and on `visibilitychange` — **never on a timer of its own**: the
-     * 15 s `/api/changes` carries the badge counts, and that is the one poll.
-     */
-    getChatSince: (cursor?: number) =>
-      request<ChatSince>(`/api/chat/since${cursor ? `?cursor=${cursor}` : ''}`, { etag: true }),
-
-    /** *Učitaj starije*, backwards from `beforeSeq`. */
-    getChatHistory: (channel: ChannelKind, beforeSeq?: number, limit = 50) =>
-      request<ChatPage>(
-        `/api/chat/${channel}/messages?limit=${limit}`
-        + (beforeSeq ? `&before_seq=${beforeSeq}` : ''),
-      ),
-
-    /**
-     * Send. The chat store's own pending list retries this — a replay of the
-     * same `client_id` answers 200 with `already_applied: true`, never a 409, so
-     * a photo taken with the wifi off appears exactly once.
-     */
-    postChatMessage: (channel: ChannelKind, body: PostMessageBody) =>
-      request<PostMessageResult>(`/api/chat/${channel}/messages`, {
-        method: 'POST', body, timeoutMs: 8000,
-      }),
-
-    /** *Za naručiti*: replace, append one line, or *Naručeno ✓* (admin only). */
-    setChatPin: (channel: ChannelKind, body: SetPinBody) =>
-      request<{ ok: true }>(`/api/chat/${channel}/pin`, { method: 'POST', body }),
-
-    /** *Obriši* / *Ukloni sliku*. A soft delete: the placeholder says who and when. */
-    deleteChatMessage: (id: string) =>
-      request<{ ok: true }>(`/api/chat/messages/${id}/delete`, { method: 'POST', body: {} }),
-
-    /** *Proslijedi u…* and *Prijavi vlasniku*. */
-    forwardChatMessage: (id: string, to: ChannelKind) =>
-      request<PostMessageResult>(`/api/chat/messages/${id}/forward`, {
-        method: 'POST', body: { to },
-      }),
-
-    /** The badge cursor, debounced 1 s on the client. Bumps nothing. */
-    markChatRead: (channel: ChannelKind, seq: number) =>
-      request<{ ok: true }>('/api/chat/read', { method: 'POST', body: { channel, seq } }),
-
-    /**
-     * `POST /api/uploads`, multipart. The phone downscales first
-     * (`app/utils/image.ts`); this is the belt, not the braces.
-     */
-    uploadImage: (blob: Blob, kind: 'chat' | 'delivery' = 'chat') => {
-      const form = new FormData()
-      form.append('image', blob, 'slika.jpg')
-      form.append('kind', kind)
-      return request<UploadResult>('/api/uploads', { method: 'POST', body: form, timeoutMs: 20_000 })
-    },
 
     // -- Raspored (Phase 4) --------------------------------------------------
 

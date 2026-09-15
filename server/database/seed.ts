@@ -31,7 +31,6 @@ import * as schema from './schema'
 import { randomUUID } from 'node:crypto'
 import { hashSecret } from '../utils/password'
 import { sealPin } from '../utils/pinReveal'
-import { CHANNEL_KINDS, CHANNEL_NAMES } from '#shared/chat'
 
 const id = () => randomUUID()
 
@@ -555,19 +554,6 @@ export function seed(db: Db, opts: SeedOptions = {}): void {
         }).run()
       }
     })
-
-    // -- Razgovor -----------------------------------------------------------
-    // The three rooms are seeded with the venue and are never created, renamed
-    // or deleted by a user (PLAN F12). `canSee` decides who opens which.
-    for (const kind of CHANNEL_KINDS) {
-      tx.insert(schema.chatChannels).values({
-        id: id(),
-        venueId,
-        kind,
-        name: CHANNEL_NAMES[kind],
-        createdAt: now,
-      }).run()
-    }
 
     // -- Raspored -----------------------------------------------------------
     // The café's two shifts, as the owner runs them: 07–15 and 15–23. Neither

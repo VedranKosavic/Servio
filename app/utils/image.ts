@@ -2,9 +2,8 @@
  * The one decode path for every photo the app sends (PHASE4 §3, WP1).
  *
  * A phone camera writes a 4 MB, 4000 px JPEG. The server refuses anything over
- * 1.5 MB for chat, café wifi refuses rather more than that, and nobody needs
- * four thousand pixels of a fridge. So every picture goes through here first and
- * comes out at 100–180 KB.
+ * 2.5 MB, café wifi refuses rather more than that, and nobody needs four
+ * thousand pixels of a delivery note. So every picture goes through here first.
  *
  * **How the resize works, since none of it is Vue.** `URL.createObjectURL(file)`
  * makes a temporary `blob:` URL for bytes that are already in memory — no
@@ -15,9 +14,8 @@
  * re-encodes what was drawn.
  *
  * **Re-encoding drops EXIF, including GPS**, because the canvas holds pixels and
- * nothing else. That is a privacy gain rather than a side effect, and *Pravila*
- * says so out loud: a photo of the bar taken at work carries no coordinates to
- * anybody.
+ * nothing else. That is a privacy gain rather than a side effect: a photo taken
+ * at work carries no coordinates to anybody.
  *
  * The object URL is revoked in a `finally`: a blob URL keeps the whole file
  * alive in memory until it is released, and a shift's worth of leaked photos is
@@ -30,9 +28,6 @@ export interface DownscaleOptions {
   /** JPEG quality, 0–1. */
   quality: number
 }
-
-/** Chat: small enough to send on one bar of signal, big enough to see the mess. */
-export const CHAT_IMAGE: DownscaleOptions = { maxEdge: 1280, quality: 0.75 }
 
 /**
  * An otpremnica: bigger, because the small print on an A4 delivery note has to
@@ -64,7 +59,7 @@ export interface DownscaledImage {
  * `ImageDecodeError`, whose message is the Bosnian sentence the screen shows.
  */
 export async function downscale(
-  file: Blob, options: DownscaleOptions = CHAT_IMAGE,
+  file: Blob, options: DownscaleOptions = DELIVERY_IMAGE,
 ): Promise<DownscaledImage> {
   const url = URL.createObjectURL(file)
   try {

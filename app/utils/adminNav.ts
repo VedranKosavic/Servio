@@ -5,7 +5,7 @@
  * It exists for exactly the reason that file does: `app/layouts/admin.vue` (the
  * left nav and the bottom tabs) and `app/pages/admin/vise.vue` (the phone's *Više*
  * list) each used to carry their own inline array, so a Phase 4 package adding
- * *Razgovor* would have had to edit two files two other packages also own. Now
+ * a row would have had to edit two files two other packages also own. Now
  * both read this, WP0 writes every row on day one, and a package's only change
  * here is flipping one boolean.
  *
@@ -18,7 +18,7 @@
  * out of a single-file component, which is why this file spells the union. */
 export type AdminIcon =
   | 'pulse' | 'money' | 'box' | 'list' | 'users' | 'calendar'
-  | 'chevron-right' | 'check' | 'x' | 'clock' | 'more' | 'chat' | 'image'
+  | 'chevron-right' | 'check' | 'x' | 'clock' | 'more'
 
 export interface AdminNavItem {
   /** English id; the label is what anybody reads. */
@@ -49,17 +49,13 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { id: 'puls', to: '/admin', label: 'Puls', icon: 'pulse', sub: 'Večeras, uživo', tab: true, ready: true },
   { id: 'smjene', to: '/admin/smjene', label: 'Smjena', icon: 'money', sub: 'Noći, pazar i predaje', tab: true, ready: true },
   { id: 'roba', to: '/admin/roba', label: 'Roba', icon: 'box', sub: 'Stanje, prijem, popisi, otpis', tab: true, ready: true },
-  // *Razgovor* is deliberately absent. Chat is not a place the owner navigates
-  // to and back from — it is something he answers while looking at a number, so
-  // it lives in `ChatDock`, the copper button pinned to the corner of every
-  // `/admin` screen. The page at `/admin/razgovor` still exists for a laptop.
   { id: 'raspored', to: '/admin/raspored', label: 'Raspored', icon: 'calendar', sub: 'Sedmica po smjenama', ready: true },
   // *Kontrolna ploča* replaced *Meni i postavke*: one door to every table the
   // owner may edit (`app/utils/kontrola.ts`). `match` keeps the row lit on the
   // screens it links to, which kept their own URLs.
   { id: 'kontrola', to: '/admin/kontrola', match: ['/admin/kontrola', '/admin/meni', '/admin/postavke'], label: 'Kontrolna ploča', icon: 'list', sub: 'Osoblje, meni, zaliha, stolovi i postavke', ready: true },
   // Five rows, and that is the whole dashboard. *Dnevnik*, *Izvoz*,
-  // *Podešavanja*, *Pravila*, *Stolovi* and *Šabloni* were deleted outright on
+  // *Podešavanja*, *Pravila*, *Stolovi*, *Šabloni* and *Razgovor* were deleted outright on
   // the owner's call — not hidden, deleted, pages and all. `log()` still writes
   // an entry inside every admin transaction and `log_entries` is still the
   // record behind it; what is gone is the screen that read it.

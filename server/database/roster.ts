@@ -14,11 +14,10 @@
  * settlement and shift membership keeps pointing at a person who still exists.
  * Deleting them would orphan the history the whole dashboard is built on.
  *
- * It also **backfills the rows a Phase 4 migration could not add**: the three
- * *Razgovor* channels and the two shift templates are seed data, not schema, so
- * a database seeded before Phase 4 has the tables and none of the rows — which
- * is why *Razgovor* opened on an empty list and *Raspored* said "Nema nijednog
- * šablona smjene" on every day of the week.
+ * It also **backfills the rows a Phase 4 migration could not add**: the two
+ * shift templates are seed data, not schema, so a database seeded before
+ * Phase 4 has the table and none of the rows — which is why *Raspored* said
+ * "Nema nijednog šablona smjene" on every day of the week.
  *
  * Safe to run while the dev server is up: SQLite in WAL mode lets two processes
  * write. Runs with `.env` loaded (`node --env-file`) so the hash uses the same
@@ -35,7 +34,6 @@ import * as schema from './schema'
 import { hashSecret, verifySecret } from '../utils/password'
 import { sealPin } from '../utils/pinReveal'
 import { roster } from './seed'
-import { CHANNEL_KINDS, CHANNEL_NAMES } from '#shared/chat'
 
 const cast = process.env.SANK_DEV_CAST === 'full' ? 'full' : 'default'
 const wanted = roster(cast)
@@ -109,16 +107,6 @@ for (const person of existing) {
 
 // -- Seed rows a migration could not write ----------------------------------
 
-const channels = new Set(db.select().from(schema.chatChannels).all().map(row => row.kind))
-const addedChannels: string[] = []
-for (const kind of CHANNEL_KINDS) {
-  if (channels.has(kind)) continue
-  db.insert(schema.chatChannels).values({
-    id: randomUUID(), venueId, kind, name: CHANNEL_NAMES[kind], createdAt: now,
-  }).run()
-  addedChannels.push(CHANNEL_NAMES[kind])
-}
-
 const templateCount = db
   .select({ n: sql<number>`count(*)` }).from(schema.shiftTemplates).get()?.n ?? 0
 const addedTemplates: string[] = []
@@ -166,6 +154,5 @@ console.info(`[sank] ${file}`)
 if (made.length) console.info(`[sank] created: ${made.join(', ')}`)
 if (set.length) console.info(`[sank] updated: ${set.join(', ')}`)
 if (off.length) console.info(`[sank] deactivated (history kept): ${off.join(', ')}`)
-if (addedChannels.length) console.info(`[sank] Razgovor channels added: ${addedChannels.join(', ')}`)
 if (addedTemplates.length) console.info(`[sank] shift templates added: ${addedTemplates.join(', ')}`)
 sqlite.close()

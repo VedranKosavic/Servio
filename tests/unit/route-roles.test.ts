@@ -47,15 +47,8 @@ function routeFiles(dir = API_DIR, prefix = '/api'): string[] {
 /**
  * `[id]` is a route parameter and `routeKey()` normalises a live uuid to `:id`,
  * so the two sides can be compared at all.
- *
- * Phase 4 adds one more: `svi` is not a uuid, so `POST /api/chat/svi/messages`
- * would never normalise to `:id` — `routeKey()` maps a `CHANNEL_KINDS` segment
- * immediately after `/api/chat` to `:channel`, and the directory that answers it
- * is `[channel]`. Without this line the two sets differ by four keys and the
- * chat routes are dead behind deny-by-default.
  */
 function segment(name: string): string {
-  if (name === '[channel]') return ':channel'
   return /^\[.+\]$/.test(name) ? ':id' : name
 }
 
@@ -67,29 +60,13 @@ describe('ROUTE_ROLES', () => {
     expect(files).toContain('GET /api/health')
     expect(files).toContain('POST /api/auth/pin')
     expect(files).toContain('PATCH /api/admin/devices/:id')
-    expect(files).toContain('POST /api/chat/:channel/messages')
   })
 
-  /**
-   * The overlap Nitro's router has to get right (PHASE4 §2.10).
-   *
-   * `POST /api/chat/messages/:id/delete` and `POST /api/chat/:channel/messages`
-   * both match a three-segment shape under `/api/chat`. The static branch wins —
-   * but that is exactly the kind of thing that is true until it isn't, so the
-   * two keys are asserted distinct **and** `routeKey()` is asserted to send
-   * delete-shaped traffic to the delete key rather than to the send key.
-   */
-  it('keeps the delete route and the send route apart', () => {
-    const uuid = '3f9a1c22-0000-4000-8000-000000000001'
-    expect(routeKey('POST', `/api/chat/messages/${uuid}/delete`))
-      .toBe('POST /api/chat/messages/:id/delete')
-    expect(routeKey('POST', '/api/chat/svi/messages'))
-      .toBe('POST /api/chat/:channel/messages')
-    expect(routeKey('POST', '/api/chat/konobari/pin')).toBe('POST /api/chat/:channel/pin')
-    // A message id that happens to spell a channel kind is not a channel: only
-    // the slot immediately after `/api/chat` is rewritten.
-    expect(routeKey('POST', '/api/chat/messages/svi/delete'))
-      .toBe('POST /api/chat/messages/svi/delete')
+  it('has no chat route left, on disk or in the table', () => {
+    expect(files.filter(key => key.includes('/api/chat'))).toEqual([])
+    expect(Object.keys(ROUTE_ROLES).filter(key => key.includes('/api/chat'))).toEqual([])
+    // With the `:channel` rule gone, a word segment is just itself.
+    expect(routeKey('POST', '/api/chat/svi/messages')).toBe('POST /api/chat/svi/messages')
   })
 
   it('declares every route file — a route nobody declared is a route nobody guarded', () => {

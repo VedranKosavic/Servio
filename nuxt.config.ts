@@ -69,7 +69,7 @@ export default defineNuxtConfig({
        * What the flag actually does is delete precaches written by an older
        * *Workbox* version, whose storage format the current one cannot read —
        * and it does it inside the worker's `activate` event, which every client
-       * waits on. Turning it on made `phase4-razgovor`'s offline photo check
+       * waits on. Turning it on made the (since removed) `phase4-razgovor` offline photo check
        * fail in three runs out of six, each of those runs taking three times as
        * long; four runs with it off, everything else identical, were green and
        * fast, as were six on the unmodified base. A one-line tidy-up is not
@@ -119,7 +119,7 @@ export default defineNuxtConfig({
              * tags inside name that build's hashed files.
              *
              * The cache has to stay: without it an offline reload of
-             * `/konobar/razgovor/svi` is answered with the precached `/konobar`
+             * `/konobar/raspored` is answered with the precached `/konobar`
              * shell and the waiter is left looking at the floor plan instead of
              * the screen he was on (the `navigateFallback` note above is the
              * same fact from the other side).
@@ -128,7 +128,7 @@ export default defineNuxtConfig({
              * and this is the one cache Workbox does **not** clean up for us.
              * Precached files carry a revision and are replaced when the new
              * worker activates; a runtime cache is keyed by URL alone, so last
-             * build's `/konobar/razgovor/svi` survives the swap and is handed
+             * build's `/konobar/raspored` survives the swap and is handed
              * out whenever the three seconds below run out. That is a stale
              * version served on a slow connection, pointing at script files the
              * activation has already deleted. So this cache is emptied once per

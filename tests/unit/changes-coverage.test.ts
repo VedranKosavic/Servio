@@ -48,9 +48,6 @@ import {
 } from '../../server/services/admin'
 import { schema } from '../helpers/db'
 import {
-  deleteMessage, forwardMessage, muteUser, postMessage, setPin,
-} from '../../server/services/chat'
-import {
   addToPattern, createTemplate, removeFromPattern, updateTemplate,
 } from '../../server/services/roster'
 import { ackRules, publishRules } from '../../server/services/rules'
@@ -91,20 +88,13 @@ const EXEMPT = [
   // (§6.1). A `bump` here would invalidate every phone's ETag for a non-event.
   /^drafts[\\/]discard\.post\.ts$/,
   /**
-   * Phase 4's two, and both belong to the first reason above.
+   * Phase 4's one, and it belongs to the first reason above.
    *
-   * `POST /api/chat/read` is a **read cursor**: it fires every few seconds from
-   * every phone that has a channel open, and a bump would invalidate every
-   * waiter's ETag on every tick — exactly the heartbeat's argument. The
-   * requester's own `MAX(last_read_seq)` is in the ETag instead, so his badge
-   * still moves and nobody else's poll notices (PHASE4 §2.11).
-   *
-   * `POST /api/uploads` writes an **orphan nobody can see**: no message points
-   * at it yet, no screen renders it, and the hourly GC will unlink it if none
-   * ever does. The message that references it is the event, and that one bumps
-   * `chat`.
+   * `POST /api/uploads` writes an **orphan nobody can see**: no scan points at
+   * it yet, no screen renders it, and the hourly GC will unlink it if none ever
+   * does. The scan that references it is the event, and that one bumps.
+   * (`POST /api/chat/read` was the other, until *Razgovor* was removed.)
    */
-  /^chat[\\/]read\.post\.ts$/,
   /^uploads[\\/]index\.post\.ts$/,
 ]
 
@@ -519,38 +509,8 @@ const CALLS: Record<string, () => void | Promise<void>> = {
     updateSettings(f.db, f.venueId, f.adminActor(), { cash_tolerance_fen: 700 })
   },
 
-  // Phase 4 — Razgovor. Every one of these ends in `bump('chat')` and **only**
-  // `chat`: a message must never invalidate the floor plan's ETag (PHASE4 §2.11).
-  [join('chat', '[channel]', 'messages.post.ts')]: () => {
-    postMessage(f.db, f.venueId, f.actor('Amar'), 'svi', {
-      client_id: randomUUID(), kind: 'text', body: 'nema leda',
-    })
-  },
-
-  [join('chat', '[channel]', 'pin.post.ts')]: () => {
-    setPin(f.db, f.venueId, f.actor('Amar'), 'svi', { append: 'led' })
-  },
-
-  [join('chat', 'messages', '[id]', 'delete.post.ts')]: () => {
-    const sent = postMessage(f.db, f.venueId, f.actor('Amar'), 'svi', {
-      client_id: randomUUID(), kind: 'text', body: 'greška',
-    })
-    deleteMessage(f.db, f.venueId, f.actor('Amar'), sent.message.id)
-  },
-
-  [join('chat', 'messages', '[id]', 'forward.post.ts')]: () => {
-    const sent = postMessage(f.db, f.venueId, f.actor('Amar'), 'konobari', {
-      client_id: randomUUID(), kind: 'text', body: 'šank je prljav',
-    })
-    forwardMessage(f.db, f.venueId, f.actor('Amar'), sent.message.id, 'admini')
-  },
-
-  [join('chat', 'users', '[id]', 'mute.post.ts')]: () => {
-    muteUser(f.db, f.venueId, f.adminActor(), f.userId('Amar'), null)
-  },
-
   // Phase 4 — Raspored, one weekly pattern since 0010. `bump('roster')` on every
-  // add and remove (and `chat` for the day's one *Svi* line).
+  // add and remove.
   [join('roster', 'pattern', 'index.post.ts')]: () => {
     addToPattern(f.db, f.venueId, f.adminActor(), {
       weekday: 5, template_id: templateId(), user_id: f.userId('Amar'),
@@ -727,14 +687,11 @@ describe('every mutating route bumps the change feed', () => {
     expect(maxSeq(f.db, f.venueId)).toBeGreaterThan(before)
   })
 
-  it('the exemptions are the §4.1 names, the dev enrol, WP1\'s credential writes, *Odbaci* and Phase 4\'s two', () => {
-    expect(EXEMPT).toHaveLength(8)
-    // Phase 4's two, each for the heartbeat's reason: a read cursor and an
-    // orphan upload are not events (PHASE4 §2.11).
-    expect(EXEMPT.some(rx => rx.test(join('chat', 'read.post.ts')))).toBe(true)
+  it('the exemptions are the §4.1 names, the dev enrol, WP1\'s credential writes, *Odbaci* and Phase 4\'s one', () => {
+    expect(EXEMPT).toHaveLength(7)
+    // Phase 4's one, for the heartbeat's reason: an orphan upload is not an
+    // event (PHASE4 §2.11).
     expect(EXEMPT.some(rx => rx.test(join('uploads', 'index.post.ts')))).toBe(true)
-    // …and nothing wider: sending a message is an event and must bump.
-    expect(EXEMPT.some(rx => rx.test(join('chat', '[channel]', 'messages.post.ts')))).toBe(false)
     expect(EXEMPT.some(rx => rx.test(join('devices', 'heartbeat.post.ts')))).toBe(true)
     expect(EXEMPT.some(rx => rx.test(join('auth', 'pin.post.ts')))).toBe(true)
     expect(EXEMPT.some(rx => rx.test(join('admin', 'enrol-codes.post.ts')))).toBe(true)

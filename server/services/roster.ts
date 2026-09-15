@@ -26,16 +26,14 @@ import { and, asc, eq, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { newId, nowIso } from '../utils/ids'
 import { conflict, notFound, unprocessable } from '../utils/errors'
-import { businessDate, cutoffIso, isoWeekday } from '#shared/dates'
+import { businessDate, isoWeekday } from '#shared/dates'
 import type {
   LiveRostered, PatternBody, PatternEntry, RosterPatternView,
   ShiftTemplateBody, ShiftTemplatePatch, ShiftTemplateView,
 } from '#shared/types'
 import type { Actor, Db, Queryable, Tx } from './types'
 import { bump } from './changes'
-import { getSettings } from './contracts'
 import { log } from './log'
-import { postSystem } from './chat'
 
 type TemplateRow = typeof schema.shiftTemplates.$inferSelect
 
@@ -344,9 +342,8 @@ function toEntry(r: ActiveRow): PatternEntry {
 }
 
 /**
- * The log entry, the bump, and **at most one *Svi* line per owner per business
- * day**: "Raspored je izmijenjen". An edit reaches every phone at once, so the
- * room is told — but a Friday of six fixes is one line, not six.
+ * The log entry and the bump. An edit reaches every phone through the poll;
+ * there is no chat line any more (the owner removed *Razgovor*, 15.09.2026).
  */
 function afterEdit(
   tx: Tx, venueId: string, actor: Actor,
@@ -360,34 +357,6 @@ function afterEdit(
     ref: { type: 'roster_pattern', id: rowId },
     at: now,
   })
-
-  const settings = getSettings(tx, venueId)
-  const dayStart = cutoffIso(
-    businessDate(now, settings.timezone, settings.business_day_start_hour),
-    settings.timezone, settings.business_day_start_hour,
-  )
-  const already = tx.select({ id: schema.chatMessages.id }).from(schema.chatMessages)
-    .where(and(
-      eq(schema.chatMessages.venueId, venueId),
-      eq(schema.chatMessages.systemKey, 'roster_changed'),
-      sql`${schema.chatMessages.createdAt} >= ${dayStart}`,
-      sql`json_extract(${schema.chatMessages.systemPayloadJson}, '$.by') = ${actor.userId}`,
-    ))
-    .get()
-
-  // The *Svi* line is a courtesy, never a precondition: a venue whose chat rooms
-  // were never seeded (a wiped or hand-built database) must still be able to
-  // edit its roster. Without this check `postSystem` throws CHANNEL_NOT_FOUND
-  // and the whole edit rolls back.
-  const svi = tx.select({ id: schema.chatChannels.id }).from(schema.chatChannels)
-    .where(and(eq(schema.chatChannels.venueId, venueId), eq(schema.chatChannels.kind, 'svi')))
-    .get()
-
-  if (!already && svi) {
-    postSystem(tx, venueId, 'svi', 'roster_changed', 'Raspored je izmijenjen',
-      { link: { label: 'Raspored →', route: '/konobar/raspored' }, by: actor.userId }, now)
-    bump(tx, venueId, 'chat')
-  }
 
   bump(tx, venueId, 'roster', rowId)
 }

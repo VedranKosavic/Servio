@@ -138,8 +138,6 @@ export const RULE_TOKENS: { key: keyof Settings, label: string }[] = [
   { key: 'waste_pin_threshold_fen', label: 'Otpis traži PIN iznad' },
   { key: 'waste_events_per_shift_per_user', label: 'Otpisa po osobi po smjeni' },
   { key: 'shared_device_idle_s', label: 'Zajednički uređaj — zaključavanje' },
-  { key: 'chat_delete_own_s', label: 'Brisanje vlastite poruke — rok' },
-  { key: 'chat_retention_days', label: 'Slike u razgovoru — koliko žive' },
   { key: 'upload_user_day_files', label: 'Slika po osobi dnevno' },
   { key: 'roster_late_grace_min', label: 'Kašnjenje — tolerancija' },
 ]

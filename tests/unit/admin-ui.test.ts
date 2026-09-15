@@ -218,7 +218,7 @@ describe('the way back', () => {
   const PAGES = new Set([
     '/admin', '/admin/smjene', '/admin/roba', '/admin/roba/prijem', '/admin/raspored',
     '/admin/meni', '/admin/postavke/kategorije',
-    '/admin/postavke/osoblje', '/admin/postavke/uredaji', '/admin/vise', '/admin/razgovor',
+    '/admin/postavke/osoblje', '/admin/postavke/uredaji', '/admin/vise',
     '/admin/kontrola', '/admin/kontrola/sabloni', '/admin/kontrola/podesavanja',
   ])
   const DYNAMIC = [
@@ -268,13 +268,13 @@ describe('the way back', () => {
   })
 
   it('falls back to Puls rather than to a 404', () => {
-    // `/admin/razgovor`'s only ancestor is `/admin` itself.
-    expect(adminBack('/admin/razgovor', exists)).toBe('/admin')
+    // `/admin/nema`'s only ancestor is `/admin` itself.
+    expect(adminBack('/admin/nema', exists)).toBe('/admin')
   })
 
   it('never returns a path the router would not resolve', () => {
     const paths = ['/admin/smjena/a', '/admin/smjena/a/stavke', '/admin/roba/artikal/b',
-      '/admin/kontrola/sabloni', '/admin/postavke/uredaji', '/admin/razgovor']
+      '/admin/kontrola/sabloni', '/admin/postavke/uredaji', '/admin/nema']
     for (const path of paths) {
       const target = adminBack(path, exists)
       if (target !== null) expect(exists(target), `${path} -> ${target}`).toBe(true)

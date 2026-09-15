@@ -130,9 +130,8 @@ const emit = defineEmits<{ open: [user: UserAdmin] }>()
 .p-fold summary::-webkit-details-marker { display: none; }
 .p-fold summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
-/* Beside the count and not out at the right edge: the dashboard's chat button
-   floats in that corner on every screen, and a disclosure the owner cannot see
-   is a section he does not know opens. */
+/* Beside the count, where the eye already is, rather than out at the right
+   edge where a disclosure is easy to miss. */
 .p-chev {
   align-self: center;
   color: var(--muted);

@@ -9,8 +9,9 @@
  * already parsed, which is what the magic-byte check needs.
  *
  * It deliberately **bumps nothing** (PHASE4 §2.11): an orphan upload nobody can
- * see is not an event — the message that references it is, and that one bumps
- * `chat`.
+ * see is not an event — the scan that references it is, and that one bumps.
+ *
+ * The only kind left is `delivery`; chat photos went with *Razgovor*.
  */
 import { useDb } from '../../utils/db'
 import { apiError, guard } from '../../utils/http'
@@ -23,7 +24,7 @@ export default defineEventHandler(async (event) => {
 
   const kindPart = parts?.find(part => part.name === 'kind')
   const result = guard(() => {
-    const kind = parseUploadKind(kindPart ? kindPart.data.toString('utf8').trim() : 'chat')
+    const kind = parseUploadKind(kindPart ? kindPart.data.toString('utf8').trim() : 'delivery')
     return createUpload(
       useDb(), event.context.venueId, event.context.actor,
       { bytes: image.data, filename: image.filename }, kind,

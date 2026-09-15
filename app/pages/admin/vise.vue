@@ -6,9 +6,7 @@
  * here as a plain card list. On a laptop nobody arrives here, because the left
  * nav shows every row at once.
  *
- * *Razgovor* is not in this list and never will be: it is `ChatDock`, the button
- * in the corner of every screen. *Dnevnik* is not here either — it left the nav
- * by the owner's call and is reached from the foot of *Podešavanja*.
+ * *Dnevnik* is not here — it left the nav by the owner's call.
  */
 definePageMeta({ middleware: 'admin', layout: 'admin' })
 
