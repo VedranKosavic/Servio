@@ -40,8 +40,8 @@
  * in it and should be: articles compared across quantity, packs, value and
  * status at a glance. In a hand that table is a sideways drag, so below 1024 px
  * the sections become lists (`RobaStanjeList`) — name and quantity on the row,
- * the state as a small mark, everything else one tap behind the row in
- * `RobaStanjeSheet`. Nothing on this screen scrolls sideways at any width.
+ * the state as a small mark, and nothing behind the row. Nothing on this
+ * screen scrolls sideways at any width.
  *
  * **`useMounted` is not optional.** `useMediaQuery` answers truthfully from the
  * first client render and the server, which has no viewport, always says the
@@ -78,12 +78,6 @@ const loading = ref(true)
 const error = ref('')
 const filter = ref<StanjeFilter>('sve')
 
-/**
- * The article whose sheet is open, **by id and not by object**: the poll
- * replaces every row every fifteen seconds, and a sheet holding the old object
- * would go on showing a quantity the shelf no longer has.
- */
-const sheetId = ref<string | null>(null)
 
 async function load() {
   try {
@@ -123,8 +117,6 @@ const shown = computed(() => rows.value.filter(row => matchesFilter(row, filter.
 /** *Kafa*, *Nargila*, *Ostalo* — of what the filter left standing. */
 const sections = computed(() => groupStanjeRows(shown.value))
 
-/** The sheet's article, read fresh every render. Null closes the sheet. */
-const sheetRow = computed(() => rows.value.find(row => row.id === sheetId.value) ?? null)
 
 /**
  * Is a shift open and has it moved anything yet?
@@ -283,7 +275,6 @@ async function createArticle(body: CreateStockItemBody) {
       v-if="isPhone"
       :sections="sections"
       :loading="loading"
-      @open="row => sheetId = row.id"
     />
 
     <!-- ---- the laptop --------------------------------------------------- -->
@@ -305,12 +296,6 @@ async function createArticle(body: CreateStockItemBody) {
     <p v-if="!loading && sections.length === 0" class="a-empty">
       Nema robe za ovaj filter.
     </p>
-
-    <RobaStanjeSheet
-      :open="sheetRow !== null"
-      :row="sheetRow"
-      @close="sheetId = null"
-    />
 
     <RobaArtikalSheet
       :open="newOpen"

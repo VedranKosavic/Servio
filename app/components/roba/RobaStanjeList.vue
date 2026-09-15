@@ -29,10 +29,9 @@
  * moment; the ledger has said the same thing all along (`docs/BACKEND.md` §6.8).
  *
  * **The state is a mark, not a column.** A row that is `ok` says nothing, which
- * is what makes the two that are not carry. Everything else an article has —
- * what it is worth, how many packs that is, what last moved it, where its ledger
- * is — is one tap behind the name, in `RobaStanjeSheet`, because on this screen
- * it is read once a week and the quantity is read every night.
+ * is what makes the two that are not carry. The row is not a control: the
+ * article sheet behind it went on the owner's call, so a name and a quantity
+ * are the whole of what this screen says about an article.
  */
 import type { StanjeRow, StanjeSection } from './RobaStanjeTable.vue'
 
@@ -41,8 +40,6 @@ defineProps<{
   /** The first read has not landed: draw bars, not an empty screen. */
   loading?: boolean
 }>()
-
-const emit = defineEmits<{ open: [row: StanjeRow] }>()
 
 /** The pill's word and colour. Colour never carries the meaning by itself. */
 function mark(row: StanjeRow): { tone: 'warn' | 'bad', text: string } | null {
@@ -71,13 +68,10 @@ function mark(row: StanjeRow): { tone: 'warn' | 'bad', text: string } | null {
       </h2>
 
       <div class="r-card">
-        <button
+        <div
           v-for="row in section.rows"
           :key="row.id"
-          type="button"
           class="r-row"
-          :aria-label="`Detalji, ${row.name}`"
-          @click="emit('open', row)"
         >
           <span class="r-text">
             <span class="r-name">{{ row.name }}</span>
@@ -92,7 +86,7 @@ function mark(row: StanjeRow): { tone: 'warn' | 'bad', text: string } | null {
               {{ formatMovementQty(row.pending, row.base_unit) }}
             </span>
           </span>
-        </button>
+        </div>
       </div>
     </section>
   </div>
@@ -139,13 +133,7 @@ function mark(row: StanjeRow): { tone: 'warn' | 'bad', text: string } | null {
   min-width: 0;
 }
 
-/**
- * The whole row is the target.
- *
- * A chevron button on the right would be a 44 px control next to a number that
- * needs the width, to do a job the row can do for free — and the row is a far
- * bigger target than the chevron ever was.
- */
+/* A plain row: the name, then the quantity. Nothing to tap. */
 .r-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -154,18 +142,10 @@ function mark(row: StanjeRow): { tone: 'warn' | 'bad', text: string } | null {
   width: 100%;
   min-height: var(--tap);
   padding: 10px 14px;
-  border: 0;
   border-bottom: 1px solid var(--line-soft);
-  background: transparent;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-standard);
 }
 
 .r-row:last-child { border-bottom: 0; }
-.r-row:active { background: var(--bg); }
-.r-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 .r-text { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
 
