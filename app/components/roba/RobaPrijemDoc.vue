@@ -268,7 +268,6 @@ function qtyText(line: DocLine): string {
 // -- the foot ----------------------------------------------------------------
 
 const deliveredOn = ref('')
-const writtenFen = ref<number | null>(null)
 const sending = ref(false)
 const error = ref('')
 const okText = ref('')
@@ -297,22 +296,10 @@ function stavkeBs(n: number): string {
   return `${n} stavki`
 }
 
-/**
- * The written amount and the lines disagree.
- *
- * A warning and never a refusal: an invoice legitimately rounds, discounts a
- * crate or carries a deposit line nothing on the shelf corresponds to. What it
- * must never do is pass unnoticed, because a delivery entered a digit short is
- * exactly the shape theft takes on this screen.
- */
-const mismatch = computed(() =>
-  writtenFen.value !== null && writtenFen.value !== total.value)
-
 const problems = computed(() => {
   const list: string[] = []
   if (lines.value.length === 0) list.push('Dodaj bar jedan artikal.')
   if (deliveredOn.value.length === 0) list.push('Upiši datum sa fakture.')
-  if ((writtenFen.value ?? 0) <= 0) list.push('Upiši iznos koji piše na fakturi.')
   return list
 })
 
@@ -356,7 +343,6 @@ async function send() {
     clientId.value = crypto.randomUUID()
     lines.value = []
     deliveredOn.value = ''
-    writtenFen.value = null
     pickQty.value = null
     pickCost.value = null
     costTouched.value = false
@@ -448,18 +434,12 @@ async function send() {
 
       <div class="d-foot-fields">
         <UiField v-model="deliveredOn" label="Datum sa fakture" kind="date" />
-        <UiField v-model="writtenFen" label="Iznos sa fakture (KM)" kind="money" />
       </div>
 
       <div class="d-total">
         <span class="d-total-label">Zbir artikala</span>
         <strong class="num"><UiMoney :fen="total" :colour="false" /></strong>
       </div>
-
-      <p v-if="mismatch" class="d-warn">
-        Zbir artikala i iznos sa fakture se ne poklapaju. Provjeri stavke —
-        prijem se svejedno može proknjižiti.
-      </p>
 
       <!-- The wrapper catches the click the disabled button swallows, so asking
            why *Proknjiži* is grey is what shows the list of reasons. -->
@@ -701,16 +681,6 @@ async function send() {
   font-family: var(--font-display);
   font-size: var(--text-metric);
   font-weight: 700;
-}
-
-.d-warn {
-  margin: 0;
-  padding: 10px 12px;
-  border-radius: var(--radius-field);
-  background: var(--warn-soft);
-  color: var(--warn);
-  font-size: var(--text-label);
-  font-weight: 500;
 }
 
 .d-send { display: flex; }
