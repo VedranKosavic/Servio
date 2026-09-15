@@ -3,21 +3,20 @@
  * *Smjena* — one night, top to bottom.
  *
  * Everything on this page comes from **one** read, `GET /api/owner/shift/:id`,
- * which answers the shift, its written summary, the per-waiter fold, the cash
- * movements, the envelopes, the counts and what arrived after closing. The
- * second read is `GET /api/admin/settings`, and it is here for one word: the
- * tolerance the difference is judged against. Nothing else on the screen fetches.
+ * which answers the shift, its written summary, the per-waiter fold, the
+ * šanker's closing and what arrived after closing. The second read is
+ * `GET /api/admin/settings`, which the waiter strip judges against.
  *
- * **The numbers reconcile against each other, not against a second read.** Pazar
- * is `summary.promet_fen`; gotovina + kartica + nenaplaćeno come out of the same
- * fold, so the tiles and the strip cannot print two different nights.
+ * **The owner's cut.** The tiles are down to *Pazar*: gotovina/kartica, gratis
+ * and storna, razlika gotovine, manjak robe and lule went, and so did *Popisi*.
+ * *Kasa* is no longer the drawer reconciliation — nobody counts cash any more —
+ * it is the šanker's *Zaključi smjenu*: Sav prihod, the deductions and
+ * *Za predati*, exactly as stored.
  *
- * The refetch is the shell's poll (`useAdminChanges`), narrowed to the three
- * entities that can change what is on this page: a shift row, a decision on an
- * adjustment, a count being confirmed. There is no `setInterval` here.
+ * The refetch is the shell's poll (`useAdminChanges`), narrowed to the entities
+ * that can change what is on this page. There is no `setInterval` here.
  */
 import { ApiSideError } from '~/composables/useApi'
-import { cashVerdict, decimalBs, noCashCountReason, perBowl, stockVarianceNote } from '~/components/smjena/smjenaLogic'
 import type { OwnerShift, Settings } from '#shared/types'
 
 definePageMeta({ middleware: 'admin', layout: 'admin' })
@@ -27,7 +26,7 @@ const api = useAdminApi()
 const me = useMe()
 const changes = useAdminChanges({
   onEntity: (entity) => {
-    if (entity === 'shift' || entity === 'adjustment' || entity === 'count') void load()
+    if (entity === 'shift' || entity === 'adjustment' || entity === 'stock') void load()
   },
 })
 
@@ -37,10 +36,6 @@ const data = ref<OwnerShift | null>(null)
 const settings = ref<Settings | null>(null)
 const loading = ref(true)
 const error = ref('')
-
-/** Which row's button is spinning. One at a time: a decision is not a batch. */
-const busyId = ref<string | null>(null)
-const actionError = ref('')
 
 // -- the review form ---------------------------------------------------------
 
@@ -71,12 +66,8 @@ async function load() {
 }
 
 /**
- * The read happens in the browser, not during the server render.
- *
- * The session is a httpOnly cookie the *server* reads off the request, and a
- * server-side `$fetch` to our own API would go out without it — the `admin`
- * middleware is client-side for the same reason (`useMe`). So the first paint is
- * the skeleton and the numbers arrive a moment later.
+ * The read happens in the browser, not during the server render: the session
+ * is a httpOnly cookie and a server-side `$fetch` would go out without it.
  */
 onMounted(load)
 
@@ -85,14 +76,8 @@ useHead({
 })
 
 /**
- * `user_id` → name, from the rows this page already holds.
- *
- * `Shift` carries `closed_by` and `reviewed_by` as ids and no names, so the
- * header assembles them from the people it can already see: the summary's
- * per-waiter fold, the envelopes, the cash movements and the counts. An id
- * nobody on this page has seen simply renders without a name rather than as a
- * UUID — and the owner reading his own review sees himself, because `useMe`
- * knows who he is.
+ * `user_id` → name, from the rows this page already holds, so the header never
+ * renders a UUID for `closed_by` or `reviewed_by`.
  */
 const names = computed<Record<string, string>>(() => {
   const map: Record<string, string> = {}
@@ -110,26 +95,13 @@ const names = computed<Record<string, string>>(() => {
     map[m.user_id] = m.user_name
     map[m.created_by] = m.created_by_name
   }
-  for (const c of shift.counts) map[c.counted_by] = c.counted_by_name
   if (shift.closing) map[shift.closing.closed_by] = shift.closing.closed_by_name
   return map
 })
 
-// -- the tiles ---------------------------------------------------------------
-
-const bowls = computed(() => data.value ? perBowl(data.value.summary) : null)
-
-const cashWord = computed(() => {
-  const shift = data.value
-  if (!shift || !settings.value) return null
-  return cashVerdict(shift.summary.diff_fen, shift.summary.expected_cash_fen, settings.value)
-})
-
 /**
- * `category_id` → name, from the one fold that has them.
- *
- * `summary.by_category` comes back named; `by_user[].by_category` is the stored
- * numeric JSON and does not. One map here beats a second read of the catalogue.
+ * `category_id` → name, from the one fold that has them: `summary.by_category`
+ * comes back named, `by_user[].by_category` does not.
  */
 const categoryNames = computed<Record<string, string>>(() => {
   const map: Record<string, string> = {}
@@ -138,39 +110,6 @@ const categoryNames = computed<Record<string, string>>(() => {
   }
   return map
 })
-
-/** What the *Manjak robe* tile says under its amount. */
-const stockNote = computed(() => stockVarianceNote(data.value?.counts ?? []))
-
-// -- the decisions -----------------------------------------------------------
-
-/** Every action does the same three things, so it is written once. */
-async function act(id: string, run: () => Promise<unknown>) {
-  busyId.value = id
-  actionError.value = ''
-  try {
-    await run()
-    await load()
-    // Tell the shell's badge straight away rather than waiting out the 15 s.
-    await changes.refresh()
-  } catch (err) {
-    actionError.value = apiErrorText(err)
-  } finally {
-    busyId.value = null
-  }
-}
-
-function decideMovement(id: string, outcome: 'approved' | 'rejected') {
-  return act(id, () => api.decideCashMovement(id, { outcome }))
-}
-
-function acceptSettlement(settlementId: string) {
-  return act(settlementId, () => api.acceptSettlement(shiftId.value, settlementId))
-}
-
-function confirmCount(countId: string) {
-  return act(countId, () => api.confirmCount(countId, {}))
-}
 
 async function review() {
   reviewPending.value = true
@@ -184,55 +123,11 @@ async function review() {
     await load()
     await changes.refresh()
   } catch (err) {
-    // 422 NOTE_REQUIRED: the card total differs from the card payments and the
-    // server wants a sentence about why before it signs the night off.
+    // 422 NOTE_REQUIRED: the server wants a sentence before it signs the night off.
     if (err instanceof ApiSideError && err.code === 'NOTE_REQUIRED') noteRequired.value = true
     reviewError.value = apiErrorText(err)
   } finally {
     reviewPending.value = false
-  }
-}
-
-// -- the two drawer sheets ---------------------------------------------------
-
-const sheet = ref<'pickup' | 'opening' | null>(null)
-const sheetAmount = ref<number | null>(null)
-const sheetNote = ref('')
-const sheetPending = ref(false)
-const sheetError = ref('')
-
-function openSheet(kind: 'pickup' | 'opening') {
-  sheet.value = kind
-  sheetAmount.value = kind === 'opening'
-    ? data.value?.shift.opening_float_override_fen ?? null
-    : null
-  sheetNote.value = ''
-  sheetError.value = ''
-}
-
-async function submitSheet() {
-  if (sheetAmount.value === null) {
-    sheetError.value = 'Upiši iznos'
-    return
-  }
-  sheetPending.value = true
-  sheetError.value = ''
-  try {
-    if (sheet.value === 'pickup') {
-      await api.pickup(shiftId.value, {
-        amount_fen: sheetAmount.value,
-        ...(sheetNote.value.trim() ? { note: sheetNote.value.trim() } : {}),
-      })
-    } else {
-      await api.openingFloat(shiftId.value, { fen: sheetAmount.value })
-    }
-    sheet.value = null
-    await load()
-    await changes.refresh()
-  } catch (err) {
-    sheetError.value = apiErrorText(err)
-  } finally {
-    sheetPending.value = false
   }
 }
 </script>
@@ -253,57 +148,12 @@ async function submitSheet() {
         @review="review"
       />
 
-      <!-- `unit="KM"` and not `sub="KM"`: the unit sits beside the figure at
-           label size, because "86,00" with "KM" under it reads as two facts and
-           it is one (DESIGN §8). `PulsTiles` has always done it this way, and
-           the same primitive rendering two ways on the owner's two most-read
-           screens is what the redesign folded together. -->
       <div class="a-tiles">
         <UiTile label="Pazar" :value="formatAmount(data.summary.promet_fen)" unit="KM" />
-        <UiTile
-          label="Gotovina / kartica"
-          :value="formatAmount(data.summary.cash_fen)"
-          unit="KM"
-          :sub="`kartica ${formatKm(data.summary.card_fen)}`"
-        />
-        <UiTile
-          label="Gratis · storna"
-          :value="formatAmount(data.summary.comp_fen)"
-          unit="KM"
-          :sub="`storna ${data.summary.void_count} · ${formatKm(data.summary.void_fen)}`"
-        />
-        <UiTile
-          label="Razlika gotovine"
-          :value="data.summary.diff_fen === null ? '—' : signedAmount(data.summary.diff_fen)"
-          :unit="data.summary.diff_fen === null ? undefined : 'KM'"
-        >
-          <template #sub>
-            <span class="a-sub">
-              <UiPill v-if="cashWord" :tone="cashWord.tone">{{ cashWord.word }}</UiPill>
-              <span v-else>{{ noCashCountReason(data.shift) }}</span>
-            </span>
-          </template>
-        </UiTile>
-        <UiTile
-          label="Manjak robe"
-          :value="signedAmount(data.summary.stock_variance_fen)"
-          unit="KM"
-          :tone="data.summary.stock_variance_fen < 0 ? 'bad' : 'plain'"
-          :sub="stockNote"
-        />
-        <UiTile
-          label="Lule"
-          :value="data.summary.bowls"
-          :sub="bowls
-            ? `${decimalBs(bowls.grams)} g/luli · ${decimalBs(bowls.coals)} žara`
-            : 'nijedna lula'"
-        />
       </div>
 
-      <!-- The šanker's close: the eight lines and what was handed over. -->
-      <SmjenaClosingCard v-if="data.closing" :closing="data.closing" />
-
-      <p v-if="actionError" class="a-error">{{ actionError }}</p>
+      <!-- *Kasa* is the šanker's close: Sav prihod, the deductions, Za predati. -->
+      <SmjenaClosingCard :closing="data.closing ?? null" />
 
       <SmjenaWaiterStrip
         :shift-id="data.shift.id"
@@ -315,58 +165,12 @@ async function submitSheet() {
 
       <SmjenaCategoryBar :shift-id="data.shift.id" :categories="data.summary.by_category" />
 
-      <div class="a-two">
-        <SmjenaCashBox
-          :shift="data.shift"
-          :summary="data.summary"
-          :movements="data.cash_movements"
-          :settlements="data.settlements"
-          :users="data.by_user"
-          :settings="settings"
-          :busy-id="busyId"
-          @decide="decideMovement"
-          @accept="acceptSettlement"
-          @pickup="openSheet('pickup')"
-          @opening-float="openSheet('opening')"
-        />
-
-        <div class="a-stack">
-          <SmjenaCounts :counts="data.counts" :busy-id="busyId" @confirm="confirmCount" />
-          <SmjenaAfterClose :late="data.late_after_close" />
-        </div>
-      </div>
-
-      <UiSheet
-        :open="sheet !== null"
-        :title="sheet === 'pickup' ? 'Uzeo iz kase' : 'Početni polog'"
-        :action="sheet === 'pickup' ? 'Zabilježi' : 'Sačuvaj'"
-        :pending="sheetPending"
-        @close="sheet = null"
-        @confirm="submitSheet"
-      >
-        <UiField
-          v-model="sheetAmount"
-          label="Iznos"
-          kind="money"
-          hint="Unosi se u KM"
-          :error="sheetError"
-        />
-        <UiField
-          v-if="sheet === 'pickup'"
-          v-model="sheetNote"
-          label="Napomena"
-          placeholder="Nije obavezno"
-        />
-        <p v-else class="a-muted">
-          Ovo je gotovina koja je bila u kasi kad je smjena počela. Upiši je samo
-          ako izvedeni iznos nije tačan.
-        </p>
-      </UiSheet>
+      <SmjenaAfterClose :late="data.late_after_close" />
     </template>
 
     <!-- A skeleton, not a spinner over stale numbers. -->
     <div v-else-if="loading" class="a-skeleton">
-      <span v-for="n in 6" :key="n" />
+      <span v-for="n in 3" :key="n" />
     </div>
   </div>
 </template>
@@ -374,30 +178,18 @@ async function submitSheet() {
 <style scoped>
 .a-page { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 
+/* One tile now; the grid keeps it the width a tile has always had. */
 .a-tiles {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
-.a-sub { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-
-/* The cash box is the dense one, so it takes the wider half. */
-.a-two {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  gap: 18px;
-  align-items: start;
-}
-
-.a-stack { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-
 .a-error { margin: 0; color: var(--danger); }
-.a-muted { margin: 0; color: var(--muted); font-size: var(--text-micro); }
 
 .a-skeleton {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -408,13 +200,7 @@ async function submitSheet() {
   background: var(--surface-2);
 }
 
-@media (max-width: 1279px) {
-  .a-tiles, .a-skeleton { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-
 @media (max-width: 1023px) {
-  /* Two-up on a phone, and the two columns become one. */
   .a-tiles, .a-skeleton { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .a-two { grid-template-columns: minmax(0, 1fr); }
 }
 </style>
