@@ -30,6 +30,12 @@ export interface WaiterMenuItem {
   action?: 'logout' | 'wakelock' | 'mode'
   /** Which roles see this row at all. */
   roles: ('radnik' | 'admin')[]
+  /**
+   * Which of tonight's screens see it, when that matters. Absent: both. The
+   * mode is on the session, so an admin (whose mode is always null) never
+   * matches a row that names one.
+   */
+  modes?: ('konobar' | 'sanker')[]
   /** Is the screen behind it built? A false renders the row greyed out. */
   ready: boolean
   /** What the greyed-out row says. */
@@ -39,8 +45,10 @@ export interface WaiterMenuItem {
 export const WAITER_MENU: WaiterMenuItem[] = [
   // WP4
   { id: 'my-shift', label: 'Moja smjena', to: '/konobar/moja-smjena', roles: ['radnik'], ready: true },
-  // Already on disk since Korak 1.
-  { id: 'settle', label: 'Završi smjenu', to: '/konobar/smjena', roles: ['radnik'], ready: true },
+  // *Zaključi smjenu* — only on the šanker's screen. The waiter's own
+  // *Završi smjenu* is gone (the owner's call, 15.09.2026): the šanker closes the
+  // whole night, and a konobar session never sees this row.
+  { id: 'close-shift', label: 'Zaključi smjenu', to: '/sanker/zakljuci', roles: ['radnik'], modes: ['sanker'], ready: true },
   // WP2
   { id: 'count', label: 'Brzi popis', to: '/konobar/popis', toBartender: '/sanker/popis', roles: ['radnik'], ready: true },
   { id: 'waste', label: 'Otpis', to: '/konobar/otpis', roles: ['radnik'], ready: true },

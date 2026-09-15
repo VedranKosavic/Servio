@@ -182,6 +182,40 @@ export function shiftBriefFor(
   }
 }
 
+/**
+ * The tabs still open on a shift, each with its table's name.
+ *
+ * It reads `tabs` alone and names the table with a LEFT join, because an inner
+ * one silently dropped every *Bez stola* tab (PHASE3 §1.11) — and a night that
+ * closes with money still on an open tab is the one thing both closes (the
+ * drawer count and the šanker's *Zaključi smjenu*) exist to stop.
+ */
+export function openTabsOn(
+  q: Queryable, venueId: string, shiftId: string,
+): { tab_id: string, table_name: string }[] {
+  return q.select({
+    id: schema.tabs.id,
+    table: sql<string>`coalesce(${schema.tables.name}, 'Bez stola')`,
+  })
+    .from(schema.tabs)
+    .leftJoin(schema.tables, eq(schema.tables.id, schema.tabs.tableId))
+    .where(and(
+      eq(schema.tabs.venueId, venueId),
+      eq(schema.tabs.shiftId, shiftId),
+      eq(schema.tabs.status, 'open'),
+    ))
+    .all()
+    .map(t => ({ tab_id: t.id, table_name: t.table }))
+}
+
+/** 409 `OPEN_TABS { tabs }` while any tab on the shift is still open. */
+export function assertNoOpenTabs(q: Queryable, venueId: string, shiftId: string): void {
+  const tabs = openTabsOn(q, venueId, shiftId)
+  if (tabs.length > 0) {
+    throw new SankError(409, 'OPEN_TABS', 'the shift still has open tabs', { tabs })
+  }
+}
+
 /** Has this shift got a submitted count of that phase? The close asks about `open`. */
 export function hasSubmittedCount(
   q: Queryable, venueId: string, shiftId: string, phase: 'open' | 'close',
@@ -314,27 +348,7 @@ export function closeShift(
   return db.transaction((tx) => {
     const shift = requireOpenShift(tx, venueId, shiftId)
 
-    // The guard reads `tabs` alone and names the table with a LEFT join, because
-    // an inner one silently dropped every *Bez stola* tab (PHASE3 §1.11) — and a
-    // night that closes with money still on an open tab is the one thing this
-    // check exists to stop.
-    const openTabs = tx.select({
-      id: schema.tabs.id,
-      table: sql<string>`coalesce(${schema.tables.name}, 'Bez stola')`,
-    })
-      .from(schema.tabs)
-      .leftJoin(schema.tables, eq(schema.tables.id, schema.tabs.tableId))
-      .where(and(
-        eq(schema.tabs.venueId, venueId),
-        eq(schema.tabs.shiftId, shiftId),
-        eq(schema.tabs.status, 'open'),
-      ))
-      .all()
-    if (openTabs.length > 0) {
-      throw new SankError(409, 'OPEN_TABS', 'the shift still has open tabs', {
-        tabs: openTabs.map(t => ({ tab_id: t.id, table_name: t.table })),
-      })
-    }
+    assertNoOpenTabs(tx, venueId, shiftId)
 
     // PLAN F10 step 4 asks for the **opening** count, not the closing one: what
     // the close needs is a baseline it can measure the night against.
@@ -602,6 +616,21 @@ export function listOwnerShifts(
     .orderBy(desc(schema.shifts.businessDate), desc(schema.shifts.openedAt))
     .all()
 
+  // *Za predati* for every night in the range that the šanker closed — one
+  // read for the whole list, not one per row.
+  const closings = new Map(
+    shifts.length === 0
+      ? []
+      : q.select({ shiftId: schema.shiftClosings.shiftId, fen: schema.shiftClosings.zaPredatiFen })
+          .from(schema.shiftClosings)
+          .where(and(
+            eq(schema.shiftClosings.venueId, venueId),
+            inArray(schema.shiftClosings.shiftId, shifts.map(s => s.id)),
+          ))
+          .all()
+          .map(r => [r.shiftId, r.fen] as const),
+  )
+
   return shifts.map((shift) => {
     const summary = latestSummaryNumbers(q, venueId, shift.id)
     return {
@@ -612,6 +641,7 @@ export function listOwnerShifts(
       closed_at: shift.closedAt,
       promet_fen: summary.promet,
       diff_fen: summary.diff,
+      za_predati_fen: closings.get(shift.id) ?? null,
     }
   })
 }
@@ -649,7 +679,7 @@ export function pendingFor(q: Queryable, venueId: string, now: string): Attentio
  * Everybody still on the shift goes home when the shift does. `left_at_source`
  * says `auto` so the roster can tell a real hand-written end from this one.
  */
-function autoLeave(tx: Tx, venueId: string, shiftId: string, at: string): void {
+export function autoLeave(tx: Tx, venueId: string, shiftId: string, at: string): void {
   tx.update(schema.shiftMembers)
     .set({ leftAt: at, leftAtSource: 'auto' })
     .where(and(

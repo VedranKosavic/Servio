@@ -111,8 +111,8 @@ function hoursText(hours: number): string {
     </div>
 
     <p class="text-label text-text-2">
-      Pazar vidiš tek kad ga predaš — prebrojiš pa upišeš, i tek onda ti {{ APP_NAME }}
-      kaže koliko je očekivao.
+      Iznose vidiš kad šanker zaključi smjenu — tada ti {{ APP_NAME }} ovdje
+      pokaže tvoj promet u KM.
     </p>
   </section>
 </template>

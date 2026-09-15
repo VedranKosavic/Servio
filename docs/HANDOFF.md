@@ -91,8 +91,8 @@ not secrets.** Before a real install, set real PINs in `/admin/postavke/osoblje`
 ## The routes
 
 - `/` — the PIN pad, then the screen chooser for a worker
-- `/konobar` — floor plan, table, order, payment, storno, end of shift, count, waste, chat, schedule, rules
-- `/sanker` — tickets, approval queue, count, chat, schedule; `/stanje` — stock and deliveries
+- `/konobar` — floor plan, table, order, payment, storno, count, waste, chat, schedule, rules. The waiter has no end of shift any more; `/konobar/smjena` redirects to *Moja smjena*
+- `/sanker` — tickets, approval queue, count, chat, schedule, and *Zaključi smjenu* (`/sanker/zakljuci`, from the avatar menu, šanker mode only) — the one end of a night; `/stanje` — stock and deliveries
 - `/admin` — Puls, Smjena, Roba, Raspored, Meni i postavke. Four nav rows, and
   that is the whole dashboard.
 

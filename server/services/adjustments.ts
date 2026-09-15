@@ -359,7 +359,7 @@ export function applyAdjustment(
     const movementId = insertRefund(
       tx, venueId,
       { venueId, userId: adj.approvedBy!, role: 'admin', sessionId: '', sessionKind: 'staff',
-        deviceId: null, deviceBoundUserId: null, borrowed: false },
+        deviceId: null, deviceBoundUserId: null, borrowed: false, mode: null },
       shiftId,
       { amountFen: adj.amountFen, adjustmentId: adj.id, at },
     )

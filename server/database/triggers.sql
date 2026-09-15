@@ -441,6 +441,23 @@ BEGIN
   SELECT RAISE(ABORT, 'append-only');
 END;
 
+-- shift_closings — *Zaključi smjenu*. What the šanker handed over, and the
+-- server's numbers it was subtracted from, as they stood that night. A wrong
+-- amount is not corrected here; the row is the record of what was said.
+DROP TRIGGER IF EXISTS shift_closings_no_update;
+CREATE TRIGGER shift_closings_no_update
+BEFORE UPDATE ON shift_closings
+BEGIN
+  SELECT RAISE(ABORT, 'append-only');
+END;
+
+DROP TRIGGER IF EXISTS shift_closings_no_delete;
+CREATE TRIGGER shift_closings_no_delete
+BEFORE DELETE ON shift_closings
+BEGIN
+  SELECT RAISE(ABORT, 'append-only');
+END;
+
 -- ===========================================================================
 -- STOCK
 -- ===========================================================================

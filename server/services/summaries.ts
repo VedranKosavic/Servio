@@ -30,13 +30,14 @@ import { newId, nowIso } from '../utils/ids'
 import { countBowls } from '#shared/bowls'
 import { mixLabels } from '#shared/flavours'
 import type {
-  CategoryLine, CountFen, LineRow, LineStatus, LineTotals, LinesPage, MyShift, MyShiftCounts,
+  CategoryLine, CountFen, LastClosedShift, LineRow, LineStatus, LineTotals, LinesPage, MyShift, MyShiftCounts,
   MyShiftRow, OwnerShift, ShiftCountBrief, ShiftSummary, StornoTotals, SummaryReason, UserSummary,
 } from '#shared/types'
 import type { Db, Queryable, Tx } from './types'
 import { expectedCash, listCashMovements, toleranceFen, withinTolerance } from './cash'
 import { bump, getSettings } from './contracts'
 import { requireShift, shiftBriefFor, shiftView, userNames } from './shifts'
+import { getClosing } from './closings'
 import { listSettlements } from './settlements'
 
 // ===========================================================================
@@ -940,7 +941,10 @@ function notesByShift(q: Queryable, venueId: string, userId: string): Map<string
  * `GET /api/me/shift` — the waiter's own night.
  *
  * **Blindness is a nudge, not a control.** `summary` stays `null` until he has
- * declared, so the screen cannot show him the answer before he writes it down —
+ * declared, so the screen cannot show him the answer before he writes it down.
+ * Since the šanker's *Zaključi smjenu* replaced the waiter's own settlement,
+ * nobody declares any more, so his totals arrive as `last_closed` the moment
+ * the shift is closed —
  * but `/api/me/shift/lines` returns per-line prices, so anyone who can add knows
  * his number anyway. The evidence is the recorded pair `declared_fen` /
  * `expected_at_declare_fen` on the settlement row, not this strip. Do not let a
@@ -959,6 +963,7 @@ export function getMyShift(q: Queryable, venueId: string, userId: string): MyShi
       shift: null, joined_at: null, hours: 0, settled: false, settlement: null,
       float_out_fen: 0, cash_movements: [], summary: null,
       counts: emptyCounts(getSettings(q, venueId)),
+      last_closed: lastClosedFor(q, venueId, userId, now),
     }
   }
 
@@ -987,6 +992,51 @@ export function getMyShift(q: Queryable, venueId: string, userId: string): MyShi
     cash_movements: movements,
     summary: settlement ? summarizeUser(q, venueId, brief.id, userId, now) : null,
     counts: myShiftCounts(q, venueId, brief.id, userId, now),
+    last_closed: lastClosedFor(q, venueId, userId, now),
+  }
+}
+
+/**
+ * The newest closed (or reviewed) shift this person was a member of — the night
+ * whose numbers are now his to read.
+ *
+ * Why closed and not settled: the šanker's *Zaključi smjenu* ended the waiter's
+ * own settlement, so "after he declared" no longer happens. What the blindness
+ * was ever protecting is a declaration made before the answer; with no
+ * declaration left, the honest moment to show a person his night is when the
+ * night is over (BACKEND §6.6).
+ */
+export function lastClosedShiftFor(
+  q: Queryable, venueId: string, userId: string,
+): { id: string, businessDate: string, closedAt: string | null } | null {
+  return q.select({
+    id: schema.shifts.id,
+    businessDate: schema.shifts.businessDate,
+    closedAt: schema.shifts.closedAt,
+  })
+    .from(schema.shiftMembers)
+    .innerJoin(schema.shifts, eq(schema.shifts.id, schema.shiftMembers.shiftId))
+    .where(and(
+      eq(schema.shiftMembers.venueId, venueId),
+      eq(schema.shiftMembers.userId, userId),
+      inArray(schema.shifts.status, ['closed', 'reviewed']),
+    ))
+    .orderBy(desc(schema.shifts.closedAt), desc(schema.shifts.openedAt))
+    .limit(1)
+    .get() ?? null
+}
+
+function lastClosedFor(
+  q: Queryable, venueId: string, userId: string, now: string,
+): LastClosedShift | null {
+  const shift = lastClosedShiftFor(q, venueId, userId)
+  if (!shift) return null
+  return {
+    shift_id: shift.id,
+    business_date: shift.businessDate,
+    closed_at: shift.closedAt,
+    summary: summarizeUser(q, venueId, shift.id, userId, now),
+    counts: myShiftCounts(q, venueId, shift.id, userId, now),
   }
 }
 
@@ -1109,5 +1159,6 @@ export function getOwnerShift(q: Queryable, venueId: string, shiftId: string): O
     settlements: listSettlements(q, venueId, shiftId),
     counts,
     late_after_close: { count: late.length, fen: lateFen, user_names: [...lateNames] },
+    closing: getClosing(q, venueId, shiftId),
   }
 }

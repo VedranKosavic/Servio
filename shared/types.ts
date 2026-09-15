@@ -68,6 +68,12 @@ export interface Actor {
   deviceBoundUserId: string | null
   /** Somebody PIN'd into a colleague's phone. */
   borrowed: boolean
+  /**
+   * The screen this session picked tonight (`sessions.mode`). `null` for an
+   * admin and for a worker who has not chosen yet. It is the one rule a service
+   * reads it for: only a `sanker` session closes the shift.
+   */
+  mode: ScreenMode | null
 }
 
 /** What a `changes` row can be about — the sync feed's vocabulary (§4.1). */

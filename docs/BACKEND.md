@@ -927,6 +927,20 @@ Returns the reveal, `SettleResult = { settlement_id, summary: UserSummary, expec
 
 **Blindness is a nudge, not a control.** `declared_fen` is recorded before any `*_fen` for that user leaves the server, and `/api/me/shift` strips `*_fen` until a settlement exists — but `/api/me/shift/lines` returns per-line prices, so anyone who can add knows his number. The evidence is the recorded pair `declared_fen` / `expected_at_declare_fen`, not the strip. Say so in the service comment and in *Pravila*; do not let a future feature lean on the strip as if it were a control.
 
+### 6.6a `server/services/closings.ts` — *Zaključi smjenu*
+
+The owner's decision of 15.09.2026 replaced the waiter's blind settlement as the end of a night. **Only a session in `sanker` mode closes the shift** (`Actor.mode`, from `sessions.mode`); a konobar session and an admin session are 403 `NOT_SANKER`, and the admin keeps `forceClose`. The UI no longer reaches `settle`, which stays on the server with its tests.
+
+`shift_closings` (migration `0009_shift_closings.sql`, append-only by `shift_closings_no_update` / `_no_delete`) holds one row per shift, `UNIQUE(venue_id, shift_id)` and `UNIQUE(venue_id, client_id)`:
+
+    za_predati = prihod − dnevnica − otpis − rashod − roba − okusi − zar − merkator
+
+`prihod_fen` and `otpis_fen` are `summarizeShift(...).promet_fen` and `.waste_fen` — the same call that writes `shift_summaries`, so the closing and the summary cannot disagree; `dnevnica_fen` is `settings.dnevnica_fen` (default 9000), once per shift. The five typed amounts are the only money in the body. `zaPredati` lives in `shared/closing.ts` and is used by both the server and the šanker's screen. The result may be negative.
+
+`closeByBar`, one transaction: `requireSanker`; a row with this `client_id` → return it (200, nothing written); a closing already on the shift → 409 `CLOSING_EXISTS`; shift not `open|closing` → 409 `SHIFT_CLOSED`; `assertNoOpenTabs` → 409 `OPEN_TABS { tabs }`; insert; shift → `closed`, `closed_kind='normal'`, `cash_counted_fen` left NULL (nobody counted); `autoLeave`; `writeSummaryVersion('close')`; `log('shift_closed_by_bar')` (raises the `shift_closed` attention row); `bump('shift')`. The next lock opens a new shift through `ensureOpenShift`. It is an online POST, not the outbox: the close is only true against the server's numbers at that moment.
+
+`getMyShift` adds `last_closed` — the newest closed shift the person worked, with his `summarizeUser` and counts. With no declaration left to protect, a waiter's totals are his once the night is closed. `getOwnerShift` adds `closing`; `listOwnerShifts` rows add `za_predati_fen`.
+
 ### 6.7 `server/services/summaries.ts`
 
 ```ts
@@ -1235,6 +1249,8 @@ Every route: `readValidatedJson(event, schema)` → `guard(() => service(useDb()
 | `POST /api/shifts/:id/closing` | A B | `{}` | `Shift` | 409 `SHIFT_CLOSED` |
 | `POST /api/shifts/:id/close` | A B | `{ cash_counted_fen, closing_note?≤500, pin, override_no_open_count?: boolean }` | `CloseResult { shift, summary_version, missing_settlements[], outstanding_fen }` | 409 `OPEN_TABS {tabs}`, `NO_OPEN_COUNT`, `SHIFT_CLOSED`; 422 `NOTE_REQUIRED`; 401 `INVALID_PIN` |
 | `POST /api/shifts/:id/force-close` | A | `{ note: min 3 }` | `CloseResult` | 409 `SHIFT_CLOSED` |
+| `GET /api/shifts/:id/zakljucenje` | A W B (šanker mode) | — | `ClosingPreview { prihod_fen, dnevnica_fen, otpis_fen, open_tabs[], closing }` | 403 `NOT_SANKER` |
+| `POST /api/shifts/:id/zakljucenje` | A W B (šanker mode) | `{ client_id, rashod_fen?, roba_fen?, okusi_fen?, zar_fen?, merkator_fen?, note? }` (each amount ≥ 0, default 0) | `ShiftClosing` (replay → 200, stored row) | 403 `NOT_SANKER`; 409 `OPEN_TABS {tabs}`, `CLOSING_EXISTS`, `SHIFT_CLOSED` |
 | `POST /api/shifts/:id/review` | A | `{ card_total_fen?, closing_note? }` | `Shift` | 409 `SHIFT_NOT_CLOSED`; 422 `NOTE_REQUIRED` |
 | `POST /api/shifts/:id/settle` | A W B (self) | `{ declared_fen, outbox_len: z.int().min(0), receiver_user_id?, receiver_pin?, override?: boolean }` | `SettleResult` | 409 `SETTLED`, `PENDING_OUTBOX {devices}`; 401 `INVALID_PIN`; 403 `NOT_APPROVER` |
 | `POST /api/shifts/:id/settlements/:sid/accept` | A B | `{}` | `Settlement` | 409 `ALREADY_ACCEPTED`; 403 `OWN_SETTLEMENT` |
@@ -1246,7 +1262,7 @@ Every route: `readValidatedJson(event, schema)` → `guard(() => service(useDb()
 | `POST /api/cash-movements/:id/decide` | A B | `{ outcome: approved\|rejected, note?, pin? }` — decides `payout` and `float_out` only (§6.5) | `CashMovement` | 409 `ALREADY_DECIDED`, `NOT_PENDING`; 403 `SELF_APPROVAL`, `OWNER_REQUIRED`; 401 `INVALID_PIN` |
 | `POST /api/cash-movements/:id/ack` | A W B (receiver) | `{}` | `CashMovement` | 403 `NOT_RECEIVER`; 409 `ALREADY_DECIDED` |
 | `GET /api/me/shift` | A W B | — | `MyShift` (§6.7) | — |
-| `GET /api/me/shift/lines?kat=&cursor=` | A W B | — | `{ rows, totals, next_cursor? }` (`totals: null` before own settlement) | — |
+| `GET /api/me/shift/lines?kat=&cursor=` | A W B | — | `{ rows, totals, next_cursor? }` — the open shift (`totals: null` before own settlement), else the newest closed shift he worked, with totals | — |
 | `GET /api/me/shifts?limit=30` | A W B | — | `MyShiftRow[]` — `listMyShifts` (§6.7) | — |
 
 ### Stock

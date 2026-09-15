@@ -398,6 +398,20 @@ export interface MyShift {
    * *Moja smjena* is not worth opening (PHASE3 §1.5).
    */
   counts: MyShiftCounts
+  /**
+   * The newest **closed** shift he worked, with his own totals. Once the šanker
+   * has closed the night there is nothing left to be blind about, so the
+   * numbers are his to read (settlement or not); `null` when he has none.
+   */
+  last_closed: LastClosedShift | null
+}
+
+export interface LastClosedShift {
+  shift_id: string
+  business_date: string
+  closed_at: string | null
+  summary: UserSummary
+  counts: MyShiftCounts
 }
 
 export interface MyShiftRow {
@@ -420,6 +434,8 @@ export interface OwnerShiftRow {
   closed_at: string | null
   promet_fen: number
   diff_fen: number | null
+  /** *Za predati* from the šanker's closing, when the night has one. */
+  za_predati_fen: number | null
 }
 
 /**
@@ -453,4 +469,51 @@ export interface OwnerShift {
   settlements: Settlement[]
   counts: ShiftCountBrief[]
   late_after_close: LateAfterClose
+  /** *Zaključenje smjene* — the šanker's close, or `null` for a night without one. */
+  closing: ShiftClosing | null
+}
+
+// -- Zaključi smjenu ---------------------------------------------------------
+
+/**
+ * One `shift_closings` row as a screen reads it — the eight lines and the
+ * result, plus who closed it. `SUM` of the typed five is not stored; a screen
+ * that wants it adds them.
+ */
+export interface ShiftClosing {
+  id: string
+  shift_id: string
+  business_date: string
+  client_id: string
+  closed_by: string
+  closed_by_name: string
+  created_at: string
+  /** Server: the shift's promet — charged minus applied voids. */
+  prihod_fen: number
+  /** Server: `settings.dnevnica_fen` as it stood at the close. */
+  dnevnica_fen: number
+  /** Server: the shift's otpis, the same number as `summary.waste_fen`. */
+  otpis_fen: number
+  rashod_fen: number
+  roba_fen: number
+  okusi_fen: number
+  zar_fen: number
+  merkator_fen: number
+  /** `prihod − dnevnica − otpis − the five`. May be negative. */
+  za_predati_fen: number
+  note: string | null
+}
+
+/** `GET /api/shifts/:id/zakljucenje` — what the šanker sees before he types. */
+export interface ClosingPreview {
+  shift_id: string
+  business_date: string
+  status: ShiftStatus
+  prihod_fen: number
+  dnevnica_fen: number
+  otpis_fen: number
+  /** Tabs still open; the close is refused (409 `OPEN_TABS`) while any are. */
+  open_tabs: { tab_id: string, table_name: string }[]
+  /** Already closed: the stored row, so a reload shows the done state. */
+  closing: ShiftClosing | null
 }

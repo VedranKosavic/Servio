@@ -554,6 +554,7 @@ describe('Smjene as days', () => {
       closed_at: null,
       promet_fen: 100000,
       diff_fen: null,
+      za_predati_fen: null,
       ...patch,
     }
   }

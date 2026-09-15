@@ -134,6 +134,7 @@ export const RULE_TOKENS: { key: keyof Settings, label: string }[] = [
   { key: 'staff_drink_max_fen', label: 'Na račun kuće — po piću' },
   { key: 'cash_tolerance_fen', label: 'Tolerancija pazara' },
   { key: 'cash_tolerance_pct', label: 'Tolerancija pazara — postotak' },
+  { key: 'dnevnica_fen', label: 'Dnevnica' },
   { key: 'waste_pin_threshold_fen', label: 'Otpis traži PIN iznad' },
   { key: 'waste_events_per_shift_per_user', label: 'Otpisa po osobi po smjeni' },
   { key: 'shared_device_idle_s', label: 'Zajednički uređaj — zaključavanje' },

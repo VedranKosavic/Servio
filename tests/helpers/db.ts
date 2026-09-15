@@ -67,7 +67,7 @@ export interface Fixture {
   onHand: (name: string) => number
 
   /** An `Actor` for `name`, built directly — what almost every test wants. */
-  actor: (name: string, opts?: { device?: string | null, bound?: boolean }) => Actor
+  actor: (name: string, opts?: { device?: string | null, bound?: boolean, mode?: 'konobar' | 'sanker' | null }) => Actor
   /** Haris, the admin. */
   adminActor: () => Actor
 
@@ -153,7 +153,7 @@ export function makeFixture(): Fixture {
     advance: (seconds: number) => { clockMs += seconds * 1000 },
   }
 
-  const actor = (name: string, opts: { device?: string | null, bound?: boolean } = {}): Actor => ({
+  const actor = (name: string, opts: { device?: string | null, bound?: boolean, mode?: 'konobar' | 'sanker' | null } = {}): Actor => ({
     venueId,
     userId: userId(name),
     role: roleOf(name),
@@ -162,6 +162,10 @@ export function makeFixture(): Fixture {
     deviceId: opts.device ?? null,
     deviceBoundUserId: opts.bound ? userId(name) : null,
     borrowed: false,
+    // A worker's session picks its screen; the fixture defaults to none, the
+    // honest state of a session that has not chosen, and a test that needs the
+    // šanker's close says so.
+    mode: opts.mode ?? null,
   })
 
   function openShift(opts: { members?: string[], at?: string, businessDate?: string } = {}): string {

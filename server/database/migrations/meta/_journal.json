@@ -64,6 +64,13 @@
       "when": 1789477956819,
       "tag": "0008_product_waste",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1789479019202,
+      "tag": "0009_shift_closings",
+      "breakpoints": true
     }
   ]
 }

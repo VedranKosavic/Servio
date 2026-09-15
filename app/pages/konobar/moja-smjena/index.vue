@@ -20,6 +20,8 @@
  */
 import type { MyShift, MyShiftRow, MySession } from '#shared/types'
 
+import { shortDateBs } from '#shared/dates'
+
 useHead({ title: 'Moja smjena' })
 
 const api = useApi()
@@ -143,13 +145,16 @@ async function saveNote(shiftId: string, body: string) {
             :persisted="persisted"
           />
 
-          <NuxtLink
-            v-if="shift?.shift && !settled"
-            to="/konobar/smjena"
-            class="btn btn-primary btn-lg"
-          >
-            Završi smjenu
-          </NuxtLink>
+          <!-- The night the šanker closed: his own numbers, in KM now that it is over.
+               Only while no new shift is open, because the category rows link to
+               `/me/shift/lines`, which reads the closed night only then. -->
+          <MineMoneyCard
+            v-if="!shift?.shift && shift?.last_closed"
+            :title="`Zadnja smjena · ${shortDateBs(shift.last_closed.business_date)}`"
+            :summary="shift.last_closed.summary"
+            :settlement="null"
+            :counts="shift.last_closed.counts"
+          />
 
           <p v-if="!shift?.shift" class="card px-4 py-6 text-center text-text-2">
             Nema otvorene smjene. Smjena se otvara prvom zaključanom turom.

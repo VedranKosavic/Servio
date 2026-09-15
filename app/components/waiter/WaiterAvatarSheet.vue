@@ -24,7 +24,11 @@ const { blocked, blockedText } = useSync()
 const wakeLock = useWakeLock()
 
 const role = computed(() => me.user.value?.role ?? 'radnik')
-const items = computed(() => WAITER_MENU.filter(item => item.roles.includes(role.value)))
+const items = computed(() => WAITER_MENU.filter(item =>
+  item.roles.includes(role.value)
+  // *Zaključi smjenu* belongs to the šanker's screen only: a row with `modes`
+  // shows when the session's mode is one of them, and never on a null mode.
+  && (!item.modes || (me.mode.value !== null && me.mode.value !== undefined && item.modes.includes(me.mode.value)))))
 
 /** Set while `POST /api/auth/mode` is in flight, and after it fails. */
 const modeBusy = ref(false)

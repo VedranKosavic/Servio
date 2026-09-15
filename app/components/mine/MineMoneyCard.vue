@@ -16,6 +16,8 @@ import { formatKm } from '#shared/money'
 import type { MyShiftCounts, Settlement, UserSummary } from '#shared/types'
 
 const props = defineProps<{
+  /** The heading. Default: tonight's, after the envelope. */
+  title?: string
   summary: UserSummary
   settlement: Settlement | null
   /**
@@ -60,7 +62,7 @@ function diffLabel(fen: number): string {
   <section class="card flex flex-col gap-3 p-4">
     <div class="flex items-baseline justify-between gap-3">
       <h2 class="section-title">
-        Pazar je predan
+        {{ title ?? 'Pazar je predan' }}
       </h2>
       <span v-if="verdict" class="text-label font-semibold" :class="verdict.tone">
         {{ verdict.word }}

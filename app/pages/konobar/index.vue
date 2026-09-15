@@ -852,9 +852,10 @@ function openLoose() {
           </div>
         </div>
 
-        <!-- The shift is being closed: envelopes are being collected -->
+        <!-- The shift is being closed. The šanker closes it (*Zaključi smjenu*);
+             the waiter has nothing to hand in and nothing to tap, only to know. -->
         <div
-          v-if="shift?.closing && !shift.my_settled"
+          v-if="shift?.closing"
           class="card flex items-center gap-3 border-warn p-4"
         >
           <div class="grow">
@@ -862,12 +863,9 @@ function openLoose() {
               Smjena se zatvara
             </p>
             <p class="text-label text-text-2">
-              Predaj pazar.
+              Naplati svoje stolove — šanker zaključuje smjenu.
             </p>
           </div>
-          <NuxtLink to="/konobar/smjena" class="btn btn-primary shrink-0">
-            Završi
-          </NuxtLink>
         </div>
 
         <!-- Bez stola: the guests at the bar, on nobody's table -->

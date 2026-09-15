@@ -9,7 +9,9 @@
  *   2. The category chip opens the drill-down, whose footer is absent until he
  *      has settled — the same blindness, said the same way.
  *   3. A *Napomena* typed on a night survives a reload.
- *   4. After *Završi smjenu*, the same night reads in KM with the tolerance word.
+ *   4. After a settlement (posted straight to the API — the waiter's *Završi
+ *      smjenu* screen is gone; the šanker closes the night), the same night
+ *      reads in KM with the tolerance word.
  *   5. *Pravila* renders the venue's published thresholds and no English.
  *   6. The re-lock is a screen over a session that is still alive, so the pad
  *      re-opens it with the right PIN **with the network off** and refuses the
@@ -186,7 +188,7 @@ test.describe('WP4 — Moja smjena', () => {
     await page.getByRole('link', { name: /Kafa/ }).first().click()
     await expect(page).toHaveURL(/\/konobar\/moja-smjena\/stavke\?kat=/)
     await expect(page.getByText('Kafa').first()).toBeVisible()
-    await expect(page.getByText(/Zbir vidiš kad predaš pazar/)).toBeVisible()
+    await expect(page.getByText(/Zbir vidiš kad šanker zaključi smjenu/)).toBeVisible()
     await expect(page.getByText('Naplaćeno', { exact: true })).toHaveCount(0)
 
     await page.goBack()

@@ -34,6 +34,12 @@ export const DEFAULT_SETTINGS = {
   cash_tolerance_pct: 1,
   variance_alert_fen: 1000,
 
+  /**
+   * *Dnevnica* — the fixed daily wage the šanker takes out of the takings when
+   * he closes the shift. Subtracted **once per shift**, whoever worked it.
+   */
+  dnevnica_fen: 9000,
+
   waste_pin_threshold_fen: 1000,
   waste_shift_fen: 2000,
   waste_events_per_shift_per_user: 3,
@@ -120,6 +126,7 @@ export const settingsSchema = z.object({
   cash_tolerance_fen: z.int().min(0).max(10_000_000),
   cash_tolerance_pct: z.number().min(0).max(100),
   variance_alert_fen: z.int().min(0).max(10_000_000),
+  dnevnica_fen: z.int().min(0).max(10_000_000),
 
   waste_pin_threshold_fen: z.int().min(0).max(10_000_000),
   waste_shift_fen: z.int().min(0).max(10_000_000),
@@ -191,6 +198,7 @@ export const SETTINGS_LABELS: Partial<Record<keyof Settings, string>> = {
   cash_tolerance_fen: 'Tolerancija kase',
   cash_tolerance_pct: 'Tolerancija kase (%)',
   variance_alert_fen: 'Prag za javljanje manjka',
+  dnevnica_fen: 'Dnevnica',
   waste_pin_threshold_fen: 'Otpis traži PIN iznad',
   waste_shift_fen: 'Otpis po smjeni',
   waste_events_per_shift_per_user: 'Otpisa po smjeni po osobi',

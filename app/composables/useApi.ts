@@ -41,8 +41,10 @@ import type {
   LoginUser,
   MarkUnpaidBody,
   MeContext,
+  ClosingPreview,
   MyShift,
   MyShiftRow,
+  ShiftClosing,
   MySession,
   PaymentResult,
   PendingAdjustment,
@@ -70,6 +72,8 @@ import type {
   DecideAdjustmentBody, DiscardDraftBody, EnrolDeviceBody, HeartbeatBody, PinLoginBody, SetModeBody,
   SettleBody, StaffNoteBody,
 } from '#shared/schemas'
+import type { closeByBarBody } from '#shared/schemas'
+import type { z } from 'zod'
 import type { PostMessageBody, SetPinBody, SwapBody } from '#shared/schemas'
 import type { ChannelKind } from '#shared/chat'
 import { errorMessage } from '#shared/errors'
@@ -421,6 +425,20 @@ export function useApi() {
     /** *Završi smjenu* — the blind declaration, and the reveal in the answer. */
     settleShift: (shiftId: string, body: SettleBody) =>
       request<SettleResult>(`/api/shifts/${shiftId}/settle`, { method: 'POST', body }),
+
+    // -- Zaključi smjenu (šanker) --------------------------------------------
+
+    /** The server's prihod, dnevnica, otpis and the open tables, before he types. */
+    getClosingPreview: (shiftId: string) =>
+      request<ClosingPreview>(`/api/shifts/${shiftId}/zakljucenje`),
+
+    /**
+     * *Zaključi smjenu*. Online only, not the outbox: the close needs the
+     * server's numbers now. `client_id` is minted once per screen, so a retry of
+     * the same tap is a replay and answers the stored row.
+     */
+    closeShiftByBar: (shiftId: string, body: z.input<typeof closeByBarBody>) =>
+      request<ShiftClosing>(`/api/shifts/${shiftId}/zakljucenje`, { method: 'POST', body }),
 
     // -- Moja smjena (S11) --------------------------------------------------
 

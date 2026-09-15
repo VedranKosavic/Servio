@@ -13,6 +13,8 @@ export const SHIFT_ERRORS = {
   SHIFT_CLOSED: 'Smjena je zatvorena.',
   SHIFT_NOT_CLOSED: 'Smjena još nije zatvorena.',
   OPEN_TABS: 'Ima otvorenih stolova. Naplati ih ili označi kao neplaćene.',
+  NOT_SANKER: 'Smjenu zaključuje šanker. Prebaci na šank pa pokušaj ponovo.',
+  CLOSING_EXISTS: 'Ova smjena je već zaključena.',
   NO_OPEN_COUNT: 'Nema početnog popisa za ovu smjenu.',
   NOTE_REQUIRED: 'Napiši šta se desilo.',
   ALREADY_LEFT: 'Već si završio smjenu.',

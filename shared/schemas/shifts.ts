@@ -66,6 +66,26 @@ export const reviewShiftBody = z.object({
   closing_note: closingNote.optional(),
 }).strict()
 
+/**
+ * `POST /api/shifts/:id/zakljucenje` — *Zaključi smjenu*, the šanker's close.
+ *
+ * Five amounts the šanker paid out of the takings tonight, each typed and each
+ * optional (a field he left empty is 0). They are the only money in this body,
+ * and they are allowed for the same reason `declared_fen` is: nobody but the
+ * person at the bar knows what the supplier was paid. Prihod, dnevnica and
+ * otpis are **not** here — the server computes them, and a phone that sent
+ * them would be ignored.
+ */
+export const closeByBarBody = z.object({
+  client_id: uuid,
+  rashod_fen: moneyFen.default(0),
+  roba_fen: moneyFen.default(0),
+  okusi_fen: moneyFen.default(0),
+  zar_fen: moneyFen.default(0),
+  merkator_fen: moneyFen.default(0),
+  note: closingNote.optional(),
+}).strict()
+
 /** `POST /api/shifts/:id/leave` */
 export const leaveShiftBody = nothing
 

@@ -111,6 +111,7 @@ const names = computed<Record<string, string>>(() => {
     map[m.created_by] = m.created_by_name
   }
   for (const c of shift.counts) map[c.counted_by] = c.counted_by_name
+  if (shift.closing) map[shift.closing.closed_by] = shift.closing.closed_by_name
   return map
 })
 
@@ -298,6 +299,9 @@ async function submitSheet() {
             : 'nijedna lula'"
         />
       </div>
+
+      <!-- The šanker's close: the eight lines and what was handed over. -->
+      <SmjenaClosingCard v-if="data.closing" :closing="data.closing" />
 
       <p v-if="actionError" class="a-error">{{ actionError }}</p>
 

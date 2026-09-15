@@ -115,6 +115,11 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   'POST /api/shifts/:id/closing': AR_APPROVE,
   'POST /api/shifts/:id/close': AR_APPROVE,
   'POST /api/shifts/:id/force-close': A,
+  // *Zaključi smjenu*. Open to every role at the door; the service admits only
+  // a session whose screen tonight is `sanker` (403 `NOT_SANKER`) — the mode is
+  // on the session, and this table only knows roles.
+  'GET /api/shifts/:id/zakljucenje': AR,
+  'POST /api/shifts/:id/zakljucenje': AR,
   'POST /api/shifts/:id/review': A,
   // Self-service: the service refuses a settle for anybody but the actor.
   'POST /api/shifts/:id/settle': AR,

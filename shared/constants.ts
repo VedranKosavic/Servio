@@ -69,6 +69,8 @@ export const TRIGGER_NAMES = [
   'roster_assignments_status_guard',
   'rules_no_delete',
   'rules_no_update',
+  'shift_closings_no_delete',
+  'shift_closings_no_update',
   'shift_members_no_delete',
   'shift_members_update_guard',
   'shift_summaries_no_delete',

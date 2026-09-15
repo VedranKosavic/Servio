@@ -723,6 +723,7 @@ export function adminLogin(db: Db, body: AdminLoginBody, ctx: { ip: string, user
       deviceId: null,
       deviceBoundUserId: null,
       borrowed: false,
+      mode: null,
     }),
     token: session.token,
     maxAgeS: session.maxAgeS,
@@ -1255,6 +1256,7 @@ export function authorizeRequest(db: Db, req: {
     deviceId: session.deviceId,
     deviceBoundUserId: device?.boundUserId ?? null,
     borrowed: session.borrowed === 1,
+    mode: session.kind === 'staff' ? session.mode ?? null : null,
   }
 
   // An admin's 30 days slide forward, at most once a day so a dashboard left

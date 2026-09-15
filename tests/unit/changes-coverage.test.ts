@@ -38,6 +38,7 @@ import {
   acknowledgeFloat, decideCashMovement, moveFloat, pickup, requestPayout, setOpeningFloat,
 } from '../../server/services/cash'
 import { acceptSettlement, settle } from '../../server/services/settlements'
+import { closeByBar } from '../../server/services/closings'
 import { clearTab } from '../../server/services/clearTable'
 import { putStaffNote } from '../../server/services/summaries'
 import { resetPin } from '../../server/services/auth'
@@ -369,6 +370,15 @@ const CALLS: Record<string, () => void | Promise<void>> = {
     forceClose(f.db, f.venueId, f.adminActor(), f.openShift({ members: ['Amar'] }), {
       note: 'telefon crko',
     })
+  },
+
+  // *Zaključi smjenu*: the šanker closes the whole night. A shift is a thing
+  // every screen reads, so the close must reach them in the same poll.
+  [join('shifts', '[id]', 'zakljucenje.post.ts')]: () => {
+    closeByBar(
+      f.db, f.venueId, f.actor('Emir', { mode: 'sanker' }), f.openShift({ members: ['Amar', 'Emir'] }),
+      { client_id: randomUUID(), rashod_fen: 0, roba_fen: 0, okusi_fen: 0, zar_fen: 0, merkator_fen: 0 },
+    )
   },
 
   [join('shifts', '[id]', 'review.post.ts')]: () => {

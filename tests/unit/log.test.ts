@@ -106,6 +106,7 @@ function bodyFor(kind: LogKind, f: Fixture): Record<string, unknown> {
       early_close: true, by_user: [{ user_id: user, declared_fen: 20_000, diff_fen: 0 }],
     },
     shift_forced: { shift_id: uid(), note: 'Amar nije predao', missing_user_ids: [user] },
+    shift_closed_by_bar: { shift_id: uid(), closing_id: uid(), prihod_fen: 45_000, za_predati_fen: -500 },
     shift_reviewed: { shift_id: uid(), card_total_fen: 8000, card_diff_fen: 0 },
     waiter_finished: {
       settlement_id: uid(), shift_id: uid(), user_id: user, from: at, to: at,

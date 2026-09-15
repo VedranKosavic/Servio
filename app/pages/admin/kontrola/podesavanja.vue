@@ -57,6 +57,14 @@ const GROUPS: Group[] = [
     ],
   },
   {
+    id: 'zakljucenje',
+    title: 'Zaključenje smjene',
+    note: 'Šta šanker oduzima od prihoda kad zaključi smjenu.',
+    fields: [
+      { key: 'dnevnica_fen', kind: 'money', hint: 'Oduzima se jednom po smjeni pri zaključenju.' },
+    ],
+  },
+  {
     id: 'storno',
     title: 'Storno',
     note: 'Šta radnik smije poništiti sam, i do kada o stornu odlučuje šanker.',

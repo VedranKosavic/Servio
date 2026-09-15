@@ -213,7 +213,7 @@ const STATUS_CLASS: Record<LineRow['status'], string> = {
           </section>
 
           <p v-else-if="rows.length" class="px-1 text-label text-text-2">
-            Zbir vidiš kad predaš pazar. Stavke su tu — cijene su na svakoj.
+            Zbir vidiš kad šanker zaključi smjenu. Stavke su tu — cijene su na svakoj.
           </p>
         </template>
       </main>

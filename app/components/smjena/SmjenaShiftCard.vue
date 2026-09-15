@@ -76,6 +76,10 @@ const clock = computed(() => {
         <span class="s-diff-label">razlika</span>
         <UiMoney :fen="shiftSlot.shift.diff_fen" :currency="false" />
       </span>
+      <span v-if="shiftSlot.shift.za_predati_fen !== null" class="s-diff">
+        <span class="s-diff-label">za predati</span>
+        <UiMoney :fen="shiftSlot.shift.za_predati_fen" :currency="false" />
+      </span>
     </span>
 
     <UiIcon class="s-chev" name="chevron-right" :size="20" />

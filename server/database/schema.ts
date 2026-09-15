@@ -548,6 +548,43 @@ export const shiftSummaries = sqliteTable('shift_summaries', {
   index('shift_summaries_venue_idx').on(t.venueId, t.shiftId),
 ])
 
+/**
+ * *Zaključi smjenu* — the šanker's end of the night, one row per shift.
+ *
+ * No counted cash on it: the owner decided the close is a plain subtraction.
+ * `prihod_fen`, `dnevnica_fen` and `otpis_fen` are what the **server** computed
+ * at that moment (promet, the venue's fixed daily wage, the shift's otpis at
+ * menu price); the five others are what the šanker typed; `za_predati_fen` is
+ * the result and may be negative. Stored rather than recomputed so "what did he
+ * hand over on the 8th" is still a row after a late void moves the promet.
+ *
+ * Append-only (`shift_closings_no_update` / `_no_delete`). `client_id` makes a
+ * retried POST a replay rather than a second closing; the unique shift index
+ * makes a second closing of the same night impossible even by accident.
+ */
+export const shiftClosings = sqliteTable('shift_closings', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  shiftId: text('shift_id').notNull().references(() => shifts.id),
+  clientId: text('client_id').notNull(),
+  closedBy: text('closed_by').notNull().references(() => users.id),
+  deviceId: text('device_id'),
+  prihodFen: integer('prihod_fen').notNull(),
+  dnevnicaFen: integer('dnevnica_fen').notNull(),
+  otpisFen: integer('otpis_fen').notNull(),
+  rashodFen: integer('rashod_fen').notNull(),
+  robaFen: integer('roba_fen').notNull(),
+  okusiFen: integer('okusi_fen').notNull(),
+  zarFen: integer('zar_fen').notNull(),
+  merkatorFen: integer('merkator_fen').notNull(),
+  zaPredatiFen: integer('za_predati_fen').notNull(),
+  note: text('note'),
+  createdAt: text('created_at').notNull(),
+}, t => [
+  uniqueIndex('shift_closings_shift_uq').on(t.venueId, t.shiftId),
+  uniqueIndex('shift_closings_client_uq').on(t.venueId, t.clientId),
+])
+
 // ---------------------------------------------------------------------------
 // Orders and money
 // ---------------------------------------------------------------------------

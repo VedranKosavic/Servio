@@ -192,6 +192,25 @@ export const LOG = {
     title: b => `Smjena prisilno zatvorena · ${b.note}`,
   }),
 
+  /**
+   * *Zaključi smjenu* — the šanker's close: no counted cash, a subtraction.
+   * Raises the same `shift_closed` attention row as the drawer close, because
+   * to the owner it is the same fact: the night is over.
+   */
+  shift_closed_by_bar: defineLog({
+    group: 'smjena',
+    alert: { rule: 'shift_closed' },
+    body: body({
+      shift_id: id,
+      closing_id: id,
+      prihod_fen: fen,
+      za_predati_fen: fen,
+    }),
+    title: (b, n) =>
+      `Smjena zaključena · prihod ${n.formatKm(b.prihod_fen)}`
+      + ` · za predati ${n.formatKm(b.za_predati_fen)}`,
+  }),
+
   shift_reviewed: defineLog({
     group: 'smjena',
     body: body({ shift_id: id, card_total_fen: fen.nullable().optional(), card_diff_fen: fen.optional() }),
