@@ -62,8 +62,8 @@ export const KONTROLA: KontrolaSection[] = [
     title: 'Lokal',
     links: [
       { id: 'stolovi', to: '/admin/kontrola/stolovi', label: 'Stolovi', sub: 'Stolovi i zone na planu', ready: false, soon: 'uskoro' },
-      { id: 'sabloni', to: '/admin/kontrola/sabloni', label: 'Šabloni smjena', sub: 'Vrijeme prve i druge smjene', ready: false, soon: 'uskoro' },
-      { id: 'podesavanja', to: '/admin/kontrola/podesavanja', label: 'Podešavanja', sub: 'Pragovi i ko odobrava', ready: false, soon: 'uskoro' },
+      { id: 'sabloni', to: '/admin/kontrola/sabloni', label: 'Šabloni smjena', sub: 'Vrijeme prve i druge smjene', ready: true },
+      { id: 'podesavanja', to: '/admin/kontrola/podesavanja', label: 'Podešavanja', sub: 'Pragovi i ko odobrava', ready: true },
     ],
   },
   {
