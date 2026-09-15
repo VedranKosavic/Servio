@@ -54,11 +54,11 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // it lives in `ChatDock`, the copper button pinned to the corner of every
   // `/admin` screen. The page at `/admin/razgovor` still exists for a laptop.
   { id: 'raspored', to: '/admin/raspored', label: 'Raspored', icon: 'calendar', sub: 'Sedmica po smjenama', ready: true },
-  // `to` is *Meni* and not `/admin/postavke`, which is *Podešavanja* — a screen
-  // that moved to *Ostalo* and is no longer one of this row's four tabs. The row
-  // has to land on a tab it actually shows.
-  { id: 'postavke', to: '/admin/meni', match: ['/admin/meni', '/admin/postavke'], label: 'Meni i postavke', icon: 'users', sub: 'Cijene, kategorije, osoblje i uređaji', ready: true },
-  // Four rows, and that is the whole dashboard. *Dnevnik*, *Izvoz*,
+  // *Kontrolna ploča* replaced *Meni i postavke*: one door to every table the
+  // owner may edit (`app/utils/kontrola.ts`). `match` keeps the row lit on the
+  // screens it links to, which kept their own URLs.
+  { id: 'kontrola', to: '/admin/kontrola', match: ['/admin/kontrola', '/admin/meni', '/admin/postavke'], label: 'Kontrolna ploča', icon: 'list', sub: 'Osoblje, meni, zaliha, stolovi i postavke', ready: true },
+  // Five rows, and that is the whole dashboard. *Dnevnik*, *Izvoz*,
   // *Podešavanja*, *Pravila*, *Stolovi* and *Šabloni* were deleted outright on
   // the owner's call — not hidden, deleted, pages and all. `log()` still writes
   // an entry inside every admin transaction and `log_entries` is still the
@@ -104,19 +104,18 @@ const BACK_ROOTS = new Set([
   '/admin/roba',
   '/admin/roba/prijem',
   '/admin/raspored',
-  '/admin/meni',
-  '/admin/postavke/kategorije',
-  '/admin/postavke/osoblje',
+  '/admin/kontrola',
   '/admin/vise',
 ])
 
 const BACK_OVERRIDES: Array<[RegExp, string]> = [
   // `/admin/smjena/<id>` — singular path, plural list. Climbing finds `/admin`.
   [/^\/admin\/smjena\/[^/]+$/, '/admin/smjene'],
-  // *Uređaji* has no tab — the link to it is at the foot of *Osoblje*, and that
-  // is where *Nazad* belongs. Climbing would try `/admin/postavke`, which is
-  // not a page any more, and land on *Puls* instead of where he came from.
-  [/^\/admin\/postavke\/uredaji$/, '/admin/postavke/osoblje'],
+  // Every screen *Kontrolna ploča* links to goes back to it. They kept their old
+  // URLs, and climbing those would try `/admin/postavke` — not a page — and
+  // land on *Puls* instead of where the owner came from.
+  [/^\/admin\/meni$/, '/admin/kontrola'],
+  [/^\/admin\/postavke\/[^/]+$/, '/admin/kontrola'],
 ]
 
 export function adminBack(path: string, exists: (candidate: string) => boolean): string | null {
@@ -162,7 +161,7 @@ const BACK_ACCUSATIVE: Record<string, string> = {
   '/admin/smjene': 'Smjenu',
   '/admin/roba': 'Robu',
   '/admin/raspored': 'Raspored',
-  '/admin/meni': 'Meni i postavke',
+  '/admin/kontrola': 'Kontrolnu ploču',
 }
 
 export function adminBackAria(to: string): string {

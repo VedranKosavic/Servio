@@ -17,10 +17,11 @@
  *   file; a stray `#fbfaf7` in a component is how a theme starts drifting, and
  *   an emoji is a house rule (`CLAUDE.md`) with no exceptions.
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { adminBack, adminBackAria, adminBackLabel } from '../../app/utils/adminNav'
+import { KONTROLA } from '../../app/utils/kontrola'
 import { attentionTarget } from '../../shared/attention'
 import { ATTENTION_ROUTES } from '../../shared/types/owner'
 import type { AttentionItem } from '../../shared/types/owner'
@@ -247,6 +248,7 @@ describe('the way back', () => {
     '/admin', '/admin/smjene', '/admin/roba', '/admin/roba/prijem', '/admin/raspored',
     '/admin/raspored/zamjene', '/admin/meni', '/admin/postavke/kategorije',
     '/admin/postavke/osoblje', '/admin/postavke/uredaji', '/admin/vise', '/admin/razgovor',
+    '/admin/kontrola',
   ])
   const DYNAMIC = [
     /^\/admin\/smjena\/[^/]+$/,
@@ -257,9 +259,24 @@ describe('the way back', () => {
 
   it('offers nothing on a screen a tab reaches directly', () => {
     for (const root of ['/admin', '/admin/smjene', '/admin/roba', '/admin/roba/prijem',
-      '/admin/meni', '/admin/postavke/osoblje', '/admin/raspored']) {
+      '/admin/kontrola', '/admin/raspored']) {
       expect(adminBack(root, exists), root).toBeNull()
     }
+  })
+
+  it('sends every screen Kontrolna ploča links to back to it', () => {
+    for (const path of ['/admin/meni', '/admin/postavke/kategorije',
+      '/admin/postavke/osoblje', '/admin/postavke/uredaji']) {
+      expect(adminBack(path, exists), path).toBe('/admin/kontrola')
+    }
+  })
+
+  it('every ready Kontrolna ploča row opens a page that exists', () => {
+    const missing = KONTROLA.flatMap(section => section.links)
+      .filter(link => link.ready)
+      .filter(link => !existsSync(`app/pages${link.to}.vue`) && !existsSync(`app/pages${link.to}/index.vue`))
+      .map(link => link.to)
+    expect(missing).toEqual([])
   })
 
   it('climbs to the nearest ancestor that is really a page', () => {
@@ -275,16 +292,6 @@ describe('the way back', () => {
   it('falls back to Puls rather than to a 404', () => {
     // `/admin/razgovor`'s only ancestor is `/admin` itself.
     expect(adminBack('/admin/razgovor', exists)).toBe('/admin')
-  })
-
-  it('sends *Uređaji* back to the screen that links to it', () => {
-    // It has no tab, and its parent path `/admin/postavke` is not a page any
-    // more, so climbing would land on *Puls* — which is not where the person
-    // came from. The link to it is at the foot of *Osoblje*, and an override
-    // says so. It is the only screen that mints a device enrolment code, so
-    // getting in and out of it is the difference between a café that can add a
-    // phone and one that cannot.
-    expect(adminBack('/admin/postavke/uredaji', exists)).toBe('/admin/postavke/osoblje')
   })
 
   it('never returns a path the router would not resolve', () => {

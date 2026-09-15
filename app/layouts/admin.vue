@@ -64,7 +64,7 @@ const dot: Record<string, () => boolean> = {}
 const GROUPS: Array<{ label: string, ids: string[] }> = [
   { label: 'Lokal', ids: ['puls', 'smjene', 'roba'] },
   { label: 'Ljudi', ids: ['raspored'] },
-  { label: 'Podešavanje', ids: ['postavke'] },
+  { label: 'Podešavanje', ids: ['kontrola'] },
 ]
 
 const grouped = computed(() => {

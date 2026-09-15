@@ -19,7 +19,7 @@ defineProps<{
 
 <template>
   <div class="p-page">
-    <UiPageHead eyebrow="Meni i postavke" :title="title" :sub="sub">
+    <UiPageHead eyebrow="Kontrolna ploča" :title="title" :sub="sub">
       <template v-if="$slots.actions" #actions><slot name="actions" /></template>
     </UiPageHead>
 

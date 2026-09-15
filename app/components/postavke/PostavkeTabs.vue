@@ -32,7 +32,7 @@ const isOn = (to: string) => route.path === to
 </script>
 
 <template>
-  <nav class="p-tabs" aria-label="Meni i postavke">
+  <nav class="p-tabs" aria-label="Kontrolna ploča">
     <NuxtLink
       v-for="tab in tabs"
       :key="tab.to"
