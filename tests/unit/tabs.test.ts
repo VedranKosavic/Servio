@@ -24,7 +24,7 @@ import {
 } from '../../server/services/tabs'
 import { clearTab } from '../../server/services/clearTable'
 import { summarizeUser } from '../../server/services/summaries'
-import { expectedCash } from '../../server/services/cash'
+import { expectedCash, shiftCategories } from '../../server/services/cash'
 import { pendingCounts } from '../../server/services/changes'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
 import { refuses } from '../helpers/shifts'
@@ -663,5 +663,72 @@ describe('policija, rashod and osoblje', () => {
     const waiter = expectedCash(f.db, f.venueId, shiftId, f.userId('Amar')).waiters[0]!
     expect(waiter.unpaid_fen).toBeGreaterThan(0)
     expect(pendingCounts(f.db, f.venueId).unpaid).toBe(1)
+  })
+})
+
+// ===========================================================================
+
+/**
+ * **What the shift gave away, by category** — the breakdown behind the owner's
+ * model: everything is rung up, and the things nobody paid for come off the
+ * night's total one category at a time.
+ */
+describe('shiftCategories', () => {
+  it('totals each category and keeps the two halves apart', () => {
+    const shiftId = f.openShift({ members: ['Amar'] })
+
+    const close = (table: string, reason: string, qty: number) => {
+      const order = f.lock('Amar', table, [{ product: 'Kafa', qty }])
+      const tab = f.db.select().from(schema.tabs).where(eq(schema.tabs.id, order.tabId)).get()!
+      markUnpaid(f.db, f.venueId, f.actor('Amar'), {
+        client_id: randomUUID(), tab_client_id: tab.clientId, reason: reason as 'policija',
+      })
+    }
+
+    close('Sto 3', 'policija', 2)     // 3,00
+    close('Sto 4', 'policija', 1)     // 1,50
+    close('Sto 5', 'otpis', 2)        // 3,00
+    close('Sto 6', 'walked_out', 4)   // 6,00
+
+    const rows = shiftCategories(f.db, f.venueId, shiftId)
+    const by = new Map(rows.map(r => [r.reason, r]))
+
+    expect(by.get('policija')).toMatchObject({ count: 2, fen: 450, authorised: true })
+    expect(by.get('otpis')).toMatchObject({ count: 1, fen: 300, authorised: true })
+    // Not given away — money somebody may still be asked for.
+    expect(by.get('walked_out')).toMatchObject({ count: 1, fen: 600, authorised: false })
+
+    // Authorised first: a settlement is about what the café gave away.
+    expect(rows[rows.length - 1]!.reason).toBe('walked_out')
+  })
+
+  it('is empty on a shift where every table paid', () => {
+    const shiftId = f.openShift({ members: ['Amar'] })
+    const order = f.lock('Amar', 'Sto 7', [{ product: 'Kafa' }])
+    payCash('Amar', order.tabId, 150)
+    expect(shiftCategories(f.db, f.venueId, shiftId)).toEqual([])
+  })
+
+  /**
+   * The identity the whole model rests on: what he hands over is the cash he
+   * took, and a category is never in it.
+   */
+  it('leaves the authorised categories out of what the waiter owes', () => {
+    const shiftId = f.openShift({ members: ['Amar'] })
+
+    const sold = f.lock('Amar', 'Sto 8', [{ product: 'Kafa', qty: 4 }])
+    payCash('Amar', sold.tabId, 600)
+
+    const given = f.lock('Amar', 'Sto 9', [{ product: 'Kafa', qty: 2 }])
+    const givenTab = f.db.select().from(schema.tabs).where(eq(schema.tabs.id, given.tabId)).get()!
+    markUnpaid(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(), tab_client_id: givenTab.clientId, reason: 'policija',
+    })
+
+    const waiter = expectedCash(f.db, f.venueId, shiftId, f.userId('Amar')).waiters[0]!
+    // 6,00 collected; the 3,00 of police coffee is off his line entirely.
+    expect(waiter.cash_fen).toBe(600)
+    expect(waiter.unpaid_fen).toBe(0)
+    expect(waiter.expected_fen).toBe(600)
   })
 })

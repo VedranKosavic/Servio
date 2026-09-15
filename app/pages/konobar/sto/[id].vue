@@ -24,8 +24,10 @@
  * which is a number to read out and never a number that is sent.
  */
 import { formatKm } from '#shared/money'
+import { unpaidWordBs } from '#shared/logTemplates'
 import type {
-  PaymentMethod, Product, TabDetail, TabLine, TabOrder, TableState, User, VenueTable,
+  PaymentMethod, Product, TabDetail, TabLine, TabOrder, TableState, UnpaidReason, User,
+  VenueTable,
 } from '#shared/types'
 import type { AdjustmentOutcome, CompReason } from '~/composables/useAdjustments'
 // Explicit, not auto-imported. Nuxt names a component after its folder plus its
@@ -362,7 +364,22 @@ async function pay(payment: { method: PaymentMethod, amount_fen: number, receive
   leaveTimer = setTimeout(() => navigateTo('/konobar'), done.changeFen > 0 ? 3500 : 2000)
 }
 
-async function markUnpaid(reason: 'walked_out' | 'dispute' | 'other') {
+/**
+ * *Otpis* and *Osoblje* from the ⋯ menu: the same act as *Nije plaćeno* — the
+ * tab closes with money still on it — but authorised in advance, so it never
+ * reaches the owner's decision list and never lands on the waiter's line.
+ */
+async function markCategory(reason: UnpaidReason) {
+  menuOpen.value = false
+  if (!await unpaidTab(reason)) {
+    say(payError.value ?? 'Nije uspjelo')
+    return
+  }
+  say(`${unpaidWordBs(reason)} · ${tableName.value}`)
+  leaveTimer = setTimeout(() => navigateTo('/konobar'), 1600)
+}
+
+async function markUnpaid(reason: UnpaidReason) {
   if (!await unpaidTab(reason)) return
   payOpen.value = false
   say(`Označeno: nije plaćeno · ${tableName.value}`)
@@ -939,6 +956,34 @@ function lateWasNotPaid(row: TableState) {
 
           <button type="button" class="btn btn-secondary btn-lg justify-start" :disabled="!hasTab" @click="openPay('unpaid')">
             Nije plaćeno
+          </button>
+
+          <!--
+            The two categories that belong at the bar rather than at a table.
+
+            *Otpis* is a drink that was made and then spilled, dropped, or rung
+            up by mistake; *Osoblje* is a worker drinking against his own
+            allowance. Both are rung up like any round — that is what moves the
+            stock and puts them in the night's total — and both close the tab
+            owing nothing, coming off the shift by category at the settlement.
+            *Policija* and *Rashod* are the table's two and live on the floor
+            plan's sheet, because that is where they are drunk.
+          -->
+          <button
+            type="button"
+            class="btn btn-secondary btn-lg justify-start"
+            :disabled="!hasTab || localRemainingFen <= 0"
+            @click="markCategory('otpis')"
+          >
+            Otpis — proliveno ili greška
+          </button>
+          <button
+            type="button"
+            class="btn btn-secondary btn-lg justify-start"
+            :disabled="!hasTab || localRemainingFen <= 0"
+            @click="markCategory('osoblje')"
+          >
+            Osoblje
           </button>
           <button
             type="button"

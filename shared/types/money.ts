@@ -40,7 +40,8 @@ export type TabLineStatus = 'ok' | 'storno' | 'storno_na_cekanju' | 'gratis'
  * halves of the list and which of them a waiter is still on the hook for.
  */
 export type UnpaidReason =
-  | 'walked_out' | 'dispute' | 'other' | 'policija' | 'rashod' | 'osoblje'
+  | 'walked_out' | 'dispute' | 'other'
+  | 'policija' | 'rashod' | 'osoblje' | 'otpis'
 
 export interface TableState {
   /**
