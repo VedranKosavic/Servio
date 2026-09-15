@@ -143,7 +143,6 @@ async function load() {
     live.value = fresh
     updatedAt.value = new Date().toISOString()
     loadError.value = ''
-    changes.setAttentionCount(fresh.attention.length)
   } catch (err) {
     // The old numbers stay on screen and the header says they are old — a
     // dashboard that silently shows yesterday's promet is worse than one that

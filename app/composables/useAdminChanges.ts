@@ -83,7 +83,6 @@ export function useAdminChanges(handlers: AdminChangeHandlers = {}) {
    * visitor's numbers into the next one's page.)
    */
   const pending = useState<PendingCounts>('sank:a:pending', () => ({ ...EMPTY_PENDING }))
-  const attention = useState<number>('sank:a:attention', () => 0)
   const logMaxAt = useState<string | null>('sank:a:log-max', () => null)
   const logSeenAt = useState<string | null>('sank:a:log-seen', () => null)
   const online = useState<boolean>('sank:a:ok', () => true)
@@ -151,26 +150,6 @@ export function useAdminChanges(handlers: AdminChangeHandlers = {}) {
     onScopeDispose(() => { registry.refresh = null })
   }
 
-  /**
-   * *Puls*' badge is the length of its own `attention[]`, which only that page
-   * reads — the feed carries the queue counts, not the assembled list. So the
-   * sum of the queues seeds the badge on every other page, and *Puls* publishes
-   * the exact number the moment it has one.
-   *
-   * The sum has to include every queue the list does, or an owner who lands on
-   * *Smjene* is told there is nothing waiting when there is. `counts` is why
-   * the badge used to read one short of the list it counts.
-   */
-  const attentionCount = computed(() => attention.value || (
-    pending.value.adjustments + pending.value.unpaid
-    + pending.value.payouts + pending.value.settlements + pending.value.counts
-  ))
-
-  /** *Puls* calls this after every read and after every decision. */
-  function setAttentionCount(n: number) {
-    attention.value = n
-  }
-
   /** *Dnevnik* calls this when it opens, beside `POST /api/owner/log/seen`. */
   function markLogSeen() {
     logSeenAt.value = logMaxAt.value
@@ -183,8 +162,6 @@ export function useAdminChanges(handlers: AdminChangeHandlers = {}) {
     /** Force a read now — after a decision, rather than waiting out the 15 s. */
     refresh: () => registry.refresh?.() ?? Promise.resolve(),
     pending,
-    attentionCount,
-    setAttentionCount,
     logUnread,
     markLogSeen,
   }

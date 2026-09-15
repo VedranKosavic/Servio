@@ -40,10 +40,11 @@ useHead({
  * The rows come from `app/utils/adminNav.ts` (WP0) rather than an inline array,
  * so a Phase 4 package adding *Razgovor* edits one file instead of this one and
  * `vise.vue` both. The badges stay here, because they are this shell's state.
+ *
+ * Empty on purpose: *Puls* used to count the *Zahtijeva pažnju* list here, and
+ * that list is gone from the app on the owner's call.
  */
-const badge: Record<string, () => number> = {
-  puls: () => changes.attentionCount.value,
-}
+const badge: Record<string, () => number> = {}
 /**
  * A row that carries a quiet dot rather than a count.
  *
