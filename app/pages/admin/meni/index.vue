@@ -112,13 +112,34 @@ const visible = computed(() => {
   })
 })
 
-/** The categories that still have a visible product, in the menu's own order. */
+/** The categories that still have a visible product on sale, in the menu's own order. */
 const groups = computed(() => categories.value
   .map(category => ({
     category,
-    rows: visible.value.filter(product => product.category_id === category.id),
+    rows: visible.value.filter(product => product.active && product.category_id === category.id),
   }))
   .filter(group => group.rows.length > 0))
+
+/**
+ * The product *Ukloni* is asking about, while its confirmation is open.
+ *
+ * Nothing is deleted: order lines and the price history point at a product
+ * forever, so removing one is `active = false`. The phones stop offering it on
+ * the next poll and this screen stops listing it.
+ */
+const removeFor = ref<ProductAdmin | null>(null)
+
+function askRemove(product: ProductAdmin) {
+  sheetId.value = null
+  removeFor.value = product
+}
+
+async function confirmRemove() {
+  const product = removeFor.value
+  if (!product) return
+  await patch(product, { active: false })
+  removeFor.value = null
+}
 
 /** The sheet's product, read fresh every render. Null closes the sheet. */
 const sheetProduct = computed(() =>
@@ -129,7 +150,7 @@ const columns = [
   { key: 'cijena', label: 'Cijena', align: 'r' as const, width: '150px' },
   { key: 'grami', label: 'g / lula', align: 'r' as const, width: '130px' },
   { key: 'omiljeno', label: 'Omiljeno', width: '90px' },
-  { key: 'aktivan', label: 'Aktivan', width: '90px' },
+  { key: 'ukloni', label: '', width: '100px' },
   { key: 'osoblje', label: 'Osoblje', width: '90px' },
   { key: 'normativ', label: 'Normativ', align: 'r' as const, width: '130px' },
 ]
@@ -253,6 +274,7 @@ async function createProduct(body: CreateProductBody) {
             :pending="busyId === product.id"
             @patch="body => patch(product, body)"
             @recipe="recipeFor = product; recipeError = null"
+            @remove="askRemove(product)"
           />
         </UiTable>
       </UiCard>
@@ -261,6 +283,24 @@ async function createProduct(body: CreateProductBody) {
         <p class="p-empty">Nema artikala po ovoj pretrazi.</p>
       </UiCard>
     </template>
+
+    <UiSheet
+      :open="removeFor !== null"
+      title="Ukloniti artikal?"
+      @close="removeFor = null"
+    >
+      <p class="p-confirm">
+        „{{ removeFor?.name }}“ više neće biti na meniju i konobari ga neće moći naručiti.
+      </p>
+      <template #footer>
+        <UiButton variant="ghost" @click="removeFor = null">Odustani</UiButton>
+        <UiButton
+          variant="danger"
+          :pending="removeFor !== null && busyId === removeFor.id"
+          @click="confirmRemove"
+        >Ukloni</UiButton>
+      </template>
+    </UiSheet>
 
     <!-- Mounted before the recipe editor on purpose: both sheets lock the page
          behind them, and when this one closes to hand over, the editor's lock
@@ -274,6 +314,7 @@ async function createProduct(body: CreateProductBody) {
       @close="sheetId = null"
       @patch="body => sheetProduct && patch(sheetProduct, body)"
       @recipe="sheetProduct && openRecipe(sheetProduct)"
+      @remove="sheetProduct && askRemove(sheetProduct)"
     />
 
     <PostavkeRecipeEditor
@@ -318,5 +359,7 @@ async function createProduct(body: CreateProductBody) {
 .p-search:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .p-empty { margin: 0; color: var(--muted); }
+
+.p-confirm { margin: 0; color: var(--ink); font-size: var(--text-body); }
 
 </style>

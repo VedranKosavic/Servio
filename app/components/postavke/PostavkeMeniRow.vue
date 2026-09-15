@@ -21,8 +21,8 @@
  * needs, next to a control the owner uses far more often. The name is now the
  * button, which is a bigger target than the chevron ever was, and the space it
  * freed is where *−* and *+* live. Nothing became unreachable: *Omiljeno*,
- * *Aktivan*, *Piće za osoblje* and *Normativ* are the same sheet, one tap away
- * on the name instead of one tap away on an arrow.
+ * *Piće za osoblje*, *Normativ* and *Ukloni s menija* are the same sheet, one
+ * tap away on the name instead of one tap away on an arrow.
  *
  * **Why a stepper at all.** A café's prices move in halves — 2,00 to 2,50, not
  * to 2,37 — and typing one on a phone means summoning a keyboard over the list,

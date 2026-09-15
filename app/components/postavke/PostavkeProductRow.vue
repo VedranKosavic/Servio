@@ -25,6 +25,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   patch: [patch: UpdateProductBody]
   recipe: []
+  /** Ask to take this product off the menu; the page confirms first. */
+  remove: []
 }>()
 
 const isShisha = computed(() => props.product.kind === 'shisha')
@@ -97,12 +99,15 @@ const starDisabled = computed(() => props.favouriteFull && !props.product.is_fav
     </td>
 
     <td>
-      <PostavkeToggle
-        :model-value="product.active"
-        :label="`Aktivan, ${product.name}`"
+      <!-- Removing is switching off: past rounds point at this product, so it
+           can never be deleted. The page asks before it does it. -->
+      <UiButton
+        small
+        variant="ghost"
         :disabled="pending"
-        @update:model-value="value => emit('patch', { active: value })"
-      />
+        :aria-label="`Ukloni s menija, ${product.name}`"
+        @click="emit('remove')"
+      >Ukloni</UiButton>
     </td>
 
     <td>

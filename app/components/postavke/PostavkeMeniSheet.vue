@@ -36,6 +36,8 @@ const emit = defineEmits<{
   patch: [patch: UpdateProductBody]
   /** Hand over to `PostavkeRecipeEditor`; the page closes this sheet first. */
   recipe: []
+  /** Ask to take this product off the menu; the page closes this sheet and confirms. */
+  remove: []
 }>()
 
 const isShisha = computed(() => props.product?.kind === 'shisha')
@@ -92,20 +94,6 @@ const recipeLine = computed(() => {
 
         <div class="p-set">
           <span class="p-set-text">
-            <span class="p-set-label">Aktivan</span>
-            <span class="p-set-hint">Ugašen artikal se ne nudi na telefonu.</span>
-          </span>
-          <PostavkeToggle
-            :model-value="product.active"
-            :label="`Aktivan, ${product.name}`"
-            :disabled="pending"
-            words
-            @update:model-value="value => emit('patch', { active: value })"
-          />
-        </div>
-
-        <div class="p-set">
-          <span class="p-set-text">
             <span class="p-set-label">Piće za osoblje</span>
             <span class="p-set-hint">Konobar ga može uzeti kao svoje piće.</span>
           </span>
@@ -153,6 +141,14 @@ const recipeLine = computed(() => {
     </template>
 
     <template #footer>
+      <!-- Removing is switching off, never deleting: past rounds point at this
+           product. The page asks before it does it. -->
+      <UiButton
+        v-if="product"
+        variant="danger"
+        :disabled="pending"
+        @click="emit('remove')"
+      >Ukloni s menija</UiButton>
       <UiButton variant="ghost" @click="emit('close')">Gotovo</UiButton>
     </template>
   </UiSheet>
