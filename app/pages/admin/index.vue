@@ -483,18 +483,18 @@ onMounted(() => { void load() })
     />
 
     <template v-if="live">
-      <!-- Always two, never an empty state. -->
-      <div class="a-smjene">
-        <PulsSmjenaCard v-bind="cardMoney" />
-        <PulsSmjenaCard v-bind="cardNext" />
-      </div>
+      <!-- The shift with the money on it, then the floor: the owner's order of
+           the two things he opens Puls for. Sljedeća smjena moved to the foot. -->
+      <PulsSmjenaCard v-bind="cardMoney" />
+
+      <PulsFloor :zones="zones" :loading="!bootstrap" @open="openTable" />
 
       <!-- Only on a day goods were booked. -->
       <PulsPrijemCard v-if="prijem.deliveries.length > 0" :prijem="prijem" />
 
       <PulsWhoStrip :shifts="whoCards" />
 
-      <PulsFloor :zones="zones" :loading="!bootstrap" @open="openTable" />
+      <PulsSmjenaCard v-bind="cardNext" />
     </template>
 
     <!-- The first paint: a skeleton, never a spinner over numbers that are not
@@ -570,12 +570,6 @@ onMounted(() => { void load() })
  * would put a four-figure amount on two lines, and a hero number that wraps is
  * not a hero number.
  */
-.a-smjene { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
-
-@media (min-width: 560px) {
-  .a-smjene { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
 .a-muted { margin: 0; color: var(--ink-2); font-size: var(--text-label); }
 .a-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
 
