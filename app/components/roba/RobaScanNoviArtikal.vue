@@ -2,15 +2,15 @@
 /**
  * *Novi artikal* from an unknown scan line (PHASE4 WP3).
  *
- * The short form of the article sheet: the six fields a delivery actually needs.
- * Everything else — tolerancija, par, tara, kategorija — has a sane default and
- * is edited on *Roba → artikal* afterwards, because the owner is standing at the
- * bar with a delivery note in his hand and a full article form is the wrong
- * thing to put between him and the crates.
+ * The short form of `RobaArtikalSheet` — the fields a delivery actually needs.
+ * Everything else — tolerancija, minimalna zaliha, tara, kategorija — has a sane
+ * default and is edited on *Kontrolna ploča → Artikli zalihe* afterwards, because
+ * the owner is standing at the bar with a delivery note in his hand.
  *
  * On save it does two writes: the article, then the alias for the OCR text that
  * had no match — so the **next** photo from this supplier comes back green
- * without anybody doing anything.
+ * without anybody doing anything. The alias is this flow's alone; the typed
+ * delivery creates through the same sheet and links nothing.
  */
 import type { CreateStockItemBody } from '#shared/schemas'
 import type { StockItemAdmin } from '#shared/types'
@@ -26,53 +26,17 @@ const emit = defineEmits<{ close: [], created: [item: StockItemAdmin] }>()
 
 const api = useAdminApi()
 
-const name = ref('')
-const kind = ref<CreateStockItemBody['kind']>('pice')
-const baseUnit = ref<CreateStockItemBody['base_unit']>('kom')
-const packName = ref('')
-const packQty = ref<number | null>(null)
 const sending = ref(false)
 const error = ref('')
 
-const KINDS = [
-  { value: 'pice', label: 'Piće' },
-  { value: 'duhan', label: 'Duhan' },
-  { value: 'zar', label: 'Žar' },
-  { value: 'potrosni', label: 'Potrošni' },
-  { value: 'hrana', label: 'Hrana' },
-]
+watch(() => props.open, (open) => { if (open) error.value = '' })
 
-const UNITS = [
-  { value: 'kom', label: 'komad' },
-  { value: 'g', label: 'gram' },
-  { value: 'ml', label: 'mililitar' },
-]
-
-watch(() => props.open, (open) => {
-  if (!open) return
-  name.value = props.text.slice(0, 60)
-  kind.value = 'pice'
-  baseUnit.value = 'kom'
-  packName.value = ''
-  packQty.value = null
-  error.value = ''
-})
-
-const canSave = computed(() => name.value.trim().length > 0 && !sending.value)
-
-async function save() {
-  if (!canSave.value) return
+async function save(body: CreateStockItemBody) {
+  if (sending.value) return
   sending.value = true
   error.value = ''
   try {
-    const created = await api.createStockItem({
-      name: name.value.trim(),
-      kind: kind.value,
-      base_unit: baseUnit.value,
-      brand: null,
-      pack_name: packName.value.trim() || null,
-      pack_qty: packQty.value ?? null,
-    })
+    const created = await api.createStockItem(body)
     // The alias is the whole point: the article without it would still be a
     // manual pick on the next otpremnica.
     await api.linkSupplierAlias({
@@ -90,37 +54,28 @@ async function save() {
 </script>
 
 <template>
-  <UiSheet :open="open" title="Novi artikal" :pending="sending" @close="emit('close')" @confirm="save">
-    <p class="a-muted">Sa otpremnice: „{{ text }}“</p>
-
-    <UiField v-model="name" label="Naziv" placeholder="Npr. Coca-Cola 0,25" />
-    <UiField v-model="kind" label="Vrsta" kind="select" :options="KINDS" />
-    <UiField v-model="baseUnit" label="Osnovna jedinica" kind="select" :options="UNITS" />
-    <UiField v-model="packName" label="Naziv paketa" placeholder="gajba, kutija — neobavezno" />
-    <UiField
-      v-model="packQty"
-      label="Komada u paketu"
-      kind="decimal"
-      hint="Prazno ako roba ne dolazi u paketu"
-    />
-
-    <p class="a-muted">
-      Ostalo — kategorija, tolerancija, par — podesi kasnije na Roba → artikal.
-      Naziv sa otpremnice se odmah povezuje, pa je sljedeća slika prepoznata.
-    </p>
-
-    <p v-if="error" class="a-error">{{ error }}</p>
-
-    <template #footer>
-      <UiButton variant="ghost" @click="emit('close')">Odustani</UiButton>
-      <UiButton variant="primary" :disabled="!canSave" :pending="sending" @click="save">
-        Sačuvaj i poveži
-      </UiButton>
+  <RobaArtikalSheet
+    :open="open"
+    :initial-name="text"
+    action="Sačuvaj i poveži"
+    :pending="sending"
+    :error="error || null"
+    @close="emit('close')"
+    @create="save"
+  >
+    <template #lead>
+      <p class="a-muted">Sa otpremnice: „{{ text }}“</p>
     </template>
-  </UiSheet>
+    <template #note>
+      <p class="a-muted">
+        Ostalo — kategorija, tolerancija, minimalna zaliha — podesi kasnije na
+        Kontrolna ploča → Artikli zalihe. Naziv sa otpremnice se odmah povezuje,
+        pa je sljedeća slika prepoznata.
+      </p>
+    </template>
+  </RobaArtikalSheet>
 </template>
 
 <style scoped>
 .a-muted { margin: 0; color: var(--muted); font-size: var(--text-micro); }
-.a-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
 </style>

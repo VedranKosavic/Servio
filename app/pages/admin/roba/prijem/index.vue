@@ -103,6 +103,7 @@ useAdminChanges({
       v-if="mode === 'unos' || scanOff"
       :items="items"
       @posted="loadCatalogue"
+      @catalogue="loadCatalogue"
       @scan="mode = 'slika'"
     />
   </div>
