@@ -784,6 +784,18 @@ export function updateTemplate(
 ): ShiftTemplateView {
   db.transaction((tx) => {
     const row = requireTemplate(tx, venueId, id)
+    // `shift_templates_name_uq` would refuse a rename onto another template's
+    // name anyway; saying so in Bosnian beats a raw SQLITE_CONSTRAINT 500.
+    if (patch.name !== undefined && patch.name !== row.name) {
+      const clash = tx.select({ id: schema.shiftTemplates.id }).from(schema.shiftTemplates)
+        .where(and(
+          eq(schema.shiftTemplates.venueId, venueId),
+          eq(schema.shiftTemplates.name, patch.name),
+          ne(schema.shiftTemplates.id, row.id),
+        ))
+        .get()
+      if (clash) throw conflict('TEMPLATE_EXISTS', `a template named ${patch.name} already exists`)
+    }
     tx.update(schema.shiftTemplates)
       .set({
         ...(patch.name !== undefined ? { name: patch.name } : {}),

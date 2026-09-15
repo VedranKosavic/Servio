@@ -97,6 +97,20 @@ describe('the same person twice in one cell', () => {
   })
 })
 
+describe('editing a template', () => {
+  it('refuses a rename onto another template\'s name with TEMPLATE_EXISTS, not a 500', () => {
+    expectCode(() => updateTemplate(f.db, f.venueId, f.adminActor(), template('Prva smjena').id, {
+      name: 'Druga smjena',
+    }, f.clock.now()), 'TEMPLATE_EXISTS')
+
+    // Saving a template under its own name is not a clash.
+    const same = updateTemplate(f.db, f.venueId, f.adminActor(), template('Prva smjena').id, {
+      name: 'Prva smjena', start_time: '07:30',
+    }, f.clock.now())
+    expect(same.start_time).toBe('07:30')
+  })
+})
+
 describe('overlapping and double shifts', () => {
   it('knows a wrap-around shift overlaps the morning after', () => {
     expect(overlaps('16:00', '01:00', '08:00', '16:00')).toBe(false)

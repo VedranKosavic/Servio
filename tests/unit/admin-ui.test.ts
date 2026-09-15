@@ -286,7 +286,7 @@ describe('the way back', () => {
     '/admin', '/admin/smjene', '/admin/roba', '/admin/roba/prijem', '/admin/raspored',
     '/admin/raspored/zamjene', '/admin/meni', '/admin/postavke/kategorije',
     '/admin/postavke/osoblje', '/admin/postavke/uredaji', '/admin/vise', '/admin/razgovor',
-    '/admin/kontrola',
+    '/admin/kontrola', '/admin/kontrola/sabloni', '/admin/kontrola/podesavanja',
   ])
   const DYNAMIC = [
     /^\/admin\/smjena\/[^/]+$/,
@@ -304,7 +304,8 @@ describe('the way back', () => {
 
   it('sends every screen Kontrolna ploča links to back to it', () => {
     for (const path of ['/admin/meni', '/admin/postavke/kategorije',
-      '/admin/postavke/osoblje', '/admin/postavke/uredaji', '/admin/kontrola/artikli']) {
+      '/admin/postavke/osoblje', '/admin/postavke/uredaji', '/admin/kontrola/artikli',
+      '/admin/kontrola/sabloni', '/admin/kontrola/podesavanja']) {
       expect(adminBack(path, exists), path).toBe('/admin/kontrola')
     }
   })
