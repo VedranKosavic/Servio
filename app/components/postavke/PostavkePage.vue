@@ -23,8 +23,6 @@ defineProps<{
       <template v-if="$slots.actions" #actions><slot name="actions" /></template>
     </UiPageHead>
 
-    <PostavkeTabs />
-
     <p v-if="error" class="p-error" role="alert">{{ error }}</p>
 
     <slot />
