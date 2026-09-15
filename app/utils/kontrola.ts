@@ -66,14 +66,4 @@ export const KONTROLA: KontrolaSection[] = [
       { id: 'podesavanja', to: '/admin/kontrola/podesavanja', label: 'Podešavanja', sub: 'Pragovi i ko odobrava', ready: true },
     ],
   },
-  {
-    id: 'historija',
-    title: 'Historija',
-    note: 'Samo za čitanje. Greška se ispravlja stornom, korekcijom ili poništenjem prijema, nikad izmjenom zapisa.',
-    links: [
-      { id: 'smjene', to: '/admin/smjene', label: 'Smjene', sub: 'Noći, pazar i predaje', ready: true },
-      { id: 'stanje', to: '/admin/roba', label: 'Stanje šanka', sub: 'Zaliha i kretanja po artiklu', ready: true },
-      { id: 'prijemi', to: '/admin/roba/prijem/historija', label: 'Historija prijema', sub: 'Proknjiženi prijemi robe', ready: true },
-    ],
-  },
 ]
