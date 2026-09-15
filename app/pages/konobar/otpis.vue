@@ -1,6 +1,17 @@
 <script setup lang="ts">
 /**
- * `/konobar/otpis` — S13. Item → koliko → razlog → *Sačuvaj*. Four taps.
+ * `/konobar/otpis` — S13. Artikal → koliko → razlog → *Sačuvaj*. Four taps.
+ *
+ * **It is written against the menu, at the menu price.** The owner's call: a
+ * spilled Coca-Cola is a Coca-Cola off the menu and it cost the café 3,00 KM,
+ * not what the crate cost. So the list is the menu (`GET /api/bootstrap`, the
+ * same catalogue *Dodaj* draws), the number on screen is `price × koliko`, and
+ * the server takes the stock off exactly as a sale of that article would. The
+ * phone's number only decides whether to offer the PIN sheet; the server
+ * re-reads the price and snapshots it, and that is what the owner sees.
+ *
+ * A nargila opens the aroma sheet first, because the aromas decide which tins
+ * lose their grams — the same rule as on an order.
  *
  * **It writes the ledger, so it goes through the outbox.** An otpis is a stock
  * movement exactly like a round is: `enqueue('waste', …)` hands back the local
@@ -21,17 +32,17 @@
  */
 import { useTimeoutFn } from '@vueuse/core'
 import { formatKm } from '#shared/money'
-import type { LogWasteBody, StockItem, WasteReason } from '#shared/types'
+import type { LogWasteBody, Product, WasteReason } from '#shared/types'
 
 useHead({ title: 'Otpis' })
 
 const me = useMe()
 const { enqueue } = useOutbox()
 const { state: syncState } = useSync()
+const { data: boot, refresh: refreshBoot } = useBootstrapData()
 
-const items = ref<StockItem[]>([])
 useChanges({
-  stock: (list) => { items.value = list },
+  menu: () => refreshBoot(),
   me: () => me.load(),
 }, { intervalMs: 15_000 })
 
@@ -50,7 +61,11 @@ const REASONS: { key: WasteReason, label: string, waiter: boolean }[] = [
   { key: 'ostalo', label: 'ostalo', waiter: false },
 ]
 
-const selected = ref<StockItem | null>(null)
+const selected = ref<Product | null>(null)
+/** A nargila's aromas, as the sheet returned them (repeats are proportions). */
+const flavourIds = ref<string[]>([])
+/** The nargila whose aroma sheet is open, before it becomes `selected`. */
+const shishaFor = ref<Product | null>(null)
 const qtyRaw = ref('1')
 const reason = ref<WasteReason | null>(null)
 const note = ref('')
@@ -76,21 +91,41 @@ function allowed(entry: (typeof REASONS)[number]): boolean {
   return entry.waiter || isApprover.value
 }
 
+function pick(product: Product) {
+  if (product.kind === 'shisha') {
+    shishaFor.value = product
+    return
+  }
+  flavourIds.value = []
+  selected.value = product
+}
+
+function pickShisha(ids: string[], chipNote: string | null) {
+  const product = shishaFor.value
+  shishaFor.value = null
+  if (!product) return
+  flavourIds.value = ids
+  if (chipNote) note.value = chipNote
+  selected.value = product
+}
+
+function chipsFor(product: Product): string[] {
+  return boot.value?.categories.find(c => c.id === product.category_id)?.note_chips ?? []
+}
+
 /**
- * What this will cost the shelf, as the phone can best guess it.
- *
- * It is an estimate and is labelled one: the server prices the movement from
- * the moving average at the moment it lands, and that is the number that ends
- * up in the ledger. This one exists only to decide whether to offer the PIN
- * sheet and to tell the person what he is about to write.
+ * What this otpis is worth: the menu price × koliko, rounded to the fening —
+ * the same sum the server writes. It can only differ if the owner changes the
+ * price between this tap and the moment the outbox lands it, and then the
+ * server's snapshot is the one that counts.
  */
-const estimateFen = computed(() => {
+const valueFen = computed(() => {
   if (!selected.value || qty.value === null) return 0
-  return Math.round((qty.value * selected.value.unit_cost_mfen) / 1000)
+  return Math.round(selected.value.price_fen * qty.value)
 })
 
 const threshold = computed(() => me.settings.value?.waste_pin_threshold_fen ?? 1000)
-const needsApproval = computed(() => estimateFen.value >= threshold.value)
+const needsApproval = computed(() => valueFen.value >= threshold.value)
 
 const canSave = computed(() =>
   !!selected.value && qty.value !== null && qty.value > 0 && !!reason.value && !saving.value)
@@ -114,8 +149,8 @@ function onSave() {
 }
 
 async function save(approval: { approverId: string, pin: string } | null) {
-  const item = selected.value
-  if (!item || qty.value === null || !reason.value || saving.value) return
+  const product = selected.value
+  if (!product || qty.value === null || !reason.value || saving.value) return
 
   saving.value = true
   saveError.value = null
@@ -124,10 +159,11 @@ async function save(approval: { approverId: string, pin: string } | null) {
       // The idempotency key: the same uuid on every retry, which is what makes
       // a re-sent otpis one broken bottle instead of two.
       client_id: crypto.randomUUID(),
-      stock_item_id: item.id,
+      product_id: product.id,
       qty: qty.value,
       reason: reason.value,
       client_created_at: new Date().toISOString(),
+      ...(flavourIds.value.length ? { flavour_ids: flavourIds.value } : {}),
       ...(note.value.trim() ? { note: note.value.trim() } : {}),
       ...(approval ? { approver_user_id: approval.approverId, pin: approval.pin } : {}),
     }
@@ -137,18 +173,19 @@ async function save(approval: { approverId: string, pin: string } | null) {
       client_id: body.client_id,
       payload: body,
       client_created_at: body.client_created_at,
-      label: `Otpis · ${item.name}`,
-      amount_fen: estimateFen.value,
+      label: `Otpis · ${product.name}`,
+      amount_fen: valueFen.value,
     })
 
     toast.value = syncState.value === 'offline'
-      ? `Sačuvano · čeka slanje · ${item.name}`
-      : `Otpisano · ${item.name}`
+      ? `Sačuvano · čeka slanje · ${product.name}`
+      : `Otpisano · ${product.name}`
     if (!approval && needsApproval.value) toast.value += ' · čeka odobrenje'
     hideToastLater()
 
     pinOpen.value = false
     selected.value = null
+    flavourIds.value = []
     qtyRaw.value = '1'
     reason.value = null
     note.value = ''
@@ -180,12 +217,17 @@ function step(delta: number) {
     <main class="flex flex-1 flex-col gap-4 py-4">
       <WaiterFailedCard />
 
-      <OtpisItemPicker
-        v-if="!selected"
-        :items="items"
-        :selected-id="selected?.id ?? null"
-        @select="selected = $event"
-      />
+      <template v-if="!selected">
+        <OtpisProductPicker
+          v-if="boot"
+          :products="boot.products"
+          :categories="boot.categories"
+          @select="pick"
+        />
+        <p v-else class="py-10 text-center text-text-2">
+          Učitavanje…
+        </p>
+      </template>
 
       <template v-else>
         <div class="card flex items-center justify-between gap-3 p-4">
@@ -194,8 +236,7 @@ function step(delta: number) {
               {{ selected.name }}
             </div>
             <div class="num text-label text-text-2">
-              {{ formatKm(estimateFen) }}
-              <template v-if="selected.estimated"> · procijenjeno</template>
+              {{ formatKm(valueFen) }} · po cijeni s menija
             </div>
           </div>
           <button type="button" class="btn btn-ghost" @click="selected = null">
@@ -219,7 +260,7 @@ function step(delta: number) {
                 autocomplete="off"
                 aria-label="Količina"
               >
-              <span class="shrink-0 text-label font-normal text-text-2">{{ selected.base_unit }}</span>
+              <span class="shrink-0 text-label font-normal text-text-2">kom</span>
             </span>
             <button type="button" class="btn btn-secondary min-h-15 w-15 shrink-0" aria-label="Više" @click="step(1)">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 6v12M6 12h12" /></svg>
@@ -267,7 +308,7 @@ function step(delta: number) {
       </template>
 
       <p class="pb-24 text-center text-caption tracking-normal text-muted">
-        Otpis odmah skida robu sa stanja. Odobrenje je potvrda, ne dozvola.
+        Otpis se vodi po cijeni s menija i odmah skida robu sa stanja. Odobrenje je potvrda, ne dozvola.
       </p>
     </main>
 
@@ -282,11 +323,21 @@ function step(delta: number) {
       </button>
     </div>
 
+    <!-- S4's aroma sheet, reused: a spilled bowl loses its grams like a sold one. -->
+    <ProductShishaSheet
+      v-if="shishaFor && boot"
+      :product="shishaFor"
+      :flavours="boot.flavours"
+      :note-chips="chipsFor(shishaFor)"
+      @close="shishaFor = null"
+      @confirm="pickShisha"
+    />
+
     <OtpisPinSheet
       v-if="pinOpen && selected"
       :approvers="approvers"
       :item-name="selected.name"
-      :cost-fen="estimateFen"
+      :cost-fen="valueFen"
       :busy="saving"
       :error="saveError"
       @approve="save"

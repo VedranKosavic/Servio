@@ -40,6 +40,49 @@ import { requireShift, shiftBriefFor, shiftView, userNames } from './shifts'
 import { listSettlements } from './settlements'
 
 // ===========================================================================
+// Otpis
+// ===========================================================================
+
+/**
+ * A shift's otpis — count and value — over both tables that hold one.
+ *
+ * `product_waste` (since 0008) is valued at the **menu price** snapshotted when
+ * it was written; `waste_events` is the older stock-item otpis at purchase
+ * cost. They never describe the same event (a product otpis writes no
+ * `waste_events` row), so adding them counts each breakage exactly once.
+ */
+function wasteTotals(
+  q: Queryable, venueId: string, shiftId: string, userId?: string,
+): { n: number, fen: number } {
+  const old = q.select({
+    n: sql<number>`count(*)`,
+    fen: sql<number>`coalesce(sum(${schema.wasteEvents.costFen}), 0)`,
+  })
+    .from(schema.wasteEvents)
+    .where(and(
+      eq(schema.wasteEvents.venueId, venueId),
+      eq(schema.wasteEvents.shiftId, shiftId),
+      userId ? eq(schema.wasteEvents.userId, userId) : undefined,
+    ))
+    .get()
+  const menu = q.select({
+    n: sql<number>`count(*)`,
+    fen: sql<number>`coalesce(sum(${schema.productWaste.valueFen}), 0)`,
+  })
+    .from(schema.productWaste)
+    .where(and(
+      eq(schema.productWaste.venueId, venueId),
+      eq(schema.productWaste.shiftId, shiftId),
+      userId ? eq(schema.productWaste.userId, userId) : undefined,
+    ))
+    .get()
+  return {
+    n: (old?.n ?? 0) + (menu?.n ?? 0),
+    fen: (old?.fen ?? 0) + (menu?.fen ?? 0),
+  }
+}
+
+// ===========================================================================
 // The one read everything folds
 // ===========================================================================
 
@@ -264,17 +307,7 @@ export function summarizeUser(
     .groupBy(schema.payments.method)
     .all()
 
-  const waste = q.select({
-    n: sql<number>`count(*)`,
-    fen: sql<number>`coalesce(sum(${schema.wasteEvents.costFen}), 0)`,
-  })
-    .from(schema.wasteEvents)
-    .where(and(
-      eq(schema.wasteEvents.venueId, venueId),
-      eq(schema.wasteEvents.shiftId, shiftId),
-      eq(schema.wasteEvents.userId, userId),
-    ))
-    .get()
+  const waste = wasteTotals(q, venueId, shiftId, userId)
 
   // `expectedCash` owns the two terms that are not derivable from the lines —
   // what the drawer handed him and what he is answerable for on an unpaid tab.
@@ -411,10 +444,7 @@ export function summarizeShift(
     .groupBy(schema.payments.method)
     .all()
 
-  const waste = q.select({ fen: sql<number>`coalesce(sum(${schema.wasteEvents.costFen}), 0)` })
-    .from(schema.wasteEvents)
-    .where(and(eq(schema.wasteEvents.venueId, venueId), eq(schema.wasteEvents.shiftId, shiftId)))
-    .get()
+  const waste = wasteTotals(q, venueId, shiftId)
 
   // The closing count's money answer: what the shelf says is missing, priced.
   const variance = q.select({
@@ -767,14 +797,7 @@ function myShiftCounts(
     if (line.adjKind === 'void' && line.adjStatus === 'pending') storno.pending += 1
   }
 
-  const wasteCount = q.select({ n: count() })
-    .from(schema.wasteEvents)
-    .where(and(
-      eq(schema.wasteEvents.venueId, venueId),
-      eq(schema.wasteEvents.shiftId, shiftId),
-      eq(schema.wasteEvents.userId, userId),
-    ))
-    .get()?.n ?? 0
+  const wasteCount = wasteTotals(q, venueId, shiftId, userId).n
 
   return {
     rounds: rounds.size,

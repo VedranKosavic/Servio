@@ -38,7 +38,8 @@ import { retireUncountedItems } from '../../server/database/retire'
 import {
   confirmCount, listCounts, pendingCounts, submitCount, witnessCount,
 } from '../../server/services/counts'
-import { createDeliveryBody } from '#shared/schemas'
+import { summarizeShift, summarizeUser } from '../../server/services/summaries'
+import { createDeliveryBody, logWasteBody } from '#shared/schemas'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
 import { rawClose, refuses } from '../helpers/shifts'
 
@@ -554,6 +555,204 @@ describe('otpis', () => {
       () => approveWaste(f.db, f.venueId, f.actor('Emir'), waste.id),
       'WASTE_ALREADY_APPROVED', 409,
     )
+  })
+})
+
+// ===========================================================================
+// Otpis of a menu article (0008) — at the menu price
+// ===========================================================================
+
+describe('otpis of a menu article', () => {
+  function productOtpis(
+    who: string, product: string, qty: number,
+    extra: Partial<Parameters<typeof logWaste>[3]> = {},
+  ) {
+    return logWaste(f.db, f.venueId, f.actor(who), {
+      client_id: randomUUID(),
+      product_id: f.productId(product),
+      qty,
+      reason: 'prosuto',
+      ...extra,
+    })
+  }
+
+  function movementsOf(wasteId: string) {
+    return f.db.select().from(schema.stockMovements)
+      .where(and(
+        eq(schema.stockMovements.refType, 'product_waste'),
+        eq(schema.stockMovements.refId, wasteId),
+      ))
+      .all()
+  }
+
+  it('is valued at price × qty and takes a 1:1 article off its shelf', () => {
+    f.openShift({ members: ['Amar'] })
+    const waste = productOtpis('Amar', 'Coca-Cola', 2)
+
+    // Menu price 3,00 KM × 2 — not the 0,90 KM a bottle cost.
+    expect(waste.cost_fen).toBe(600)
+    expect(waste.unit_price_fen).toBe(300)
+    expect(waste.product_id).toBe(f.productId('Coca-Cola'))
+    expect(waste.stock_item_id).toBeNull()
+    expect(waste.item_name).toBe('Coca-Cola')
+    expect(f.onHand('Coca-Cola 0,25 l')).toBe(77)
+
+    const moves = movementsOf(waste.id)
+    expect(moves.map(m => [m.type, m.qtyDelta, m.unitCostMfen])).toEqual([['waste', -2, 90_000]])
+    expect(entries('product_waste_logged')).toHaveLength(1)
+    // It is a product otpis, not a stock-item one: the old table is untouched.
+    expect(f.db.select().from(schema.wasteEvents).all()).toHaveLength(0)
+  })
+
+  it('deducts a normativ article exactly as its sale would', () => {
+    f.openShift({ members: ['Amar'] })
+    const waste = productOtpis('Amar', 'Limunada', 2)
+
+    expect(waste.cost_fen).toBe(700)
+    expect(f.onHand('Limun')).toBe(18)
+    expect(f.onHand('Šećer')).toBe(4200 - 20)
+    expect(movementsOf(waste.id)).toHaveLength(2)
+  })
+
+  it('deducts a spilled bowl by its aromas and coal, and wants the aromas', () => {
+    f.openShift({ members: ['Emir'] })
+    const jabuka = f.onHand('Al Fakher · Jabuka')
+    const ugalj = f.onHand('Ugalj (kocke)')
+
+    const bowl = productOtpis('Emir', 'Nargila', 1, {
+      flavour_ids: [f.stockItemId('Al Fakher · Jabuka')],
+    })
+    expect(bowl.cost_fen).toBe(1500)
+    expect(f.onHand('Al Fakher · Jabuka')).toBe(jabuka - 20)
+    expect(f.onHand('Ugalj (kocke)')).toBe(ugalj - 3)
+
+    refuses(() => productOtpis('Emir', 'Nargila', 1), 'FLAVOURS_REQUIRED', 400)
+  })
+
+  it('writes the otpis and no movement for an article with no stock link', () => {
+    f.openShift({ members: ['Amar'] })
+    const before = movements().length
+    const waste = productOtpis('Amar', 'Ostalo', 1)
+
+    expect(waste.cost_fen).toBe(500)
+    expect(waste.on_hand).toBeNull()
+    expect(movementsOf(waste.id)).toHaveLength(0)
+    expect(movements().length).toBe(before)
+  })
+
+  it('rounds a fractional quantity once, to the fening', () => {
+    f.openShift({ members: ['Amar'] })
+    expect(productOtpis('Amar', 'Coca-Cola', 0.5).cost_fen).toBe(150)
+    expect(productOtpis('Amar', 'Coca-Cola', 1 / 3).cost_fen).toBe(100)
+  })
+
+  it('keeps the price it was written at when the menu price changes', () => {
+    f.openShift({ members: ['Amar'] })
+    const waste = productOtpis('Amar', 'Coca-Cola', 2)
+    const shiftId = f.db.select().from(schema.productWaste).get()!.shiftId!
+
+    f.db.update(schema.products).set({ priceFen: 900 })
+      .where(eq(schema.products.id, f.productId('Coca-Cola'))).run()
+
+    const again = logWaste(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(), product_id: f.productId('Coca-Cola'), qty: 1, reason: 'prosuto',
+    })
+    expect(again.cost_fen).toBe(900)
+
+    // The first one still reads 6,00 KM, on its own and in the shift's total.
+    const summary = summarizeShift(f.db, f.venueId, shiftId, f.clock.now())
+    expect(summary.waste_fen).toBe(600 + 900)
+    const mine = summarizeUser(f.db, f.venueId, shiftId, f.userId('Amar'), f.clock.now())
+    expect(mine.waste).toEqual({ count: 2, fen: 1500 })
+    expect(approveWaste(f.db, f.venueId, f.actor('Emir'), waste.id).cost_fen).toBe(600)
+  })
+
+  it('adds an old stock-item otpis and a menu one into one waste_fen, each counted once', () => {
+    f.openShift({ members: ['Amar'] })
+    logWaste(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(), stock_item_id: f.stockItemId('Šećer'), qty: 100, reason: 'prosuto',
+    })
+    productOtpis('Amar', 'Coca-Cola', 1)
+    const shiftId = f.db.select().from(schema.productWaste).get()!.shiftId!
+
+    // 20 fen of sugar at cost + 300 fen of Coca-Cola at menu price.
+    expect(summarizeShift(f.db, f.venueId, shiftId, f.clock.now()).waste_fen).toBe(320)
+  })
+
+  it('replays a retried post with the stored result', () => {
+    f.openShift({ members: ['Amar'] })
+    const body = {
+      client_id: randomUUID(),
+      product_id: f.productId('Limunada'),
+      qty: 1,
+      reason: 'prosuto' as const,
+    }
+    const first = logWaste(f.db, f.venueId, f.actor('Amar'), body)
+    // A price change between the two posts must not reach the replay either.
+    f.db.update(schema.products).set({ priceFen: 1 })
+      .where(eq(schema.products.id, f.productId('Limunada'))).run()
+    const second = logWaste(f.db, f.venueId, f.actor('Amar'), body)
+
+    expect(second.id).toBe(first.id)
+    expect(second.already_applied).toBe(true)
+    expect(second.cost_fen).toBe(350)
+    expect(f.onHand('Limun')).toBe(19)
+    expect(f.db.select().from(schema.productWaste).all()).toHaveLength(1)
+  })
+
+  it('compares the approval threshold with the menu value, not the cost', () => {
+    f.openShift({ members: ['Emir'] })
+    // Four bottles cost 3,60 KM and sell for 12,00 KM: over the 10 KM line.
+    const four = productOtpis('Emir', 'Coca-Cola', 4)
+    expect(four.cost_fen).toBe(1200)
+    expect(four.needs_approval).toBe(true)
+
+    // Two Red Bulls are exactly 10,00 KM, which is the line itself; one is not.
+    expect(productOtpis('Emir', 'Red Bull', 2).needs_approval).toBe(true)
+    f.settingsWith({ waste_events_per_shift_per_user: 100 })
+    expect(productOtpis('Emir', 'Red Bull', 1).needs_approval).toBe(false)
+  })
+
+  it('keeps the bottle rule, the reason rule and the per-shift cap', () => {
+    f.openShift({ members: ['Amar', 'Emir'] })
+    f.settingsWith({ approver_roles: ['admin'] })
+    expect(productOtpis('Amar', 'Coca-Cola', 1).needs_approval).toBe(true)
+    expect(productOtpis('Amar', 'Limunada', 1).needs_approval).toBe(false)
+    refuses(
+      () => productOtpis('Amar', 'Limunada', 1, { reason: 'degustacija' }),
+      'REASON_FORBIDDEN', 403,
+    )
+
+    f.settingsWith({})
+    // Emir's fourth of the night — two old-shape rows count toward it too.
+    for (let i = 0; i < 2; i++) {
+      logWaste(f.db, f.venueId, f.actor('Emir'), {
+        client_id: randomUUID(), stock_item_id: f.stockItemId('Šećer'), qty: 1, reason: 'prosuto',
+      })
+    }
+    expect(productOtpis('Emir', 'Limunada', 1).needs_approval).toBe(false)
+    expect(productOtpis('Emir', 'Limunada', 1).needs_approval).toBe(true)
+    expect(entries('waste_capped')).toHaveLength(1)
+  })
+
+  it('is acknowledged once, by id, like the old kind', () => {
+    f.openShift({ members: ['Emir'] })
+    const waste = productOtpis('Emir', 'Coca-Cola', 4)
+    expect(approveWaste(f.db, f.venueId, f.actor('Emir'), waste.id).approved_by_name).toBe('Emir')
+    refuses(
+      () => approveWaste(f.db, f.venueId, f.actor('Emir'), waste.id),
+      'WASTE_ALREADY_APPROVED', 409,
+    )
+  })
+
+  it('takes exactly one of product_id or stock_item_id', () => {
+    const base = { client_id: randomUUID(), qty: 1, reason: 'prosuto' }
+    expect(logWasteBody.safeParse({ ...base, product_id: randomUUID() }).success).toBe(true)
+    expect(logWasteBody.safeParse({ ...base, stock_item_id: randomUUID() }).success).toBe(true)
+    expect(logWasteBody.safeParse(base).success).toBe(false)
+    expect(logWasteBody.safeParse({
+      ...base, product_id: randomUUID(), stock_item_id: randomUUID(),
+    }).success).toBe(false)
   })
 })
 

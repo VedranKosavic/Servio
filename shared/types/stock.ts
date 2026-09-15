@@ -138,21 +138,34 @@ export interface DeliveryView {
   already_applied: boolean
 }
 
+/**
+ * One otpis, whichever table holds it.
+ *
+ * A menu-article otpis (`product_waste`, since 0008) has `product_id` set,
+ * `stock_item_id` null, `item_name` the product's name and `cost_fen` its value
+ * **at menu price**; `on_hand` is null because one article may touch several
+ * shelves, or none. An old stock-item otpis (`waste_events`) is the reverse and
+ * is valued at purchase cost, as it always was.
+ */
 export interface WasteView {
   id: string
-  stock_item_id: string
+  product_id: string | null
+  stock_item_id: string | null
   item_name: string
   qty: number
   reason: string
   note: string | null
+  /** The otpis value: menu price × qty for a product, purchase cost for a stock item. */
   cost_fen: number
+  /** The menu price snapshotted when a product otpis was written; null otherwise. */
+  unit_price_fen: number | null
   /** Priced by the `last_cost_mfen` fallback — *procijenjeno* on the screen. */
   estimated: boolean
   needs_approval: boolean
   approved_by: string | null
   approved_by_name: string | null
   created_at: string
-  on_hand: number
+  on_hand: number | null
   already_applied: boolean
 }
 

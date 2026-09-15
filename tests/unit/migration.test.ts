@@ -171,8 +171,33 @@ function bootedAt0004(file: string): void {
   migrate(drizzle(sqlite), { migrationsFolder: dir })
   sqlite.pragma('foreign_keys = ON')
   // The half that matters: this database has booted, so the guards are on it.
-  applyTriggers(sqlite)
+  // Every guard whose table existed at 0004, that is — a trigger on a table a
+  // later migration creates (`product_waste`, 0008) could not have been
+  // installed on the café's database that morning, and SQLite refuses to
+  // create one on a table that is not there.
+  sqlite.exec(triggersForExistingTables(sqlite))
   sqlite.close()
+}
+
+/**
+ * `triggers.sql` with the blocks for not-yet-created tables left out. Each
+ * guard in the file is a `DROP TRIGGER IF EXISTS x;` + `CREATE TRIGGER x … ON
+ * table … END;` pair; only the pairs naming a missing table are removed.
+ */
+function triggersForExistingTables(sqlite: Database.Database): string {
+  const tables = new Set(
+    sqlite.prepare(`SELECT name FROM sqlite_master WHERE type='table'`).all()
+      .map(r => (r as { name: string }).name),
+  )
+  const file = readFileSync(resolve(process.cwd(), 'server/database/triggers.sql'), 'utf8')
+  const block = /DROP TRIGGER IF EXISTS (\w+);\s*CREATE TRIGGER \1\s+(?:BEFORE|AFTER|INSTEAD OF)\s+(?:INSERT|DELETE|UPDATE(?: OF [\w, ]+?)?)\s+ON\s+(\w+)[\s\S]*?\nEND;/g
+  const sql = file.replace(block, (whole, _name: string, table: string) => (tables.has(table) ? whole : ''))
+  // Proof the filter is narrow: without it this helper would silently install
+  // nothing and the test below would pass for the wrong reason.
+  if (!sql.includes('CREATE TRIGGER shift_members_update_guard')) {
+    throw new Error('triggersForExistingTables dropped a guard whose table exists')
+  }
+  return sql
 }
 
 function korak1Database(file: string): void {

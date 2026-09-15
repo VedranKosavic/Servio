@@ -509,6 +509,41 @@ describe('waste — the bottle stays broken', () => {
   })
 })
 
+describe('menu-article otpis — the price it was written at stays', () => {
+  function productWaste(opts: { needsApproval?: boolean } = {}): string {
+    f.openShift()
+    const id = randomUUID()
+    f.db.insert(schema.productWaste).values({
+      id, venueId: f.venueId, clientId: randomUUID(), productId: f.productId('Coca-Cola'),
+      qty: 2, reason: 'prosuto', unitPriceFen: 300, valueFen: 600,
+      userId: f.userId('Amar'), needsApproval: opts.needsApproval ? 1 : 0,
+      createdAt: f.clock.now(),
+    }).run()
+    return id
+  }
+
+  it('refuses editing the value, the price snapshot or the quantity', () => {
+    const id = productWaste()
+    for (const set of ['value_fen = 0', 'unit_price_fen = 900', 'qty = 1']) {
+      f.expectRefused(`UPDATE product_waste SET ${set} WHERE id=${q(id)}`, /only approved_by/)
+    }
+    f.expectRefused(`DELETE FROM product_waste WHERE id=${q(id)}`, /append-only/)
+  })
+
+  it('allows the approval, once', () => {
+    const id = productWaste({ needsApproval: true })
+    f.sqlite.exec(
+      `UPDATE product_waste SET approved_by=${q(f.userId('Emir'))}, `
+      + `approved_at=${q(f.clock.now())} WHERE id=${q(id)}`,
+    )
+    f.expectRefused(
+      `UPDATE product_waste SET approved_by=${q(f.userId('Haris'))}, `
+      + `approved_at=${q(f.clock.now())} WHERE id=${q(id)}`,
+      /only approved_by/,
+    )
+  })
+})
+
 describe('the log and its evidence', () => {
   it('refuses rewriting a title without a redaction', () => {
     const entryId = f.logEntry()

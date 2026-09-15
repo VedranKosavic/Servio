@@ -190,9 +190,10 @@ const CALLS: Record<string, () => void | Promise<void>> = {
   },
 
   [join('stock', 'waste', 'index.post.ts')]: () => {
+    // The shape the staff screen sends since 0008: a menu article.
     logWaste(f.db, f.venueId, f.actor('Amar'), {
       client_id: randomUUID(),
-      stock_item_id: f.stockItemId('Coca-Cola 0,25 l'),
+      product_id: f.productId('Coca-Cola'),
       qty: 1,
       reason: 'razbijeno',
     })

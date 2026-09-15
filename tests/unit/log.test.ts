@@ -189,6 +189,10 @@ function bodyFor(kind: LogKind, f: Fixture): Record<string, unknown> {
       waste_id: uid(), stock_item_id: f.stockItemId('Coca-Cola 0,25 l'), user_id: user,
       qty: 2, cost_fen: 180, reason: 'razbijeno', needs_approval: true,
     },
+    product_waste_logged: {
+      waste_id: uid(), product_id: f.productId('Coca-Cola'), user_id: user,
+      qty: 2, value_fen: 600, reason: 'prosuto', needs_approval: false,
+    },
     waste_capped: { waste_id: uid(), user_id: user, count: 4 },
     stock_corrected: {
       movement_id: uid(), stock_item_id: f.stockItemId('Šećer'),

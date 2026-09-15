@@ -570,6 +570,23 @@ export const LOG = {
       + ` · ${n.formatKm(b.cost_fen)} · ${b.reason}`,
   }),
 
+  /**
+   * The one kind added after the Korak 2 freeze: `waste_logged` requires a
+   * `stock_item_id` and names a shelf, and a menu-article otpis (0008) names a
+   * product and may touch no shelf at all. Same group, same quiet rule.
+   */
+  product_waste_logged: defineLog({
+    group: 'roba',
+    body: body({
+      waste_id: id, product_id: id, user_id: id,
+      qty: z.number(), value_fen: fen, reason: z.string(),
+      needs_approval: z.boolean().optional(),
+    }),
+    title: (b, n) =>
+      `Otpis · ${n.user(b.user_id)} · ${n.product(b.product_id)} ${b.qty}`
+      + ` · ${n.formatKm(b.value_fen)} · ${b.reason}`,
+  }),
+
   waste_capped: defineLog({
     group: 'roba',
     body: body({ waste_id: id, user_id: id, count: z.int() }),
