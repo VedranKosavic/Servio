@@ -56,10 +56,9 @@ const PHASES: { key: Phase, label: string }[] = [
   { key: 'adhoc', label: 'Usput' },
 ]
 
-/** One row of the draft: what was typed, in which unit, plus its note. */
+/** One row of the draft: what was typed (in the base unit), plus its note. */
 interface DraftRow {
   value: string
-  unit: 'pack' | 'base'
   note: string
 }
 
@@ -149,11 +148,11 @@ function onAuthError(err: unknown): void {
 const spot = computed(() => items.value.filter(i => i.is_spot))
 
 /**
- * A row starts empty and counted in base units — pieces, grams — because that
- * is what a person holding the shelf sees first. The toggle is there for the
- * gajba of Coca-Cola nobody wants to count bottle by bottle.
+ * A row starts empty and is always counted in base units — pieces, grams —
+ * because that is what a person holding the shelf sees. There is no pack
+ * toggle: the owner dropped the pack concept from every screen.
  */
-const EMPTY_ROW: DraftRow = { value: '', unit: 'base', note: '' }
+const EMPTY_ROW: DraftRow = { value: '', note: '' }
 
 function rowOf(item: StockItem): DraftRow {
   return draft.value[item.id] ?? EMPTY_ROW
@@ -219,9 +218,8 @@ function buildBody(): SubmitCountBody {
       // computes a quantity that will be stored.
       return { stock_item_id: item.id, weighed_g: typed, note }
     }
-    return row.unit === 'pack'
-      ? { stock_item_id: item.id, packs: typed, loose: 0, note }
-      : { stock_item_id: item.id, packs: 0, loose: typed, note }
+    // Always base units: no pack is ever typed or multiplied on a phone.
+    return { stock_item_id: item.id, packs: 0, loose: typed, note }
   })
 
   return { kind: 'spot', phase: phase.value, lines }
@@ -347,11 +345,9 @@ const staleOnCount = computed(() => result.value?.stale_devices ?? [])
             :key="item.id"
             :item="item"
             :value="rowOf(item).value"
-            :unit="rowOf(item).unit"
             :note="rowOf(item).note"
             :needs-note="needNote.includes(item.id)"
             @update:value="setRow(item.id, { value: $event })"
-            @update:unit="setRow(item.id, { unit: $event })"
             @update:note="setRow(item.id, { note: $event })"
           />
 

@@ -130,9 +130,6 @@ async function send() {
             <strong>{{ item.name }}</strong>
             <small>
               {{ item.base_unit }}
-              <template v-if="item.pack_name && item.pack_qty">
-                · {{ item.pack_name }} × {{ item.pack_qty }}
-              </template>
             </small>
           </div>
 

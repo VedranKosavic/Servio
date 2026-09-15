@@ -37,7 +37,7 @@
  * shift stops being open.
  *
  * **Two layouts, one page.** At a desk each section is a card with a dense table
- * in it and should be: articles compared across quantity, packs, value and
+ * in it and should be: articles compared across quantity, value and
  * status at a glance. In a hand that table is a sideways drag, so below 1024 px
  * the sections become lists (`RobaStanjeList`) — name and quantity on the row,
  * the state as a small mark, and nothing behind the row. Nothing on this

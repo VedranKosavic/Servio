@@ -13,10 +13,10 @@
  * Three things the form insists on, each for a reason that shows up months later
  * in a report:
  *
- * - **Packs and loose units are separate fields.** "2 gajbe i još 5 flaša" is
- *   how the invoice reads and how the bartender counts; the quantity in base
- *   units is derived (`packs × pack_qty + loose`) and shown back, so a wrong
- *   pack size is visible before it is posted.
+ * - **Quantity is one number, in the article's base unit.** There is no pack
+ *   concept on any screen (the owner's call): the admin types pieces, grams or
+ *   millilitres, and the line goes as `packs: 0, loose: qty`, so the server's
+ *   `packs × pack_qty + loose` is exactly what was typed.
  * - **The price is not optional.** It is what the moving average is built from,
  *   and an average built out of zeros quietly turns off every variance, *utrošak*
  *   and *otpis* figure the owner reads (§3.1). A crate you were not charged for
@@ -96,7 +96,6 @@ const deliveredOn = ref('')
 const draftLines = ref<DeliveryLineDraft[]>([])
 const query = ref('')
 const selectedId = ref<string | null>(null)
-const packsRaw = ref('')
 const looseRaw = ref('')
 const costRaw = ref('')
 const lineNote = ref('')
@@ -108,17 +107,11 @@ const matches = computed(() => {
 })
 
 const selected = computed(() => props.items.find(item => item.id === selectedId.value) ?? null)
-const packs = computed(() => parseDecimalInput(packsRaw.value) ?? 0)
-const loose = computed(() => parseDecimalInput(looseRaw.value) ?? 0)
 const costFen = computed(() => parseKm(costRaw.value))
 
-/** `packs × pack_qty + loose`, the same arithmetic the server does. */
-const lineQty = computed(() => {
-  const item = selected.value
-  if (!item) return 0
-  const perPack = item.pack_qty ?? 0
-  return packs.value * perPack + loose.value
-})
+/** The quantity as typed, in the article's base unit — booked as `loose`. */
+const lineQty = computed(() =>
+  selected.value ? parseDecimalInput(looseRaw.value) ?? 0 : 0)
 
 /** What one base unit ends up costing — the number the average is built from. */
 const unitCostText = computed(() => {
@@ -132,7 +125,6 @@ const lineReady = computed(() =>
 
 function pickItem(id: string) {
   selectedId.value = id
-  packsRaw.value = ''
   looseRaw.value = ''
   costRaw.value = ''
   lineNote.value = ''
@@ -144,8 +136,9 @@ function addLine() {
   if (!lineReady.value || !item || costFen.value === null) return
   draftLines.value.push({
     stock_item_id: item.id,
-    packs: packs.value,
-    loose: loose.value,
+    // No pack: the whole quantity goes as loose base units.
+    packs: 0,
+    loose: lineQty.value,
     line_cost_fen: costFen.value,
     note: lineNote.value.trim() || undefined,
     item_name: item.name,
@@ -247,7 +240,7 @@ function isoFromDate(value: string): string | undefined {
             <div class="dl-line-text">
               <span class="dl-line-name">{{ line.item_name }}</span>
               <span class="num dl-line-qty">
-                {{ line.packs ? `${line.packs} pak · ` : '' }}{{ line.loose ? `${line.loose} ${line.base_unit} · ` : '' }}ukupno {{ line.qty }} {{ line.base_unit }}
+                {{ formatStockQty(line.qty, line.base_unit) }}
               </span>
             </div>
             <span class="num dl-line-cost">{{ formatKm(line.line_cost_fen) }}</span>
@@ -339,35 +332,16 @@ function isoFromDate(value: string): string | undefined {
           <span class="chip">Promijeni</span>
         </button>
 
-        <div class="dl-pair">
-          <label v-if="selected.pack_qty" class="field">
-            <span class="eyebrow">
-              {{ selected.pack_name || 'Pakovanja' }} × {{ selected.pack_qty }}
-            </span>
-            <input
-              v-model="packsRaw"
-              type="text"
-              inputmode="decimal"
-              placeholder="0"
-              class="input input-num"
-            >
-          </label>
-
-          <label class="field">
-            <span class="eyebrow">Pojedinačno ({{ selected.base_unit }})</span>
-            <input
-              v-model="looseRaw"
-              type="text"
-              inputmode="decimal"
-              placeholder="0"
-              class="input input-num"
-            >
-          </label>
-        </div>
-
-        <p v-if="lineQty > 0" class="note">
-          <span class="num">Ukupno {{ formatStockQty(lineQty, selected.base_unit) }}</span>
-        </p>
+        <label class="field">
+          <span class="eyebrow">Količina ({{ selected.base_unit }})</span>
+          <input
+            v-model="looseRaw"
+            type="text"
+            inputmode="decimal"
+            placeholder="0"
+            class="input input-num"
+          >
+        </label>
 
         <label class="field">
           <span class="eyebrow">Cijena stavke sa fakture (KM)</span>
@@ -388,7 +362,7 @@ function isoFromDate(value: string): string | undefined {
             v-model="lineNote"
             type="text"
             maxlength="200"
-            placeholder="npr. gratis gajba, oštećeno"
+            placeholder="npr. dva komada gratis, oštećeno"
             class="input"
           >
         </label>

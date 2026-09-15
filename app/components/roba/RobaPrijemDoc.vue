@@ -14,19 +14,18 @@
  * `supplier_name` is optional in the schema now rather than sent as an empty
  * string (`shared/schemas/stock.ts`), and what a delivery is accountable by did
  * not move: the server takes the person from the session and the history lists
- * him on every row. *Prijem sa slike* still fills a supplier in — it reads one
- * off the photograph, and nobody types it.
+ * him on every row. There is no *Sa slike* either: the owner removed the photo
+ * flow, so this document is the only way a delivery is booked.
  *
  * **The article is picked in a sheet, not in a `<select>`.** See
  * `RobaArtikalPicker.vue`: search, and the same three sections as *Stanje
  * šanka*. The OS wheel of nineteen names it replaces is the control this screen
  * is used through, which is why it got the work.
  *
- * **Quantity is one number, in the article's own unit.** The route still takes
- * `packs` and `loose` and computes `qty = packs × pack_qty + loose`, so this
- * screen sends the whole quantity as `loose` and nothing is lost — "Coca-Cola
- * ×36" is 36, not "1 gajba + 12", and the field's hint names the crate for
- * anybody who would rather multiply it himself.
+ * **Quantity is one number, in the article's own unit — there is no pack.** The
+ * route still takes `packs` and `loose` and computes `qty = packs × pack_qty +
+ * loose`, so this screen sends `packs: 0` and the whole quantity as `loose`:
+ * "Coca-Cola ×36" is 36 pieces, and the field's hint is just the unit.
  *
  * **Why the money is per line and not one figure.** The owner types the total
  * from the invoice at the foot, which is what he asked for — but it is a
@@ -58,8 +57,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   posted: []
-  /** Hand over to the photo flow; the page swaps this card for `RobaScanCard`. */
-  scan: []
   /** A *Novi artikal* was created from the picker; the page reloads the catalogue. */
   catalogue: []
 }>()
@@ -68,8 +65,8 @@ const api = useAdminApi()
 
 /**
  * Articles created from this document, before the page's catalogue reload comes
- * back — the same move `RobaScanDraft` makes: held beside the prop, because a
- * child never mutates what its parent owns, and dropped once the prop has them.
+ * back: held beside the prop, because a child never mutates what its parent
+ * owns, and dropped once the prop has them.
  */
 const added = ref<StockItemAdmin[]>([])
 
@@ -158,15 +155,8 @@ function pick(id: string) {
   pickCost.value = suggestedCost(itemOf(id), pickQty.value)
 }
 
-/** "kom · gajba = 24 kom" — the unit, and the crate for anybody multiplying. */
-const qtyHint = computed(() => {
-  const item = itemOf(pickId.value)
-  if (!item) return ''
-  const pack = item.pack_qty && item.pack_name
-    ? ` · ${item.pack_name} = ${item.pack_qty} ${item.base_unit}`
-    : ''
-  return `${item.base_unit}${pack}`
-})
+/** "kom" — the unit the quantity is typed in. There is no pack to multiply. */
+const qtyHint = computed(() => itemOf(pickId.value)?.base_unit ?? '')
 
 /**
  * The amount fills itself in from the last invoice, and the owner corrects it
@@ -284,8 +274,8 @@ const total = computed(() =>
  * "1 stavka · 2 stavke · 7 stavki".
  *
  * Bosnian counts in three forms and the rule differs per noun, which is why the
- * house rule is not to generate a plural for a word the owner typed (a pack name
- * is "3 × gajba" for exactly that reason). *Stavka* is not one of those: it is
+ * house rule is not to generate a plural for a word the owner typed. *Stavka*
+ * is not one of those: it is
  * one fixed word in the product's own vocabulary, and its three forms are
  * knowable, so the sentence that confirms a posting can be written correctly
  * rather than in the genitive plural that reads wrong at one.
@@ -358,12 +348,6 @@ async function send() {
 
 <template>
   <UiCard title="Novi prijem robe" @input="touched = true" @change="touched = true">
-    <template #actions>
-      <!-- The photo is a *way to start this document*, not a rival screen: it
-           produces the same lines and posts through the same route. -->
-      <UiButton small variant="ghost" @click="emit('scan')">Sa slike</UiButton>
-    </template>
-
     <!-- ---- pick an article -------------------------------------------- -->
     <div class="d-add">
       <!-- A button drawn as a field: the row reads as three fields and one
