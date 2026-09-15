@@ -11,7 +11,8 @@
  * only after *Predaj*, in `PopisResult`.
  *
  * Two ways to count, decided by the item and not by the person:
- *   - `count` — whole packs or loose pieces, one toggle, one number;
+ *   - `count` — pieces (or the article's own base unit), one number. There is no
+ *     pack toggle: the owner dropped the pack concept from every screen;
  *   - `weigh` — gross grams off the kitchen scale, with the tare named on
  *     screen and subtracted by the server (never here: the phone does not
  *     compute a quantity the ledger will store).
@@ -22,8 +23,6 @@ const props = defineProps<{
   item: StockItem
   /** The typed number, as typed: "" until somebody counts this row. */
   value: string
-  /** For a packed item: is the number packs or single pieces? */
-  unit: 'pack' | 'base'
   note: string
   /** The server sent this row back needing a note (422 `NOTE_REQUIRED`). */
   needsNote?: boolean
@@ -31,12 +30,10 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:value': [string]
-  'update:unit': ['pack' | 'base']
   'update:note': [string]
 }>()
 
 const weighed = computed(() => props.item.count_method === 'weigh')
-const packable = computed(() => !weighed.value && (props.item.pack_qty ?? 0) > 1)
 
 /** The tare is the empty tin. Named on screen so nobody subtracts it twice. */
 const tare = computed(() => (weighed.value ? props.item.tare_g ?? 0 : 0))
@@ -50,26 +47,15 @@ watch(() => props.needsNote, (needs) => { if (needs) noteOpen.value = true }, { 
 
 /**
  * What the row says under the field: never the expected quantity, only what
- * this number means. "2 gajbe = 48 kom", "neto 603 g".
+ * this number means — "minus tara 42 g · neto 603 g" on a weighed item.
  */
 const hint = computed(() => {
-  if (!filled.value) return null
-  if (weighed.value) {
-    if (tare.value <= 0) return null
-    const net = Math.max(0, typed.value! - tare.value)
-    return `minus tara ${tare.value} g · neto ${formatStockQty(net, props.item.base_unit)}`
-  }
-  if (props.unit === 'pack' && packable.value) {
-    const pieces = typed.value! * (props.item.pack_qty ?? 0)
-    return `${props.item.pack_name ?? 'pakovanje'} × ${props.item.pack_qty} = ${formatStockQty(pieces, props.item.base_unit)}`
-  }
-  return null
+  if (!filled.value || !weighed.value || tare.value <= 0) return null
+  const net = Math.max(0, typed.value! - tare.value)
+  return `minus tara ${tare.value} g · neto ${formatStockQty(net, props.item.base_unit)}`
 })
 
-const suffix = computed(() => {
-  if (weighed.value) return 'g'
-  return props.unit === 'pack' ? (props.item.pack_name ?? 'pak') : props.item.base_unit
-})
+const suffix = computed(() => (weighed.value ? 'g' : props.item.base_unit))
 
 const fieldId = computed(() => `popis-${props.item.id}`)
 </script>
@@ -106,26 +92,6 @@ const fieldId = computed(() => `popis-${props.item.id}`)
           @input="emit('update:value', ($event.target as HTMLInputElement).value)"
         >
         <span class="shrink-0 text-body text-text-2">{{ suffix }}</span>
-      </div>
-
-      <!-- The toggle exists only where a pack does: a bottle is a bottle. -->
-      <div v-if="packable" class="flex shrink-0 overflow-hidden rounded-control border border-line">
-        <button
-          type="button"
-          class="min-h-13 px-3 text-label font-semibold"
-          :class="unit === 'pack' ? 'bg-accent text-accent-ink' : 'bg-surface-2 text-text-2'"
-          @click="emit('update:unit', 'pack')"
-        >
-          {{ item.pack_name ?? 'pak' }}
-        </button>
-        <button
-          type="button"
-          class="min-h-13 px-3 text-label font-semibold"
-          :class="unit === 'base' ? 'bg-accent text-accent-ink' : 'bg-surface-2 text-text-2'"
-          @click="emit('update:unit', 'base')"
-        >
-          {{ item.base_unit }}
-        </button>
       </div>
     </div>
 

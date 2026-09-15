@@ -14,9 +14,9 @@
  * šanka* draws — *Kafa*, *Nargila*, *Ostalo* (`stanjeGroup()` in
  * `RobaStanjeTable.vue`, so the two screens can never disagree about where an
  * article belongs) — each a sticky label over a card of 44 px rows. A row says
- * the name and, quietly beside it, the unit and the crate: *kom · gajba = 24
- * kom* is the sentence somebody needs one field later, when he types how much
- * arrived. The chosen article carries a check.
+ * the name and, quietly beside it, the unit — *kom* — which is what somebody
+ * types in one field later, when he says how much arrived. There is no pack:
+ * the admins count every delivery in pieces. The chosen article carries a check.
  *
  * **The search matches per word, by prefix, without diacritics.** "cola" finds
  * *Coca-Cola 0,25 l*, "menta" finds both mints, "secer" would find *Šećer* — a
@@ -58,7 +58,7 @@ const active = computed(() => props.items.filter(item => item.active))
 /** Does this article match what has been typed? Per word, by prefix (see above). */
 function matches(item: StockItemAdmin, needle: string): boolean {
   if (needle === '') return true
-  const haystack = fold(`${item.name} ${item.brand ?? ''} ${item.pack_name ?? ''}`)
+  const haystack = fold(`${item.name} ${item.brand ?? ''}`)
   return haystack.split(/[\s·,\-/()]+/).some(word => word.startsWith(needle))
 }
 
@@ -80,12 +80,9 @@ const sections = computed(() => {
 
 const found = computed(() => sections.value.reduce((n, section) => n + section.rows.length, 0))
 
-/** "kom · gajba = 24 kom" — the unit, and the crate for anybody multiplying. */
+/** "kom" — the unit the quantity field counts in. There is no pack. */
 function meta(item: StockItemAdmin): string {
-  const pack = item.pack_qty && item.pack_name
-    ? ` · ${item.pack_name} = ${item.pack_qty} ${item.base_unit}`
-    : ''
-  return `${item.base_unit}${pack}`
+  return item.base_unit
 }
 </script>
 

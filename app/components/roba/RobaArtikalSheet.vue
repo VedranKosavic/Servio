@@ -2,24 +2,26 @@
 /**
  * One stock article, as a form — the only one in the app.
  *
- * Three screens create or edit an article and all three draw this sheet:
+ * Two screens create or edit an article and both draw this sheet:
  *
  * - *Artikli zalihe* (`/admin/kontrola/artikli`) with `full`: every field the
  *   owner may set, for a new article or an existing one.
- * - *Prijem robe*, from the article picker, **short**: an unknown crate is on the
- *   bar and the owner has a delivery note in his hand, so the sheet asks only
- *   what the delivery needs — name, kind, unit, pack, cost.
- * - *Prijem sa slike* (`RobaScanNoviArtikal`), short, which also learns the OCR
- *   text as an alias after the article exists.
+ * - *Prijem robe*, from the article picker, **short**: an unknown article is on
+ *   the bar and the owner has a delivery note in his hand, so the sheet asks only
+ *   what the delivery needs — name, kind, unit, cost.
  *
  * **The sheet writes nothing.** It emits a body and the screen that opened it
- * does the write, because the three writes differ (the photo flow links an alias,
- * the typed delivery picks the new article onto its document) and the form does
- * not.
+ * does the write, because the writes differ (the typed delivery picks the new
+ * article onto its document) and the form does not.
  *
  * **The cost is mandatory on a new article** (422 `COST_REQUIRED`): a zero cost
  * quietly turns *manjak*, *utrošak* and waste values into zeroes. It is typed as
- * the price of what the invoice prices — see `app/utils/stockCost.ts`.
+ * the price of one piece (or a kilogram / litre) — see `app/utils/stockCost.ts`.
+ *
+ * **There is no pack field.** The owner's call: admins type every quantity in
+ * the base unit. Every save sends `pack_name: null, pack_qty: null`, so an old
+ * article that still says "gajba · 24" on the server is cleaned the next time it
+ * is saved.
  *
  * **The unit is frozen once the article has a movement** (409 `UNIT_FROZEN`):
  * on hand is a sum over the ledger in the old unit. The select is disabled then,
@@ -36,7 +38,7 @@ const props = withDefaults(defineProps<{
   full?: boolean
   /** For the category select in the full form. */
   categories?: CategoryAdmin[]
-  /** What a new article's name starts as: the picker's query, the OCR text. */
+  /** What a new article's name starts as: the picker's query. */
   initialName?: string
   /** The primary button. */
   action?: string
@@ -53,8 +55,6 @@ const emit = defineEmits<{
 const name = ref('')
 const kind = ref<CreateStockItemBody['kind']>('pice')
 const baseUnit = ref<CreateStockItemBody['base_unit']>('kom')
-const packName = ref('')
-const packQty = ref<number | null>(null)
 /** In feninga, for `basis.qty` base units — not the stored per-unit cost. */
 const costFen = ref<number | null>(null)
 const categoryId = ref('')
@@ -65,7 +65,7 @@ const toleranceQty = ref<number | null>(null)
 const parQty = ref<number | null>(null)
 const active = ref(true)
 
-const basis = computed(() => costBasis(baseUnit.value, packName.value, packQty.value))
+const basis = computed(() => costBasis(baseUnit.value))
 
 /** The cost as the item stood when the sheet opened, at the basis now on screen. */
 const originalCostFen = computed(() =>
@@ -79,8 +79,6 @@ watch(() => props.open, (open) => {
   name.value = item?.name ?? props.initialName.slice(0, 60)
   kind.value = item?.kind ?? 'pice'
   baseUnit.value = item?.base_unit ?? 'kom'
-  packName.value = item?.pack_name ?? ''
-  packQty.value = item?.pack_qty ?? null
   categoryId.value = item?.category_id ?? ''
   brand.value = item?.brand ?? ''
   countMethod.value = item?.count_method ?? 'count'
@@ -89,7 +87,7 @@ watch(() => props.open, (open) => {
   parQty.value = item?.par_qty ?? null
   active.value = item?.active ?? true
   costFen.value = item && item.last_cost_mfen > 0
-    ? fenFromMfen(item.last_cost_mfen, costBasis(item.base_unit, item.pack_name, item.pack_qty).qty)
+    ? fenFromMfen(item.last_cost_mfen, costBasis(item.base_unit).qty)
     : null
 }, { immediate: true })
 
@@ -109,12 +107,12 @@ const canSave = computed(() =>
 
 function save() {
   if (!canSave.value) return
-  const pack = packName.value.trim() || null
   const common = {
     name: name.value.trim(),
     kind: kind.value,
-    pack_name: pack,
-    pack_qty: pack ? packQty.value : null,
+    // No pack, ever — and on an edit this clears one an old row still holds.
+    pack_name: null,
+    pack_qty: null,
   }
   const extra = props.full
     ? {
@@ -181,25 +179,12 @@ function save() {
       @update:model-value="value => baseUnit = value as CreateStockItemBody['base_unit']"
     />
 
-    <div class="s-pair">
-      <UiField v-model="packName" label="Naziv paketa" placeholder="gajba, kutija" />
-      <PostavkeNumField
-        :label="`Količina u paketu (${baseUnit})`"
-        :model-value="packQty"
-        kind="decimal"
-        :disabled="packName.trim() === ''"
-        @input="value => packQty = value"
-        @commit="value => packQty = value"
-      />
-    </div>
-    <p class="s-muted">Prazno ako roba ne dolazi u paketu.</p>
-
     <PostavkeNumField
       label="Nabavna cijena"
       :model-value="costFen"
       kind="money"
       suffix="KM"
-      :hint="`Cijena za: ${basis.label}${item ? '' : ' · obavezno'}`"
+      :hint="`Cijena ${basis.label}${item ? '' : ' · obavezno'}`"
       @input="value => costFen = value"
       @commit="value => costFen = value"
     />

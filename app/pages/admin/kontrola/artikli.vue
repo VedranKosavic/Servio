@@ -132,17 +132,13 @@ async function setActive(item: StockItemAdmin, active: boolean) {
     rowPending.value = null
   }
 }
-
-function packText(item: StockItemAdmin): string {
-  return item.pack_name && item.pack_qty ? `${item.pack_name} · ${item.pack_qty}` : ''
-}
 </script>
 
 <template>
   <div class="k-page">
     <UiPageHead
       title="Artikli zalihe"
-      sub="Jedinica, paket, nabavna cijena, tolerancija"
+      sub="Jedinica, nabavna cijena, tolerancija"
       :stale="error ?? undefined"
     >
       <template #actions>
@@ -183,7 +179,6 @@ function packText(item: StockItemAdmin): string {
             <td>{{ stockKindLabel(item.kind) }}</td>
             <td>
               {{ item.base_unit }}
-              <span v-if="packText(item)" class="k-muted k-block">{{ packText(item) }}</span>
             </td>
             <td class="num">
               {{ stockCostText(item) }}

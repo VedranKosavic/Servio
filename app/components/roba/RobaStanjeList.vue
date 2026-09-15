@@ -4,7 +4,7 @@
  * dashboard is read.
  *
  * The laptop gets a `UiTable` per section and should: articles compared across
- * quantity, packs, value and status at one glance is what a desk is for. In a
+ * quantity, value and status at one glance is what a desk is for. In a
  * hand that table is a 390 px box the owner drags sideways past the name to
  * reach a status he cannot see — so below 1024 px the row stops being a table
  * row and becomes the one thing this screen is about: **an article and how much

@@ -174,15 +174,22 @@ describe('the period presets', () => {
  * *manjak* and *utrošak* off by a factor of 24.
  */
 describe('stock cost basis', () => {
-  it('prices the pack when there is one, else a piece, a kilogram or a litre', () => {
-    expect(costBasis('kom', 'gajba', 24)).toEqual({ qty: 24, label: 'gajba · 24 kom' })
-    expect(costBasis('kom', null, null)).toEqual({ qty: 1, label: 'po kom' })
-    expect(costBasis('g', '', 250)).toEqual({ qty: 1000, label: 'po kg' })
-    expect(costBasis('ml', null, null)).toEqual({ qty: 1000, label: 'po l' })
+  it('prices a piece, a kilogram or a litre — never a pack', () => {
+    expect(costBasis('kom')).toEqual({ qty: 1, label: 'po kom' })
+    expect(costBasis('g')).toEqual({ qty: 1000, label: 'po kg' })
+    expect(costBasis('ml')).toEqual({ qty: 1000, label: 'po l' })
+  })
+
+  it('ignores an old gajba of 24 still stored on the article', () => {
+    // The owner dropped the pack concept: an article whose row still says
+    // `pack_name: 'gajba', pack_qty: 24` is priced and shown per piece.
+    const legacy = { base_unit: 'kom' as const, pack_name: 'gajba', pack_qty: 24, last_cost_mfen: 120_000 }
+    expect(stockCostText(legacy)).toBe(`${formatKm(120)} po kom`)
+    expect(stockCostText(legacy)).not.toMatch(/gajb|paket/)
   })
 
   it('converts a typed price to per-unit milli-feninga and back', () => {
-    // Gajba of 24 at 28,80 KM is 1,20 KM a bottle: 120 fen = 120 000 mfen.
+    // 24 pieces at 28,80 KM is 1,20 KM a bottle: 120 fen = 120 000 mfen.
     expect(mfenFromFen(2880, 24)).toBe(120_000)
     expect(fenFromMfen(120_000, 24)).toBe(2880)
     // 1 kg of tobacco at 240,00 KM is 24 fen a gram.
@@ -196,10 +203,10 @@ describe('stock cost basis', () => {
   })
 
   it('writes the cost beside its basis, and a dash for no cost', () => {
-    const base = { base_unit: 'kom' as const, pack_name: 'gajba', pack_qty: 24 }
     // Through `formatKm`, whose space before *KM* is a non-breaking one.
-    expect(stockCostText({ ...base, last_cost_mfen: 120_000 })).toBe(`${formatKm(2880)} gajba · 24 kom`)
-    expect(stockCostText({ ...base, last_cost_mfen: 0 })).toBe('—')
+    expect(stockCostText({ base_unit: 'kom', last_cost_mfen: 120_000 })).toBe(`${formatKm(120)} po kom`)
+    expect(stockCostText({ base_unit: 'g', last_cost_mfen: 24_000 })).toBe(`${formatKm(24_000)} po kg`)
+    expect(stockCostText({ base_unit: 'kom', last_cost_mfen: 0 })).toBe('—')
   })
 })
 

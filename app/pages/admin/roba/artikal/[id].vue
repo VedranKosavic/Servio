@@ -160,7 +160,7 @@ async function send() {
         label="Na stanju"
         :value="head ? formatStockQty(head.on_hand, head.base_unit) : '—'"
         :tone="(head?.on_hand ?? 0) < 0 ? 'bad' : 'plain'"
-        :sub="admin?.pack_name && admin?.pack_qty ? `paket: ${admin.pack_name} × ${admin.pack_qty}` : 'bez paketa'"
+        :sub="head ? `u jedinici: ${head.base_unit}` : undefined"
       />
       <UiTile
         label="Nabavna cijena"
@@ -223,7 +223,7 @@ async function send() {
         v-model="form.note"
         label="Napomena"
         kind="textarea"
-        placeholder="Npr. gajba nije bila na otpremnici"
+        placeholder="Npr. šest komada nije bilo na otpremnici"
         :error="formError"
       />
 

@@ -3,16 +3,19 @@
  *
  * The server keeps `last_cost_mfen`: **milli-feninga per base unit** — a
  * thousandth of a fening — because a gram of tobacco costs a fraction of one.
- * Nobody reads an invoice that way. It says "gajba 28,80 KM" or "1 kg 240,00 KM",
- * so the article sheet asks for the price of the thing the paper prices and this
- * file turns it into the stored number and back.
+ * Nobody types a price that way, so the article sheet asks for a readable one
+ * and this file turns it into the stored number and back.
  *
- * The quantity the typed price is for (`costBasis`):
+ * The quantity the typed price is for (`costBasis`) depends on the unit alone:
  *
- * - **the pack**, when the article has one — the line an invoice actually has;
- * - otherwise **one piece** for `kom`;
- * - otherwise **a kilogram or a litre** for `g` / `ml`, where one unit would be
- *   a price of 0,02 KM that rounds away.
+ * - **one piece** for `kom`;
+ * - **a kilogram or a litre** for `g` / `ml`, where one unit would be a price of
+ *   0,02 KM that rounds away.
+ *
+ * **There is no pack.** The owner's call: admins type every quantity in pieces
+ * (or grams / millilitres), so a price is never "per gajba" either. The
+ * `pack_name` / `pack_qty` columns survive on the server for old rows and are
+ * ignored here on purpose.
  *
  * Pure and in `app/utils/`, so it is auto-imported by Nuxt and testable in Node.
  */
@@ -43,15 +46,11 @@ export function stockKindLabel(kind: StockKind): string {
 export interface CostBasis {
   /** How many base units the typed price is for. */
   qty: number
-  /** Beside a price: "po kom", "po kg", "gajba · 24 kom". */
+  /** Beside a price: "po kom", "po kg", "po l". */
   label: string
 }
 
-export function costBasis(
-  unit: BaseUnit, packName: string | null | undefined, packQty: number | null | undefined,
-): CostBasis {
-  const pack = packName?.trim()
-  if (pack && packQty && packQty > 0) return { qty: packQty, label: `${pack} · ${packQty} ${unit}` }
+export function costBasis(unit: BaseUnit): CostBasis {
   if (unit === 'g') return { qty: 1000, label: 'po kg' }
   if (unit === 'ml') return { qty: 1000, label: 'po l' }
   return { qty: 1, label: 'po kom' }
@@ -73,9 +72,9 @@ export function fenFromMfen(mfen: number, qty: number): number {
   return Math.round((mfen * qty) / 1000)
 }
 
-/** "28,80 KM · gajba · 24 kom" — or `—` for an article nobody has priced yet. */
-export function stockCostText(item: Pick<StockItemAdmin, 'last_cost_mfen' | 'base_unit' | 'pack_name' | 'pack_qty'>): string {
+/** "1,20 KM po kom" — or `—` for an article nobody has priced yet. */
+export function stockCostText(item: Pick<StockItemAdmin, 'last_cost_mfen' | 'base_unit'>): string {
   if (item.last_cost_mfen <= 0) return '—'
-  const basis = costBasis(item.base_unit, item.pack_name, item.pack_qty)
+  const basis = costBasis(item.base_unit)
   return `${formatKm(fenFromMfen(item.last_cost_mfen, basis.qty))} ${basis.label}`
 }

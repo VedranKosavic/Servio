@@ -40,8 +40,6 @@ export interface StanjeRow {
   status: StockStatus
   value_fen: number
   par_qty: number | null
-  /** "3 × gajba + 7", or null when the item has no pack size on it. */
-  packs_label: string | null
   /** The ledger's last word on this item, when `GET /api/stock` answered. */
   last_movement: StockLastMovement | null
   /** A round arrived for this item after a popis had already counted it. */
@@ -127,29 +125,6 @@ export function groupStanjeRows(rows: StanjeRow[]): StanjeSection[] {
 }
 
 /**
- * "3 × gajba + 7".
- *
- * Deliberately **not** "3 gajbe + 7". Bosnian counts in three plural forms
- * (1 gajba · 2–4 gajbe · 5+ gajbi) and the rule differs per noun, so a generated
- * plural would be wrong on the shelf more often than it was right. The multiply
- * sign is honest and reads the same for every pack name the owner ever types.
- */
-function packsLabel(item: StockItemStock): string | null {
-  const size = item.pack_qty
-  if (!size || size <= 0 || !item.pack_name) return null
-  if (item.on_hand < 0) return null
-
-  const packs = Math.floor(item.on_hand / size)
-  const rest = item.on_hand - packs * size
-  if (packs === 0) return null
-
-  const restText = rest === 0
-    ? ''
-    : ` + ${item.base_unit === 'kom' ? String(Math.round(rest * 100) / 100) : formatStockQty(rest, item.base_unit)}`
-  return `${packs} × ${item.pack_name}${restText}`
-}
-
-/**
  * Which articles had a round arrive after a popis had already counted them —
  * the *Kasno sinhronizovano* nag list of PLAN §9.
  *
@@ -220,7 +195,6 @@ export function buildStanjeRows(
       status: item.status,
       value_fen: item.value_fen,
       par_qty: item.par_qty,
-      packs_label: packsLabel(item),
       last_movement: last,
       late_sync: late.has(item.id) || last?.type === 'late_sync',
       group: stanjeGroup(item),
@@ -315,7 +289,6 @@ function statusPill(row: StanjeRow): { tone: 'good' | 'warn' | 'bad', text: stri
   color: var(--muted);
 }
 
-.a-roba-packs { white-space: nowrap; }
 .a-roba-dash { color: var(--muted); }
 
 /* Tonight, in the one colour on this screen that means "still moving". The
