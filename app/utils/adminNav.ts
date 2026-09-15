@@ -112,11 +112,13 @@ const BACK_ROOTS = new Set([
 const BACK_OVERRIDES: Array<[RegExp, string]> = [
   // `/admin/smjena/<id>` — singular path, plural list. Climbing finds `/admin`.
   [/^\/admin\/smjena\/[^/]+$/, '/admin/smjene'],
-  // Every screen *Kontrolna ploča* links to goes back to it. They kept their old
-  // URLs, and climbing those would try `/admin/postavke` — not a page — and
-  // land on *Puls* instead of where the owner came from.
-  [/^\/admin\/meni$/, '/admin/kontrola'],
-  [/^\/admin\/postavke\/[^/]+$/, '/admin/kontrola'],
+  // Every screen *Kontrolna ploča* lists goes back to *Više*, which now draws
+  // those rows directly under *Raspored*. They kept their old URLs, and climbing
+  // `/admin/postavke/…` would try a path that is not a page and land on *Puls*;
+  // climbing `/admin/kontrola/…` would land on the hub the phone no longer uses.
+  [/^\/admin\/meni$/, '/admin/vise'],
+  [/^\/admin\/postavke\/[^/]+$/, '/admin/vise'],
+  [/^\/admin\/kontrola\/[^/]+$/, '/admin/vise'],
 ]
 
 export function adminBack(path: string, exists: (candidate: string) => boolean): string | null {
@@ -163,6 +165,7 @@ const BACK_ACCUSATIVE: Record<string, string> = {
   '/admin/roba': 'Robu',
   '/admin/raspored': 'Raspored',
   '/admin/kontrola': 'Kontrolnu ploču',
+  '/admin/vise': 'Više',
 }
 
 export function adminBackAria(to: string): string {

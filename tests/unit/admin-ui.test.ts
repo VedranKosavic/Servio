@@ -235,12 +235,13 @@ describe('the way back', () => {
     }
   })
 
-  it('sends every screen Kontrolna ploča links to back to it', () => {
+  it('sends every screen Kontrolna ploča lists back to Više, which draws them', () => {
     for (const path of ['/admin/meni', '/admin/postavke/kategorije',
       '/admin/postavke/osoblje', '/admin/postavke/uredaji',
-      '/admin/kontrola/sabloni', '/admin/kontrola/podesavanja']) {
-      expect(adminBack(path, exists), path).toBe('/admin/kontrola')
+      '/admin/kontrola/stolovi', '/admin/kontrola/sabloni', '/admin/kontrola/podesavanja']) {
+      expect(adminBack(path, exists), path).toBe('/admin/vise')
     }
+    expect(adminBackAria('/admin/vise')).toBe('Nazad na Više')
   })
 
   it('every ready Kontrolna ploča row opens a page that exists', () => {
