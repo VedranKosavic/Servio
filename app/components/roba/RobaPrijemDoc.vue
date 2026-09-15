@@ -49,7 +49,7 @@
  * - **The actor comes from the session.** No body ever names who entered it,
  *   which is exactly what makes the history worth reading.
  */
-import type { CreateDeliveryBody } from '#shared/schemas'
+import type { CreateDeliveryBody, CreateStockItemBody } from '#shared/schemas'
 import type { StockItemAdmin } from '#shared/types'
 
 const props = defineProps<{
@@ -60,9 +60,23 @@ const emit = defineEmits<{
   posted: []
   /** Hand over to the photo flow; the page swaps this card for `RobaScanCard`. */
   scan: []
+  /** A *Novi artikal* was created from the picker; the page reloads the catalogue. */
+  catalogue: []
 }>()
 
 const api = useAdminApi()
+
+/**
+ * Articles created from this document, before the page's catalogue reload comes
+ * back — the same move `RobaScanDraft` makes: held beside the prop, because a
+ * child never mutates what its parent owns, and dropped once the prop has them.
+ */
+const added = ref<StockItemAdmin[]>([])
+
+const allItems = computed(() => [
+  ...props.items,
+  ...added.value.filter(extra => !props.items.some(item => item.id === extra.id)),
+])
 
 /** One article on the document, before it is posted. */
 interface DocLine {
@@ -94,7 +108,43 @@ const pickerOpen = ref(false)
  * says *Izaberi artikal* until somebody picks one, and *Dodaj* stays grey.
  */
 function itemOf(id: string): StockItemAdmin | undefined {
-  return props.items.find(item => item.id === id)
+  return allItems.value.find(item => item.id === id)
+}
+
+// -- Novi artikal ------------------------------------------------------------
+
+/**
+ * The article sheet, opened from the picker. Short form and **no alias**: that
+ * is the photo flow's, which has an OCR text to learn; a typed delivery has none.
+ * The new article lands picked on the adder, so the next thing the owner types
+ * is how many arrived.
+ */
+const creating = ref(false)
+const createName = ref('')
+const createPending = ref(false)
+const createError = ref<string | null>(null)
+
+function openCreate(name: string) {
+  pickerOpen.value = false
+  createName.value = name
+  createError.value = null
+  creating.value = true
+}
+
+async function createItem(body: CreateStockItemBody) {
+  if (createPending.value) return
+  createPending.value = true
+  try {
+    const created = await api.createStockItem(body)
+    added.value = [...added.value, created]
+    creating.value = false
+    pick(created.id)
+    emit('catalogue')
+  } catch (err) {
+    createError.value = apiErrorText(err, 'Artikal nije dodan.')
+  } finally {
+    createPending.value = false
+  }
 }
 
 const pickedName = computed(() => itemOf(pickId.value)?.name ?? '')
@@ -429,11 +479,30 @@ async function send() {
 
     <RobaArtikalPicker
       :open="pickerOpen"
-      :items="items"
+      :items="allItems"
       :selected-id="pickId"
+      creatable
       @close="pickerOpen = false"
       @pick="pick"
+      @create="openCreate"
     />
+
+    <RobaArtikalSheet
+      :open="creating"
+      :initial-name="createName"
+      action="Dodaj artikal"
+      :pending="createPending"
+      :error="createError"
+      @close="creating = false"
+      @create="createItem"
+    >
+      <template #note>
+        <p class="d-note">
+          Ostalo — kategorija, tolerancija, minimalna zaliha — podesi kasnije na
+          Kontrolna ploča → Artikli zalihe.
+        </p>
+      </template>
+    </RobaArtikalSheet>
 
     <RobaPrijemLinijaSheet
       :open="openLine !== null"
@@ -652,6 +721,7 @@ async function send() {
    of reasons on for somebody asking why the button is grey. */
 .d-send > :deep(button:disabled) { pointer-events: none; }
 
+.d-note { margin: 0; color: var(--muted); font-size: var(--text-micro); }
 .d-problems { margin: 0; padding-left: 18px; color: var(--muted); font-size: var(--text-micro); }
 .d-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
 .d-ok { margin: 0; color: var(--good); font-size: var(--text-label); font-weight: 500; }

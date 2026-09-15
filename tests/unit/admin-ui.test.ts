@@ -22,6 +22,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { adminBack, adminBackAria, adminBackLabel } from '../../app/utils/adminNav'
 import { KONTROLA } from '../../app/utils/kontrola'
+import { costBasis, fenFromMfen, mfenFromFen, stockCostText } from '../../app/utils/stockCost'
 import { attentionTarget } from '../../shared/attention'
 import { ATTENTION_ROUTES } from '../../shared/types/owner'
 import type { AttentionItem } from '../../shared/types/owner'
@@ -167,6 +168,43 @@ describe('the period presets', () => {
 
 // ===========================================================================
 
+/**
+ * The article sheet's cost: typed as the price of what the invoice prices,
+ * stored as milli-feninga per base unit. A wrong basis here is every future
+ * *manjak* and *utrošak* off by a factor of 24.
+ */
+describe('stock cost basis', () => {
+  it('prices the pack when there is one, else a piece, a kilogram or a litre', () => {
+    expect(costBasis('kom', 'gajba', 24)).toEqual({ qty: 24, label: 'gajba · 24 kom' })
+    expect(costBasis('kom', null, null)).toEqual({ qty: 1, label: 'po kom' })
+    expect(costBasis('g', '', 250)).toEqual({ qty: 1000, label: 'po kg' })
+    expect(costBasis('ml', null, null)).toEqual({ qty: 1000, label: 'po l' })
+  })
+
+  it('converts a typed price to per-unit milli-feninga and back', () => {
+    // Gajba of 24 at 28,80 KM is 1,20 KM a bottle: 120 fen = 120 000 mfen.
+    expect(mfenFromFen(2880, 24)).toBe(120_000)
+    expect(fenFromMfen(120_000, 24)).toBe(2880)
+    // 1 kg of tobacco at 240,00 KM is 24 fen a gram.
+    expect(mfenFromFen(24_000, 1000)).toBe(24_000)
+    expect(fenFromMfen(24_000, 1000)).toBe(24_000)
+  })
+
+  it('never rounds a real price down to the zero the server refuses', () => {
+    expect(mfenFromFen(1, 100_000)).toBe(1)
+    expect(mfenFromFen(0, 24)).toBe(0)
+  })
+
+  it('writes the cost beside its basis, and a dash for no cost', () => {
+    const base = { base_unit: 'kom' as const, pack_name: 'gajba', pack_qty: 24 }
+    // Through `formatKm`, whose space before *KM* is a non-breaking one.
+    expect(stockCostText({ ...base, last_cost_mfen: 120_000 })).toBe(`${formatKm(2880)} gajba · 24 kom`)
+    expect(stockCostText({ ...base, last_cost_mfen: 0 })).toBe('—')
+  })
+})
+
+// ===========================================================================
+
 /** Every file that makes up the dashboard's surface. */
 function adminFiles(): string[] {
   const roots = ['app/components/ui', 'app/pages/admin']
@@ -266,17 +304,22 @@ describe('the way back', () => {
 
   it('sends every screen Kontrolna ploča links to back to it', () => {
     for (const path of ['/admin/meni', '/admin/postavke/kategorije',
-      '/admin/postavke/osoblje', '/admin/postavke/uredaji']) {
+      '/admin/postavke/osoblje', '/admin/postavke/uredaji', '/admin/kontrola/artikli']) {
       expect(adminBack(path, exists), path).toBe('/admin/kontrola')
     }
   })
 
   it('every ready Kontrolna ploča row opens a page that exists', () => {
-    const missing = KONTROLA.flatMap(section => section.links)
+    const links = KONTROLA.flatMap(section => section.links)
+    const missing = links
       .filter(link => link.ready)
       .filter(link => !existsSync(`app/pages${link.to}.vue`) && !existsSync(`app/pages${link.to}/index.vue`))
       .map(link => link.to)
     expect(missing).toEqual([])
+    // Artikli zalihe is built; a row that is ready carries no "uskoro".
+    const artikli = links.find(link => link.id === 'artikli')
+    expect(artikli?.ready).toBe(true)
+    expect(artikli?.soon).toBeUndefined()
   })
 
   it('climbs to the nearest ancestor that is really a page', () => {

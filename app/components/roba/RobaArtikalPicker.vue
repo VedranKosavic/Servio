@@ -25,6 +25,11 @@
  *
  * One tap picks and closes: there is no *Sačuvaj* in a sheet whose whole job is
  * one choice, and the quantity field behind it is where the owner is going next.
+ *
+ * **`creatable` adds *Novi artikal*.** A crate the catalogue has never seen is on
+ * the bar; the picker emits `create` with what was typed into the search, the
+ * screen closes this sheet and opens `RobaArtikalSheet` in its place — handed
+ * over, not stacked, because two scrims on a phone is one too many.
  */
 import { fold } from '~/components/order/OrderText'
 import { stanjeGroup } from './RobaStanjeTable.vue'
@@ -36,9 +41,11 @@ const props = defineProps<{
   items: StockItemAdmin[]
   /** The article the document's adder is holding, so the sheet can mark it. */
   selectedId: string
+  /** Offer *Novi artikal*; the screen does the creating. */
+  creatable?: boolean
 }>()
 
-const emit = defineEmits<{ close: [], pick: [id: string] }>()
+const emit = defineEmits<{ close: [], pick: [id: string], create: [name: string] }>()
 
 const query = ref('')
 
@@ -118,10 +125,18 @@ function meta(item: StockItemAdmin): string {
       </section>
     </div>
 
-    <p v-if="sections.length === 0" class="p-empty">Nema artikla s tim nazivom.</p>
+    <p v-if="sections.length === 0" class="p-empty">
+      Nema artikla s tim nazivom.
+      <UiButton v-if="creatable && query.trim()" small variant="soft" @click="emit('create', query.trim())">
+        Dodaj kao novi artikal
+      </UiButton>
+    </p>
 
     <template #footer>
       <UiButton variant="ghost" @click="emit('close')">Odustani</UiButton>
+      <UiButton v-if="creatable" variant="soft" @click="emit('create', query.trim())">
+        Novi artikal
+      </UiButton>
     </template>
   </UiSheet>
 </template>
@@ -201,6 +216,11 @@ function meta(item: StockItemAdmin): string {
 .p-meta { font-size: var(--text-micro); color: var(--muted); }
 
 .p-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  overflow-wrap: anywhere;
   margin: 0;
   padding: 18px 14px;
   border: 1px dashed var(--line);
