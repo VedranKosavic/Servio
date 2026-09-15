@@ -375,7 +375,15 @@ function afterEdit(
     ))
     .get()
 
-  if (!already) {
+  // The *Svi* line is a courtesy, never a precondition: a venue whose chat rooms
+  // were never seeded (a wiped or hand-built database) must still be able to
+  // edit its roster. Without this check `postSystem` throws CHANNEL_NOT_FOUND
+  // and the whole edit rolls back.
+  const svi = tx.select({ id: schema.chatChannels.id }).from(schema.chatChannels)
+    .where(and(eq(schema.chatChannels.venueId, venueId), eq(schema.chatChannels.kind, 'svi')))
+    .get()
+
+  if (!already && svi) {
     postSystem(tx, venueId, 'svi', 'roster_changed', 'Raspored je izmijenjen',
       { link: { label: 'Raspored →', route: '/konobar/raspored' }, by: actor.userId }, now)
     bump(tx, venueId, 'chat')

@@ -187,6 +187,18 @@ describe('every edit reaches every screen and leaves a record', () => {
       .filter(m => m.systemKey === 'roster_changed')
     expect(lines).toHaveLength(1)
   })
+
+  it('still saves the edit when the venue has no Svi room, and posts nothing', () => {
+    // A wiped or hand-built database has no chat rooms. The Svi line is a
+    // courtesy: without it the edit used to throw CHANNEL_NOT_FOUND and roll back.
+    f.sqlite.exec(`UPDATE chat_channels SET kind = 'gone-' || kind WHERE venue_id = '${f.venueId}'`)
+
+    const amar = add('Amar', PON)
+    expect(rows().map(r => r.id)).toEqual([amar.id])
+    expect(rosterEntries()).toHaveLength(1)
+    expect(f.db.select().from(schema.chatMessages).all()
+      .filter(m => m.systemKey === 'roster_changed')).toHaveLength(0)
+  })
 })
 
 // ---------------------------------------------------------------------------
