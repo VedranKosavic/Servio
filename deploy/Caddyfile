@@ -55,7 +55,7 @@ sank.example.duckdns.org {
 # `header_up` that rewrites either header, and do not put another proxy in
 # front of Caddy without reading that function first.
 #
-# **Uploads.** Chat images post to `/api/uploads`; nginx needs
+# **Uploads.** Delivery photos post to `/api/uploads`; nginx needs
 # `client_max_body_size 10m` for them and Caddy has no such limit by default,
 # so there is nothing to raise.
 #

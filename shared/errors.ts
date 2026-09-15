@@ -22,7 +22,7 @@ import { SHIFT_ERRORS } from './errors/shifts'
 import { STOCK_ERRORS } from './errors/stock'
 import { SYNC_ERRORS } from './errors/sync'
 import { ADMIN_ERRORS } from './errors/admin'
-import { CHAT_ERRORS } from './errors/chat'
+import { UPLOAD_ERRORS } from './errors/uploads'
 import { ROSTER_ERRORS } from './errors/roster'
 import { RULES_ERRORS } from './errors/rules'
 import { SCAN_ERRORS } from './errors/scan'
@@ -35,7 +35,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
   ...STOCK_ERRORS,
   ...SYNC_ERRORS,
   ...ADMIN_ERRORS,
-  ...CHAT_ERRORS,
+  ...UPLOAD_ERRORS,
   ...ROSTER_ERRORS,
   ...RULES_ERRORS,
   ...SCAN_ERRORS,
@@ -49,5 +49,5 @@ export function errorMessage(code: string): string {
 export {
   COMMON_ERRORS, AUTH_ERRORS, MONEY_ERRORS, SHIFT_ERRORS,
   STOCK_ERRORS, SYNC_ERRORS, ADMIN_ERRORS,
-  CHAT_ERRORS, ROSTER_ERRORS, RULES_ERRORS, SCAN_ERRORS,
+  UPLOAD_ERRORS, ROSTER_ERRORS, RULES_ERRORS, SCAN_ERRORS,
 }

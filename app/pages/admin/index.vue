@@ -593,13 +593,4 @@ onMounted(() => { void load() })
   .a-page { max-width: 760px; }
 }
 
-/**
- * The layout's *Razgovor* button floats over the bottom-right corner of every
- * dashboard screen, and the floor plan is the last thing on this page — so the
- * page ends with enough room under it for the plan to scroll clear of the button
- * instead of finishing underneath it.
- */
-@media (max-width: 1023px) {
-  .a-page { padding-bottom: 72px; }
-}
 </style>

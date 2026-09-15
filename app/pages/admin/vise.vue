@@ -10,7 +10,8 @@
  * added there lands here too. Every one of those screens goes back to *Više*
  * (`adminBack`).
  *
- * The *Kontrolna ploča* page itself stays for the laptop rail.
+ * The *Kontrolna ploča* page itself stays for the laptop rail. *Dnevnik* is
+ * not here — it left the nav by the owner's call.
  */
 import { KONTROLA } from '~/utils/kontrola'
 

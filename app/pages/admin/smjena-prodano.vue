@@ -171,9 +171,4 @@ useAdminChanges({
   .a-page { max-width: 760px; }
 }
 
-/* The layout's *Razgovor* button floats over the bottom-right corner of every
-   dashboard screen, so the list ends clear of it instead of under it. */
-@media (max-width: 1023px) {
-  .a-page { padding-bottom: 72px; }
-}
 </style>

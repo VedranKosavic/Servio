@@ -1,6 +1,6 @@
 /**
- * The image pipeline (PHASE4 §2.6): five checks, a file on disk, and two
- * collectors.
+ * The image pipeline (PHASE4 §2.6): the checks, a file on disk, and the
+ * collector. Since *Razgovor* was removed the only kind is `delivery`.
  *
  * Everything here writes real files into a scratch directory, because the
  * things worth checking are the things a mock would paper over: that the file
@@ -14,9 +14,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
 import { expectCode, jpegBytes, pngBytes, scratchUploads, type Scratch } from '../helpers/phase4'
 import {
-  absolutePath, createUpload, expireChatImages, fileMode, gcOrphans, jpegSize, readUpload,
+  absolutePath, createUpload, fileMode, gcOrphans, jpegSize, parseUploadKind, readUpload,
 } from '../../server/services/uploads'
-import { postMessage } from '../../server/services/chat'
 import { discardScan, scanDelivery, setScanModel, stubScanModel } from '../../server/services/scan'
 
 let f: Fixture
@@ -32,42 +31,47 @@ afterEach(() => {
   setScanModel(null)
 })
 
-const chatPhoto = (name = 'Amar', bytes = jpegBytes(1280, 960)) =>
-  createUpload(f.db, f.venueId, f.actor(name), { bytes }, 'chat', f.clock.now())
+const deliveryPhoto = (bytes = jpegBytes(1600, 1200)) =>
+  createUpload(f.db, f.venueId, f.adminActor(), { bytes }, 'delivery', f.clock.now())
+
+/** A row as an old database holds it: a chat photo from before *Razgovor* went. */
+function legacyChatRow(): string {
+  const id = randomUUID()
+  f.db.insert(schema.uploads).values({
+    id, venueId: f.venueId, kind: 'chat', path: `chat/2026/09/${id}.jpg`,
+    bytes: 1000, width: 0, height: 0, mime: 'image/jpeg',
+    createdBy: f.userId('Amar'), createdAt: f.clock.now(),
+  }).run()
+  return id
+}
 
 // ---------------------------------------------------------------------------
-// The five checks, in order
+// The checks, in order
 // ---------------------------------------------------------------------------
 
 describe('createUpload', () => {
   it('refuses PNG bytes wearing a .jpg name — check 1, and nowhere else', () => {
     expectCode(
-      () => createUpload(f.db, f.venueId, f.actor('Amar'), {
+      () => createUpload(f.db, f.venueId, f.adminActor(), {
         bytes: pngBytes(), filename: 'slika.jpg',
-      }, 'chat'),
+      }, 'delivery'),
       'NOT_JPEG',
     )
   })
 
-  it('refuses a 1.6 MB chat photo and accepts a 2.4 MB delivery photo', () => {
-    expectCode(
-      () => createUpload(f.db, f.venueId, f.actor('Amar'), { bytes: jpegBytes(1, 1, 1_600_000) }, 'chat'),
-      'IMAGE_TOO_BIG',
-    )
+  it('accepts a 2.4 MB delivery photo and refuses a 2.6 MB one', () => {
+    expect(deliveryPhoto(jpegBytes(1600, 1200, 2_400_000)).bytes).toBeGreaterThan(2_000_000)
+    expectCode(() => deliveryPhoto(jpegBytes(1, 1, 2_600_000)), 'IMAGE_TOO_BIG')
+  })
 
-    const delivery = createUpload(
-      f.db, f.venueId, f.adminActor(), { bytes: jpegBytes(1600, 1200, 2_400_000) }, 'delivery',
-    )
-    expect(delivery.bytes).toBeGreaterThan(2_000_000)
+  it('knows no kind but delivery — chat photos went with Razgovor', () => {
+    expect(parseUploadKind('delivery')).toBe('delivery')
+    expectCode(() => parseUploadKind('chat'), 'KIND_FORBIDDEN')
   })
 
   /**
-   * A delivery photo is the owner's alone.
-   *
-   * It used to follow `bartender_can_receive_goods`. The café's call is that a
-   * šanker reads Stanje šanka and never receives goods, so the setting no longer
-   * opens this door — a worker is refused with it on and with it off, exactly
-   * like `POST /api/stock/deliveries`.
+   * A delivery photo is the owner's alone. A šanker reads Stanje šanka and
+   * never receives goods, whatever the old bartender setting says.
    */
   it('refuses a delivery photo from any worker, whatever the old bartender setting says', () => {
     f.settingsWith({ bartender_can_receive_goods: true })
@@ -78,68 +82,32 @@ describe('createUpload', () => {
 
     f.settingsWith({ bartender_can_receive_goods: false })
     expectCode(
-      () => createUpload(f.db, f.venueId, f.actor('Emir'), { bytes: jpegBytes() }, 'delivery'),
-      'KIND_FORBIDDEN',
-    )
-    expectCode(
       () => createUpload(f.db, f.venueId, f.actor('Amar'), { bytes: jpegBytes() }, 'delivery'),
       'KIND_FORBIDDEN',
     )
   })
 
-  it('stops at the 26th file of a day', () => {
-    for (let i = 0; i < 25; i++) {
-      const upload = chatPhoto()
-      // Only **referenced** uploads count toward a cap: an orphan is a send that
-      // failed, and charging somebody for it would lock him out of the retry.
-      postMessage(f.db, f.venueId, f.actor('Amar'), 'svi', {
-        client_id: randomUUID(), kind: 'image', upload_id: upload.id,
-      }, f.clock.now())
-    }
-    expectCode(() => chatPhoto(), 'USER_CAP')
-  })
-
-  it('stops the venue at 200 MB of chat photos in a month', () => {
-    // One oversized row written straight into the table, and one message
-    // pointing at it — writing 200 MB of real files to prove arithmetic would
-    // make the suite unusable.
-    const id = randomUUID()
-    f.db.insert(schema.uploads).values({
-      id, venueId: f.venueId, kind: 'chat', path: 'chat/2026/09/x.jpg',
-      bytes: 201 * 1024 * 1024, width: 0, height: 0, mime: 'image/jpeg',
-      createdBy: f.userId('Emir'), createdAt: f.clock.now(),
-    }).run()
-    f.db.insert(schema.chatMessages).values({
-      id: randomUUID(), venueId: f.venueId,
-      channelId: f.db.select().from(schema.chatChannels).all().find(c => c.kind === 'svi')!.id,
-      clientId: randomUUID(), seq: 1, kind: 'image', uploadId: id,
-      authorId: f.userId('Emir'), createdAt: f.clock.now(),
-    }).run()
-
-    expectCode(() => chatPhoto(), 'STORAGE_CAP')
-  })
-
-  it('writes a quiet chat_cap_hit naming the person whenever a cap trips', () => {
+  it('writes a quiet chat_cap_hit naming the person whenever the daily cap trips', () => {
     f.settingsWith({ upload_user_day_files: 0 })
-    expectCode(() => chatPhoto(), 'USER_CAP')
+    expectCode(() => deliveryPhoto(), 'USER_CAP')
 
     const entry = f.db.select().from(schema.logEntries).all()
       .find(e => e.kind === 'chat_cap_hit')!
-    expect(JSON.parse(entry.bodyJson).user_id).toBe(f.userId('Amar'))
+    expect(JSON.parse(entry.bodyJson).user_id).toBe(f.adminActor().userId)
   })
 
   it('writes the file at kind/YYYY/MM/<uuid>.jpg with mode 0600', () => {
-    const upload = chatPhoto()
+    const upload = deliveryPhoto()
     const row = f.db.select().from(schema.uploads).where(eq(schema.uploads.id, upload.id)).get()!
 
-    expect(row.path).toMatch(/^chat\/\d{4}\/\d{2}\/[0-9a-f-]{36}\.jpg$/)
+    expect(row.path).toMatch(/^delivery\/\d{4}\/\d{2}\/[0-9a-f-]{36}\.jpg$/)
     expect(existsSync(absolutePath(row.path))).toBe(true)
     // 0600: readable by the one Node process and nobody else on the box.
     expect(fileMode(row.path)).toBe(0o600)
   })
 
   it('reads the dimensions out of the SOF marker, and answers 0 × 0 on a header it cannot parse', () => {
-    const upload = chatPhoto('Amar', jpegBytes(1280, 960))
+    const upload = deliveryPhoto(jpegBytes(1280, 960))
     expect([upload.width, upload.height]).toEqual([1280, 960])
     // Three magic bytes and nothing else: still a "JPEG" by check 1, no frame.
     expect(jpegSize(Buffer.from([0xFF, 0xD8, 0xFF]))).toEqual({ width: 0, height: 0 })
@@ -151,28 +119,27 @@ describe('createUpload', () => {
 // ---------------------------------------------------------------------------
 
 describe('readUpload', () => {
-  it('answers nothing for an orphan nobody has posted yet', () => {
-    const upload = chatPhoto()
-    expect(readUpload(f.db, f.venueId, f.actor('Amar'), upload.id)).toBeNull()
-  })
-
   it('lets the owner read a delivery photo, and no worker', () => {
-    // Only an admin may take one now; a šanker never receives goods.
-    const owners = createUpload(f.db, f.venueId, f.adminActor(), { bytes: jpegBytes() }, 'delivery')
+    const owners = deliveryPhoto()
     expect(readUpload(f.db, f.venueId, f.adminActor(), owners.id)).not.toBeNull()
-    // A worker has no business with an invoice photo.
     expect(readUpload(f.db, f.venueId, f.actor('Emir'), owners.id)).toBeNull()
     expect(readUpload(f.db, f.venueId, f.actor('Amar'), owners.id)).toBeNull()
+  })
+
+  it('serves a legacy chat photo to nobody', () => {
+    const id = legacyChatRow()
+    expect(readUpload(f.db, f.venueId, f.adminActor(), id)).toBeNull()
+    expect(readUpload(f.db, f.venueId, f.actor('Amar'), id)).toBeNull()
   })
 })
 
 // ---------------------------------------------------------------------------
-// The two collectors
+// The collector
 // ---------------------------------------------------------------------------
 
 describe('gcOrphans', () => {
   it('leaves an orphan alone for an hour and unlinks it after, keeping the row', () => {
-    const upload = chatPhoto()
+    const upload = deliveryPhoto()
     const row = f.db.select().from(schema.uploads).where(eq(schema.uploads.id, upload.id)).get()!
 
     expect(gcOrphans(f.db, f.venueId, 60, f.clock.now())).toBe(0)
@@ -183,29 +150,25 @@ describe('gcOrphans', () => {
 
     expect(existsSync(absolutePath(row.path))).toBe(false)
     const after = f.db.select().from(schema.uploads).where(eq(schema.uploads.id, upload.id)).get()!
-    // The row outlives the file: that is how the reference count stays honest
-    // and how the screen knows to render "Slika istekla".
+    // The row outlives the file: that is how the reference count stays honest.
     expect(after.deletedAt).not.toBeNull()
     expect(after.path).toBe(row.path)
   })
 
-  it('never touches a photo a live message points at', () => {
-    const upload = chatPhoto()
-    postMessage(f.db, f.venueId, f.actor('Amar'), 'svi', {
-      client_id: randomUUID(), kind: 'image', upload_id: upload.id,
-    }, f.clock.now())
-
+  it('never touches a legacy chat photo — removing Razgovor deletes no file', () => {
+    const id = legacyChatRow()
     f.clock.advance(61 * 60)
     expect(gcOrphans(f.db, f.venueId, 60, f.clock.now())).toBe(0)
+    expect(f.db.select().from(schema.uploads).where(eq(schema.uploads.id, id)).get()!.deletedAt).toBeNull()
   })
 
   it('keeps a parsed scan\'s photo and collects a discarded one\'s', async () => {
     setScanModel(stubScanModel())
 
-    const kept = createUpload(f.db, f.venueId, f.adminActor(), { bytes: jpegBytes() }, 'delivery', f.clock.now())
+    const kept = deliveryPhoto()
     await scanDelivery(f.db, f.venueId, f.adminActor(), { upload_id: kept.id }, f.clock.now())
 
-    const thrown = createUpload(f.db, f.venueId, f.adminActor(), { bytes: jpegBytes() }, 'delivery', f.clock.now())
+    const thrown = deliveryPhoto()
     const draft = await scanDelivery(f.db, f.venueId, f.adminActor(), { upload_id: thrown.id }, f.clock.now())
     discardScan(f.db, f.venueId, f.adminActor(), draft.scan_id, { reason: 'pogrešna slika' }, f.clock.now())
 
@@ -220,51 +183,13 @@ describe('gcOrphans', () => {
   })
 })
 
-describe('expireChatImages', () => {
-  it('unlinks a chat photo at 91 days and leaves a 400-day-old delivery photo alone', () => {
-    const chat = chatPhoto()
-    const delivery = createUpload(
-      f.db, f.venueId, f.adminActor(), { bytes: jpegBytes() }, 'delivery', f.clock.now(),
-    )
-
-    f.clock.advance(91 * 86_400)
-    expect(expireChatImages(f.db, f.venueId, 90, f.clock.now())).toBe(1)
-
-    const rows = f.db.select().from(schema.uploads).all()
-    expect(rows.find(r => r.id === chat.id)!.deletedAt).not.toBeNull()
-    expect(rows.find(r => r.id === delivery.id)!.deletedAt).toBeNull()
-
-    // …and still nothing at 400 days: a delivery photo is evidence beside a
-    // posted delivery and follows the ledger, not the retention clock.
-    f.clock.advance(310 * 86_400)
-    expect(expireChatImages(f.db, f.venueId, 90, f.clock.now())).toBe(0)
-    expect(f.db.select().from(schema.uploads).all()
-      .find(r => r.id === delivery.id)!.deletedAt).toBeNull()
-  })
-
-  it('leaves the message in place — the thread says "Slika istekla", it does not lose the line', () => {
-    const upload = chatPhoto()
-    const sent = postMessage(f.db, f.venueId, f.actor('Amar'), 'svi', {
-      client_id: randomUUID(), kind: 'image', upload_id: upload.id, body: 'led je stigao',
-    }, f.clock.now())
-
-    f.clock.advance(91 * 86_400)
-    expireChatImages(f.db, f.venueId, 90, f.clock.now())
-
-    const message = f.db.select().from(schema.chatMessages)
-      .where(eq(schema.chatMessages.id, sent.message.id)).get()!
-    expect(message.deletedAt).toBeNull()
-    expect(message.body).toBe('led je stigao')
-  })
-})
-
 // ---------------------------------------------------------------------------
 // The trigger
 // ---------------------------------------------------------------------------
 
 describe('uploads, at the database level', () => {
   it('refuses a DELETE and a second deleted_at', () => {
-    const upload = chatPhoto()
+    const upload = deliveryPhoto()
     f.expectRefused(`DELETE FROM uploads WHERE id = '${upload.id}'`, /append-only/)
 
     f.sqlite.exec(`UPDATE uploads SET deleted_at = '2026-09-10T00:00:00.000Z' WHERE id = '${upload.id}'`)
@@ -275,9 +200,9 @@ describe('uploads, at the database level', () => {
   })
 
   it('refuses re-pointing a row at another file', () => {
-    const upload = chatPhoto()
+    const upload = deliveryPhoto()
     f.expectRefused(
-      `UPDATE uploads SET path = 'chat/2020/01/other.jpg' WHERE id = '${upload.id}'`,
+      `UPDATE uploads SET path = 'delivery/2020/01/other.jpg' WHERE id = '${upload.id}'`,
       /only deleted_at/,
     )
   })

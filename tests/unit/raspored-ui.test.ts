@@ -20,7 +20,7 @@
  * asserted below with the same intent — cell placement, the picker's tag, my own
  * shifts — on weekdays instead of dates.
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { weekdayLongBs, weekdayShortBs } from '../../shared/dates'
@@ -193,16 +193,18 @@ describe('the house rules hold on the roster screens', () => {
   it('flips the two nav rows this package owns and nothing else', () => {
     const waiterMenu = readFileSync('app/utils/waiterMenu.ts', 'utf8')
     expect(waiterMenu).toMatch(/id: 'roster'[^\n]*ready: true/)
-    expect(waiterMenu).toMatch(/id: 'chat'[^\n]*ready: true/)
+    expect(waiterMenu).not.toMatch(/id: 'chat'/)
 
     const adminNav = readFileSync('app/utils/adminNav.ts', 'utf8')
     expect(adminNav).toMatch(/id: 'raspored'[^\n]*ready: true/)
     expect(adminNav).not.toMatch(/id: 'razgovor'/)
   })
 
-  it('Razgovor is reachable from every /admin screen, as the dock', () => {
-    expect(readFileSync('app/layouts/admin.vue', 'utf8')).toContain('<ChatDock />')
-    const dock = readFileSync('app/components/chat/ChatDock.vue', 'utf8')
-    expect(dock).toContain('/admin/razgovor')
+  it('Razgovor is gone from every screen: no dock, no pages', () => {
+    expect(readFileSync('app/layouts/admin.vue', 'utf8')).not.toContain('ChatDock')
+    expect(existsSync('app/components/chat')).toBe(false)
+    expect(existsSync('app/pages/admin/razgovor')).toBe(false)
+    expect(existsSync('app/pages/konobar/razgovor')).toBe(false)
+    expect(existsSync('app/pages/sanker/razgovor')).toBe(false)
   })
 })

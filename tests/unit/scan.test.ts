@@ -101,11 +101,15 @@ describe('scanDelivery with the stub', () => {
   })
 
   it('refuses a photo that is not a delivery photo, and somebody else\'s', async () => {
-    const chat = createUpload(
-      f.db, f.venueId, f.actor('Amar'), { bytes: jpegBytes() }, 'chat', f.clock.now(),
-    )
+    // A legacy chat photo, as an old database still holds one.
+    const chatId = randomUUID()
+    f.db.insert(schema.uploads).values({
+      id: chatId, venueId: f.venueId, kind: 'chat', path: `chat/2026/09/${chatId}.jpg`,
+      bytes: 1000, width: 0, height: 0, mime: 'image/jpeg',
+      createdBy: f.adminActor().userId, createdAt: f.clock.now(),
+    }).run()
     await expect(scanDelivery(
-      f.db, f.venueId, f.adminActor(), { upload_id: chat.id }, f.clock.now(),
+      f.db, f.venueId, f.adminActor(), { upload_id: chatId }, f.clock.now(),
     )).rejects.toThrow(/not a delivery photo/)
 
     // A delivery photo is the owner's alone, so the owner's own photo scans.

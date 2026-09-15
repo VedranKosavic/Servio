@@ -33,7 +33,6 @@ import { makeFixture, schema, type Fixture } from '../helpers/db'
 import { jpegBytes, scratchUploads } from '../helpers/phase4'
 import { businessDate, isoWeekday } from '../../shared/dates'
 import { ROLE_LABELS } from '../../shared/landing'
-import { chatSince, postMessage } from '../../server/services/chat'
 import { addToPattern, getPattern, listTemplates } from '../../server/services/roster'
 import { latestRules, publishRules } from '../../server/services/rules'
 import { scanDelivery, setScanModel, stubScanModel } from '../../server/services/scan'
@@ -627,35 +626,6 @@ describe('GET /api/me/sessions and GET /api/auth/users', () => {
  * are written against these shapes in parallel, and a field that quietly
  * disappears has to fail here rather than as a blank line on somebody's phone.
  */
-describe('GET /api/chat/since', () => {
-  it('carries the channels, the cursor and the messages — and no forbidden room', () => {
-    postMessage(f.db, f.venueId, f.actor('Amar'), 'svi', {
-      client_id: randomUUID(), kind: 'text', body: 'nema leda',
-    })
-
-    const answer = chatSince(f.db, f.venueId, f.actor('Amar'), null)
-    expect(Object.keys(answer).sort())
-      .toEqual(['channels', 'cursor', 'has_more', 'messages', 'muted_until'])
-
-    expect(Object.keys(answer.channels[0]!).sort()).toEqual([
-      'id', 'kind', 'last_seq', 'members', 'name', 'pinned_at', 'pinned_text',
-      'preview', 'preview_at', 'unread',
-    ])
-    expect(Object.keys(answer.messages[0]!).sort()).toEqual([
-      'at', 'author_id', 'author_initials', 'author_name', 'body', 'channel',
-      'client_id', 'deleted_at', 'deleted_by_name', 'forwarded_from_id', 'id',
-      'image', 'kind', 'reply_preview', 'reply_to_id', 'seq', 'system_key',
-      'system_payload',
-    ])
-
-    // The room is visible to the people in it, by name.
-    const svi = answer.channels.find(c => c.kind === 'svi')!
-    expect(svi.members).toContain('Haris')
-    expect(answer.channels.find(c => c.kind === 'konobari')!.members)
-      .not.toContain('Haris')
-  })
-})
-
 /**
  * Moved (0010): this block asserted the dated roster's two weeks, offers and
  * requests, and *Sati*'s planned-against-worked row. Both are gone — *Raspored*
@@ -724,7 +694,6 @@ describe('no Phase 4 response carries a secret either', () => {
       weekday: 1, template_id: listTemplates(f.db, f.venueId)[0]!.id, user_id: f.userId('Amar'),
     })
     const payloads = [
-      chatSince(f.db, f.venueId, f.actor('Amar'), null),
       getPattern(f.db, f.venueId),
       latestRules(f.db, f.venueId, f.actor('Amar')),
     ]

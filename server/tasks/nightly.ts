@@ -34,7 +34,7 @@ import type { Settings } from '#shared/settings'
 import { getSettings } from '../services/contracts'
 import { queueAlert } from '../services/alerts'
 import { pruneChanges } from '../services/changes'
-import { expireChatImages, gcOrphans } from '../services/uploads'
+import { gcOrphans } from '../services/uploads'
 import { alertTaskFailure, claimTaskRun, recordTaskRun, tasksDisabled, venueIds } from '../utils/tasks'
 
 /** `changes` is a cursor, not history: a week is longer than any phone is offline. */
@@ -43,7 +43,7 @@ const CHANGES_KEEP_DAYS = 7
 const SESSIONS_KEEP_DAYS = 30
 /** The hour, local, at which the daily half runs. */
 const NIGHTLY_HOUR = 5
-/** An upload no message references after this long is an abandoned send. */
+/** A delivery photo no scan kept after this long is an abandoned send. */
 const ORPHAN_AGE_MIN = 60
 
 /**
@@ -132,16 +132,11 @@ export function nightlyRun(db: Db, at = nowIso()): void {
       if (Number(localTime(at, settings.timezone).slice(0, 2)) !== NIGHTLY_HOUR) continue
       if (!claimTaskRun(db, venueId, 'nightly', day, at)) continue
 
+      // Delivery photos never expire — they are evidence beside a posted
+      // delivery and follow the ledger (PHASE4 §2.6).
       const pruned = pruneNightly(db, at)
-      // Chat photos expire; **delivery photos never do** — they are evidence
-      // beside a posted delivery and follow the ledger, so a 400-day-old
-      // otpremnica is untouched (PHASE4 §2.6).
-      const expired = expireChatImages(db, venueId, settings.chat_retention_days, at)
       recordTaskRun(db, venueId, 'nightly', day, true, undefined, at)
-      console.info(
-        `[sank] nightly ${day}: ${pruned.changes} changes, ${pruned.sessions} sessions,`
-        + ` ${expired} chat photos pruned`,
-      )
+      console.info(`[sank] nightly ${day}: ${pruned.changes} changes, ${pruned.sessions} sessions pruned`)
     } catch (err) {
       recordTaskRun(db, venueId, 'nightly', day, false, err instanceof Error ? err.message : String(err), at)
       alertTaskFailure(db, venueId, 'nightly', day, err, at)

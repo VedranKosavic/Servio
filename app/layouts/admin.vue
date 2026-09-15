@@ -38,7 +38,7 @@ useHead({
 
 /**
  * The rows come from `app/utils/adminNav.ts` (WP0) rather than an inline array,
- * so a Phase 4 package adding *Razgovor* edits one file instead of this one and
+ * so a package adding a row edits one file instead of this one and
  * `vise.vue` both. The badges stay here, because they are this shell's state.
  *
  * Empty on purpose: no row carries a count today.
@@ -202,11 +202,6 @@ async function signOut() {
     <main class="a-main">
       <slot />
     </main>
-
-    <!-- *Razgovor*, as a button in the corner rather than a row in the nav.
-         It is mounted on the shell so it survives every route change with its
-         thread and its half-typed reply intact. -->
-    <ChatDock />
 
     <!-- The phone tabs. Hidden at 1024 px and above. -->
     <nav class="a-tabs" aria-label="Glavna navigacija">

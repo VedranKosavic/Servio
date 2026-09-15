@@ -66,12 +66,6 @@ unaprijed nije pravilo.
 - Svoju grešku ispravljaš sam u prvih {{void_self_window_s}} od zaključavanja.
 - Poslije toga odlučuje šanker, u roku od {{bartender_approve_window_s}}.
 - Na račun kuće: {{staff_drinks_per_shift}} po smjeni, do {{staff_drink_max_fen}} po piću.
-
-## Razgovor
-
-- Slike su samo šanka, robe i prostora — gosti nikad.
-- Svoju poruku možeš obrisati u prvih {{chat_delete_own_s}}.
-- Slike u razgovoru žive {{chat_retention_days}}, poslije toga ih više nema.
 `
 
 export function useRules() {

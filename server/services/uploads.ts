@@ -15,22 +15,25 @@
  */
 import { existsSync, mkdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
-import { and, eq, inArray, isNull, lt, sql } from 'drizzle-orm'
+import { and, eq, isNull, lt, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { newId, nowIso } from '../utils/ids'
 import { forbidden, SankError, unprocessable } from '../utils/errors'
 import { errorMessage } from '#shared/errors'
-import { canSee } from '#shared/chat'
 import type { UploadResult } from '#shared/types'
 import type { Actor, Db, Queryable, Tx } from './types'
 import { getSettings } from './contracts'
 import { log } from './log'
 
-export type UploadKind = 'chat' | 'delivery'
+/**
+ * The one kind a new upload may be. `uploads.kind` still allows `'chat'` in the
+ * schema because old rows carry it — *Razgovor* was removed (15.09.2026) and
+ * nothing creates, serves or collects a chat photo any more.
+ */
+export type UploadKind = 'delivery'
 
-/** The belt behind the phone's downscale. A chat photo is 100–180 KB in practice. */
+/** The belt behind the phone's downscale. */
 export const MAX_BYTES: Record<UploadKind, number> = {
-  chat: 1_500_000,
   delivery: 2_500_000,
 }
 
@@ -51,9 +54,10 @@ export function absolutePath(relative: string): string {
 
 /**
  * `POST /api/uploads`. Every refusal is a Bosnian sentence in
- * `shared/errors/chat.ts`, and every cap that trips leaves a quiet
- * `chat_cap_hit` entry naming the person — so "why can I not send a photo" has
- * an answer in the Dnevnik rather than in a log file nobody reads.
+ * `shared/errors/uploads.ts`, and a cap that trips leaves a quiet
+ * `chat_cap_hit` entry naming the person (the kind kept its old name; the log
+ * templates are frozen) — so "why can I not send a photo" has an answer in the
+ * record rather than in a log file nobody reads.
  */
 export function createUpload(
   db: Db, venueId: string, actor: Actor,
@@ -80,23 +84,13 @@ export function createUpload(
   }
 
   const dayFrom = new Date(Date.parse(now) - 86_400_000).toISOString()
-  const monthFrom = new Date(Date.parse(now) - 30 * 86_400_000).toISOString()
 
-  // 4. Per-user daily caps, and 5. the venue's monthly chat cap. Both count
-  //    **referenced** uploads only (see `countedUsage`): an orphan nobody can
-  //    see is not a photo anybody sent.
+  // 4. Per-user daily caps. They count **referenced** uploads only (see
+  //    `countedUsage`): an orphan nobody can see is not a photo anybody sent.
   const mine = countedUsage(db, venueId, { createdBy: actor.userId, from: dayFrom })
   if (mine.files >= settings.upload_user_day_files || mine.bytes + file.bytes.length > settings.upload_user_day_bytes) {
     capHit(db, venueId, actor, 'user', now)
     throw new SankError(413, 'USER_CAP', errorMessage('USER_CAP'))
-  }
-
-  if (kind === 'chat') {
-    const venue = countedUsage(db, venueId, { kind: 'chat', from: monthFrom })
-    if (venue.bytes + file.bytes.length > settings.chat_image_month_bytes) {
-      capHit(db, venueId, actor, 'venue', now)
-      throw new SankError(413, 'STORAGE_CAP', errorMessage('STORAGE_CAP'))
-    }
   }
 
   const id = newId()
@@ -129,7 +123,7 @@ export function createUpload(
   }).run()
 
   // No `bump` on purpose (PHASE4 §2.11): an orphan upload nobody can see is not
-  // an event. The message that references it is, and that one bumps `chat`.
+  // an event. The scan that references it is, and that one bumps.
   return { id, url: `/api/uploads/${id}`, width: size.width, height: size.height, bytes: file.bytes.length }
 }
 
@@ -137,8 +131,10 @@ export function createUpload(
  * `GET /api/uploads/:id` — the access check behind the stream.
  *
  * Returns `null` for everything it refuses, and the route answers **404**, never
- * 403: a 403 would confirm the file exists, which for a *Konobari* photo an
- * admin asked about is exactly the thing that must not happen.
+ * 403: a 403 would confirm the file exists.
+ *
+ * A legacy chat photo answers `null` like any other refusal: *Razgovor* is gone
+ * and no screen has a message to show it in.
  */
 export function readUpload(
   q: Queryable, venueId: string, actor: Actor, id: string,
@@ -146,49 +142,21 @@ export function readUpload(
   const row = q.select().from(schema.uploads)
     .where(and(eq(schema.uploads.venueId, venueId), eq(schema.uploads.id, id)))
     .get()
-  if (!row || row.deletedAt) return null
+  if (!row || row.deletedAt || row.kind !== 'delivery') return null
 
-  if (row.kind === 'delivery') {
-    // The owner sees every delivery photo; the person who took it sees his own,
-    // which is what puts the picture at the top of his own scan draft.
-    const allowed = actor.role === 'admin' || row.createdBy === actor.userId
-    return allowed ? { path: absolutePath(row.path), bytes: row.bytes, mime: row.mime } : null
-  }
-
-  // A chat photo is visible exactly where the message that carries it is. The
-  // channel set comes from `canSee`, so a forward into *Admini* is what makes an
-  // admin's request start answering 200 — and the author deleting the original
-  // does not take the copy's evidence with it.
-  const visible = visibleChannelIds(q, venueId, actor)
-  if (visible.length === 0) return null
-
-  const referenced = q.select({ id: schema.chatMessages.id })
-    .from(schema.chatMessages)
-    .where(and(
-      eq(schema.chatMessages.venueId, venueId),
-      eq(schema.chatMessages.uploadId, id),
-      isNull(schema.chatMessages.deletedAt),
-      inArray(schema.chatMessages.channelId, visible),
-    ))
-    .get()
-
-  return referenced ? { path: absolutePath(row.path), bytes: row.bytes, mime: row.mime } : null
-}
-
-/** Every channel id this actor may read. Built from `canSee`, never filtered after. */
-export function visibleChannelIds(q: Queryable, venueId: string, actor: Actor): string[] {
-  return q.select({ id: schema.chatChannels.id, kind: schema.chatChannels.kind })
-    .from(schema.chatChannels)
-    .where(eq(schema.chatChannels.venueId, venueId))
-    .all()
-    .filter(c => canSee(actor.role, c.kind))
-    .map(c => c.id)
+  // The owner sees every delivery photo; the person who took it sees his own,
+  // which is what puts the picture at the top of his own scan draft.
+  const allowed = actor.role === 'admin' || row.createdBy === actor.userId
+  return allowed ? { path: absolutePath(row.path), bytes: row.bytes, mime: row.mime } : null
 }
 
 /**
- * The hourly collector: unlink the file of every upload older than
- * `olderThanMin` that no non-deleted message and no `parsed|applied` scan
- * references. Returns how many files went.
+ * The hourly collector: unlink the file of every **delivery** upload older than
+ * `olderThanMin` that no `parsed|applied` scan references. Returns how many
+ * files went.
+ *
+ * Legacy chat photos are left exactly as they are — neither collected nor
+ * served — so removing *Razgovor* deletes no file on its own.
  */
 export function gcOrphans(db: Db, venueId: string, olderThanMin: number, now = nowIso()): number {
   const before = new Date(Date.parse(now) - olderThanMin * 60_000).toISOString()
@@ -197,12 +165,9 @@ export function gcOrphans(db: Db, venueId: string, olderThanMin: number, now = n
     .from(schema.uploads)
     .where(and(
       eq(schema.uploads.venueId, venueId),
+      eq(schema.uploads.kind, 'delivery'),
       isNull(schema.uploads.deletedAt),
       lt(schema.uploads.createdAt, before),
-      sql`${schema.uploads.id} NOT IN (
-        SELECT upload_id FROM chat_messages
-        WHERE venue_id = ${venueId} AND upload_id IS NOT NULL AND deleted_at IS NULL
-      )`,
       sql`${schema.uploads.id} NOT IN (
         SELECT upload_id FROM delivery_scans
         WHERE venue_id = ${venueId} AND status IN ('parsed','applied')
@@ -214,34 +179,7 @@ export function gcOrphans(db: Db, venueId: string, olderThanMin: number, now = n
   return orphans.length
 }
 
-/**
- * At 05:40: unlink chat photos older than `chat_retention_days`. The message
- * stays and renders "Slika istekla".
- *
- * Delivery photos are deliberately untouched — they are evidence beside a posted
- * delivery and follow the ledger, so a 400-day-old otpremnica is still there.
- */
-export function expireChatImages(db: Db, venueId: string, days: number, now = nowIso()): number {
-  const before = new Date(Date.parse(now) - days * 86_400_000).toISOString()
-
-  const stale = db.select({ id: schema.uploads.id, path: schema.uploads.path })
-    .from(schema.uploads)
-    .where(and(
-      eq(schema.uploads.venueId, venueId),
-      eq(schema.uploads.kind, 'chat'),
-      isNull(schema.uploads.deletedAt),
-      lt(schema.uploads.createdAt, before),
-    ))
-    .all()
-
-  for (const row of stale) unlink(db, venueId, row.id, row.path, now)
-  return stale.length
-}
-
-/**
- * Unlink one file and stamp its row. Exported because `deleteMessage` calls it
- * **inside** its own transaction, after counting the references that are left.
- */
+/** Unlink one file and stamp its row, inside the caller's transaction. */
 export function unlinkUpload(tx: Tx, venueId: string, id: string, path: string, at: string): void {
   removeFile(path)
   tx.update(schema.uploads)
@@ -275,30 +213,23 @@ export function fileMode(path: string): number {
 /**
  * How much of a cap has actually been used.
  *
- * Only uploads a message or a kept scan references are counted (§2.6): an
- * orphan is a picture nobody ever saw, and charging somebody's daily budget for
- * a send that failed halfway would lock him out of the one he is retrying.
+ * Only uploads a kept scan references are counted (§2.6): an orphan is a
+ * picture nobody ever saw, and charging somebody's daily budget for a send that
+ * failed halfway would lock him out of the one he is retrying.
  */
 function countedUsage(
   q: Queryable, venueId: string,
-  filter: { createdBy?: string, kind?: UploadKind, from: string },
+  filter: { createdBy: string, from: string },
 ): { files: number, bytes: number } {
   const where = [
     eq(schema.uploads.venueId, venueId),
+    eq(schema.uploads.createdBy, filter.createdBy),
     sql`${schema.uploads.createdAt} >= ${filter.from}`,
-    sql`(
-      ${schema.uploads.id} IN (
-        SELECT upload_id FROM chat_messages
-        WHERE venue_id = ${venueId} AND upload_id IS NOT NULL AND deleted_at IS NULL
-      )
-      OR ${schema.uploads.id} IN (
-        SELECT upload_id FROM delivery_scans
-        WHERE venue_id = ${venueId} AND status IN ('parsed','applied')
-      )
+    sql`${schema.uploads.id} IN (
+      SELECT upload_id FROM delivery_scans
+      WHERE venue_id = ${venueId} AND status IN ('parsed','applied')
     )`,
   ]
-  if (filter.createdBy) where.push(eq(schema.uploads.createdBy, filter.createdBy))
-  if (filter.kind) where.push(eq(schema.uploads.kind, filter.kind))
 
   const row = q.select({
     files: sql<number>`count(*)`,
@@ -308,7 +239,7 @@ function countedUsage(
   return { files: row?.files ?? 0, bytes: row?.bytes ?? 0 }
 }
 
-function capHit(db: Db, venueId: string, actor: Actor, which: 'user' | 'venue', at: string): void {
+function capHit(db: Db, venueId: string, actor: Actor, which: 'user', at: string): void {
   db.transaction((tx) => {
     log(tx, venueId, {
       kind: 'chat_cap_hit',
@@ -365,7 +296,7 @@ export function jpegSize(bytes: Buffer): { width: number, height: number } {
 
 /** A `kind` that arrived as a form field. Anything else is a 422. */
 export function parseUploadKind(value: unknown): UploadKind {
-  if (value === 'chat' || value === 'delivery') return value
+  if (value === 'delivery') return value
   throw unprocessable('KIND_FORBIDDEN', `unknown upload kind ${String(value)}`)
 }
 

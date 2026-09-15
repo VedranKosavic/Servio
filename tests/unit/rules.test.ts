@@ -52,12 +52,9 @@ describe('publishRules', () => {
     expect(versions[1]!.body_md).toBe(V1)
   })
 
-  it('posts one Svi line naming the version, and a Dnevnik entry', () => {
+  it('writes a Dnevnik entry and posts nothing to chat', () => {
     publish(V1)
-    const line = f.db.select().from(schema.chatMessages).all()
-      .find(m => m.systemKey === 'rules_published')!
-    expect(line.body).toBe('Objavljena su nova Pravila (v1)')
-    expect(JSON.parse(line.systemPayloadJson!).link.route).toBe('/konobar/pravila')
+    expect(f.db.select().from(schema.chatMessages).all()).toHaveLength(0)
 
     expect(f.db.select().from(schema.logEntries).all()
       .some(e => e.kind === 'rules_published')).toBe(true)

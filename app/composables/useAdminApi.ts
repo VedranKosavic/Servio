@@ -22,11 +22,8 @@
  * Bosnian sentence with its numbers filled in.
  */
 import { ApiSideError } from '~/composables/useApi'
-import type { ChannelKind } from '#shared/chat'
 import type {
   CategoriesReport,
-  ChatPage,
-  ChatSince,
   ConfirmCountBody,
   ConfirmResult,
   CountView,
@@ -52,7 +49,6 @@ import type {
   OwnerStockReport,
   PatternEntry,
   PinResetResult,
-  PostMessageResult,
   RosterPatternView,
   RuleVersion,
   RulesView,
@@ -81,9 +77,7 @@ import type {
   DiscardScanBody,
   LinkAliasBody,
   PatternBody,
-  PostMessageBody,
   PublishRulesBody,
-  SetPinBody,
   ShiftTemplateBody,
   ShiftTemplatePatch,
   CreateProductBody,
@@ -427,42 +421,10 @@ export function useAdminApi() {
     markLogSeen: () =>
       request<unknown>('/api/owner/log/seen', { method: 'POST', body: {} }),
 
-    // -- Razgovor (Phase 4) --------------------------------------------------
-    //
-    // `/admin` sees *Svi* and *Admini* and **never *Konobari*** — not as an empty
-    // row, not as a hidden tab. The server builds the answer from `canSee`, so
-    // there is nothing here for a screen to remember to filter.
+    // -- Slike (Phase 4) -----------------------------------------------------
 
-    getChatSince: (cursor?: number) =>
-      request<ChatSince>(`/api/chat/since${cursor ? `?cursor=${cursor}` : ''}`),
-
-    getChatHistory: (channel: ChannelKind, beforeSeq?: number, limit = 50) =>
-      request<ChatPage>(
-        `/api/chat/${channel}/messages?limit=${limit}`
-        + (beforeSeq ? `&before_seq=${beforeSeq}` : ''),
-      ),
-
-    postChatMessage: (channel: ChannelKind, body: PostMessageBody) =>
-      request<PostMessageResult>(`/api/chat/${channel}/messages`, { method: 'POST', body }),
-
-    /** *Naručeno ✓* is `{ cleared: true }`, and it is the owner's alone. */
-    setChatPin: (channel: ChannelKind, body: SetPinBody) =>
-      request<{ ok: true }>(`/api/chat/${channel}/pin`, { method: 'POST', body }),
-
-    deleteChatMessage: (id: string) =>
-      request<{ ok: true }>(`/api/chat/messages/${id}/delete`, { method: 'POST', body: {} }),
-
-    forwardChatMessage: (id: string, to: ChannelKind) =>
-      request<PostMessageResult>(`/api/chat/messages/${id}/forward`, { method: 'POST', body: { to } }),
-
-    markChatRead: (channel: ChannelKind, seq: number) =>
-      request<{ ok: true }>('/api/chat/read', { method: 'POST', body: { channel, seq } }),
-
-    /** *Utišaj* — `null` lifts it. */
-    muteChatUser: (userId: string, until: string | null) =>
-      request<{ ok: true }>(`/api/chat/users/${userId}/mute`, { method: 'POST', body: { until } }),
-
-    uploadImage: (blob: Blob, kind: 'chat' | 'delivery' = 'chat') => {
+    /** A delivery photo, multipart. The only upload kind left. */
+    uploadImage: (blob: Blob, kind: 'delivery' = 'delivery') => {
       const form = new FormData()
       form.append('image', blob, 'slika.jpg')
       form.append('kind', kind)

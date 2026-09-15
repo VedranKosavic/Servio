@@ -3,7 +3,7 @@
  *
  * **What this is guarding.** The service worker keeps a copy of the HTML of
  * every screen the phone has opened (`sank-shell`, `nuxt.config.ts`), so that
- * an offline reload of `/konobar/razgovor/svi` comes back on that screen rather
+ * an offline reload of `/konobar/raspored` comes back on that screen rather
  * than on the floor plan. Those copies are per build: the script tags inside
  * them name hashed files like `/_nuxt/Bq3f9x2a.js`, and the next build's files
  * have different names.
@@ -11,7 +11,7 @@
  * **Workbox will not do this one for us**, and the distinction is the point.
  * Precached files are stored with a revision, so activating a new worker
  * replaces them. A *runtime* cache like `sank-shell` is keyed by URL alone:
- * last build's `/konobar/razgovor/svi` survives the swap untouched and is
+ * last build's `/konobar/raspored` survives the swap untouched and is
  * handed out the next time the network takes longer than three seconds — a
  * document naming script files the activation has just deleted. Left alone that
  * is a phone stuck between two builds, which is the shape of the bug this file

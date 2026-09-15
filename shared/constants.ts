@@ -245,8 +245,6 @@ export const RATE_LIMITS = {
   pin: { limit: 10, windowS: 60 },
   /** Keyed by `deviceId ?? sessionId`. */
   orders: { limit: 60, windowS: 60 },
-  /** Sending chat messages. Keyed by `deviceId ?? sessionId` (PHASE4 §2.5). */
-  chat: { limit: 10, windowS: 60 },
 } as const
 
 /** Every money field in a body: `z.int().min(0).max(MAX_MONEY_FEN)`. */
