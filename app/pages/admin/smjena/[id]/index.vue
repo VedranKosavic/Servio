@@ -16,7 +16,8 @@
  * The refetch is the shell's poll (`useAdminChanges`), narrowed to the entities
  * that can change what is on this page. There is no `setInterval` here.
  */
-import type { OwnerShift } from '#shared/types'
+import { shiftCrew, shiftSlotName } from '~/components/smjena/smjeneDays'
+import type { OwnerShift, ShiftTemplateView } from '#shared/types'
 
 definePageMeta({ middleware: 'admin', layout: 'admin' })
 
@@ -32,12 +33,19 @@ useAdminChanges({
 const shiftId = computed(() => String(route.params.id))
 
 const data = ref<OwnerShift | null>(null)
+/** Prva / Druga smjena windows, read once: a template does not move mid-page. */
+const templates = ref<ShiftTemplateView[] | null>(null)
 const loading = ref(true)
 const error = ref('')
 
 async function load() {
   try {
-    data.value = await api.getShift(shiftId.value)
+    const [shift, slots] = await Promise.all([
+      api.getShift(shiftId.value),
+      templates.value ? Promise.resolve(templates.value) : api.getShiftTemplates().catch(() => []),
+    ])
+    data.value = shift
+    templates.value = slots
     error.value = ''
   } catch (err) {
     error.value = apiErrorText(err)
@@ -52,8 +60,18 @@ async function load() {
  */
 onMounted(load)
 
+/** *Prva smjena* / *Druga smjena*, from the opening time against the templates. */
+const title = computed(() => data.value
+  ? shiftSlotName(data.value.shift.opened_at, templates.value ?? [])
+  : 'Smjena')
+
+/** Konobari who locked rounds, and the šanker who closed it. */
+const crew = computed(() => data.value
+  ? shiftCrew(data.value.by_user, data.value.closing)
+  : { konobari: [], sanker: null })
+
 useHead({
-  title: () => data.value ? `Smjena ${dateBs(data.value.shift.business_date)}` : 'Smjena',
+  title: () => data.value ? `${title.value} ${dateBs(data.value.shift.business_date)}` : 'Smjena',
 })
 
 /**
@@ -87,7 +105,7 @@ const names = computed<Record<string, string>>(() => {
     <p v-if="error" class="a-error">{{ error }}</p>
 
     <template v-if="data">
-      <SmjenaHeader :shift="data.shift" :names="names" />
+      <SmjenaHeader :shift="data.shift" :names="names" :title="title" :crew="crew" />
 
       <div class="a-tiles">
         <UiTile label="Pazar" :value="formatAmount(data.summary.promet_fen)" unit="KM" />

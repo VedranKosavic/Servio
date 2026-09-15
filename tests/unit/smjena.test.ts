@@ -42,6 +42,8 @@ import {
   PLAIN_SLOT_NAME,
   groupShiftsByDay,
   matchTemplate,
+  shiftCrew,
+  shiftSlotName,
 } from '../../app/components/smjena/smjeneDays'
 import { resolvePeriod } from '../../app/composables/useAdminPeriod'
 import { DEFAULT_SETTINGS } from '../../shared/settings'
@@ -679,5 +681,36 @@ describe('Smjene as days', () => {
     expect(ids.sort()).toEqual(['s-1', 's-2', 's-old'])
     // The page's total is summed from the rows; the days have to agree with it.
     expect(days.reduce((sum, day) => sum + day.promet_fen, 0)).toBe(42500 + 181250 + 5000)
+  })
+})
+
+describe('the shift page header: which shift, and who worked it', () => {
+  const templates = [
+    { id: 't1', name: 'Prva smjena', start_time: '07:00', end_time: '15:00', sort: 1, active: true },
+    { id: 't2', name: 'Druga smjena', start_time: '15:00', end_time: '23:00', sort: 2, active: true },
+  ]
+
+  it('names the slot from the café clock, not UTC', () => {
+    // 13:17 UTC in September is 15:17 in Sarajevo — the Druga window.
+    expect(shiftSlotName('2026-09-15T13:17:00Z', templates)).toBe('Druga smjena')
+    expect(shiftSlotName('2026-09-15T06:30:00Z', templates)).toBe('Prva smjena')
+  })
+
+  it('is Vanredna outside every window, and plain Smjena with no templates', () => {
+    expect(shiftSlotName('2026-09-15T22:30:00Z', templates)).toBe('Vanredna smjena')
+    expect(shiftSlotName('2026-09-15T13:17:00Z', [])).toBe('Smjena')
+    expect(shiftSlotName('2026-09-15T13:17:00Z', templates.map(t => ({ ...t, active: false })))).toBe('Smjena')
+  })
+
+  it('reads the šanker from the closing and the konobari from the rounds', () => {
+    const users = [
+      { user_id: 'amar', name: 'Amar', rounds: 3 },
+      { user_id: 'emir', name: 'Emir', rounds: 4 },
+      { user_id: 'dino', name: 'Dino', rounds: 0 },
+    ]
+    expect(shiftCrew(users, { closed_by: 'emir', closed_by_name: 'Emir' }))
+      .toEqual({ konobari: ['Amar'], sanker: 'Emir' })
+    // Open shift: nobody has closed it, so there is no šanker to name yet.
+    expect(shiftCrew(users, null)).toEqual({ konobari: ['Amar', 'Emir'], sanker: null })
   })
 })

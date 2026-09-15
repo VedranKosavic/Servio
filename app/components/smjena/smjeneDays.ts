@@ -115,6 +115,43 @@ export function matchTemplate(
   return templates.find(template => covers(template, minute)) ?? null
 }
 
+/**
+ * *Prva smjena*, *Druga smjena* — what one shift is called on its own page.
+ *
+ * The same rule *Smjene* uses to put a shift in a slot, from the opening time
+ * alone and against active templates only; outside every window it is
+ * `EXTRA_SLOT_NAME`, and with no templates at all it is plain *Smjena*.
+ */
+export function shiftSlotName(openedAt: string, templates: ShiftTemplateView[]): string {
+  const active = templates.filter(template => template.active)
+  if (active.length === 0) return PLAIN_SLOT_NAME
+  const minute = openedAt && !Number.isNaN(Date.parse(openedAt))
+    ? toMinutes(localTime(openedAt))
+    : Number.NaN
+  return active.find(template => covers(template, minute))?.name ?? EXTRA_SLOT_NAME
+}
+
+/**
+ * Who worked a shift, as the header names them.
+ *
+ * Which screen a worker was on is a property of his **session**, and the
+ * shift does not keep it — so the crew is read from what the shift does keep.
+ * The šanker is whoever closed it (*Zaključi smjenu* admits a šanker-mode
+ * session only), `null` while it is open. The konobari are everybody who locked
+ * a round, less that šanker, in the fold's own order.
+ */
+export function shiftCrew(
+  users: Array<{ user_id: string, name: string, rounds: number }>,
+  closing: { closed_by: string, closed_by_name: string } | null,
+): { konobari: string[], sanker: string | null } {
+  return {
+    konobari: users
+      .filter(user => user.rounds > 0 && user.user_id !== closing?.closed_by)
+      .map(user => user.name),
+    sanker: closing?.closed_by_name ?? null,
+  }
+}
+
 /** Earliest opening first — the order the day was actually worked in. */
 function byOpenedAt(a: OwnerShiftRow, b: OwnerShiftRow): number {
   return a.opened_at < b.opened_at ? -1 : a.opened_at > b.opened_at ? 1 : 0

@@ -1,15 +1,16 @@
 <script setup lang="ts">
 /**
- * The top of `/admin/smjena/:id`: which night this is, and its status.
+ * The top of `/admin/smjena/:id`: which shift this is, who worked it, and its
+ * status.
  *
- * The sentence under the title reads in the order the owner asks the questions
- * — *pet 11.09.2026. · otvorena 18:03 · zatvorena 00:42 · Emir* — which night,
- * when it started, when it ended, who ended it.
+ * The title is the slot — *Prva smjena*, *Druga smjena* — from `shiftSlotName`,
+ * and under it the crew: *Konobar: Amar, Dino · Šanker: Emir* (`shiftCrew`).
+ * The sentence below reads in the order the owner asks the questions — which
+ * night, when it started, when it ended, how long.
  *
  * **There is no review form any more.** *Ukupno s terminala* and *Pregledano*
  * went on the owner's call: the café takes no cards, and the šanker's
- * *Zaključi smjenu* is the sign-off. `POST /api/shifts/:id/review` still exists
- * for the API; nothing on this screen calls it.
+ * *Zaključi smjenu* is the sign-off.
  *
  * **The way back is `UiPageHead`'s own**, drawn above the title, so this header
  * builds no back control of its own.
@@ -17,11 +18,15 @@
 import { shiftStatusPill } from './smjenaLogic'
 import type { Shift } from '#shared/types'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   shift: Shift
   /** `user_id` → name, assembled by the page from the rows it already has. */
   names: Record<string, string>
-}>()
+  /** *Prva smjena* / *Druga smjena* / *Vanredna smjena*. */
+  title?: string
+  /** Who locked rounds, and who closed it as šanker. */
+  crew?: { konobari: string[], sanker: string | null }
+}>(), { title: 'Smjena', crew: () => ({ konobari: [], sanker: null }) })
 
 const pill = computed(() => shiftStatusPill(props.shift.status))
 
@@ -43,12 +48,17 @@ const line = computed(() => {
   const parts = [dayLabel.value, `otvorena ${timeBs(props.shift.opened_at)}`]
   if (props.shift.closed_at) {
     parts.push(`zatvorena ${timeBs(props.shift.closed_at)}`)
-    const closer = nameOf(props.shift.closed_by)
-    if (closer) parts.push(closer)
     if (props.shift.closed_kind === 'forced') parts.push('prisilno zatvorena')
   }
   parts.push(spanBs(props.shift.opened_at, props.shift.closed_at))
   return parts.filter(Boolean).join(' · ')
+})
+
+/** *Konobar: Amar, Dino · Šanker: Emir* — a dash where nobody is known yet. */
+const crewLine = computed(() => {
+  const konobari = props.crew.konobari.length ? props.crew.konobari.join(', ') : '—'
+  const label = props.crew.konobari.length > 1 ? 'Konobari' : 'Konobar'
+  return `${label}: ${konobari} · Šanker: ${props.crew.sanker ?? '—'}`
 })
 
 /** "pregledano · Haris 09:14", for a night signed off before the form went. */
@@ -61,11 +71,13 @@ const statusLabel = computed(() => {
 
 <template>
   <header class="s-head">
-    <UiPageHead eyebrow="Lokal" title="Smjena" :sub="line">
+    <UiPageHead eyebrow="Lokal" :title="title" :sub="line">
       <template #actions>
         <UiPill :tone="pill.tone">{{ statusLabel }}</UiPill>
       </template>
     </UiPageHead>
+
+    <p class="s-crew">{{ crewLine }}</p>
 
     <p v-if="shift.closing_note" class="s-note">
       Napomena: {{ shift.closing_note }}
@@ -74,7 +86,14 @@ const statusLabel = computed(() => {
 </template>
 
 <style scoped>
-.s-head { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.s-head { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+.s-crew {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-body);
+  font-weight: 600;
+}
 
 .s-note {
   margin: 0;
