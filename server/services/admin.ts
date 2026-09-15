@@ -179,7 +179,7 @@ export function getProduct(q: Queryable, venueId: string, productId: string): Pr
 export function createProduct(
   db: Db, venueId: string, actor: Actor, body: CreateProductBody, now = nowIso(),
 ): ProductAdmin {
-  requireCategory(db, venueId, body.category_id)
+  requireLiveCategory(db, venueId, body.category_id)
   if (body.sells_stock_item_id) requireStockItem(db, venueId, body.sells_stock_item_id)
 
   const id = newId()
@@ -239,7 +239,11 @@ export function updateProduct(
   requireSomething(patch)
   const before = requireProduct(db, venueId, productId)
 
-  if (patch.category_id) requireCategory(db, venueId, patch.category_id)
+  // Only a *new* assignment must be to a live category: an edit that re-sends
+  // the category an item already sits in must not fail because it was deleted.
+  if (patch.category_id && patch.category_id !== before.categoryId) {
+    requireLiveCategory(db, venueId, patch.category_id)
+  }
   if (patch.sells_stock_item_id) requireStockItem(db, venueId, patch.sells_stock_item_id)
 
   const priceMoved = patch.price_fen !== undefined && patch.price_fen !== before.priceFen
@@ -397,15 +401,20 @@ export function listCategories(q: Queryable, venueId: string): CategoryAdmin[] {
       .map(r => [r.categoryId, r.n]),
   )
 
-  return rows.map(row => ({
-    id: row.id,
-    name: row.name,
-    kind: row.kind,
-    note_chips: parseChips(row.noteChipsJson),
-    sort: row.sort,
-    active: isOn(row.active),
-    product_count: counts.get(row.id) ?? 0,
-  }))
+  // A deleted category is `active = 0` (see `deleteCategory`) and leaves the
+  // list. The one switched-off category still shown is an older *ugašena* one
+  // that holds live articles — hiding it would hide those articles from *Meni*.
+  return rows
+    .filter(row => isOn(row.active) || (counts.get(row.id) ?? 0) > 0)
+    .map(row => ({
+      id: row.id,
+      name: row.name,
+      kind: row.kind,
+      note_chips: parseChips(row.noteChipsJson),
+      sort: row.sort,
+      active: isOn(row.active),
+      product_count: counts.get(row.id) ?? 0,
+    }))
 }
 
 export function createCategory(
@@ -472,6 +481,89 @@ export function updateCategory(
 
   announce(db, venueId, 'menu', categoryId)
   return requireCategoryView(db, venueId, categoryId)
+}
+
+/**
+ * `DELETE /api/admin/categories/:id` — *Obriši* on *Kategorije*.
+ *
+ * Refused while the category still holds an active menu article: deleting it
+ * would take those articles off the waiter's phone without anybody deciding
+ * that, so the owner removes or moves them first (409 `CATEGORY_HAS_PRODUCTS`).
+ *
+ * Past that, **hard or soft is decided by what still points at the row**. A
+ * removed article (`products.active = 0`) still belongs to it and old
+ * `order_lines` point at that article; a stock item may carry it for the
+ * *Kategorije* report; a written shift summary or waiter settlement may hold its
+ * id in JSON. If any of those exist the row stays as `active = 0` — every list
+ * the owner and the phones read hides it, and every report keeps naming it.
+ * Only a category nothing ever referenced is really `DELETE`d. The check and
+ * the write are one transaction, so a product added in between cannot slip in.
+ */
+export function deleteCategory(
+  db: Db, venueId: string, actor: Actor, categoryId: string, now = nowIso(),
+): { ok: true, mode: 'hard' | 'soft' } {
+  const row = requireCategory(db, venueId, categoryId)
+  let mode: 'hard' | 'soft' = 'soft'
+
+  db.transaction((tx) => {
+    const count = (n: { n: number } | undefined) => n?.n ?? 0
+    const activeProducts = count(tx.select({ n: sql<number>`count(*)` }).from(schema.products)
+      .where(and(
+        eq(schema.products.venueId, venueId),
+        eq(schema.products.categoryId, categoryId),
+        eq(schema.products.active, 1),
+      )).get())
+    if (activeProducts > 0) {
+      throw conflict('CATEGORY_HAS_PRODUCTS', 'this category still holds active products')
+    }
+    // Already deleted (soft) and holding nothing live: there is nothing to delete.
+    if (!isOn(row.active)) throw notFound('CATEGORY_NOT_FOUND', 'no such category in this venue')
+
+    const idInJson = `%${categoryId}%`
+    const referenced
+      = count(tx.select({ n: sql<number>`count(*)` }).from(schema.products)
+        .where(and(eq(schema.products.venueId, venueId), eq(schema.products.categoryId, categoryId)))
+        .get())
+      + count(tx.select({ n: sql<number>`count(*)` }).from(schema.stockItems)
+        .where(and(eq(schema.stockItems.venueId, venueId), eq(schema.stockItems.categoryId, categoryId)))
+        .get())
+      + count(tx.select({ n: sql<number>`count(*)` }).from(schema.shiftSummaries)
+        .where(and(
+          eq(schema.shiftSummaries.venueId, venueId),
+          sql`${schema.shiftSummaries.byCategoryJson} LIKE ${idInJson}`,
+        )).get())
+      + count(tx.select({ n: sql<number>`count(*)` }).from(schema.waiterSettlements)
+        .where(and(
+          eq(schema.waiterSettlements.venueId, venueId),
+          sql`${schema.waiterSettlements.summaryJson} LIKE ${idInJson}`,
+        )).get())
+
+    if (referenced > 0) {
+      tx.update(schema.categories).set({ active: 0 })
+        .where(and(eq(schema.categories.id, categoryId), eq(schema.categories.venueId, venueId)))
+        .run()
+      mode = 'soft'
+    } else {
+      tx.delete(schema.categories)
+        .where(and(eq(schema.categories.id, categoryId), eq(schema.categories.venueId, venueId)))
+        .run()
+      mode = 'hard'
+    }
+
+    // The name travels in the body: after a hard delete there is no row left
+    // for the Dnevnik to look it up by.
+    log(tx, venueId, {
+      kind: 'category_deleted',
+      body: { category_id: categoryId, name: row.name },
+      actorId: actor.userId,
+      ref: { type: 'category', id: categoryId },
+      at: now,
+    })
+    bump(tx, venueId, 'menu', categoryId)
+  })
+
+  announce(db, venueId, 'menu', categoryId)
+  return { ok: true, mode }
 }
 
 // ===========================================================================
@@ -704,7 +796,7 @@ export function createStockItem(
   if (!body.last_cost_mfen) {
     throw unprocessable('COST_REQUIRED', 'a new stock item needs last_cost_mfen > 0')
   }
-  if (body.category_id) requireCategory(db, venueId, body.category_id)
+  if (body.category_id) requireLiveCategory(db, venueId, body.category_id)
 
   const id = newId()
 
@@ -768,7 +860,11 @@ export function updateStockItem(
     && hasMovements(db, venueId, itemId)) {
     throw conflict('UNIT_FROZEN', 'this item already has stock movements')
   }
-  if (patch.category_id) requireCategory(db, venueId, patch.category_id)
+  // Only a *new* assignment must be to a live category: an edit that re-sends
+  // the category an item already sits in must not fail because it was deleted.
+  if (patch.category_id && patch.category_id !== before.categoryId) {
+    requireLiveCategory(db, venueId, patch.category_id)
+  }
 
   const seedsAverage = patch.last_cost_mfen !== undefined
     && patch.last_cost_mfen > 0
@@ -1108,6 +1204,13 @@ function requireCategory(q: Queryable, venueId: string, id: string) {
     .where(and(eq(schema.categories.id, id), eq(schema.categories.venueId, venueId)))
     .get()
   if (!row) throw notFound('CATEGORY_NOT_FOUND', 'no such category in this venue')
+  return row
+}
+
+/** A category something may be put into: it exists and has not been deleted. */
+function requireLiveCategory(q: Queryable, venueId: string, id: string) {
+  const row = requireCategory(q, venueId, id)
+  if (!isOn(row.active)) throw notFound('CATEGORY_NOT_FOUND', 'no such category in this venue')
   return row
 }
 

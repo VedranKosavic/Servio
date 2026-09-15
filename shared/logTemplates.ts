@@ -648,6 +648,13 @@ export const LOG = {
     title: (b, n) => `Kategorija promijenjena · ${n.category(b.category_id)} · ${b.what}`,
   }),
 
+  /** The name is in the body because a hard-deleted row can no longer be looked up. */
+  category_deleted: defineLog({
+    group: 'postavke',
+    body: body({ category_id: id, name: z.string() }),
+    title: b => `Kategorija obrisana · ${b.name}`,
+  }),
+
   table_changed: defineLog({
     group: 'postavke',
     body: body({ table_id: id, what: z.string() }),

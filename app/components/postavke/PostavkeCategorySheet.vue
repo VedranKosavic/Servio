@@ -33,6 +33,8 @@ const emit = defineEmits<{
   close: []
   create: [body: CreateCategoryBody]
   update: [id: string, patch: UpdateCategoryBody]
+  /** *Obriši kategoriju* — the page asks before it does it. */
+  remove: []
 }>()
 
 const KINDS: Array<{ value: CategoryKind, label: string }> = [
@@ -116,7 +118,10 @@ function save() {
       @commit="value => sort = value"
     />
 
-    <div class="p-row">
+    <!-- *Obriši* is the way out now. The switch only stays for an older
+         category that was switched off while it still held articles, so it
+         can be switched back on. -->
+    <div v-if="category && !category.active" class="p-row">
       <span class="p-caption">Aktivna</span>
       <PostavkeToggle v-model="active" label="Aktivna kategorija" words />
     </div>
@@ -125,6 +130,12 @@ function save() {
       {{ category.product_count }} artikala nestaje sa menija dok je kategorija ugašena.
     </p>
       <template #footer>
+        <UiButton
+          v-if="category"
+          variant="danger"
+          :disabled="pending"
+          @click="emit('remove')"
+        >Obriši kategoriju</UiButton>
         <UiButton variant="ghost" @click="emit('close')">Odustani</UiButton>
         <UiButton
           variant="primary"

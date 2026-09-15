@@ -80,7 +80,8 @@ export function getBootstrap(db: Queryable, venueId: string, actor: Actor): Boot
 
   const categories = db.select()
     .from(schema.categories)
-    .where(eq(schema.categories.venueId, venueId))
+    // A deleted category is `active = 0` and never reaches a phone again.
+    .where(and(eq(schema.categories.venueId, venueId), eq(schema.categories.active, 1)))
     .orderBy(asc(schema.categories.sort))
     .all()
 

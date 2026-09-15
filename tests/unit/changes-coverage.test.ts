@@ -44,7 +44,7 @@ import { putStaffNote } from '../../server/services/summaries'
 import { resetPin } from '../../server/services/auth'
 import {
   createCategory, createProduct, createStockItem, createTable, createUser, setRecipe,
-  updateCategory, updateProduct, updateSettings, updateStockItem, updateTable, updateUser,
+  deleteCategory, updateCategory, updateProduct, updateSettings, updateStockItem, updateTable, updateUser,
 } from '../../server/services/admin'
 import { schema } from '../helpers/db'
 import {
@@ -479,6 +479,11 @@ const CALLS: Record<string, () => void | Promise<void>> = {
 
   [join('admin', 'categories', '[id]', 'index.patch.ts')]: () => {
     updateCategory(f.db, f.venueId, f.adminActor(), firstCategory(), { sort: 9 })
+  },
+
+  [join('admin', 'categories', '[id]', 'index.delete.ts')]: () => {
+    const created = createCategory(f.db, f.venueId, f.adminActor(), { name: 'Prazna' })
+    deleteCategory(f.db, f.venueId, f.adminActor(), created.id)
   },
 
   [join('admin', 'tables', 'index.post.ts')]: () => {

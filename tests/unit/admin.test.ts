@@ -26,7 +26,12 @@ import { maxSeq } from '../../server/services/changes'
 import { requireRole } from '../../server/utils/auth'
 import { resetPin } from '../../server/services/auth'
 import { verifySecret } from '../../server/utils/password'
+import { getBootstrap } from '../../server/services/bootstrap'
+import { categoriesReport } from '../../server/services/reports'
+import { latestSummary, writeSummaryVersion } from '../../server/services/summaries'
+import { ROUTE_ROLES } from '../../shared/routeRoles'
 import {
+  deleteCategory,
   createCategory, createProduct, createStockItem, createTable, createUser,
   getVenueSettings, listCategories, listProducts, listStockItems, listTables, listUsers,
   setRecipe, updateCategory, updateProduct, updateSettings, updateStockItem,
@@ -282,6 +287,69 @@ describe('categories and tables', () => {
     expect(renamed.name).toBe('Koktel')
     expect(renamed.note_chips).toEqual(['bez leda', 'duplo'])
     expect(entries('category_changed')).toHaveLength(2)
+  })
+
+  it('deletes an empty category for real: row gone, one bump, one Dnevnik entry', () => {
+    const created = createCategory(f.db, f.venueId, admin(), { name: 'Prazna' })
+    const before = maxSeq(f.db, f.venueId)
+
+    expect(deleteCategory(f.db, f.venueId, admin(), created.id)).toEqual({ ok: true, mode: 'hard' })
+
+    expect(f.db.select().from(schema.categories)
+      .where(eq(schema.categories.id, created.id)).get()).toBeUndefined()
+    expect(maxSeq(f.db, f.venueId)).toBeGreaterThan(before)
+    const logged = entries('category_deleted')
+    expect(logged).toHaveLength(1)
+    expect(JSON.parse(logged[0]!.bodyJson)).toMatchObject({ category_id: created.id, name: 'Prazna' })
+    expect(listCategories(f.db, f.venueId).find(c => c.id === created.id)).toBeUndefined()
+  })
+
+  it('keeps a category with history as switched off, hidden everywhere, still named in reports', () => {
+    const shiftId = f.openShift({ members: ['Amar'] })
+    f.lock('Amar', 'Sto 7', [{ product: 'Kafa' }])
+    f.db.transaction(tx => writeSummaryVersion(tx, f.venueId, shiftId, 'close', f.clock.now()))
+
+    const kafa = categoryId('Kafa')
+    for (const product of listProducts(f.db, f.venueId).filter(p => p.category_id === kafa)) {
+      updateProduct(f.db, f.venueId, admin(), product.id, { active: false })
+    }
+
+    expect(deleteCategory(f.db, f.venueId, admin(), kafa).mode).toBe('soft')
+
+    const row = f.db.select().from(schema.categories).where(eq(schema.categories.id, kafa)).get()
+    expect(row?.active).toBe(0)
+    expect(listCategories(f.db, f.venueId).some(c => c.id === kafa)).toBe(false)
+    expect(getBootstrap(f.db, f.venueId, f.actor('Amar')).categories.some(c => c.id === kafa))
+      .toBe(false)
+
+    // History keeps the name: the written summary and the *Kategorije* report.
+    const summary = latestSummary(f.db, f.venueId, shiftId)!
+    expect(summary.by_category.find(c => c.category_id === kafa)?.name).toBe('Kafa')
+    const report = categoriesReport(f.db, f.venueId, '2000-01-01T00:00:00.000Z', '2100-01-01T00:00:00.000Z')
+    expect(report.rows.find(r => r.category_id === kafa)?.category_name).toBe('Kafa')
+
+    // Nothing new goes into it, and it cannot be deleted twice.
+    expect(() => createProduct(f.db, f.venueId, admin(), {
+      category_id: kafa, name: 'Espresso', price_fen: 220,
+    })).toThrow(/no such category/)
+    expect(() => deleteCategory(f.db, f.venueId, admin(), kafa)).toThrow(/no such category/)
+  })
+
+  it('refuses while the category still holds an active article, and changes nothing', () => {
+    const kafa = categoryId('Kafa')
+    const before = maxSeq(f.db, f.venueId)
+
+    expect(() => deleteCategory(f.db, f.venueId, admin(), kafa))
+      .toThrow(expect.objectContaining({ code: 'CATEGORY_HAS_PRODUCTS' }))
+
+    expect(f.db.select().from(schema.categories)
+      .where(eq(schema.categories.id, kafa)).get()?.active).toBe(1)
+    expect(maxSeq(f.db, f.venueId)).toBe(before)
+    expect(entries('category_deleted')).toHaveLength(0)
+  })
+
+  it('routes the delete to admins only', () => {
+    expect(ROUTE_ROLES['DELETE /api/admin/categories/:id']).toEqual(['admin'])
   })
 
   it('refuses to take a table out of use while guests are sitting at it', () => {
@@ -624,7 +692,7 @@ describe('the guard on every admin route', () => {
     const mine = files(ADMIN_DIR).filter(
       path => MINE.some(prefix => path.includes(`/admin/${prefix}`)),
     )
-    expect(mine.length).toBe(19)
+    expect(mine.length).toBe(20)
 
     for (const path of mine) {
       expect(readFileSync(path, 'utf8'), `${path} has no requireRole`)

@@ -194,6 +194,7 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   'GET /api/admin/categories': A,
   'POST /api/admin/categories': A,
   'PATCH /api/admin/categories/:id': A,
+  'DELETE /api/admin/categories/:id': A,
   'GET /api/admin/tables': A,
   'POST /api/admin/tables': A,
   'PATCH /api/admin/tables/:id': A,

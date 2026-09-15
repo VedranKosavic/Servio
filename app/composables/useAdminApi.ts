@@ -358,6 +358,9 @@ export function useAdminApi() {
       request<CategoryAdmin>('/api/admin/categories', { method: 'POST', body }),
     updateCategory: (id: string, body: UpdateCategoryBody) =>
       request<CategoryAdmin>(`/api/admin/categories/${id}`, { method: 'PATCH', body }),
+    /** Gone from every list; 409 `CATEGORY_HAS_PRODUCTS` while it holds active articles. */
+    deleteCategory: (id: string) =>
+      request<{ ok: true, mode: 'hard' | 'soft' }>(`/api/admin/categories/${id}`, { method: 'DELETE' }),
 
     getTables: () => request<TableAdmin[]>('/api/admin/tables'),
     createTable: (body: CreateTableBody) =>

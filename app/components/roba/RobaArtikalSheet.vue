@@ -91,12 +91,19 @@ watch(() => props.open, (open) => {
     : null
 }, { immediate: true })
 
-const categoryOptions = computed(() => [
-  { value: '', label: 'Bez kategorije' },
-  ...props.categories
+const categoryOptions = computed(() => {
+  const listed = props.categories
     .filter(category => category.active || category.id === props.item?.category_id)
-    .map(category => ({ value: category.id, label: category.name })),
-])
+    .map(category => ({ value: category.id, label: category.name }))
+  // A deleted category is no longer in the list, but the item still sits in it:
+  // without its own option the select would show nothing and a save could
+  // quietly drop the item out of its category.
+  const own = props.item?.category_id
+  const missing = own && !listed.some(option => option.value === own)
+    ? [{ value: own, label: props.item?.category_name ?? 'Obrisana kategorija' }]
+    : []
+  return [{ value: '', label: 'Bez kategorije' }, ...listed, ...missing]
+})
 
 const unitFrozen = computed(() => props.item?.unit_frozen ?? false)
 

@@ -203,6 +203,7 @@ function bodyFor(kind: LogKind, f: Fixture): Record<string, unknown> {
     price_changed: { product_id: f.productId('Kafa'), before: 150, after: 180 },
     product_changed: { product_id: f.productId('Kafa'), what: 'naziv' },
     category_changed: { category_id: uid(), what: 'sort' },
+    category_deleted: { category_id: uid(), name: 'Kokteli' },
     table_changed: { table_id: table, what: 'zona' },
     stock_item_changed: { stock_item_id: f.stockItemId('Šećer'), what: 'tolerancija' },
     recipe_changed: { product_id: f.productId('Kafa'), what: '7 g → 8 g' },

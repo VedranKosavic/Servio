@@ -22,6 +22,9 @@ export const ADMIN_ERRORS = {
   // stays because it is the only fragment that defines it.
   CATEGORY_NOT_FOUND: 'Kategorija ne postoji.',
 
+  /** Deleting it would silently take live articles off the waiter's phone. */
+  CATEGORY_HAS_PRODUCTS: 'Kategorija ima artikle. Prvo ih ukloni ili premjesti u drugu kategoriju.',
+
   /** Nothing to change: a PATCH with no keys would write an empty Dnevnik entry. */
   EMPTY_PATCH: 'Nema izmjena za snimiti.',
 

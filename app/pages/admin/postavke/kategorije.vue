@@ -3,10 +3,13 @@
  * *Kategorije* — the tabs the waiter's menu is split into, their order, and the
  * quick note chips each one offers.
  *
- * A category is never deleted, only switched off: a category that disappeared in
- * March still has to name the `order_lines` sold in February, and a report whose
- * foreign key no longer resolves is a report that silently loses a column. So
- * *Aktivna* is the only way out, and the sheet says how many products go with it.
+ * **Obriši.** Refused while the category still holds active articles (the
+ * confirmation says how many and keeps the button off). Otherwise the server
+ * decides: a category nothing ever pointed at is really deleted; one that removed
+ * articles, stock items or past shift summaries still name is kept as
+ * `active = 0`, because a category that disappeared in March still has to name
+ * what was sold in February. Either way it leaves this list, *Meni* and the
+ * waiter's phone, and there is no way back.
  *
  * **Two layouts, one page.** At a desk this is a seven-column table and it
  * should be. In a hand it is a list (`PostavkeKatList`): the name and one quiet
@@ -101,7 +104,7 @@ const columns = [
   { key: 'napomene', label: 'Napomene' },
   { key: 'sort', label: 'Sortiranje', align: 'r' as const, width: '100px' },
   { key: 'aktivna', label: 'Aktivna', width: '100px' },
-  { key: 'akcija', label: '', align: 'r' as const, width: '110px' },
+  { key: 'akcija', label: '', align: 'r' as const, width: '190px' },
 ]
 
 function open(category: CategoryAdmin | null) {
@@ -134,6 +137,42 @@ async function update(id: string, patch: UpdateCategoryBody) {
   } finally {
     sheetPending.value = false
   }
+}
+
+/** The category *Obriši* is asking about, while its confirmation is open. */
+const removeFor = ref<CategoryAdmin | null>(null)
+const removePending = ref(false)
+const removeError = ref<string | null>(null)
+
+function askRemove(category: CategoryAdmin) {
+  // The edit sheet hands over rather than stacking two scrims.
+  sheetOpen.value = false
+  removeError.value = null
+  removeFor.value = category
+}
+
+async function confirmRemove() {
+  const category = removeFor.value
+  if (!category || category.product_count > 0) return
+  removePending.value = true
+  try {
+    await api.deleteCategory(category.id)
+    removeFor.value = null
+    await load()
+  } catch (err) {
+    removeError.value = apiErrorText(err, 'Kategorija nije obrisana.')
+  } finally {
+    removePending.value = false
+  }
+}
+
+/** 1 artikal, 2 artikla, 5 artikala — the last digit, except in the teens. */
+function artikala(n: number): string {
+  const last = n % 10
+  const teens = n % 100
+  if (last === 1 && teens !== 11) return `${n} artikal`
+  if (last >= 2 && last <= 4 && (teens < 12 || teens > 14)) return `${n} artikla`
+  return `${n} artikala`
 }
 
 /**
@@ -231,7 +270,15 @@ async function move(category: CategoryAdmin, delta: -1 | 1) {
             </UiPill>
           </td>
           <td class="r">
-            <UiButton small variant="ghost" @click="open(category)">Izmijeni</UiButton>
+            <span class="p-actions">
+              <UiButton small variant="ghost" @click="open(category)">Izmijeni</UiButton>
+              <UiButton
+                small
+                variant="ghost"
+                :aria-label="`Obriši kategoriju, ${category.name}`"
+                @click="askRemove(category)"
+              >Obriši</UiButton>
+            </span>
           </td>
         </tr>
       </UiTable>
@@ -247,7 +294,36 @@ async function move(category: CategoryAdmin, delta: -1 | 1) {
       @close="sheetOpen = false"
       @create="create"
       @update="update"
+      @remove="editing && askRemove(editing)"
     />
+
+    <!-- Mounted after the edit sheet: it opens as that one closes, and the
+         later sheet's page lock has to be the one that wins. -->
+    <UiSheet
+      :open="removeFor !== null"
+      title="Obrisati kategoriju?"
+      :pending="removePending"
+      @close="removeFor = null"
+    >
+      <p v-if="removeError" class="p-error" role="alert">{{ removeError }}</p>
+      <p v-if="removeFor && removeFor.product_count > 0" class="p-confirm">
+        „{{ removeFor.name }}“ ima {{ artikala(removeFor.product_count) }} na meniju.
+        Prvo ih ukloni ili premjesti u drugu kategoriju.
+      </p>
+      <p v-else class="p-confirm">
+        „{{ removeFor?.name }}“ nestaje iz liste kategorija i sa menija. Izvještaji
+        za ranije smjene zadržavaju njen naziv.
+      </p>
+      <template #footer>
+        <UiButton variant="ghost" @click="removeFor = null">Odustani</UiButton>
+        <UiButton
+          variant="danger"
+          :pending="removePending"
+          :disabled="!removeFor || removeFor.product_count > 0"
+          @click="confirmRemove"
+        >Obriši</UiButton>
+      </template>
+    </UiSheet>
   </PostavkePage>
 </template>
 
@@ -255,4 +331,15 @@ async function move(category: CategoryAdmin, delta: -1 | 1) {
 .off td { opacity: 0.55; }
 .p-muted { color: var(--muted); }
 .p-chips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.p-actions { display: inline-flex; gap: 4px; }
+.p-confirm { margin: 0; color: var(--ink); font-size: var(--text-body); }
+
+.p-error {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--text-micro);
+}
 </style>
