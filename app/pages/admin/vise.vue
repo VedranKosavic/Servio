@@ -41,27 +41,6 @@ const links = adminMore()
         </NuxtLink>
       </template>
     </UiCard>
-
-    <!-- The phone has no left nav, so the cross-links to the staff app live
-         here — the owner also serves tables, and both screens ask for a session
-         rather than for a role. He has no `mode` of his own (his landing is the
-         dashboard), so he picks a screen by opening it. -->
-    <UiCard>
-      <NuxtLink to="/konobar" class="a-more-row">
-        <span class="a-more-text">
-          <strong>Konobarski ekran</strong>
-          <small>Stolovi, narudžbe i naplata</small>
-        </span>
-        <UiIcon name="chevron-right" :size="20" />
-      </NuxtLink>
-      <NuxtLink to="/sanker" class="a-more-row">
-        <span class="a-more-text">
-          <strong>Šankerski ekran</strong>
-          <small>Priprema, šank i zaliha</small>
-        </span>
-        <UiIcon name="chevron-right" :size="20" />
-      </NuxtLink>
-    </UiCard>
   </div>
 </template>
 

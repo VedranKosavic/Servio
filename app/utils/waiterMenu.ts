@@ -67,9 +67,9 @@ export const WAITER_MENU: WaiterMenuItem[] = [
   // The label is the *other* screen's name and is written in the sheet, because
   // it depends on where the person currently is.
   { id: 'mode', label: 'Prebaci ekran', action: 'mode', roles: ['radnik'], ready: true },
-  // The owner also serves tables, so he can be here — and this is his way back.
-  // `/admin` is the only row he does not share with the waiters; the light
-  // dashboard's own nav carries the mirror of it, *Konobarski ekran*.
+  // An admin who opens the staff app by URL has this as his way back. `/admin`
+  // is the only row he does not share with the waiters; the dashboard itself no
+  // longer links across to the staff screens.
   { id: 'dashboard', label: 'Kontrolna ploča', to: '/admin', roles: ['admin'], ready: true },
   { id: 'logout', label: 'Odjavi se', action: 'logout', roles: ['radnik', 'admin'], ready: true },
 ]

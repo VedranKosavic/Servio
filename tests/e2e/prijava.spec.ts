@@ -157,7 +157,7 @@ test.describe('Prijava — the PIN pad', () => {
     expect(body).not.toMatch(/Haris|Amar|Emir|Lejla/)
   })
 
-  test('an owner lands on the dashboard, and can cross to the tables', async () => {
+  test('an owner lands on the dashboard, with no link across to the staff screens', async () => {
     const page = await context.newPage()
     await padIn(page, PINS.Haris)
 
@@ -165,12 +165,10 @@ test.describe('Prijava — the PIN pad', () => {
     await expect(page).toHaveURL(/\/admin$/)
     await expect(page.getByRole('heading', { name: 'Puls' })).toBeVisible()
 
-    // The dashboard is responsive; on a 390 px phone the nav is the bottom tabs
-    // and the cross-link lives on *Više*. He also serves tables, so `/konobar`
-    // stays open to him — it asks for a session, not for a mode.
+    // *Konobarski ekran* and *Šankerski ekran* were removed from *Više* and from
+    // the rail on the owner's call; the dashboard offers no way across.
     await page.getByRole('link', { name: 'Više' }).click()
-    await page.getByRole('link', { name: /Konobarski ekran/ }).click()
-    await expect(page).toHaveURL(/\/konobar$/)
+    await expect(page.getByRole('link', { name: /Konobarski ekran|Šankerski ekran/ })).toHaveCount(0)
 
     await page.close()
   })
