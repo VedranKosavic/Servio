@@ -789,6 +789,7 @@ export function getDelivery(q: Queryable, venueId: string, deliveryId: string): 
     supplier_name: header.d.supplierName,
     invoice_no: header.d.invoiceNo,
     delivered_at: header.d.deliveredAt,
+    created_at: header.d.createdAt,
     total_fen: header.d.totalFen,
     status: header.d.status,
     reversed_at: header.d.reversedAt,

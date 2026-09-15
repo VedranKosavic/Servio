@@ -51,7 +51,8 @@
  * shifts' *names and hours* are read from those templates rather than written
  * here, because a café that adds a third shift must not need this file edited.
  */
-import type { OwnerLive, OwnerShiftRow, TabDetail } from '#shared/types'
+import type { DeliveryView, OwnerLive, OwnerShiftRow, TabDetail } from '#shared/types'
+import { prijemToday } from '~/utils/pulsPrijem'
 import type { PulsFloorCell } from '~/utils/puls'
 import { addDays, businessDate, localTime } from '#shared/dates'
 
@@ -108,6 +109,13 @@ const changes = useAdminChanges({
   onEntity: (entity) => { if (catalogueMoved(entity)) void refreshBootstrap() },
 })
 
+/**
+ * *Prijem robe danas*. The newest deliveries ride on the same tick as the live
+ * read; the card appears only when one was entered today (`prijemToday`).
+ */
+const deliveries = ref<DeliveryView[]>([])
+const prijem = computed(() => prijemToday(deliveries.value, now.value.toISOString()))
+
 /** One read at a time: the mount and the first tick must not both fetch. */
 let inFlight = false
 
@@ -115,7 +123,14 @@ async function load() {
   if (inFlight) return
   inFlight = true
   try {
-    const fresh = await api.getLive()
+    const [fresh, booked] = await Promise.all([
+      api.getLive(),
+      // No range (`qs` drops empty values): the newest 200 by invoice date,
+      // filtered to today's entries on the client. A failed read here must not
+      // blank the rest of Puls.
+      api.getDeliveries({ from: '', to: '' }).catch(() => deliveries.value),
+    ])
+    deliveries.value = booked
 
     // The one extra read, and only on the night it is needed: with no shift open
     // the live answer has no id and no promet for the shift that just finished.
@@ -473,6 +488,9 @@ onMounted(() => { void load() })
         <PulsSmjenaCard v-bind="cardMoney" />
         <PulsSmjenaCard v-bind="cardNext" />
       </div>
+
+      <!-- Only on a day goods were booked. -->
+      <PulsPrijemCard v-if="prijem.deliveries.length > 0" :prijem="prijem" />
 
       <PulsWhoStrip :shifts="whoCards" />
 

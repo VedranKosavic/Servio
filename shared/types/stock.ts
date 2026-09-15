@@ -119,6 +119,8 @@ export interface DeliveryView {
   supplier_name: string
   invoice_no: string | null
   delivered_at: string
+  /** When the delivery was entered — *Puls* shows today's by this, not the invoice date. */
+  created_at: string
   total_fen: number
   status: string
   reversed_at: string | null
