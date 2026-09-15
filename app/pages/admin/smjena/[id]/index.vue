@@ -8,15 +8,14 @@
  * `GET /api/admin/settings`, which the waiter strip judges against.
  *
  * **The owner's cut.** The tiles are down to *Pazar*: gotovina/kartica, gratis
- * and storna, razlika gotovine, manjak robe and lule went, and so did *Popisi*.
- * *Kasa* is no longer the drawer reconciliation — nobody counts cash any more —
- * it is the šanker's *Zaključi smjenu*: Sav prihod, the deductions and
- * *Za predati*, exactly as stored.
+ * and storna, razlika gotovine, manjak robe and lule went, and so did *Popisi*
+ * and the review form (*Ukupno s terminala*, *Pregledano*). *Kasa* is no longer
+ * the drawer reconciliation — nobody counts cash any more — it is the šanker's
+ * *Zaključi smjenu*: Sav prihod, the deductions and *Za predati*, as stored.
  *
  * The refetch is the shell's poll (`useAdminChanges`), narrowed to the entities
  * that can change what is on this page. There is no `setInterval` here.
  */
-import { ApiSideError } from '~/composables/useApi'
 import type { OwnerShift, Settings } from '#shared/types'
 
 definePageMeta({ middleware: 'admin', layout: 'admin' })
@@ -24,7 +23,7 @@ definePageMeta({ middleware: 'admin', layout: 'admin' })
 const route = useRoute()
 const api = useAdminApi()
 const me = useMe()
-const changes = useAdminChanges({
+useAdminChanges({
   onEntity: (entity) => {
     if (entity === 'shift' || entity === 'adjustment' || entity === 'stock') void load()
   },
@@ -37,14 +36,6 @@ const settings = ref<Settings | null>(null)
 const loading = ref(true)
 const error = ref('')
 
-// -- the review form ---------------------------------------------------------
-
-const cardTotal = ref<number | null>(null)
-const closingNote = ref('')
-const reviewPending = ref(false)
-const reviewError = ref('')
-const noteRequired = ref(false)
-
 async function load() {
   try {
     const [shift, config] = await Promise.all([
@@ -53,10 +44,6 @@ async function load() {
     ])
     data.value = shift
     settings.value = config
-    // Only seed the form while it is untouched, so a poll landing mid-typing
-    // cannot overwrite what the owner is in the middle of entering.
-    if (cardTotal.value === null) cardTotal.value = shift.shift.card_total_fen
-    if (!closingNote.value) closingNote.value = shift.shift.closing_note ?? ''
     error.value = ''
   } catch (err) {
     error.value = apiErrorText(err)
@@ -110,26 +97,6 @@ const categoryNames = computed<Record<string, string>>(() => {
   }
   return map
 })
-
-async function review() {
-  reviewPending.value = true
-  reviewError.value = ''
-  noteRequired.value = false
-  try {
-    await api.reviewShift(shiftId.value, {
-      ...(cardTotal.value === null ? {} : { card_total_fen: cardTotal.value }),
-      ...(closingNote.value.trim() ? { closing_note: closingNote.value.trim() } : {}),
-    })
-    await load()
-    await changes.refresh()
-  } catch (err) {
-    // 422 NOTE_REQUIRED: the server wants a sentence before it signs the night off.
-    if (err instanceof ApiSideError && err.code === 'NOTE_REQUIRED') noteRequired.value = true
-    reviewError.value = apiErrorText(err)
-  } finally {
-    reviewPending.value = false
-  }
-}
 </script>
 
 <template>
@@ -137,19 +104,18 @@ async function review() {
     <p v-if="error" class="a-error">{{ error }}</p>
 
     <template v-if="data && settings">
-      <SmjenaHeader
-        v-model:card-total="cardTotal"
-        v-model:note="closingNote"
-        :shift="data.shift"
-        :names="names"
-        :pending="reviewPending"
-        :error="reviewError"
-        :note-required="noteRequired"
-        @review="review"
-      />
+      <SmjenaHeader :shift="data.shift" :names="names" />
 
       <div class="a-tiles">
         <UiTile label="Pazar" :value="formatAmount(data.summary.promet_fen)" unit="KM" />
+        <!-- The šanker's Za predati, beside the takings it came from. -->
+        <UiTile
+          label="Predano"
+          :value="data.closing ? signedAmount(data.closing.za_predati_fen) : '—'"
+          :unit="data.closing ? 'KM' : undefined"
+          :tone="data.closing && data.closing.za_predati_fen < 0 ? 'bad' : 'plain'"
+          :sub="data.closing ? 'za predati' : 'smjena nije zaključena'"
+        />
       </div>
 
       <!-- *Kasa* is the šanker's close: Sav prihod, the deductions, Za predati. -->
