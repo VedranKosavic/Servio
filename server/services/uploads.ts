@@ -73,12 +73,10 @@ export function createUpload(
 
   const settings = getSettings(db, venueId)
 
-  // 3. Kind. `delivery` is the owner's, or the šanker's when the venue says so —
-  //    the same setting that gates `POST /api/stock/deliveries`.
-  if (kind === 'delivery') {
-    const allowed = actor.role === 'admin'
-      || (actor.role === 'radnik' && settings.bartender_can_receive_goods)
-    if (!allowed) throw unprocessable('KIND_FORBIDDEN', 'this session may not upload a delivery photo')
+  // 3. Kind. `delivery` is the owner's alone, like `POST /api/stock/deliveries`:
+  //    a šanker reads the shelf and never receives goods.
+  if (kind === 'delivery' && actor.role !== 'admin') {
+    throw unprocessable('KIND_FORBIDDEN', 'this session may not upload a delivery photo')
   }
 
   const dayFrom = new Date(Date.parse(now) - 86_400_000).toISOString()

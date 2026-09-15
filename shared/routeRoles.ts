@@ -139,7 +139,8 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   'POST /api/stock/opening': A,
   // Admin always; a radnik only when `bartender_can_receive_goods` is on,
   // which the service checks — this row is the coarse half of that rule.
-  'POST /api/stock/deliveries': AR_APPROVE,
+  // Admin only: a šanker reads Stanje šanka and never receives goods.
+  'POST /api/stock/deliveries': A,
   'GET /api/stock/deliveries': AR_APPROVE,
   'POST /api/stock/deliveries/:id/reverse': A,
   'POST /api/stock/waste': AR,
@@ -222,8 +223,7 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   'POST /api/chat/users/:id/mute': A,
 
   // -- Phase 4: slike ------------------------------------------------------
-  // `kind='delivery'` is gated inside the service by `bartender_can_receive_goods`,
-  // the same setting that gates `POST /api/stock/deliveries`.
+  // `kind='delivery'` is admin-only inside the service, like `POST /api/stock/deliveries`.
   'POST /api/uploads': AR,
   'GET /api/uploads/:id': AR,
 
@@ -255,7 +255,7 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   'POST /api/admin/rules': A,
 
   // -- Phase 4: Prijem sa slike --------------------------------------------
-  'POST /api/stock/deliveries/scan': AR_APPROVE,
+  'POST /api/stock/deliveries/scan': A,
   'POST /api/stock/scans/:id/discard': A,
   'POST /api/stock/supplier-aliases': A,
 }

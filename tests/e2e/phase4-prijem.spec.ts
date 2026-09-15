@@ -244,16 +244,11 @@ test('3 · Proknjiži knjiži prijem sa source=scan i zatvara sken', async () =>
 })
 
 /**
- * The gate on a delivery photo was half role and half setting; it is all
- * setting now.
- *
- * It read "an admin, or a bartender if `bartender_can_receive_goods`", and a
- * waiter was refused by his role. With one worker role there is nobody left for
- * the role half to refuse, so `bartender_can_receive_goods` does the whole job —
- * which is the sentence its *Postavke* label always made, and the same setting
- * that gates `POST /api/stock/deliveries`.
+ * A delivery photo is the owner's alone: a šanker reads Stanje šanka and never
+ * receives goods, so `bartender_can_receive_goods` no longer opens the door.
+ * The seed still turns that setting on, which is exactly the case worth proving.
  */
-test('4 · otpremnicu šalje radnik samo ako venue to dozvoljava', async () => {
+test('4 · otpremnicu šalje samo admin', async () => {
   const photo = () => ({
     multipart: {
       // Any bytes: the `kind` check is what answers, and it answers first.
@@ -265,29 +260,13 @@ test('4 · otpremnicu šalje radnik samo ako venue to dozvoljava', async () => {
     },
   })
 
-  // The seed turns the setting on, which is what the /sanker delivery screen
-  // needs, so Amar may photograph an otpremnica.
-  const allowed = await amar.post('/api/uploads', photo())
-  expect(allowed.status(), await allowed.text()).toBe(201)
+  const refused = await amar.post('/api/uploads', photo())
+  expect(refused.status()).toBe(422)
+  const body = await refused.json() as { data?: { code?: string } }
+  expect(body.data?.code).toBe('KIND_FORBIDDEN')
 
-  const before = await (await haris.get('/api/admin/settings'))
-    .json() as { bartender_can_receive_goods: boolean }
-  expect((await haris.patch('/api/admin/settings', {
-    data: { bartender_can_receive_goods: false },
-  })).ok()).toBe(true)
-
-  try {
-    const res = await amar.post('/api/uploads', photo())
-    expect(res.status()).toBe(422)
-    const body = await res.json() as { data?: { code?: string } }
-    expect(body.data?.code).toBe('KIND_FORBIDDEN')
-  } finally {
-    // `settings_json` outlives this file and this browser, against the same
-    // data/verify.db, so putting it back is what makes the suite re-runnable.
-    await haris.patch('/api/admin/settings', {
-      data: { bartender_can_receive_goods: before.bartender_can_receive_goods },
-    })
-  }
+  const allowed = await haris.post('/api/uploads', photo())
+  expect(allowed.status(), await allowed.text()).not.toBe(422)
 })
 
 test('5 · nepodešeno prepoznavanje je mirna kartica, a Ručno i dalje knjiži', async () => {

@@ -549,8 +549,11 @@ export function createDelivery(
     if (replay) return { id: replay.id, replayed: true }
 
     const settings = getSettings(tx, venueId)
-    if (actor.role !== 'admin' && !settings.bartender_can_receive_goods) {
-      throw forbidden('RECEIVING_FORBIDDEN', 'only an admin may post a delivery here')
+    // Receiving goods is the owner's job, full stop: the café's call was that a
+    // šanker reads the shelf and never adds to it. `bartender_can_receive_goods`
+    // no longer opens this door — it survives in `settings_json` and nothing reads it.
+    if (actor.role !== 'admin') {
+      throw forbidden('RECEIVING_FORBIDDEN', 'only an admin may post a delivery')
     }
 
     const deliveredAt = clampEventAt(

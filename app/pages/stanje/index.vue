@@ -10,11 +10,10 @@
  * than the bar's 5 s, because stock moves slower than tickets and this screen is
  * read between rounds, not stared at.
  *
- * **Who may book a delivery is a setting, not a guess.** `POST /api/stock/deliveries`
- * is admin-only, plus the bartender when the owner has turned on
- * `bartender_can_receive_goods` (BACKEND §7). So the button is drawn only for
- * somebody the server would actually accept, and everybody else gets the
- * sentence saying why — a button that always answers 403 teaches a bartender to
+ * **Only an admin books a delivery.** `POST /api/stock/deliveries` is admin-only
+ * — the café's call is that a šanker reads the shelf and never adds to it — so
+ * the button is drawn only for an admin, and everybody else gets the sentence
+ * saying who does it. A button that always answers 403 teaches a bartender to
  * distrust the app.
  */
 import { useTimeoutFn } from '@vueuse/core'
@@ -40,12 +39,8 @@ onMounted(() => {
   void me.requireSession()
 })
 
-/** Admin always; a bartender only when the owner has allowed it. */
-const canReceive = computed(() => {
-  const role = me.user.value?.role
-  if (role === 'admin') return true
-  return role === 'radnik' && me.settings.value?.bartender_can_receive_goods === true
-})
+/** Only an admin receives goods; a šanker reads this screen and never adds to it. */
+const canReceive = computed(() => me.user.value?.role === 'admin')
 
 /** The four kinds, in the order the bar thinks about them. */
 const GROUPS: Array<{ kind: StockKind, title: string }> = [
@@ -191,8 +186,7 @@ async function postDelivery(delivery: {
         nije upisano ručno.
         <template v-if="!canReceive">
           <br>
-          Prijem robe knjiži vlasnik. Ako treba da ga knjiži šanker, vlasnik to
-          uključuje u postavkama.
+          Prijem robe knjiži admin na kontrolnoj ploči.
         </template>
       </p>
     </main>

@@ -108,9 +108,12 @@ describe('scanDelivery with the stub', () => {
       f.db, f.venueId, f.adminActor(), { upload_id: chat.id }, f.clock.now(),
     )).rejects.toThrow(/not a delivery photo/)
 
-    const emirs = photo('Emir')
+    // A delivery photo is the owner's alone, so the owner's own photo scans.
+    const owners = createUpload(
+      f.db, f.venueId, f.adminActor(), { bytes: jpegBytes() }, 'delivery', f.clock.now(),
+    )
     await expect(scanDelivery(
-      f.db, f.venueId, f.actor('Emir'), { upload_id: emirs }, f.clock.now(),
+      f.db, f.venueId, f.adminActor(), { upload_id: owners.id }, f.clock.now(),
     )).resolves.toBeTruthy()
   })
 })

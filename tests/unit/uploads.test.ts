@@ -62,21 +62,19 @@ describe('createUpload', () => {
   })
 
   /**
-   * The gate here was half role and half setting; it is all setting now.
+   * A delivery photo is the owner's alone.
    *
-   * It used to read "an admin, or a bartender if `bartender_can_receive_goods`"
-   * — and a waiter was refused by his role. With one worker role there is
-   * nobody left for the role half to refuse, so the setting does the whole job:
-   * on, and any worker may photograph a delivery; off, and only the owner may.
-   * That is the same sentence the *Postavke* label always made, and the same
-   * setting that gates `POST /api/stock/deliveries`.
+   * It used to follow `bartender_can_receive_goods`. The café's call is that a
+   * šanker reads Stanje šanka and never receives goods, so the setting no longer
+   * opens this door — a worker is refused with it on and with it off, exactly
+   * like `POST /api/stock/deliveries`.
    */
-  it('refuses a delivery photo from a worker when the venue does not let workers receive goods', () => {
-    // The dev seed turns `bartender_can_receive_goods` on, which is what the
-    // existing `/sanker` delivery screen needs.
-    expect(() => createUpload(
-      f.db, f.venueId, f.actor('Emir'), { bytes: jpegBytes() }, 'delivery',
-    )).not.toThrow()
+  it('refuses a delivery photo from any worker, whatever the old bartender setting says', () => {
+    f.settingsWith({ bartender_can_receive_goods: true })
+    expectCode(
+      () => createUpload(f.db, f.venueId, f.actor('Emir'), { bytes: jpegBytes() }, 'delivery'),
+      'KIND_FORBIDDEN',
+    )
 
     f.settingsWith({ bartender_can_receive_goods: false })
     expectCode(
@@ -158,12 +156,13 @@ describe('readUpload', () => {
     expect(readUpload(f.db, f.venueId, f.actor('Amar'), upload.id)).toBeNull()
   })
 
-  it('lets the owner read every delivery photo, and the šanker read his own', () => {
-    const mine = createUpload(f.db, f.venueId, f.actor('Emir'), { bytes: jpegBytes() }, 'delivery')
-    expect(readUpload(f.db, f.venueId, f.adminActor(), mine.id)).not.toBeNull()
-    expect(readUpload(f.db, f.venueId, f.actor('Emir'), mine.id)).not.toBeNull()
-    // A waiter who did not take it has no business with an invoice photo.
-    expect(readUpload(f.db, f.venueId, f.actor('Amar'), mine.id)).toBeNull()
+  it('lets the owner read a delivery photo, and no worker', () => {
+    // Only an admin may take one now; a šanker never receives goods.
+    const owners = createUpload(f.db, f.venueId, f.adminActor(), { bytes: jpegBytes() }, 'delivery')
+    expect(readUpload(f.db, f.venueId, f.adminActor(), owners.id)).not.toBeNull()
+    // A worker has no business with an invoice photo.
+    expect(readUpload(f.db, f.venueId, f.actor('Emir'), owners.id)).toBeNull()
+    expect(readUpload(f.db, f.venueId, f.actor('Amar'), owners.id)).toBeNull()
   })
 })
 

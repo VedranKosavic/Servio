@@ -372,7 +372,8 @@ describe('GET /api/stock and POST /api/stock/deliveries', () => {
    * §7's takes the actor from the session and answers with one `DeliveryView`.
    */
   it('adds a delivery and answers with the DeliveryView', () => {
-    const delivery = createDelivery(f.db, f.venueId, f.actor('Emir'), {
+    // An admin: receiving goods is the owner's alone (stock-ops.test pins the refusal).
+    const delivery = createDelivery(f.db, f.venueId, f.adminActor(), {
       client_id: randomUUID(),
       supplier_name: 'Coca-Cola HBC',
       invoice_no: 'R-1201',
@@ -392,7 +393,7 @@ describe('GET /api/stock and POST /api/stock/deliveries', () => {
     expect(delivery.invoice_no).toBe('R-1201')
     expect(delivery.total_fen).toBe(6400)
     expect(delivery.status).toBe('posted')
-    expect(delivery.entered_by_name).toBe('Emir')
+    expect(delivery.entered_by_name).toBe('Haris')
     expect(delivery.already_applied).toBe(false)
     expect(delivery.lines).toHaveLength(2)
     // 2 gajbe × 24 = 48 boca, and 4 800 fen over 48 is 100 000 mfen a bottle.

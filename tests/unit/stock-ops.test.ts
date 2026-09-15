@@ -291,7 +291,7 @@ describe('a delivery', () => {
     expect(f.db.select().from(schema.deliveries).all()).toHaveLength(1)
   })
 
-  it('lets the bartender receive goods only when the setting says so', () => {
+  it('refuses a worker receiving goods, even with the old bartender setting on', () => {
     f.settingsWith({ bartender_can_receive_goods: false })
     const body = () => ({
       client_id: randomUUID(),
@@ -308,7 +308,11 @@ describe('a delivery', () => {
     )
 
     f.settingsWith({ bartender_can_receive_goods: true })
-    expect(createDelivery(f.db, f.venueId, f.actor('Emir'), body()).status).toBe('posted')
+    refuses(
+      () => createDelivery(f.db, f.venueId, f.actor('Emir'), body()),
+      'RECEIVING_FORBIDDEN', 403,
+    )
+    expect(createDelivery(f.db, f.venueId, f.adminActor(), body()).status).toBe('posted')
   })
 
   it('reverses once, and refuses the second reversal', () => {
