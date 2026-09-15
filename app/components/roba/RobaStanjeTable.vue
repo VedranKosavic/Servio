@@ -253,7 +253,6 @@ const COLUMNS: UiColumn[] = [
   { key: 'name', label: 'Artikal' },
   { key: 'on_hand', label: 'Na stanju', align: 'r' },
   { key: 'pending', label: 'Večeras', align: 'r' },
-  { key: 'packs', label: 'Paketi + komadi' },
   { key: 'value', label: 'Vrijednost', align: 'r' },
   { key: 'status', label: 'Status' },
 ]
@@ -271,12 +270,6 @@ function statusPill(row: StanjeRow): { tone: 'good' | 'warn' | 'bad', text: stri
     default: return { tone: 'good', text: 'ok' }
   }
 }
-
-/** "zadnje: prijem robe · 09.09.2026." — the ledger's own words, in one line. */
-function lastLine(row: StanjeRow): string {
-  if (!row.last_movement) return ''
-  return `zadnje: ${row.last_movement.ref_label} · ${dateBs(row.last_movement.occurred_at)}`
-}
 </script>
 
 <template>
@@ -284,7 +277,7 @@ function lastLine(row: StanjeRow): string {
     <UiTable :columns="COLUMNS" :loading="loading">
       <tr v-for="row in rows" :key="row.id">
         <td>
-          <NuxtLink :to="`/admin/roba/artikal/${row.id}`" class="a-roba-link">{{ row.name }}</NuxtLink>
+          <span class="a-roba-link">{{ row.name }}</span>
           <span v-if="row.late_sync" class="a-roba-note">kasno sinhronizovano</span>
         </td>
         <td class="r">{{ formatStockQty(row.settled, row.base_unit) }}</td>
@@ -295,15 +288,10 @@ function lastLine(row: StanjeRow): string {
             {{ formatMovementQty(row.pending, row.base_unit) }}
           </span>
         </td>
-        <td class="a-roba-packs">
-          <span v-if="row.packs_label">{{ row.packs_label }}</span>
-          <span v-else class="a-roba-dash">—</span>
-        </td>
         <td class="r"><UiMoney :fen="row.value_fen" :currency="false" /></td>
         <td>
           <div class="a-roba-status">
             <UiPill :tone="statusPill(row).tone">{{ statusPill(row).text }}</UiPill>
-            <small v-if="row.status === 'u_minusu' && row.last_movement">{{ lastLine(row) }}</small>
           </div>
         </td>
       </tr>

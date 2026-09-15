@@ -4,8 +4,8 @@
  *
  * The laptop table has six columns and room for all of them. A 390 px row has
  * room for a name and a quantity, so everything else about the article lives
- * here: what it is worth, how many packs that is, what last moved it, and the
- * way into its ledger.
+ * here: what it is worth and how many packs that is. *Zadnje kretanje* and the
+ * *Kretanje robe* button went on the owner's call.
  *
  * **The split is spelled out here, in full.** On the row it is two figures side
  * by side, which is right for scanning twenty of them; here there is room for
@@ -16,9 +16,7 @@
  * this article; on every other article the sheet shows one quantity, because
  * there is only one.
  *
- * Nothing in here is a control except the way into the article's ledger. A
- * correction lives on that page, behind the *Korekcija* button, and it stays
- * there: writing a movement is not something to be two taps from a list.
+ * Nothing in here is a control.
  */
 import type { StanjeRow } from './RobaStanjeTable.vue'
 
@@ -86,19 +84,6 @@ const status = computed<{ tone: 'good' | 'warn' | 'bad', text: string } | null>(
           <span class="r-fact-value num"><UiMoney :fen="row.value_fen" /></span>
         </div>
 
-        <div class="r-fact">
-          <span class="r-fact-label">Paketi + komadi</span>
-          <span class="r-fact-value num">{{ row.packs_label ?? '—' }}</span>
-        </div>
-
-        <div v-if="row.last_movement" class="r-fact">
-          <span class="r-fact-label">Zadnje kretanje</span>
-          <span class="r-fact-value">
-            {{ row.last_movement.ref_label }} ·
-            <span class="num">{{ dateBs(row.last_movement.occurred_at) }}</span>
-          </span>
-        </div>
-
         <div v-if="row.late_sync" class="r-fact">
           <span class="r-fact-label">Napomena</span>
           <span class="r-fact-value">
@@ -110,11 +95,6 @@ const status = computed<{ tone: 'good' | 'warn' | 'bad', text: string } | null>(
 
     <template #footer>
       <UiButton variant="ghost" @click="emit('close')">Zatvori</UiButton>
-      <UiButton
-        v-if="row"
-        variant="primary"
-        @click="navigateTo(`/admin/roba/artikal/${row.id}`)"
-      >Kretanje robe</UiButton>
     </template>
   </UiSheet>
 </template>
