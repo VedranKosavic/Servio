@@ -41,6 +41,11 @@ import type { PulsFloorCell, PulsFloorZone } from '~/utils/puls'
 const props = defineProps<{
   zones: PulsFloorZone[]
   loading?: boolean
+  /**
+   * Who is on the open shift, by name — the owner's call moved *Ko radi* into
+   * this head. Empty when nothing is open, and then the head names nobody.
+   */
+  workers?: string[]
 }>()
 
 defineEmits<{ open: [cell: PulsFloorCell] }>()
@@ -81,7 +86,7 @@ const visibleZones = computed(() => (props.zones.length > 1
   ? props.zones.filter(zone => zone.zone === shown.value)
   : props.zones))
 
-/** "6 od 27 zauzeto · 1 čeka naplatu" — the one line a card head is worth. */
+/** "6 od 27 zauzeto · 1 čeka naplatu · Radi: Amar, Emir" — the one line a card head is worth. */
 const count = computed(() => {
   const busy = props.zones.reduce((n, zone) => n + zone.busy, 0)
   const total = props.zones.reduce((n, zone) => n + zone.total, 0)
@@ -89,6 +94,7 @@ const count = computed(() => {
   const waiting = cells.value.filter(cell => cell.pending_review).length
   const parts = [`${busy} od ${total} zauzeto`]
   if (waiting) parts.push(`${waiting} čeka naplatu`)
+  if (props.workers?.length) parts.push(`Radi: ${props.workers.join(', ')}`)
   return parts.join(' · ')
 })
 </script>
