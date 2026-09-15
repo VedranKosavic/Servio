@@ -55,7 +55,6 @@ import type {
   Prep,
   PrepOrder,
   RulesView,
-  SwapRequestView,
   UploadResult,
   SettleResult,
   StockResponse,
@@ -74,7 +73,7 @@ import type {
 } from '#shared/schemas'
 import type { closeByBarBody } from '#shared/schemas'
 import type { z } from 'zod'
-import type { PostMessageBody, SetPinBody, SwapBody } from '#shared/schemas'
+import type { PostMessageBody, SetPinBody } from '#shared/schemas'
 import type { ChannelKind } from '#shared/chat'
 import { errorMessage } from '#shared/errors'
 
@@ -527,32 +526,14 @@ export function useApi() {
     // -- Raspored (Phase 4) --------------------------------------------------
 
     /**
-     * S17. Every write below is **online only** and disabled with "Nema veze"
-     * (PHASE4 §3, WP2): a swap is not urgent, and a queued one would need
-     * server-side conflict rules for nothing.
+     * S17, read-only. Swaps and sick days are gone from the app ("Ne trebaju nam
+     * zamjene i bolovanje"); their routes still exist and no screen calls them.
      */
     getMyRoster: () => request<MyRoster>('/api/me/roster'),
 
     /** *Moji sati* — own rows only; the route never takes a user id. */
     getMyHours: (month: string) =>
       request<HoursRow[]>(`/api/me/roster/hours?month=${encodeURIComponent(month)}`),
-
-    /** *Traži zamjenu* — on your own row, optional colleague, reason and note. */
-    requestSwap: (body: SwapBody) =>
-      request<SwapRequestView>('/api/roster/swaps', { method: 'POST', body }),
-
-    /** *Preuzimam*. `force_double` is the retry after the *Dupla smjena* sheet. */
-    acceptSwap: (id: string, forceDouble = false) =>
-      request<SwapRequestView>(`/api/roster/swaps/${id}/accept`, {
-        method: 'POST', body: forceDouble ? { force_double: true } : {},
-      }),
-
-    declineSwap: (id: string) =>
-      request<SwapRequestView>(`/api/roster/swaps/${id}/decline`, { method: 'POST', body: {} }),
-
-    /** *Povuci* — the requester's own. A withdrawn `bolest` returns the row to `planned`. */
-    cancelSwap: (id: string) =>
-      request<SwapRequestView>(`/api/roster/swaps/${id}/cancel`, { method: 'POST', body: {} }),
 
     // -- Pravila (Phase 4) ---------------------------------------------------
 

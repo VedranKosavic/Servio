@@ -507,21 +507,25 @@ describe('whoShifts', () => {
       .toEqual([['Benza', 'ceka'], ['Adin', 'van-rasporeda']])
   })
 
-  it('keeps a hole in the plan visible, and never as `radi`', () => {
+  /**
+   * Moved: this used to assert the words *bolest* and *nije došao* on the card.
+   * Sick and absent marks are gone from the app ("Ne trebaju nam zamjene i
+   * bolovanje"), so an old `sick`/`absent` row is simply not on tonight's plan —
+   * no row, no word — and a person who works anyway is named like any cover.
+   */
+  it('draws no sick or absent row, and names who works anyway as a cover', () => {
     const [shift] = whoShifts([
       planned({ user_id: 'a', status: 'sick' }),
       planned({ user_id: 'b', name: 'Nidal', status: 'absent' }),
     ], [], DRUGA)
+    expect(shift!.rows).toEqual([])
 
-    expect(shift!.rows.map(r => r.state)).toEqual(['bolest', 'odsutan'])
-    // Even if the sick person somehow rang something up, the plan's word wins:
-    // the row is about the day the owner marked, not about a stray line.
     const [again] = whoShifts(
       [planned({ user_id: 'a', status: 'sick' })],
       [person({ user_id: 'a' })],
       DRUGA,
     )
-    expect(again!.rows[0]!.state).toBe('bolest')
+    expect(again!.rows.map(r => r.state)).toEqual(['van-rasporeda'])
   })
 
   it('puts the running shift first and leaves the rest as plan only', () => {
@@ -558,7 +562,7 @@ describe('whoShifts', () => {
   it('has a word for every state that is not the ordinary one', () => {
     expect(whoStateBs('radi')).toBe('')
     expect(whoStateBs('planiran')).toBe('')
-    for (const state of ['ceka', 'bolest', 'odsutan', 'van-rasporeda'] as const) {
+    for (const state of ['ceka', 'van-rasporeda'] as const) {
       expect(whoStateBs(state)).not.toBe('')
     }
   })

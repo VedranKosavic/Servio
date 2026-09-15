@@ -17,14 +17,11 @@
  * names, the template's hours, and the `+` that opens the picker. One tap moves
  * between days, and nothing scrolls to do it.
  *
- * **What the strip is allowed to say.** It is an index, not a statement, so it
- * never leans on colour alone (DESIGN §2): a person who is off sick or did not
- * come is **struck through** and a person whose shift is out for swap has a
- * **dashed** edge — a shape in both cases, with the tint only reinforcing it.
- * Two initials have no room for a word, so the word lives where the decision
- * is: one tap down, on `RasporedChip` in the panel, which spells *bolestan* and
- * *zamjena* out in full. Each initial also carries it as a `title`, and the day
- * button's accessible name carries the date and the head count.
+ * **What the strip is allowed to say.** It is an index, not a statement: who is
+ * on the plan, in initials, and nothing else. There are no swaps and no sick or
+ * absent marks to show any more ("Ne trebaju nam zamjene i bolovanje"). Each
+ * initial carries the full name as a `title`, and the day button's accessible
+ * name carries the date and the head count.
  *
  * **Today is the café's business date**, passed down from the page: at 01:30 the
  * owner is still working Friday and Friday is still the day the strip marks.
@@ -108,15 +105,6 @@ function dayAria(entry: typeof days.value[number]): string {
   return `${dayLabelBs(entry.work_date)}${state}${who}`
 }
 
-function personAria(person: Assignment): string {
-  if (person.swap_pending) return `${person.user_name} — zamjena`
-  if (person.status !== 'planned') return `${person.user_name} — ${STATUS_BS[person.status]}`
-  return person.user_name
-}
-
-const struck = (person: Assignment) =>
-  person.status === 'sick' || person.status === 'absent'
-
 /** `removed` rows stay folded away, exactly as they are on the laptop grid. */
 const unfolded = ref(new Set<string>())
 const key = (cell: RosterCell) => `${cell.work_date}|${cell.template.id}`
@@ -151,8 +139,7 @@ function toggle(cell: RosterCell) {
               v-for="person in group.shown"
               :key="person.id"
               class="r-ini"
-              :class="{ struck: struck(person), swap: person.swap_pending }"
-              :title="personAria(person)"
+              :title="person.user_name"
             >{{ person.user_initials }}</span>
             <span v-if="group.more" class="r-ini r-more">+{{ group.more }}</span>
           </span>
@@ -336,22 +323,6 @@ function toggle(cell: RosterCell) {
   letter-spacing: 0;
   font-weight: 600;
   color: var(--ink-2);
-}
-
-/* Struck through, not merely tinted: shape carries the meaning and the colour
-   only reinforces it, so the strip survives a colour-blind reading. */
-.r-ini.struck {
-  text-decoration: line-through;
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
-/* Dashed: a shift that is out for swap is not settled yet. */
-.r-ini.swap {
-  border-style: dashed;
-  border-color: var(--warn);
-  background: var(--warn-soft);
-  color: var(--warn);
 }
 
 .r-more { background: transparent; color: var(--muted); }

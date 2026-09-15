@@ -59,7 +59,6 @@ import type {
   RulesView,
   ScanDraft,
   ShiftTemplateView,
-  SwapRequestView,
   UploadResult,
   ProductAdmin,
   CategoryAdmin,
@@ -80,7 +79,6 @@ import type {
 import type {
   AdminLoginBody,
   AssignmentBody,
-  AssignmentPatch,
   CreateCategoryBody,
   DiscardScanBody,
   LinkAliasBody,
@@ -487,12 +485,6 @@ export function useAdminApi() {
     getRoster: (from: string, to: string) =>
       request<RosterWeekView[]>(`/api/roster${qs({ from, to })}`),
 
-    /** *Kopiraj prošlu sedmicu* — the regular people, not the one-off covers. */
-    copyRosterWeek: (weekStart: string) =>
-      request<RosterWeekView>('/api/roster/weeks/copy', {
-        method: 'POST', body: { week_start: weekStart },
-      }),
-
     publishRosterWeek: (weekStart: string) =>
       request<RosterWeekView>('/api/roster/weeks/publish', {
         method: 'POST', body: { week_start: weekStart },
@@ -501,25 +493,14 @@ export function useAdminApi() {
     addAssignment: (body: AssignmentBody) =>
       request<Assignment>('/api/roster/assignments', { method: 'POST', body }),
 
-    /** *Nije došao* / *Bolestan* / *Vrati* — status and note, never a person. */
-    patchAssignment: (id: string, body: AssignmentPatch) =>
-      request<Assignment>(`/api/roster/assignments/${id}`, { method: 'PATCH', body }),
-
-    removeAssignment: (id: string) =>
-      request<{ ok: true }>(`/api/roster/assignments/${id}`, { method: 'DELETE' }),
-
-    listSwaps: (status?: string) =>
-      request<SwapRequestView[]>(`/api/roster/swaps${qs({ status })}`),
-
-    /** *Dodijeli* — the avatar picker names a taker and accepts in one transaction. */
-    assignSwap: (id: string, toUserId: string, forceDouble = false) =>
-      request<SwapRequestView>(`/api/roster/swaps/${id}/assign`, {
-        method: 'POST',
-        body: { to_user_id: toUserId, ...(forceDouble ? { force_double: true } : {}) },
+    /**
+     * `workDate` only for an inherited cell: `id` is then the source week's row
+     * and the server writes the week down as a draft before it removes anyone.
+     */
+    removeAssignment: (id: string, workDate?: string) =>
+      request<{ ok: true }>(`/api/roster/assignments/${id}${qs({ work_date: workDate })}`, {
+        method: 'DELETE',
       }),
-
-    declineSwap: (id: string) =>
-      request<SwapRequestView>(`/api/roster/swaps/${id}/decline`, { method: 'POST', body: {} }),
 
     /** *Sati* — planned against worked. "Prva akcija nije dolazak." */
     getRosterHours: (month: string) =>

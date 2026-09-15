@@ -18,11 +18,13 @@ import { makeFixture, schema, type Fixture } from '../helpers/db'
 import { expectCode } from '../helpers/phase4'
 import { addDays, businessDate, plannedHours, weekStart } from '#shared/dates'
 import {
-  addAssignment, copyWeek, decideSwap, getMyRoster, getRoster, listSwaps,
-  genitiveBs, overlaps, patchAssignment, projectForStaff, publishWeek, removeAssignment,
+  addAssignment, decideSwap, getMyRoster, getRoster, listSwaps,
+  genitiveBs, overlaps, patchAssignment, plannedOn, projectForStaff, publishWeek, removeAssignment,
   requestSwap, rosterHours, updateTemplate,
 } from '../../server/services/roster'
 import { updateUser } from '../../server/services/admin'
+import { getLive } from '../../server/services/owner'
+import type { Assignment } from '#shared/types'
 import { ROUTE_ROLES } from '#shared/routeRoles'
 
 let f: Fixture
@@ -174,30 +176,315 @@ describe('past dates', () => {
 // Copy, publish and the system line
 // ---------------------------------------------------------------------------
 
-describe('copyWeek and publishWeek', () => {
-  it('copies the regular people and not the one-off covers', () => {
-    const thisWeek = futureWeek()
-    plan('Amar', { date: thisWeek })
-    plan('Lejla', { date: thisWeek })
-    // A swap cover: `origin='swap'` is exactly what must not be copied.
+/**
+ * "Kada se objavi raspored, taj raspored važi zauvijek osim ako se objavi novi
+ * raspored." A published week is the pattern of every later week that has no
+ * rows of its own, until a newer week is published.
+ *
+ * (*Kopiraj prošlu sedmicu* and its two tests are gone with the button: the
+ * invariant they held — the regular people carry forward, one-off covers do
+ * not — is asserted below on the inheritance that replaced the copy.)
+ */
+describe('a published week repeats until a newer one is published', () => {
+  const cells = (weeks: { days: { assignments: Assignment[] }[] }[]) =>
+    weeks[0]!.days.flatMap(d => d.assignments)
+  const adminWeek = (week: string) => getRoster(f.db, f.venueId, f.adminActor(), week, week)[0]!
+  const staffWeek = (name: string, week: string) => projectForStaff(
+    getRoster(f.db, f.venueId, f.actor(name), week, week), f.userId(name),
+  )[0]!
+  const rowsIn = (week: string) => f.db.select().from(schema.rosterAssignments).all()
+    .filter(a => a.workDate >= week && a.workDate <= addDays(week, 6))
+  const headerOf = (week: string) => f.db.select().from(schema.rosterWeeks).all()
+    .find(w => w.weekStart === week)
+
+  /** W: Lejla on Monday (Druga), Amar on Friday (Druga), published. */
+  function publishedPattern(): { week: string, lejla: Assignment, amar: Assignment } {
+    const week = futureWeek()
+    const lejla = plan('Lejla', { date: week })
+    const amar = plan('Amar', { date: addDays(week, 4) })
+    publishWeek(f.db, f.venueId, f.adminActor(), week, f.clock.now())
+    return { week, lejla, amar }
+  }
+
+  /** A published header for a week in the past, written around the service. */
+  function publishPast(date: string): void {
     f.sqlite.exec(
-      `UPDATE roster_assignments SET origin = 'swap' WHERE user_id = '${f.userId('Lejla')}'`,
+      `INSERT INTO roster_weeks (id, venue_id, week_start, published_at, published_by,`
+      + ` created_by, created_at) VALUES ('${crypto.randomUUID()}', '${f.venueId}',`
+      + ` '${weekStart(date)}', '${f.clock.now()}', '${f.userId('Haris')}',`
+      + ` '${f.userId('Haris')}', '${f.clock.now()}')`,
     )
+  }
 
-    copyWeek(f.db, f.venueId, f.adminActor(), addDays(thisWeek, 7), f.clock.now())
-    const next = f.db.select().from(schema.rosterAssignments).all()
-      .filter(a => a.workDate >= addDays(thisWeek, 7))
-    expect(next.map(a => a.userId)).toEqual([f.userId('Amar')])
-    expect(next[0]!.origin).toBe('copy')
+  it('shows the owner every later week as the published pattern, marked and unwritten', () => {
+    const { week } = publishedPattern()
+    const before = f.db.select().from(schema.rosterAssignments).all().length
+
+    for (const later of [addDays(week, 7), addDays(week, 28)]) {
+      const view = adminWeek(later)
+      expect(view.inherited_from).toBe(week)
+      expect(view.published_at).not.toBeNull()
+      expect(view.published_by_name).toBe('Haris')
+      const people = view.days.flatMap(d => d.assignments)
+      expect(people.map(a => [a.user_name, a.work_date])).toEqual([
+        ['Lejla', later],
+        ['Amar', addDays(later, 4)],
+      ])
+      expect(people.every(a => a.inherited && a.status === 'planned')).toBe(true)
+    }
+
+    // Read time, not write time: not one row exists for those weeks.
+    expect(f.db.select().from(schema.rosterAssignments).all()).toHaveLength(before)
+    expect(headerOf(addDays(week, 7))).toBeUndefined()
   })
 
-  it('refuses a copy into a week that already has rows', () => {
-    const next = addDays(futureWeek(), 7)
-    plan('Amar', { date: next })
-    expectCode(() => copyWeek(f.db, f.venueId, f.adminActor(), next, f.clock.now()),
-      'WEEK_NOT_EMPTY')
+  it('shows staff the same pattern on /api/roster', () => {
+    const { week } = publishedPattern()
+    const later = staffWeek('Dino', addDays(week, 14))
+    expect(later.inherited_from).toBe(week)
+    expect(later.published_at).not.toBeNull()
+    expect(later.days.flatMap(d => d.assignments).map(a => a.user_name)).toEqual(['Lejla', 'Amar'])
   })
 
+  it('shows S17\'s next week as this week repeated', () => {
+    const today_ = today()
+    const thisWeek = weekStart(today_)
+    plan('Tarik', { date: today_, template: 'Prva smjena' })
+    publishWeek(f.db, f.venueId, f.adminActor(), thisWeek, f.clock.now())
+    const mine = getMyRoster(f.db, f.venueId, f.actor('Tarik'), f.clock.now())
+    expect(mine.next_week.inherited_from).toBe(thisWeek)
+    expect(mine.next_week.days.flatMap(d => d.assignments)
+      .map(a => [a.user_name, a.work_date])).toEqual([['Tarik', addDays(today_, 7)]])
+  })
+
+  it('puts tonight\'s inherited plan on Puls and in Sati', () => {
+    const today_ = today()
+    // Last week, published, with Lejla on today's weekday.
+    planPast('Lejla', addDays(today_, -7))
+    publishPast(addDays(today_, -7))
+
+    expect(plannedOn(f.db, f.venueId, today_).map(r => r.name)).toEqual(['Lejla'])
+    expect(getLive(f.db, f.venueId, f.adminActor()).rostered.map(r => r.name)).toContain('Lejla')
+
+    const lejla = rosterHours(f.db, f.venueId, today_.slice(0, 7), f.userId('Lejla'))[0]!
+    expect(lejla.days.map(d => d.business_date)).toContain(today_)
+  })
+
+  it('inherits nothing before the first publish, and nothing backwards', () => {
+    const week = futureWeek()
+    plan('Amar', { date: week })
+    // A draft is not a pattern.
+    expect(cells([adminWeek(addDays(week, 7))])).toEqual([])
+    expect(adminWeek(addDays(week, 7)).inherited_from).toBeNull()
+    expect(staffWeek('Amar', addDays(week, 7)).published_at).toBeNull()
+
+    // A publish two weeks later reaches forward only.
+    plan('Lejla', { date: addDays(week, 14) })
+    publishWeek(f.db, f.venueId, f.adminActor(), addDays(week, 14), f.clock.now())
+    expect(cells([adminWeek(addDays(week, 7))])).toEqual([])
+    expect(cells([adminWeek(addDays(week, 21))]).map(a => a.user_name)).toEqual(['Lejla'])
+  })
+
+  it('lets a newer publish take over from its own week on', () => {
+    const { week } = publishedPattern()
+    const newer = addDays(week, 14)
+    // The owner rewrites that week: both regulars off, Dino on. The first removal
+    // writes the inherited week down as a draft; the second is an ordinary row.
+    for (const name of ['Lejla', 'Amar']) {
+      const cell = cells([adminWeek(newer)]).find(a => a.user_name === name)!
+      removeAssignment(f.db, f.venueId, f.adminActor(), cell.id, f.clock.now(),
+        cell.inherited ? cell.work_date : undefined)
+    }
+    plan('Dino', { date: addDays(newer, 2) })
+    publishWeek(f.db, f.venueId, f.adminActor(), newer, f.clock.now())
+
+    expect(adminWeek(addDays(week, 7)).inherited_from).toBe(week)
+    expect(cells([adminWeek(addDays(week, 7))]).map(a => a.user_name)).toEqual(['Lejla', 'Amar'])
+    for (const later of [addDays(newer, 7), addDays(newer, 70)]) {
+      expect(adminWeek(later).inherited_from).toBe(newer)
+      expect(cells([adminWeek(later)]).map(a => a.user_name)).toEqual(['Dino'])
+    }
+  })
+
+  it('carries the regular people and not a one-off cover', () => {
+    const week = futureWeek()
+    const amar = plan('Amar', { date: addDays(week, 4) })
+    publishWeek(f.db, f.venueId, f.adminActor(), week, f.clock.now())
+    const request = requestSwap(f.db, f.venueId, f.actor('Amar'), {
+      assignment_id: amar.id, reason: 'zamjena',
+    }, f.clock.now())
+    decideSwap(f.db, f.venueId, f.actor('Lejla'), request.id, 'accept', {}, f.clock.now())
+
+    // Amar handed over one Friday; he is still the Friday person.
+    expect(cells([adminWeek(addDays(week, 7))]).map(a => a.user_name)).toEqual(['Amar'])
+  })
+
+  it('turns the first edit into a draft of that week, still invisible to staff', () => {
+    const { week } = publishedPattern()
+    const next = addDays(week, 7)
+
+    plan('Dino', { date: addDays(next, 1) })
+
+    const rows = rowsIn(next)
+    expect(rows.map(r => [f.db.select().from(schema.users).all().find(u => u.id === r.userId)!.name, r.origin]).sort())
+      .toEqual([['Amar', 'copy'], ['Dino', 'owner'], ['Lejla', 'copy']])
+    expect(headerOf(next)!.publishedAt).toBeNull()
+
+    const owner = adminWeek(next)
+    expect([owner.inherited_from, owner.published_at]).toEqual([null, null])
+    expect(cells([owner]).every(a => !a.inherited)).toBe(true)
+
+    // Staff keep the published pattern until the owner publishes the draft.
+    const staff = staffWeek('Dino', next)
+    expect(staff.inherited_from).toBe(week)
+    expect(cells([staff]).map(a => a.user_name)).toEqual(['Lejla', 'Amar'])
+    // …and the week after still repeats the published week, not the draft.
+    expect(cells([adminWeek(addDays(next, 7))]).map(a => a.user_name)).toEqual(['Lejla', 'Amar'])
+
+    // The edit before publish posted nothing to *Svi*.
+    expect(f.db.select().from(schema.chatMessages).all()
+      .filter(m => m.systemKey === 'roster_changed')).toHaveLength(0)
+  })
+
+  it('makes the published draft the pattern from its week on', () => {
+    const { week } = publishedPattern()
+    const next = addDays(week, 7)
+    plan('Dino', { date: addDays(next, 1) })
+    publishWeek(f.db, f.venueId, f.adminActor(), next, f.clock.now())
+
+    expect(cells([staffWeek('Tarik', next)]).map(a => a.user_name)).toEqual(['Lejla', 'Dino', 'Amar'])
+    const after = adminWeek(addDays(next, 14))
+    expect(after.inherited_from).toBe(next)
+    expect(cells([after]).map(a => a.user_name)).toEqual(['Lejla', 'Dino', 'Amar'])
+    expect(f.db.select().from(schema.chatMessages).all()
+      .filter(m => m.systemKey === 'roster_published')).toHaveLength(2)
+  })
+
+  it('writes an inherited week down before publishing it, so later weeks keep the people', () => {
+    const { week } = publishedPattern()
+    const next = addDays(week, 7)
+    publishWeek(f.db, f.venueId, f.adminActor(), next, f.clock.now())
+
+    expect(rowsIn(next)).toHaveLength(2)
+    expect(cells([adminWeek(addDays(next, 7))]).map(a => a.user_name)).toEqual(['Lejla', 'Amar'])
+  })
+
+  it('removes a person from an inherited cell as a draft of that week', () => {
+    const { week, amar } = publishedPattern()
+    const next = addDays(week, 7)
+    const cell = cells([adminWeek(next)]).find(a => a.user_name === 'Amar')!
+    expect([cell.id, cell.inherited]).toEqual([amar.id, true])
+
+    removeAssignment(f.db, f.venueId, f.adminActor(), cell.id, f.clock.now(), cell.work_date)
+
+    // A draft: the row is gone outright, Lejla was written down, the phones
+    // still see Amar.
+    expect(rowsIn(next).map(r => r.userId)).toEqual([f.userId('Lejla')])
+    expect(headerOf(next)!.publishedAt).toBeNull()
+    expect(cells([staffWeek('Amar', next)]).map(a => a.user_name)).toEqual(['Lejla', 'Amar'])
+    // The source row itself is untouched.
+    expect(rowOf(amar.id).status).toBe('planned')
+  })
+
+  it('refuses a stale inherited tap with ROSTER_CHANGED, and writes nothing', () => {
+    const { week } = publishedPattern()
+    const cell = cells([adminWeek(addDays(week, 14))]).find(a => a.user_name === 'Amar')!
+
+    // A newer publish in between: week+14 no longer repeats week.
+    plan('Dino', { date: addDays(week, 7) })
+    publishWeek(f.db, f.venueId, f.adminActor(), addDays(week, 7), f.clock.now())
+    const before = f.db.select().from(schema.rosterAssignments).all().length
+
+    expectCode(() => removeAssignment(f.db, f.venueId, f.adminActor(), cell.id,
+      f.clock.now(), cell.work_date), 'ROSTER_CHANGED')
+    // Not a whole number of weeks after the source row.
+    expectCode(() => removeAssignment(f.db, f.venueId, f.adminActor(), cell.id,
+      f.clock.now(), addDays(cell.work_date, 3)), 'ROSTER_CHANGED')
+
+    expect(f.db.select().from(schema.rosterAssignments).all()).toHaveLength(before)
+    expect(headerOf(addDays(week, 14))).toBeUndefined()
+  })
+
+  /**
+   * Swaps and sick days are gone from the UI ("Ne trebaju nam zamjene i
+   * bolovanje"). Their routes survive, unused, and act on real rows only: an
+   * inherited cell's id is the **source** week's row, so a swap or a status patch
+   * aimed at it lands on that source row and never writes a later week down.
+   */
+  it('never materialises a week for a swap or a status change', () => {
+    const { week, amar } = publishedPattern()
+    const later = addDays(week, 14)
+    const cell = cells([adminWeek(later)]).find(a => a.user_name === 'Amar')!
+    expect(cell.id).toBe(amar.id)
+
+    patchAssignment(f.db, f.venueId, f.adminActor(), cell.id, { note: 'napomena' }, f.clock.now())
+    requestSwap(f.db, f.venueId, f.actor('Amar'), {
+      assignment_id: cell.id, reason: 'zamjena',
+    }, f.clock.now())
+
+    expect(rowsIn(later)).toEqual([])
+    expect(headerOf(later)).toBeUndefined()
+    expect(adminWeek(later).inherited_from).toBe(week)
+  })
+
+  it('hides a deactivated template from inherited weeks, and keeps the past', () => {
+    const today_ = today()
+    // Two weeks ago, published, Amar on today's weekday. Last week and this week
+    // only ever inherited it.
+    planPast('Amar', addDays(today_, -14))
+    publishPast(addDays(today_, -14))
+    const druga = template('Druga smjena')
+
+    updateTemplate(f.db, f.venueId, f.adminActor(), druga.id, { active: false }, f.clock.now())
+
+    // The weeks that already happened were written down with the template…
+    for (const past of [addDays(today_, -7), today_]) {
+      expect(rowsIn(weekStart(past)).map(r => [r.workDate, r.templateId]))
+        .toEqual([[past, druga.id]])
+      expect(headerOf(weekStart(past))!.publishedAt).not.toBeNull()
+    }
+    // …and no week after this one carries it.
+    expect(cells([adminWeek(weekStart(addDays(today_, 7)))])).toEqual([])
+    expect(cells([adminWeek(weekStart(addDays(today_, 35)))])).toEqual([])
+  })
+
+  it('drops a deactivated person from inherited weeks and keeps the days he worked', () => {
+    const today_ = today()
+    planPast('Dino', addDays(today_, -14))
+    publishPast(addDays(today_, -14))
+
+    updateUser(f.db, f.venueId, f.adminActor(), f.userId('Dino'), { active: false }, f.clock.now())
+
+    // Last week keeps him; tonight's row became `removed` like any future row.
+    expect(rowsIn(weekStart(addDays(today_, -7))).map(r => r.status)).toEqual(['planned'])
+    expect(rowsIn(weekStart(today_)).map(r => [r.status, r.note])).toEqual([['removed', 'deaktiviran']])
+    expect(cells([adminWeek(weekStart(addDays(today_, 14)))])).toEqual([])
+  })
+
+  it('writes nothing on any read — GET is not a mutation', () => {
+    const today_ = today()
+    planPast('Lejla', addDays(today_, -7))
+    publishPast(addDays(today_, -7))
+    plan('Amar', { date: addDays(futureWeek(), 7) }) // a draft further on
+
+    const count = (table: string) =>
+      (f.sqlite.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n
+    const tables = ['roster_assignments', 'roster_weeks', 'changes', 'log_entries', 'chat_messages']
+    const before = tables.map(count)
+
+    getRoster(f.db, f.venueId, f.adminActor(), today_, addDays(today_, 60))
+    getRoster(f.db, f.venueId, f.actor('Amar'), today_, addDays(today_, 60))
+    getMyRoster(f.db, f.venueId, f.actor('Lejla'), f.clock.now())
+    plannedOn(f.db, f.venueId, today_)
+    getLive(f.db, f.venueId, f.adminActor())
+    rosterHours(f.db, f.venueId, today_.slice(0, 7))
+    rosterHours(f.db, f.venueId, today_.slice(0, 7), f.userId('Lejla'))
+
+    expect(tables.map(count)).toEqual(before)
+  })
+})
+
+describe('publishWeek', () => {
   it('publishes once, posts one Svi line, and refuses a second publish', () => {
     const week = futureWeek()
     plan('Amar', { date: week })

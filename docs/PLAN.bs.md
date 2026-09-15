@@ -160,7 +160,7 @@ Proizvodi s cijenom koja važi odmah ("mijenjaj cijene prije otvaranja smjene"),
 
 ### Raspored
 
-Telefon: kartice dana s **"+"** za osobu (2 dodira); laptop: mreža šabloni × dani; **"Kopiraj prošlu sedmicu"** + **"Objavi raspored"** = 3 dodira, četiri ispravke još 8–12; kartice **"Zamjene"** i **"Sati"** (faza 3b). Detalji u odjeljku 9.
+Telefon: kartice dana s **"+"** za osobu (2 dodira); laptop: mreža šabloni × dani; **"Objavi raspored"** — objavljeni raspored važi svake sedmice dok se ne objavi novi, pa se sedmica ne kopira; četiri ispravke i objava 9–13 dodira. Zamjene i bolovanje nisu u aplikaciji. Detalji u odjeljku 9.
 
 ### Razgovor
 
@@ -282,7 +282,7 @@ Jedan zapis "ko je šta uradio", nastao spajanjem stare "Aktivnosti" i zapisa ra
 
 **Model.** Šablon je imenovani raspon: **"Dnevna"** 08–16 i **"Večernja"** 16–01; još jedan ("Vikend večernja" 18–03) je jedan unos. Sedmica je **"Nacrt"** do **"Objavi raspored"**, poslije svaka izmjena važi odmah. Vrijeme se kopira iz šablona pri dodjeli; svaka izmjena ostavlja zapis s prije/poslije; zamjena ne prepisuje ime (davalac "zamijenjen", primalac novi red); uklanjanje nakon objave je status s bilješkom. Planirani sati su nominalni, odrađeni od prve radnje do odjave.
 
-**Vlasnik pravi sedmicu.** **"Kopiraj prošlu sedmicu"** (redovni ljudi, ne jednokratne zamjene) → ćelija → osoba (2 dodira); druga smjena istog dana pita jednom **"Dupla smjena — svejedno dodaj"** (3), preklapanje nije moguće; **"Ukloni"** (2). **"Objavi raspored"** → "Raspored za 14.09.–20.09. je objavljen — Raspored →" u "Svi"; poslije objave najviše jedna linija po vlasniku dnevno ("Haris mijenja raspored 14.–20.09. — Raspored →"), bez razloga i bilješke.
+**Vlasnik pravi sedmicu.** Sedmica bez svog rasporeda prikazuje posljednji objavljeni (**"važi od 14.09."**), a prva izmjena od nje pravi nacrt → ćelija → osoba (2 dodira); druga smjena istog dana pita jednom **"Dupla smjena — svejedno dodaj"** (3), preklapanje nije moguće; **"Ukloni"** (2). **"Objavi raspored"** → "Raspored za 14.09.–20.09. je objavljen — Raspored →" u "Svi"; poslije objave najviše jedna linija po vlasniku dnevno ("Haris mijenja raspored 14.–20.09. — Raspored →"), bez razloga i bilješke.
 
 **Zamjene.** Osoblje vidi samo objavljene sedmice i o kolegama samo ko kad radi; bolovanje i izostanak su prazno mjesto ("Bolovanje vidi samo vlasnik."). Zahtjev ide kao linija u "Konobari" ("Amar traži zamjenu · pet 18.09. Večernja 16–01 — Raspored →"); **"Preuzimam"** daje liniju u "Svi" "Zamjena · pet 18.09. Večernja — Dino umjesto Amara". Razlog "bolest" odmah označi red kao bolovanje — jedini put kojim konobar sam unosi bolovanje u raspored (vlasnik ga može upisati i ručno) — i šalje vlasniku Telegram; linija u "Svi" je ista kao za svaku zamjenu. Vlasnik ne potvrđuje zamjene; može promijeniti ćeliju — to je veto. Nepopunjen zahtjev ide u "Zahtijeva pažnju" i na Telegram manje od 24 h i 4 h prije smjene; vlasnik **"Dodijeli"** (3 dodira; do 7 dana nakon datuma kao "dodijeljeno naknadno") ili **"Odbij"**. Prošla smjena se ne preuzima; isti dan da. Do faze 3b Pravila kažu: "Zamjenu dogovori u Konobarima — vlasnik je upiše u raspored; bolestan? Javi vlasniku."
 

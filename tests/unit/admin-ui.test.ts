@@ -291,7 +291,7 @@ describe('the light theme is one palette', () => {
 describe('the way back', () => {
   const PAGES = new Set([
     '/admin', '/admin/smjene', '/admin/roba', '/admin/roba/prijem', '/admin/raspored',
-    '/admin/raspored/zamjene', '/admin/meni', '/admin/postavke/kategorije',
+    '/admin/meni', '/admin/postavke/kategorije',
     '/admin/postavke/osoblje', '/admin/postavke/uredaji', '/admin/vise', '/admin/razgovor',
     '/admin/kontrola', '/admin/kontrola/sabloni', '/admin/kontrola/podesavanja',
   ])
@@ -333,7 +333,9 @@ describe('the way back', () => {
   it('climbs to the nearest ancestor that is really a page', () => {
     expect(adminBack('/admin/smjena/abc/stavke', exists)).toBe('/admin/smjena/abc')
     expect(adminBack('/admin/roba/artikal/xyz', exists)).toBe('/admin/roba')
-    expect(adminBack('/admin/raspored/zamjene', exists)).toBe('/admin/raspored')
+    // (`/admin/raspored/zamjene` was the third case; the page is gone with the
+    // swaps, and a path that is not a page any more climbs like any other.)
+    expect(adminBack('/admin/raspored/nema', exists)).toBe('/admin/raspored')
   })
 
   it('sends a shift to Smjene, whose path is spelled differently', () => {
@@ -347,7 +349,7 @@ describe('the way back', () => {
 
   it('never returns a path the router would not resolve', () => {
     const paths = ['/admin/smjena/a', '/admin/smjena/a/stavke', '/admin/roba/artikal/b',
-      '/admin/raspored/zamjene', '/admin/postavke/uredaji', '/admin/razgovor']
+      '/admin/kontrola/sabloni', '/admin/postavke/uredaji', '/admin/razgovor']
     for (const path of paths) {
       const target = adminBack(path, exists)
       if (target !== null) expect(exists(target), `${path} -> ${target}`).toBe(true)

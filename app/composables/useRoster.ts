@@ -16,7 +16,7 @@
  */
 import { addDays, plannedHours, shortDateBs, weekStart, weekdayBs } from '#shared/dates'
 import type {
-  Assignment, AssignmentStatus, HoursRow, RosterWeekView, ShiftTemplateView, SwapStatus,
+  Assignment, AssignmentStatus, HoursRow, RosterWeekView, ShiftTemplateView,
 } from '#shared/types'
 
 // ---------------------------------------------------------------------------
@@ -58,14 +58,6 @@ export const STATUS_BS: Record<AssignmentStatus, string> = {
   sick: 'bolestan',
   absent: 'nije došao',
   removed: 'uklonjeno',
-}
-
-/** *Zamjene* filters by these, and the tab strip spells them out. */
-export const SWAP_STATUS_BS: Record<SwapStatus, string> = {
-  pending: 'čeka',
-  accepted: 'preuzeta',
-  declined: 'odbijena',
-  cancelled: 'povučena',
 }
 
 /**

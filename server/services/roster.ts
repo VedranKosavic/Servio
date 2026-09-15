@@ -19,8 +19,29 @@
  * **The roster is the documented exception to append-only** (PLAN §6) — and the
  * history is not lost, it is in `log_entries`: every write below logs inside its
  * own transaction, with before and after.
+ *
+ * **A published week repeats until a newer one is published.** The owner's rule
+ * is "Kada se objavi raspored, taj raspored važi zauvijek osim ako se objavi
+ * novi raspored". It is kept **at read time**: a week with no rows of its own is
+ * drawn from the most recent published week before it, shifted by whole weeks
+ * (`weekRows` → `patternOf`). No GET writes a row to make that true, so a phone
+ * can look at next month without anybody copying weeks, and the change feed
+ * stays honest (a GET that wrote would be a mutation without a `bump`).
+ *
+ * The pattern turns into real rows (it is *materialised*, `materialiseWeek`) only
+ * when the owner changes the plan:
+ *   - he adds or removes a person → the week becomes a **draft** of its own,
+ *     invisible to staff until *Objavi raspored*;
+ *   - he publishes a week that was only inherited → its rows are written first;
+ *   - he deactivates a person or a template → every inherited week up to this one
+ *     is written first, so the past keeps who was on it (`materialiseThrough`).
+ *
+ * Swaps and status changes (*Traži zamjenu*, *Bolestan*, *Nije došao*) are gone
+ * from the app ("Ne trebaju nam zamjene i bolovanje"). Their routes and the code
+ * below still exist, unused by any screen, and act on real rows only: they never
+ * materialise an inherited week.
  */
-import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNotNull, ne, or, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { newId, nowIso } from '../utils/ids'
 import { conflict, forbidden, notFound, unprocessable } from '../utils/errors'
@@ -103,9 +124,12 @@ export function listTemplates(q: Queryable, venueId: string, includeInactive = t
  * Who the plan has on one day — the *Ko radi* card on *Puls*.
  *
  * **Not `weekView`.** That builds seven days, both projections, the swap chips
- * and every template's row, and *Puls* polls; this is one indexed read of one
- * date (`roster_assignments_date_idx`) on a screen that asks every fifteen
- * seconds.
+ * and every template's row, and *Puls* polls; this reads one week's rows (or the
+ * published pattern the week inherits) and keeps one date, on a screen that asks
+ * every fifteen seconds.
+ *
+ * **An inherited week counts.** Tonight's plan is tonight's plan whether the
+ * owner wrote this week or it is last month's publish carried forward.
  *
  * **Draft weeks count.** `weekView` hides an unpublished week from staff, and
  * this is an owner-only read on an owner-only route — the owner wrote the plan,
@@ -121,41 +145,38 @@ export function listTemplates(q: Queryable, venueId: string, includeInactive = t
  * morning comes before the evening and the rows do not move between polls.
  */
 export function plannedOn(q: Queryable, venueId: string, date: string): LiveRostered[] {
-  const rows = q.select({
-    userId: schema.rosterAssignments.userId,
-    templateId: schema.rosterAssignments.templateId,
-    startTime: schema.rosterAssignments.startTime,
-    endTime: schema.rosterAssignments.endTime,
-    status: schema.rosterAssignments.status,
-    name: schema.users.name,
-    initials: schema.users.initials,
-    templateName: schema.shiftTemplates.name,
-    sort: schema.shiftTemplates.sort,
-  })
-    .from(schema.rosterAssignments)
-    .innerJoin(schema.users, eq(schema.users.id, schema.rosterAssignments.userId))
-    .innerJoin(
-      schema.shiftTemplates,
-      eq(schema.shiftTemplates.id, schema.rosterAssignments.templateId),
-    )
-    .where(and(
-      eq(schema.rosterAssignments.venueId, venueId),
-      eq(schema.rosterAssignments.workDate, date),
-      inArray(schema.rosterAssignments.status, ['planned', 'sick', 'absent']),
-    ))
-    .orderBy(asc(schema.shiftTemplates.sort), asc(schema.users.name))
-    .all()
+  const rows = weekRows(q, venueId, weekStart(date), 'admin').rows
+    .filter(r => r.workDate === date
+      && (r.status === 'planned' || r.status === 'sick' || r.status === 'absent'))
+  if (rows.length === 0) return []
 
-  return rows.map(row => ({
-    user_id: row.userId,
-    name: row.name,
-    initials: row.initials,
-    template_id: row.templateId,
-    template_name: row.templateName,
-    start_time: row.startTime,
-    end_time: row.endTime,
-    status: row.status as LiveRostered['status'],
-  }))
+  const users = new Map(
+    q.select({ id: schema.users.id, name: schema.users.name, initials: schema.users.initials })
+      .from(schema.users).where(eq(schema.users.venueId, venueId)).all()
+      .map(u => [u.id, u] as const),
+  )
+  const templates = new Map(
+    q.select().from(schema.shiftTemplates).where(eq(schema.shiftTemplates.venueId, venueId)).all()
+      .map(t => [t.id, t] as const),
+  )
+
+  return rows
+    .filter(r => users.has(r.userId) && templates.has(r.templateId))
+    .map(row => ({
+      user_id: row.userId,
+      name: users.get(row.userId)!.name,
+      initials: users.get(row.userId)!.initials,
+      template_id: row.templateId,
+      template_name: templates.get(row.templateId)!.name,
+      start_time: row.startTime,
+      end_time: row.endTime,
+      status: row.status as LiveRostered['status'],
+      sort: templates.get(row.templateId)!.sort,
+    }))
+    // The template's own `sort`, then the name — byte order, like SQL's default
+    // collation, so the rows do not move between polls.
+    .sort((a, b) => (a.sort - b.sort) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+    .map(({ sort: _sort, ...rest }) => rest)
 }
 
 // ---------------------------------------------------------------------------
@@ -163,86 +184,22 @@ export function plannedOn(q: Queryable, venueId: string, date: string): LiveRost
 // ---------------------------------------------------------------------------
 
 /**
- * *Kopiraj prošlu sedmicu* — the regular people, not the one-off covers.
+ * *Objavi raspored* — and the one *Svi* line that tells the building.
  *
- * `origin != 'swap'` is the whole rule: a colleague who took one Friday because
- * somebody was ill is not on next week's plan by accident.
+ * From this week on, the published week is the pattern every later week without
+ * rows of its own repeats (see the header). *Kopiraj prošlu sedmicu* is gone for
+ * that reason: there is nothing left to copy by hand.
  */
-export function copyWeek(
-  db: Db, venueId: string, actor: Actor, week: string, now = nowIso(),
-): RosterWeekView {
-  const target = weekStart(week)
-  const source = addDays(target, -7)
-
-  db.transaction((tx) => {
-    ensureWeek(tx, venueId, actor, target, now)
-
-    const existing = tx.select({ id: schema.rosterAssignments.id })
-      .from(schema.rosterAssignments)
-      .where(and(
-        eq(schema.rosterAssignments.venueId, venueId),
-        sql`${schema.rosterAssignments.workDate} >= ${target}`,
-        sql`${schema.rosterAssignments.workDate} <= ${addDays(target, 6)}`,
-      ))
-      .get()
-    if (existing) throw conflict('WEEK_NOT_EMPTY', `week ${target} already has rows`)
-
-    const rows = tx.select().from(schema.rosterAssignments)
-      .where(and(
-        eq(schema.rosterAssignments.venueId, venueId),
-        sql`${schema.rosterAssignments.workDate} >= ${source}`,
-        sql`${schema.rosterAssignments.workDate} <= ${addDays(source, 6)}`,
-        ne(schema.rosterAssignments.origin, 'swap'),
-        ne(schema.rosterAssignments.status, 'removed'),
-      ))
-      .all()
-
-    const active = new Set(
-      tx.select({ id: schema.users.id }).from(schema.users)
-        .where(and(eq(schema.users.venueId, venueId), eq(schema.users.active, 1)))
-        .all().map(u => u.id),
-    )
-
-    let copied = 0
-    for (const row of rows) {
-      if (!active.has(row.userId)) continue
-      const shifted = addDays(row.workDate, 7)
-      tx.insert(schema.rosterAssignments).values({
-        id: newId(),
-        venueId,
-        workDate: shifted,
-        templateId: row.templateId,
-        userId: row.userId,
-        startTime: row.startTime,
-        endTime: row.endTime,
-        status: 'planned',
-        origin: 'copy',
-        createdBy: actor.userId,
-        createdAt: now,
-      }).run()
-      copied++
-    }
-
-    log(tx, venueId, {
-      kind: 'roster_changed',
-      body: { week_start: target, what: 'kopirano', rows: copied },
-      actorId: actor.userId,
-      ref: { type: 'roster_week', id: target },
-      at: now,
-    })
-    bump(tx, venueId, 'roster', target)
-  })
-
-  return weekView(db, venueId, actor, target)
-}
-
-/** *Objavi raspored* — and the one *Svi* line that tells the building. */
 export function publishWeek(
   db: Db, venueId: string, actor: Actor, week: string, now = nowIso(),
 ): RosterWeekView {
   const target = weekStart(week)
 
   db.transaction((tx) => {
+    // A week that is still only the pattern carried forward gets its rows first.
+    // Publishing a bare header instead would make it an empty published week,
+    // and every week after it would inherit nobody.
+    materialiseWeek(tx, venueId, actor, target, 'nacrt', now)
     const row = ensureWeek(tx, venueId, actor, target, now)
     if (row.publishedAt) throw conflict('ALREADY_PUBLISHED', `week ${target} is already published`)
 
@@ -289,6 +246,10 @@ export function addAssignment(
     if (!user) throw notFound('USER_NOT_FOUND', `user ${body.user_id} not found`)
     if (!user.active) throw unprocessable('USER_NOT_ACTIVE', 'that person is deactivated')
 
+    // The first edit on an inherited week writes the pattern down as a draft of
+    // its own — before the constraints, so "already works that day" sees the
+    // people the week was showing.
+    materialiseWeek(tx, venueId, actor, weekStart(body.work_date), 'nacrt', now)
     checkDayConstraints(tx, venueId, body.work_date, body.user_id, template, body.force_double === true)
     ensureWeek(tx, venueId, actor, weekStart(body.work_date), now)
 
@@ -326,7 +287,7 @@ export function addAssignment(
 export function patchAssignment(
   db: Db, venueId: string, actor: Actor, id: string, body: AssignmentPatch, now = nowIso(),
 ): Assignment {
-  db.transaction((tx) => {
+  const resolvedId = db.transaction((tx) => {
     const row = requireAssignment(tx, venueId, id)
     const settings = getSettings(tx, venueId)
     const today = businessDate(now, settings.timezone, settings.business_day_start_hour)
@@ -369,9 +330,10 @@ export function patchAssignment(
         assignment_id: row.id, user_id: row.userId, status: body.status ?? null,
       }, now)
     }
+    return row.id
   })
 
-  return requireAssignmentView(db, venueId, actor, id)
+  return requireAssignmentView(db, venueId, actor, resolvedId)
 }
 
 /**
@@ -380,10 +342,11 @@ export function patchAssignment(
  * already seen it.
  */
 export function removeAssignment(
-  db: Db, venueId: string, actor: Actor, id: string, now = nowIso(),
+  db: Db, venueId: string, actor: Actor, id: string, now = nowIso(), workDate?: string,
 ): void {
   db.transaction((tx) => {
-    const row = requireAssignment(tx, venueId, id)
+    // An inherited cell: the week becomes a draft of its own, then loses the row.
+    const row = resolveCell(tx, venueId, actor, id, workDate, now)
     const settings = getSettings(tx, venueId)
     const today = businessDate(now, settings.timezone, settings.business_day_start_hour)
     if (row.workDate < today) throw conflict('ROSTER_LOCKED', 'a past date cannot be edited')
@@ -709,6 +672,12 @@ export function onUserDeactivated(
   const settings = getSettings(tx, venueId)
   const today = businessDate(now, settings.timezone, settings.business_day_start_hour)
 
+  // Inherited weeks skip an inactive person. Written down first, every week up
+  // to this one keeps him on the days he was still here; the rows from today on
+  // then turn `removed` below like any other future row. His `active = 0` is
+  // already written in this transaction, hence `stillHere`.
+  const wrote = materialiseThrough(tx, venueId, actor, weekStart(today), now, userId)
+
   const future = tx.select().from(schema.rosterAssignments)
     .where(and(
       eq(schema.rosterAssignments.venueId, venueId),
@@ -735,7 +704,7 @@ export function onUserDeactivated(
     .all()
   for (const request of mine) closeRequest(tx, request.id, 'cancelled', actor.userId, now)
 
-  if (future.length > 0 || mine.length > 0) bump(tx, venueId, 'roster', userId)
+  if (wrote || future.length > 0 || mine.length > 0) bump(tx, venueId, 'roster', userId)
 }
 
 // ---------------------------------------------------------------------------
@@ -784,6 +753,13 @@ export function updateTemplate(
 ): ShiftTemplateView {
   db.transaction((tx) => {
     const row = requireTemplate(tx, venueId, id)
+    // Deactivating a template hides its cells from every inherited week. Write
+    // the inherited weeks up to this one down first, so the past keeps them.
+    if (patch.active === false && row.active === 1) {
+      const settings = getSettings(tx, venueId)
+      const today = businessDate(now, settings.timezone, settings.business_day_start_hour)
+      materialiseThrough(tx, venueId, actor, weekStart(today), now)
+    }
     // `shift_templates_name_uq` would refuse a rename onto another template's
     // name anyway; saying so in Bosnian beats a raw SQLITE_CONSTRAINT 500.
     if (patch.name !== undefined && patch.name !== row.name) {
@@ -846,14 +822,10 @@ export function rosterHours(
   const to = lastDayOf(month)
   const grace = settings.roster_late_grace_min
 
-  const assignments = q.select().from(schema.rosterAssignments)
-    .where(and(
-      eq(schema.rosterAssignments.venueId, venueId),
-      sql`${schema.rosterAssignments.workDate} >= ${from}`,
-      sql`${schema.rosterAssignments.workDate} <= ${to}`,
-      ...(userId ? [eq(schema.rosterAssignments.userId, userId)] : []),
-    ))
-    .all()
+  // Week by week, so a month that is partly the published pattern carried
+  // forward plans exactly what the grid and the phones show for it.
+  const assignments = rowsBetween(q, venueId, from, to)
+    .filter(a => !userId || a.userId === userId)
 
   const worked = q.select({
     userId: schema.shiftMembers.userId,
@@ -1233,38 +1205,325 @@ export function genitiveBs(name: string): string {
   return `${name}a`
 }
 
+// ---------------------------------------------------------------------------
+// Inheritance: which rows a week shows
+// ---------------------------------------------------------------------------
+
+type WeekRow = typeof schema.rosterWeeks.$inferSelect
+/** A row as a week shows it: its own, or the source week's carried forward. */
+type CellRow = AssignmentRow & { inherited: boolean }
+
+interface WeekRows {
+  header: WeekRow | undefined
+  /** Set when the rows are the published pattern of this earlier week. */
+  source: WeekRow | undefined
+  rows: CellRow[]
+}
+
+/**
+ * The rows one week shows, for one kind of reader — the single place the rule
+ * "a published week repeats until a newer one is published" is decided.
+ *
+ * - **The owner** sees a week's own rows whenever it has any (or a header, which
+ *   is a draft he emptied on purpose), published or not. Only a week with
+ *   nothing of its own shows the pattern.
+ * - **Staff** see own rows only when the week is published. A draft is the
+ *   owner's alone, so staff keep seeing the published pattern under it.
+ * - The pattern is the most recent **published** week *before* this one. Before
+ *   the first publish there is none, and the week is empty, as it always was.
+ */
+function weekRows(
+  q: Queryable, venueId: string, week: string, reader: 'admin' | 'staff',
+): WeekRows {
+  const header = weekHeader(q, venueId, week)
+
+  if (reader === 'admin') {
+    const own = adminRows(q, venueId, week)
+    if (header || own.length > 0) {
+      return { header, source: undefined, rows: own.map(r => ({ ...r, inherited: false })) }
+    }
+  } else if (header?.publishedAt) {
+    return {
+      header, source: undefined,
+      rows: staffRows(q, venueId, week).map(r => ({ ...r, inherited: false })),
+    }
+  }
+
+  const source = sourceWeek(q, venueId, week)
+  return { header, source, rows: source ? patternOf(q, venueId, source, week) : [] }
+}
+
+function weekHeader(q: Queryable, venueId: string, week: string): WeekRow | undefined {
+  return q.select().from(schema.rosterWeeks)
+    .where(and(eq(schema.rosterWeeks.venueId, venueId), eq(schema.rosterWeeks.weekStart, week)))
+    .get()
+}
+
+/** The most recent published week strictly before `week` — the plan in force. */
+function sourceWeek(q: Queryable, venueId: string, week: string): WeekRow | undefined {
+  return q.select().from(schema.rosterWeeks)
+    .where(and(
+      eq(schema.rosterWeeks.venueId, venueId),
+      isNotNull(schema.rosterWeeks.publishedAt),
+      sql`${schema.rosterWeeks.weekStart} < ${week}`,
+    ))
+    .orderBy(desc(schema.rosterWeeks.weekStart))
+    .limit(1)
+    .get()
+}
+
+/** Does this week have a header or a row of its own? */
+function isOwnWeek(q: Queryable, venueId: string, week: string): boolean {
+  if (weekHeader(q, venueId, week)) return true
+  return !!q.select({ id: schema.rosterAssignments.id }).from(schema.rosterAssignments)
+    .where(and(
+      eq(schema.rosterAssignments.venueId, venueId),
+      sql`${schema.rosterAssignments.workDate} >= ${week}`,
+      sql`${schema.rosterAssignments.workDate} <= ${addDays(week, 6)}`,
+    ))
+    .get()
+}
+
+/**
+ * The source week's **regular people**, moved onto `week`'s dates.
+ *
+ * The rule the old *Kopiraj prošlu sedmicu* used, kept: `origin != 'swap'` and
+ * `status != 'removed'`. A colleague who took one Friday because somebody was
+ * ill is not on every Friday after it, and the person he covered still is (his
+ * `swapped` or `sick` row counts as the plan). Every carried cell is `planned`.
+ *
+ * - `start_time`/`end_time` are the **source rows' snapshots**, not today's
+ *   template, exactly as the copy used to write them.
+ * - A deactivated person or template carries nothing forward. Deactivating
+ *   first writes the inherited weeks up to today (`materialiseThrough`), so this
+ *   filter only ever hides them from weeks that had not started yet.
+ * - A template added after the source week has no cells to carry and is empty.
+ */
+function patternOf(
+  q: Queryable, venueId: string, source: WeekRow, week: string,
+  /**
+   * The person being deactivated in this very transaction. `updateUser` writes
+   * his `active = 0` before the roster hook runs, and the weeks written down for
+   * him are exactly the ones he still worked.
+   */
+  stillHere?: string,
+): CellRow[] {
+  const shift = daysBetween(source.weekStart, week)
+  const rows = q.select().from(schema.rosterAssignments)
+    .innerJoin(schema.users, eq(schema.users.id, schema.rosterAssignments.userId))
+    .innerJoin(
+      schema.shiftTemplates,
+      eq(schema.shiftTemplates.id, schema.rosterAssignments.templateId),
+    )
+    .where(and(
+      eq(schema.rosterAssignments.venueId, venueId),
+      sql`${schema.rosterAssignments.workDate} >= ${source.weekStart}`,
+      sql`${schema.rosterAssignments.workDate} <= ${addDays(source.weekStart, 6)}`,
+      ne(schema.rosterAssignments.origin, 'swap'),
+      ne(schema.rosterAssignments.status, 'removed'),
+      stillHere
+        ? or(eq(schema.users.active, 1), eq(schema.users.id, stillHere))
+        : eq(schema.users.active, 1),
+      eq(schema.shiftTemplates.active, 1),
+    ))
+    .orderBy(asc(schema.rosterAssignments.workDate), asc(schema.rosterAssignments.createdAt))
+    .all()
+
+  // A `swapped` row and a later re-add of the same person in the same cell are
+  // one person in the plan, not two.
+  const seen = new Set<string>()
+  const out: CellRow[] = []
+  for (const { roster_assignments: row } of rows) {
+    const key = `${row.workDate}|${row.templateId}|${row.userId}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({
+      ...row,
+      workDate: addDays(row.workDate, shift),
+      status: 'planned',
+      origin: 'copy',
+      swapRequestId: null,
+      note: null,
+      updatedBy: null,
+      updatedAt: null,
+      inherited: true,
+    })
+  }
+  return out
+}
+
+/** Every row the owner's weeks show between two dates, inherited or not. */
+function rowsBetween(q: Queryable, venueId: string, from: string, to: string): CellRow[] {
+  const out: CellRow[] = []
+  for (let week = weekStart(from); week <= to; week = addDays(week, 7)) {
+    for (const row of weekRows(q, venueId, week, 'admin').rows) {
+      if (row.workDate >= from && row.workDate <= to) out.push(row)
+    }
+  }
+  return out
+}
+
+/**
+ * Write an inherited week down as rows of its own — **materialise** it.
+ *
+ * A no-op on a week that already has a header or a row, and on a week before
+ * the first publish (there is nothing to carry). `'nacrt'` leaves an
+ * unpublished header, so the week is the owner's draft until *Objavi raspored*;
+ * `'objavljeno'` copies the source week's `published_at`/`published_by`, because
+ * nothing new was published — the plan in force just got rows to point at, and
+ * *Objavio Haris · 12.09.* stays true. Neither posts a *Svi* line: what the
+ * phones see does not change.
+ *
+ * Returns whether it wrote anything. Always inside the caller's transaction, so
+ * a refusal after it (an overlap, somebody else's row) takes the rows back out.
+ */
+function materialiseWeek(
+  tx: Tx, venueId: string, actor: Actor, week: string,
+  as: 'nacrt' | 'objavljeno', now: string, stillHere?: string,
+): boolean {
+  if (isOwnWeek(tx, venueId, week)) return false
+  const source = sourceWeek(tx, venueId, week)
+  if (!source) return false
+
+  const pattern = patternOf(tx, venueId, source, week, stillHere)
+  const header = ensureWeek(tx, venueId, actor, week, now)
+  if (as === 'objavljeno') {
+    tx.update(schema.rosterWeeks)
+      .set({ publishedAt: source.publishedAt, publishedBy: source.publishedBy })
+      .where(eq(schema.rosterWeeks.id, header.id))
+      .run()
+  }
+
+  for (const cell of pattern) {
+    tx.insert(schema.rosterAssignments).values({
+      id: newId(),
+      venueId,
+      workDate: cell.workDate,
+      templateId: cell.templateId,
+      userId: cell.userId,
+      startTime: cell.startTime,
+      endTime: cell.endTime,
+      status: 'planned',
+      origin: 'copy',
+      createdBy: actor.userId,
+      createdAt: now,
+    }).run()
+  }
+
+  log(tx, venueId, {
+    kind: 'roster_changed',
+    body: {
+      week_start: week,
+      what: as === 'nacrt' ? 'nastavak objavljenog rasporeda, nacrt' : 'nastavak objavljenog rasporeda',
+      from_week: source.weekStart,
+      rows: pattern.length,
+    },
+    actorId: actor.userId,
+    ref: { type: 'roster_week', id: week },
+    at: now,
+  })
+  bump(tx, venueId, 'roster', week)
+  return true
+}
+
+/**
+ * Materialise, as published, every inherited week from the plan in force up to
+ * and including `lastWeek`.
+ *
+ * Called before a person or a template is deactivated: `patternOf` skips
+ * inactive ones, so without this the weeks he already worked — never written
+ * down, only inherited — would lose him from the grid and from *Sati*. It is
+ * bounded by the weeks since the last publish, and a week of its own is left
+ * alone.
+ */
+function materialiseThrough(
+  tx: Tx, venueId: string, actor: Actor, lastWeek: string, now: string, stillHere?: string,
+): boolean {
+  const first = sourceWeek(tx, venueId, addDays(lastWeek, 7))
+  if (!first) return false
+  let wrote = false
+  for (let week = addDays(first.weekStart, 7); week <= lastWeek; week = addDays(week, 7)) {
+    if (materialiseWeek(tx, venueId, actor, week, 'objavljeno', now, stillHere)) wrote = true
+  }
+  return wrote
+}
+
+/**
+ * The row *Ukloni sa smjene* is about.
+ *
+ * A plain id is its own row. An **inherited** cell has no row: the screen sends
+ * the source week's row id plus the `work_date` it tapped. That week is written
+ * down as a draft and the matching row — same date, template and person — is
+ * the answer.
+ *
+ * `409 ROSTER_CHANGED` when the tap no longer matches the server: a newer week
+ * was published since the phone loaded, the owner already took that person off,
+ * or the date is not a whole number of weeks after the source row. A week that
+ * already has rows is not written again; its matching row is used as it is.
+ */
+function resolveCell(
+  tx: Tx, venueId: string, actor: Actor, id: string, workDate: string | undefined, now: string,
+): AssignmentRow {
+  const row = requireAssignment(tx, venueId, id)
+  if (workDate === undefined || workDate === row.workDate) return row
+
+  const gap = daysBetween(row.workDate, workDate)
+  if (gap <= 0 || gap % 7 !== 0) {
+    throw conflict('ROSTER_CHANGED', `${workDate} is not a repeat of ${row.workDate}`)
+  }
+
+  const week = weekStart(workDate)
+  if (!isOwnWeek(tx, venueId, week)) {
+    const source = sourceWeek(tx, venueId, week)
+    if (source?.weekStart !== weekStart(row.workDate)) {
+      throw conflict('ROSTER_CHANGED', `week ${week} no longer repeats ${weekStart(row.workDate)}`)
+    }
+    materialiseWeek(tx, venueId, actor, week, 'nacrt', now)
+  }
+
+  const found = tx.select().from(schema.rosterAssignments)
+    .where(and(
+      eq(schema.rosterAssignments.venueId, venueId),
+      eq(schema.rosterAssignments.workDate, workDate),
+      eq(schema.rosterAssignments.templateId, row.templateId),
+      eq(schema.rosterAssignments.userId, row.userId),
+      inArray(schema.rosterAssignments.status, ['planned', 'sick', 'absent']),
+    ))
+    .get()
+  if (!found) throw conflict('ROSTER_CHANGED', `no row for that cell on ${workDate}`)
+  return found
+}
+
+/** Whole days from one `YYYY-MM-DD` to another. */
+function daysBetween(from: string, to: string): number {
+  const ms = (day: string) => {
+    const [y, m, d] = day.split('-').map(Number)
+    return Date.UTC(y!, m! - 1, d!)
+  }
+  return Math.round((ms(to) - ms(from)) / 86_400_000)
+}
+
 /**
  * One week, from the side of whoever asked.
  *
  * The two branches are two queries, not one query and a filter — see the header.
+ * Which rows a week shows is `weekRows`; this only draws them.
  */
 function weekView(
   q: Queryable, venueId: string, actor: Actor, week: string,
 ): RosterWeekView {
   const isAdmin = actor.role === 'admin'
-  const header = q.select().from(schema.rosterWeeks)
-    .where(and(eq(schema.rosterWeeks.venueId, venueId), eq(schema.rosterWeeks.weekStart, week)))
-    .get()
-
-  const published = header?.publishedAt ?? null
+  const { header, source, rows } = weekRows(q, venueId, week, isAdmin ? 'admin' : 'staff')
   const templates = listTemplates(q, venueId, isAdmin)
+
+  // The publish the week stands on: its own, or the source week's when it only
+  // repeats that one. A draft with no source stands on nothing, and S17 says
+  // "Raspored za sljedeću sedmicu još nije objavljen."
+  const standing = source ?? (header?.publishedAt ? header : undefined)
 
   const days: RosterDayView[] = []
   for (let i = 0; i < 7; i++) days.push({ work_date: addDays(week, i), assignments: [] })
 
-  // A draft week is the owner's alone: staff get the empty shape and S17 says
-  // "Raspored za sljedeću sedmicu još nije objavljen."
-  if (!isAdmin && !published) {
-    return {
-      week_start: week,
-      published_at: null,
-      published_by_name: null,
-      days,
-      templates,
-    }
-  }
-
-  const rows = isAdmin ? adminRows(q, venueId, week) : staffRows(q, venueId, week)
   const names = new Map(
     q.select({ id: schema.users.id, name: schema.users.name, initials: schema.users.initials })
       .from(schema.users).where(eq(schema.users.venueId, venueId)).all()
@@ -1290,7 +1549,10 @@ function weekView(
       user_initials: user?.initials ?? '··',
       status: row.status,
       origin: row.origin,
-      swap_pending: pending.has(row.id),
+      // An inherited cell's id is the source row's, and a request on that row is
+      // about the source week's date, not this one.
+      swap_pending: !row.inherited && pending.has(row.id),
+      inherited: row.inherited,
     }
     if (isAdmin) {
       assignment.note = row.note
@@ -1303,8 +1565,9 @@ function weekView(
 
   return {
     week_start: week,
-    published_at: published,
-    published_by_name: header?.publishedBy ? nameOf(q, header.publishedBy) : null,
+    published_at: standing?.publishedAt ?? null,
+    published_by_name: standing?.publishedBy ? nameOf(q, standing.publishedBy) : null,
+    inherited_from: source?.weekStart ?? null,
     days,
     templates,
   }

@@ -3,13 +3,15 @@
  * One person in one cell — `/admin`, light kit.
  *
  * The whole chip is the button, because on a phone the target is the chip and
- * not a caret hidden inside it. What it draws is only ever four things:
+ * not a caret hidden inside it. What it draws is only ever three things:
  *
- * - **planned** — plain, the ordinary case, so a full week is quiet;
- * - **swap pending** — amber and the word *zamjena*, on both sides of the swap;
- * - **sick / absent** — struck through with the word, never a colour alone;
+ * - **a name on the plan** — plain, the ordinary case, so a full week is quiet;
+ * - **removed** — the word *uklonjeno*, on a row the owner unfolded;
  * - **the drift note** — "staro 15–00" when this row's snapshotted hours differ
  *   from what the template says today.
+ *
+ * No swap and no sick or absent badge: those are gone from the app ("Ne trebaju
+ * nam zamjene i bolovanje").
  */
 import type { Assignment, ShiftTemplateView } from '#shared/types'
 
@@ -21,15 +23,6 @@ const props = defineProps<{
 
 defineEmits<{ open: [] }>()
 
-const struck = computed(() =>
-  props.person.status === 'sick' || props.person.status === 'absent')
-
-const tone = computed(() => {
-  if (props.person.swap_pending) return 'warn'
-  if (props.person.status === 'sick' || props.person.status === 'absent') return 'bad'
-  return 'plain'
-})
-
 /** The row kept its own hours and the template has since moved. */
 const drift = computed(() => {
   const t = props.template
@@ -40,12 +33,11 @@ const drift = computed(() => {
 </script>
 
 <template>
-  <button type="button" class="r-chip" :class="`t-${tone}`" @click="$emit('open')">
-    <span class="r-in" :class="{ struck }">{{ person.user_initials }}</span>
-    <span class="r-nm" :class="{ struck }">{{ person.user_name }}</span>
+  <button type="button" class="r-chip" @click="$emit('open')">
+    <span class="r-in">{{ person.user_initials }}</span>
+    <span class="r-nm">{{ person.user_name }}</span>
 
-    <small v-if="person.swap_pending" class="r-tag">zamjena</small>
-    <small v-else-if="person.status !== 'planned'" class="r-tag">{{ STATUS_BS[person.status] }}</small>
+    <small v-if="person.status === 'removed'" class="r-tag">{{ STATUS_BS.removed }}</small>
     <small v-if="drift" class="r-tag r-drift">{{ drift }}</small>
   </button>
 </template>
@@ -68,9 +60,6 @@ const drift = computed(() => {
   text-align: left;
 }
 
-.t-warn { border-color: var(--warn); background: var(--warn-soft); }
-.t-bad { border-color: var(--danger); background: var(--danger-soft); }
-
 .r-in {
   flex-shrink: 0;
   width: 26px;
@@ -86,7 +75,6 @@ const drift = computed(() => {
 }
 
 .r-nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.struck { text-decoration: line-through; }
 .r-tag { color: var(--ink-2); font-size: var(--text-caption); white-space: nowrap; }
 .r-drift { color: var(--muted); }
 

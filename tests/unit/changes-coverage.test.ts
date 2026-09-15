@@ -51,7 +51,7 @@ import {
   deleteMessage, forwardMessage, muteUser, postMessage, setPin,
 } from '../../server/services/chat'
 import {
-  addAssignment, copyWeek, createTemplate, decideSwap, patchAssignment,
+  addAssignment, createTemplate, decideSwap, patchAssignment,
   publishWeek, removeAssignment, requestSwap, updateTemplate,
 } from '../../server/services/roster'
 import { ackRules, publishRules } from '../../server/services/rules'
@@ -553,10 +553,6 @@ const CALLS: Record<string, () => void | Promise<void>> = {
 
   // Phase 4 — Raspored. `bump('roster')`, and the publish also bumps `chat`
   // because it posts one *Svi* line.
-  [join('roster', 'weeks', 'copy.post.ts')]: () => {
-    copyWeek(f.db, f.venueId, f.adminActor(), nextWeek())
-  },
-
   [join('roster', 'weeks', 'publish.post.ts')]: () => {
     publishWeek(f.db, f.venueId, f.adminActor(), nextWeek())
   },

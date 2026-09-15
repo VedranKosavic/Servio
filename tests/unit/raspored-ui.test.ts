@@ -19,7 +19,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  HOURS_NOTE_BS, STATUS_BS, SWAP_STATUS_BS,
+  HOURS_NOTE_BS, STATUS_BS,
   alreadyThatDay, dayLabelBs, hoursBs, hoursEmpty, lateBs, monthBs, myShifts,
   shiftMonth, templateSpanBs, timeSpanBs, weekCells, weekRangeBs,
 } from '../../app/composables/useRoster'
@@ -46,6 +46,7 @@ function person(patch: Partial<Assignment>): Assignment {
     status: 'planned',
     origin: 'owner',
     swap_pending: false,
+    inherited: false,
     ...patch,
   }
 }
@@ -61,6 +62,7 @@ function week(rows: Assignment[], templates = [DNEVNA, VECERNJA]): RosterWeekVie
     week_start: monday,
     published_at: '2026-09-12T09:00:00Z',
     published_by_name: 'Haris',
+    inherited_from: null,
     days,
     templates,
   }
@@ -97,12 +99,11 @@ describe('the labels', () => {
     expect(lateBs(0)).toBe('')
   })
 
-  it('names every status and every swap status in Bosnian', () => {
+  it('names every status in Bosnian', () => {
+    // `SWAP_STATUS_BS` is gone with the *Zamjene* page. The row statuses stay
+    // named: the server still has them, and *uklonjeno* is still on screen.
     expect(Object.values(STATUS_BS)).toEqual(
       ['planirano', 'zamijenjeno', 'bolestan', 'nije došao', 'uklonjeno'],
-    )
-    expect(Object.values(SWAP_STATUS_BS)).toEqual(
-      ['čeka', 'preuzeta', 'odbijena', 'povučena'],
     )
   })
 

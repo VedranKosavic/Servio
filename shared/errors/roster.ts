@@ -11,8 +11,8 @@ export const ROSTER_ERRORS = {
   TEMPLATE_EXISTS: 'Šablon s tim nazivom već postoji.',
 
   // -- Sedmica --------------------------------------------------------------
-  WEEK_NOT_EMPTY: 'Ova sedmica već ima raspored.',
   ALREADY_PUBLISHED: 'Raspored za ovu sedmicu je već objavljen.',
+  ROSTER_CHANGED: 'Raspored se u međuvremenu promijenio — osvježi i pokušaj ponovo.',
 
   // -- Ćelija ---------------------------------------------------------------
   OVERLAP: 'Ta osoba već radi smjenu koja se preklapa tog dana.',

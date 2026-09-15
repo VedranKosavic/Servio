@@ -43,6 +43,13 @@ export interface Assignment {
   swap_request_id?: string | null
   /** True on a row with a `pending` request — the amber chip, on both sides. */
   swap_pending: boolean
+  /**
+   * True when this cell is not a row of its own week but the published pattern
+   * carried forward (`RosterWeekView.inherited_from`). `id` is then the **source
+   * row's** id, and a write on it sends `work_date` with it, so the server can
+   * write the week's rows before it acts.
+   */
+  inherited: boolean
 }
 
 export interface RosterDayView {
@@ -52,8 +59,18 @@ export interface RosterDayView {
 
 export interface RosterWeekView {
   week_start: string
+  /** On an inherited week, the source week's publish — the plan in force. */
   published_at: string | null
   published_by_name: string | null
+  /**
+   * The Monday of the published week this one repeats, or `null` when the week
+   * shows its own rows (or nothing at all, before the first publish).
+   *
+   * "Kada se objavi raspored, taj raspored važi zauvijek osim ako se objavi
+   * novi": a week with no rows of its own shows the most recent published week
+   * before it, shifted by whole weeks.
+   */
+  inherited_from: string | null
   days: RosterDayView[]
   /** The templates this week's grid draws rows for. */
   templates: ShiftTemplateView[]

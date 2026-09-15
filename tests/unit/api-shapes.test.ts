@@ -665,7 +665,8 @@ describe('GET /api/me/roster and GET /api/roster/hours', () => {
     const mine = getMyRoster(f.db, f.venueId, f.actor('Amar'))
     expect(Object.keys(mine).sort()).toEqual(['mine', 'next_week', 'offers', 'this_week'])
     expect(Object.keys(mine.this_week).sort())
-      .toEqual(['days', 'published_at', 'published_by_name', 'templates', 'week_start'])
+      // `inherited_from`: the published week this one repeats, or null.
+      .toEqual(['days', 'inherited_from', 'published_at', 'published_by_name', 'templates', 'week_start'])
     // Seven day rows, always — an empty week is seven empty days, not no days.
     expect(mine.this_week.days).toHaveLength(7)
     expect(Object.keys(mine.this_week.templates[0]!).sort())

@@ -2,10 +2,15 @@
 /**
  * *Sedmica* — the owner's week. `/admin`, light kit.
  *
- * **A typical week is three taps**: *Kopiraj prošlu sedmicu*, a glance, *Objavi
- * raspored*. Four fixes on top of that is eight to twelve. Everything in this
- * component is arranged around that budget, which is why the picker stays open
- * and why the two week-level buttons sit in the header rather than behind a menu.
+ * **A published week repeats every week until a newer one is published** — the
+ * owner's rule, kept by the server at read time. A week with no rows of its own
+ * arrives with `inherited_from` set and its cells marked `inherited`: the pill
+ * says *važi od 14.09.*, *Objavi raspored* has nothing to do, and the first edit
+ * writes that week down as a draft of its own (the server does it; this screen
+ * only sends `work_date` with an inherited cell's id). So a typical week is no
+ * taps at all, and a changed one is its fixes plus *Objavi raspored*. That is why
+ * the picker stays open and why the week-level button sits in the header rather
+ * than behind a menu.
  *
  * Two refusals the server makes and this screen has to speak for:
  *
@@ -18,6 +23,7 @@
  * there is one poll on `/admin` and this subscribes to it (`useAdminChanges`).
  */
 import { weekCells, alreadyThatDay } from '~/composables/useRoster'
+import { shortDateBs } from '#shared/dates'
 import type { ApiSideError } from '~/composables/useApi'
 import type { Assignment, RosterWeekView, UserAdmin } from '#shared/types'
 
@@ -33,9 +39,10 @@ const error = ref('')
 const busy = ref(false)
 
 const rows = computed(() => (view.value ? weekCells(view.value) : []))
+/** True on an inherited week too: its plan is in force, there is nothing to publish. */
 const published = computed(() => !!view.value?.published_at)
-const empty = computed(() =>
-  !!view.value && view.value.days.every(d => d.assignments.length === 0))
+/** The Monday of the published week this one repeats, or `null`. */
+const inheritedFrom = computed(() => view.value?.inherited_from ?? null)
 
 async function load() {
   try {
@@ -63,7 +70,7 @@ const changes = useAdminChanges({
   onEntity: (entity) => { if (entity === 'roster') void load() },
 })
 
-// -- the two week buttons ---------------------------------------------------
+// -- the week button --------------------------------------------------------
 
 async function run(action: () => Promise<unknown>) {
   busy.value = true
@@ -80,7 +87,6 @@ async function run(action: () => Promise<unknown>) {
   }
 }
 
-const copyWeek = () => run(() => api.copyRosterWeek(week.monday.value))
 const publish = () => run(() => api.publishRosterWeek(week.monday.value))
 
 // -- the picker -------------------------------------------------------------
@@ -179,10 +185,14 @@ async function cellRun(action: () => Promise<unknown>) {
   }
 }
 
-const setStatus = (status: 'planned' | 'absent' | 'sick') =>
-  cellRun(() => api.patchAssignment(cell.value!.id, { status }))
+/**
+ * An inherited cell has no row of its own: its `id` is the source week's row, so
+ * *Ukloni* carries the date that was tapped and the server writes that week down
+ * as a draft before it takes the person off.
+ */
+const tappedDate = () => (cell.value?.inherited ? cell.value.work_date : undefined)
 
-const removeCell = () => cellRun(() => api.removeAssignment(cell.value!.id))
+const removeCell = () => cellRun(() => api.removeAssignment(cell.value!.id, tappedDate()))
 </script>
 
 <template>
@@ -195,7 +205,10 @@ const removeCell = () => cellRun(() => api.removeAssignment(cell.value!.id))
           <UiButton variant="soft" aria-label="Prethodna sedmica" @click="week.go(-1)">‹</UiButton>
           <div class="r-when">
             <strong>{{ week.label.value }}</strong>
-            <UiPill :tone="published ? 'good' : 'neutral'">
+            <UiPill v-if="inheritedFrom" tone="good">
+              važi od {{ shortDateBs(inheritedFrom) }}
+            </UiPill>
+            <UiPill v-else :tone="published ? 'good' : 'neutral'">
               {{ published ? 'objavljeno' : 'nacrt' }}
             </UiPill>
           </div>
@@ -203,20 +216,23 @@ const removeCell = () => cellRun(() => api.removeAssignment(cell.value!.id))
         </div>
 
         <div class="r-acts">
-          <UiButton variant="ghost" :pending="busy" :disabled="!empty" @click="copyWeek">
-            Kopiraj prošlu sedmicu
-          </UiButton>
           <UiButton variant="primary" :pending="busy" :disabled="published" @click="publish">
             Objavi raspored
           </UiButton>
         </div>
       </div>
 
-      <p v-if="view?.published_at && view.published_by_name" class="r-quiet">
-        Objavio {{ view.published_by_name }} · {{ dateTimeBs(view.published_at) }}
+      <p v-if="inheritedFrom" class="r-quiet">
+        Nastavak rasporeda objavljenog za {{ weekRangeBs(inheritedFrom) }}. Prva izmjena
+        pravi nacrt ove sedmice, a telefoni ga vide tek kad ga objaviš.
+      </p>
+      <p v-else-if="view?.published_at && view.published_by_name" class="r-quiet">
+        Objavio {{ view.published_by_name }} · {{ dateTimeBs(view.published_at) }}.
+        Ponavlja se svake sedmice dok ne objaviš novi raspored.
       </p>
       <p v-else class="r-quiet">
-        Nacrt vidi samo vlasnik. Telefoni dobiju sedmicu tek kad je objaviš.
+        Nacrt vidi samo vlasnik, a telefoni i dalje vide posljednji objavljeni raspored.
+        Objavljeni raspored se ponavlja svake sedmice dok ne objaviš novi.
       </p>
 
       <p v-if="error" class="r-error" role="alert">{{ error }}</p>
@@ -269,7 +285,6 @@ const removeCell = () => cellRun(() => api.removeAssignment(cell.value!.id))
       :pending="busy"
       :error="cellError"
       @close="cell = null"
-      @status="setStatus"
       @remove="removeCell"
     />
   </div>
@@ -331,14 +346,13 @@ const removeCell = () => cellRun(() => api.removeAssignment(cell.value!.id))
   .r-when { flex-wrap: wrap; justify-content: center; }
   .r-when strong { font-size: var(--text-section); }
 
-  /* *Kopiraj prošlu sedmicu* takes the width of its own label and *Objavi
-     raspored* takes the rest, which is what puts both on one 44 px line at
-     360 px and up. The tighter padding is what buys the last few pixels. */
+  /* *Objavi raspored* is the one week-level action, and on a phone it takes the
+     whole line. */
   .r-acts {
     margin-left: 0;
     width: 100%;
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
   }
 

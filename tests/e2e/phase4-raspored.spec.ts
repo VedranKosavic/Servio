@@ -4,16 +4,17 @@
  *
  * What is proved here:
  *
- *   1. **Three taps for a week.** *Kopiraj prošlu sedmicu* then *Objavi
- *      raspored*, and the pill goes *nacrt → objavljeno*.
+ *   1. **A published week repeats.** *Objavi raspored* turns the pill *nacrt →
+ *      objavljeno*, and the week after it shows the same people under *važi od*
+ *      with nothing copied (*Kopiraj prošlu sedmicu* is gone: "Kada se objavi
+ *      raspored, taj raspored važi zauvijek osim ako se objavi novi raspored").
  *   2. **A published week reaches the phones**, and an unpublished one does not:
  *      a draft says "Raspored za sljedeću sedmicu još nije objavljen" and shows
  *      nobody, because the server sends staff a different query and not a
  *      filtered one.
- *   3. **A swap crosses two phones.** Dino asks on his handset, Amar takes it on
- *      his; the giver's row is `swapped`, the taker's is `origin='swap'`, and
- *      the *Svi* line the room sees carries **no reason and no note** — the rule
- *      that makes *bolest* invisible outside *Zamjene* and *Dnevnik*.
+ *   3. *(Skipped.)* **A swap crossing two phones** — swaps and sick days are gone
+ *      from the app ("Ne trebaju nam zamjene i bolovanje"); the test stays as a
+ *      named skip so nobody wonders where it went.
  *   4. **A shift in the past is refused in Bosnian**, with the sentence from
  *      `shared/errors/roster.ts` and not a status code.
  *   5. ***Sati* prints the caveat and the two rows that are not shifts** —
@@ -170,7 +171,11 @@ test('a draft week is the owner\'s alone, and publishing it is two taps', async 
   }, { timeout: 15_000 }).toContain('Amar')
 })
 
-test('kopiraj prošlu sedmicu fills the next one in one tap', async ({ page }) => {
+/**
+ * Replaces *kopiraj prošlu sedmicu fills the next one in one tap*: the button is
+ * gone, because a published week already repeats into every week after it.
+ */
+test('the week after a published one repeats it, with nothing copied', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/admin/login')
   await page.locator('input[type="email"]').first().fill(ADMIN.email)
@@ -178,95 +183,34 @@ test('kopiraj prošlu sedmicu fills the next one in one tap', async ({ page }) =
   await page.getByRole('button', { name: 'Prijavi se' }).click()
   await page.waitForURL(/\/admin(\?|$)/)
 
-  await page.goto(`/admin/raspored?w=${weekAfter}`)
-  /**
-   * *Kopiraj* is disabled until the week has loaded **and** come back empty — a
-   * `null` view is not an empty week, and offering the button before the answer
-   * arrives is how an owner copies a week twice.
-   */
-  const copy = page.getByRole('button', { name: 'Kopiraj prošlu sedmicu' })
-  await expect(copy).toBeEnabled({ timeout: 15_000 })
+  // Publish, if this file's first test did not already.
+  await admin.post('/api/roster/weeks/publish', { data: { week_start: nextWeek } })
 
-  await copy.click()
-  await expect(page.getByText('Amar').first()).toBeVisible({ timeout: 10_000 })
-  // One tap, and the button is spent: the week is no longer empty.
-  await expect(copy).toBeDisabled()
+  await page.goto(`/admin/raspored?w=${weekAfter}`)
+  await expect(page.getByText(/važi od/)).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText('Amar').first()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Kopiraj prošlu sedmicu' })).toHaveCount(0)
+  // Nothing to publish: the plan in force already covers this week.
+  await expect(page.getByRole('button', { name: 'Objavi raspored' })).toBeDisabled()
+
+  // A phone sees the same repeat, on a week nobody wrote.
+  const staff = await (await amarCtx.request.get(`/api/roster?from=${weekAfter}&to=${weekAfter}`))
+    .json() as { inherited_from: string | null, days: { assignments: { user_name: string }[] }[] }[]
+  expect(staff[0]!.inherited_from).toBe(nextWeek)
+  expect(staff[0]!.days.flatMap(d => d.assignments).map(a => a.user_name)).toContain('Amar')
 })
 
 // ===========================================================================
 
-test('a swap crosses two phones and says nothing about the reason', async () => {
-  const day = addDays(nextWeek, 5)
-  await roster(day, 'Večernja', 'Dino')
-
-  // Publish, if this file's first test did not already.
-  await admin.post('/api/roster/weeks/publish', { data: { week_start: nextWeek } })
-
-  const dino: Page = await dinoCtx.newPage()
-  await dino.goto('/konobar/raspored')
-  await dino.getByRole('button', { name: 'Sljedeća' }).click()
-
-  // His own row is the only tappable one on the screen.
-  await dino.getByRole('button', { name: /Dino/ }).first().click()
-  await dino.getByRole('button', { name: 'Traži zamjenu' }).click()
-  // Reason *bolest*, deliberately: the point of the test is that the room
-  // cannot tell.
-  await dino.getByRole('button', { name: 'Bolest', exact: true }).click()
-  await dino.getByRole('button', { name: 'Pošalji' }).click()
-  await expect(dino.getByText('Moji zahtjevi')).toBeVisible({ timeout: 10_000 })
-
-  // The row went `sick` in the same transaction as the request.
-  const swaps = await (await admin.get('/api/roster/swaps?status=pending')).json() as
-    { id: string, from_user_name: string, reason: string, assignment_id: string }[]
-  const request = swaps.find(s => s.from_user_name === 'Dino')!
-  expect(request.reason).toBe('bolest')
-
-  /**
-   * **A colleague's sick day is a hole on S17.** *Pravila* says "Bolovanje vidi
-   * samo vlasnik", and S17 caches its answer in IndexedDB — so a `sick` that
-   * reached a waiter's phone would be written to his disk. `GET /api/me/roster`
-   * therefore applies the same staff projection `GET /api/roster` does.
-   */
-  const beforeTake = await (await amarCtx.request.get('/api/me/roster')).json() as
-    { next_week: { days: { assignments: { user_name: string, status: string }[] }[] } }
-  const dinoRows = beforeTake.next_week.days
-    .flatMap(d => d.assignments).filter(a => a.user_name === 'Dino')
-  expect(dinoRows).toEqual([])
-
-  // The owner, on the same day, sees the word.
-  const ownerSwaps = await (await admin.get('/api/roster/swaps?status=pending')).json() as
-    { from_user_name: string, reason: string }[]
-  expect(ownerSwaps.find(s => s.from_user_name === 'Dino')!.reason).toBe('bolest')
-
-  const amar: Page = await amarCtx.newPage()
-  await amar.goto('/konobar/raspored')
-  await expect(amar.getByText('Traži se zamjena')).toBeVisible({ timeout: 15_000 })
-  await amar.getByRole('button', { name: 'Preuzimam' }).first().click()
-  await amar.getByRole('button', { name: 'Preuzimam', exact: true }).last().click()
-  await expect(amar.getByText('Traži se zamjena')).toHaveCount(0, { timeout: 15_000 })
-
-  /**
-   * The ledger side. A **`bolest` giver stays `sick`** rather than becoming
-   * `swapped` (PHASE4 §2.7): *Sati* has to count the sick day and the grid has
-   * to keep the struck-through chip, even though somebody covered the shift.
-   */
-  const week = await (await admin.get(`/api/roster?from=${nextWeek}&to=${nextWeek}`)).json() as
-    { days: { work_date: string, assignments: { user_name: string, status: string, origin: string }[] }[] }[]
-  const cell = week[0]!.days.find(d => d.work_date === day)!.assignments
-  expect(cell.find(a => a.user_name === 'Dino')!.status).toBe('sick')
-  expect(cell.find(a => a.user_name === 'Amar' && a.origin === 'swap')).toBeTruthy()
-
-  // **The room is told nothing.** The *Svi* line is identical for both reasons,
-  // because a distinct wording would itself be the reason.
-  const since = await (await admin.get('/api/chat/since')).json() as
-    { channels?: { kind: string }[], messages?: { body: string | null }[] }
-  const bodies = (since.messages ?? []).map(m => m.body ?? '').join(' ')
-  expect(bodies.toLowerCase()).not.toContain('bolest')
-  expect(bodies.toLowerCase()).not.toContain('bolovanje')
-
-  await dino.close()
-  await amar.close()
-})
+/**
+ * Skipped, not deleted: the owner removed swaps and sick days from the app
+ * ("Ne trebaju nam zamjene i bolovanje"). *Traži zamjenu*, *Preuzimam* and the
+ * *Zamjene* page no longer exist, so there is nothing on a phone to tap. The
+ * server routes survive unused and keep their unit tests in
+ * `tests/unit/roster.test.ts`; the privacy rule this test walked (the room never
+ * learns the reason) is asserted there too.
+ */
+test.skip('a swap crosses two phones and says nothing about the reason', () => {})
 
 // ===========================================================================
 

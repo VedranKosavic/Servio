@@ -234,7 +234,6 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   'GET /api/roster': AR,
   'GET /api/me/roster': AR,
   'GET /api/me/roster/hours': AR,
-  'POST /api/roster/weeks/copy': A,
   'POST /api/roster/weeks/publish': A,
   'POST /api/roster/assignments': A,
   'PATCH /api/roster/assignments/:id': A,

@@ -67,7 +67,6 @@ const deleteWindow = computed(() => value('chat_delete_own_s') || '15 minuta')
         Ko je šta pročitao aplikacija pamti samo da bi brojala nepročitane
         poruke — to se ne vidi ni na jednom ekranu i nema „viđeno“.
       </li>
-      <li>Bolovanje i izostanak vidi samo vlasnik.</li>
     </ul>
   </section>
 

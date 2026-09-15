@@ -351,12 +351,11 @@ export function shiftPrometFen(who: LiveWho[]): number {
  *   turning into an accusation at a threshold nobody published (PLAN §8).
  * - `planiran` — a shift that is not running. There is no fact to compare the
  *   plan against, so the row is the plan and nothing more.
- * - `bolest` / `odsutan` — the owner marked the day in *Raspored*.
  * - `van-rasporeda` — he is working and the plan does not have him. Not a
  *   flag: covers get arranged by phone all the time. It is on the card because
  *   *Ko radi* that does not name somebody standing behind the bar is wrong.
  */
-export type WhoState = 'radi' | 'ceka' | 'planiran' | 'bolest' | 'odsutan' | 'van-rasporeda'
+export type WhoState = 'radi' | 'ceka' | 'planiran' | 'van-rasporeda'
 
 export interface WhoRow {
   user_id: string
@@ -424,6 +423,11 @@ export function whoShifts(
   }
 
   for (const person of rostered) {
+    // Sick and absent marks are gone from the app ("Ne trebaju nam zamjene i
+    // bolovanje"). An old `sick`/`absent` row is somebody the plan no longer
+    // counts on tonight, so it draws no row and no word — and if he signs on
+    // anyway he appears below as `van-rasporeda`, like anyone else off the plan.
+    if (person.status !== 'planned') continue
     const shift = shifts.get(person.template_id) ?? {
       template_id: person.template_id,
       name: person.template_name,
@@ -438,13 +442,7 @@ export function whoShifts(
       user_id: person.user_id,
       name: person.name,
       initials: person.initials,
-      state: person.status === 'sick'
-        ? 'bolest'
-        : person.status === 'absent'
-          ? 'odsutan'
-          : !shift.running
-              ? 'planiran'
-              : live ? 'radi' : 'ceka',
+      state: !shift.running ? 'planiran' : live ? 'radi' : 'ceka',
       settled: shift.running && (live?.settled ?? false),
     })
   }
@@ -475,8 +473,6 @@ export function whoShifts(
 export function whoStateBs(state: WhoState): string {
   switch (state) {
     case 'ceka': return 'nije prijavljen'
-    case 'bolest': return 'bolest'
-    case 'odsutan': return 'nije došao'
     case 'van-rasporeda': return 'van rasporeda'
     default: return ''
   }

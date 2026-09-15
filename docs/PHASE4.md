@@ -192,7 +192,6 @@ Two jobs join `server/tasks/nightly.ts` (no-ops under vitest, as the existing on
 export function getRoster(db: Queryable, venueId: string, actor: Actor,
                           from: string, to: string): RosterWeekView[]
 export function getMyRoster(db: Queryable, venueId: string, actor: Actor): MyRoster
-export function copyWeek(db: Db, venueId: string, actor: Actor, weekStart: string): RosterWeekView
 export function publishWeek(db: Db, venueId: string, actor: Actor, weekStart: string): RosterWeekView
 export function addAssignment(db: Db, venueId: string, actor: Actor, body: AssignmentBody): Assignment
 export function patchAssignment(db: Db, venueId: string, actor: Actor, id: string, body: AssignmentPatch): Assignment
@@ -206,7 +205,7 @@ export function rosterHours(db: Queryable, venueId: string, month: string, userI
 
 **The staff projection is a different query, not a filter.** `getRoster` for a non-admin returns published weeks only, strips `note`, `updated_by` and `swap_request_id`, and maps a **colleague's** `sick | absent | removed` row to a hole; own rows keep their full status. There is no code path in which a waiter's response object ever held a colleague's `sick` and then dropped it.
 
-**Copy and publish.** `copyWeek` copies the previous week's rows with `origin != 'swap' AND status != 'removed'` — the regular people, not one-off covers — skipping deactivated users; `409 WEEK_NOT_EMPTY` if the target already has rows. `publishWeek` sets `published_at`, writes `roster_published`, and posts one *Svi* system line "Raspored za 14.09.–20.09. je objavljen — Raspored →"; a second publish is `409 ALREADY_PUBLISHED`.
+**Publish, and the pattern it sets.** *(Revised 2026-09-15 — `copyWeek`, its route and *Kopiraj prošlu sedmicu* are gone; see PLAN F14 (b).)* A published week repeats into every later week with no rows of its own: `weekRows` shows the latest published week before it — rows with `origin != 'swap' AND status != 'removed'`, active people and templates — shifted by whole weeks, at read time. The first owner edit (`addAssignment`, `removeAssignment` with `?work_date=`) writes that pattern down as the week's own draft, and publishing an inherited week writes it first. Swap and status routes act on real rows only. `publishWeek` sets `published_at`, writes `roster_published`, and posts one *Svi* system line "Raspored za 14.09.–20.09. je objavljen — Raspored →"; a second publish is `409 ALREADY_PUBLISHED`.
 
 **Constraints**, all enforced in one helper shared by `addAssignment` and the swap taker: the partial unique index (the same person twice in one cell); `409 OVERLAP` for two overlapping templates on one date, **with no override**; `409 DOUBLE_SHIFT` for a second non-overlapping template on one day, overridden by `force_double: true` on the retry (the sheet *Dupla smjena — svejedno dodaj*, asked once); `409 ROSTER_LOCKED` for any create or delete when `work_date < today`.
 
@@ -303,7 +302,6 @@ Every row is declared in `shared/routeRoles.ts`; `AWB` = all three roles, `AB` =
 | `GET /api/roster?from=&to=` | AWB | staff projection for non-admins |
 | `GET /api/me/roster` | AWB | my week + offers and requests awaiting me |
 | `GET /api/me/roster/hours?month=` | AWB | *Moji sati*, own rows only |
-| `POST /api/roster/weeks/copy` | A | `{week_start}` |
 | `POST /api/roster/weeks/publish` | A | `{week_start}` |
 | `POST /api/roster/assignments` | A | `{work_date, template_id, user_id, force_double?}` |
 | `PATCH /api/roster/assignments/:id` | A | status and note only |

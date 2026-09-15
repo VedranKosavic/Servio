@@ -2,13 +2,16 @@
 /**
  * What the owner can do to one person in one cell — `/admin`, light kit.
  *
- * **The past and the future are different sheets behind one title**, and that is
- * the point of the file. Before the day, a cell is a plan: a name can come off
- * it. After the day, a cell is a record of who was supposed to be there, and the
- * server refuses to un-staff it (`422 PAST_LOCKED`) — an owner cannot
- * retroactively take somebody off the night the stock went missing. So the past
- * offers *Nije došao* and *Bolestan* and nothing that erases, and the sheet says
- * why rather than showing a button that will be refused.
+ * **One action, and only before the day.** The roster has no swaps and no sick
+ * or absent marks ("Ne trebaju nam zamjene i bolovanje"), so a cell is a plan,
+ * and the one thing to do with a name on it is take it off. After the day the
+ * server refuses that (`409 ROSTER_LOCKED`) — an owner cannot retroactively take
+ * somebody off the night the stock went missing — so the past sheet only says
+ * who was on the plan and why nothing can change, rather than showing a button
+ * that will be refused.
+ *
+ * An **inherited** cell (the published raspored repeating) says so: taking a name
+ * off there writes this week down as a draft of its own first.
  */
 import type { Assignment } from '#shared/types'
 
@@ -23,7 +26,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
-  status: [status: 'planned' | 'absent' | 'sick']
   remove: []
 }>()
 
@@ -41,12 +43,13 @@ const span = computed(() => props.person
     <div v-if="person" class="r-cell">
       <p class="r-span">{{ span }}</p>
 
-      <p v-if="person.status !== 'planned'" class="r-now">
-        Sada: <strong>{{ STATUS_BS[person.status] }}</strong>
+      <p v-if="person.status === 'removed'" class="r-now">
+        Sada: <strong>{{ STATUS_BS.removed }}</strong>
       </p>
 
-      <p v-if="person.swap_pending" class="r-note">
-        Za ovu smjenu je tražena zamjena. Izmjena ćelije povlači taj zahtjev.
+      <p v-if="person.inherited" class="r-note">
+        Ova smjena dolazi iz objavljenog rasporeda koji se ponavlja svake sedmice.
+        Ako je ukloniš, ova sedmica postaje nacrt.
       </p>
 
       <p v-if="person.note" class="r-note">{{ person.note }}</p>
@@ -55,39 +58,14 @@ const span = computed(() => props.person
         izmijenjeno {{ dateBs(person.updated_at) }} · {{ person.updated_by_name }}
       </p>
 
-      <div class="r-acts">
-        <template v-if="past">
-          <UiButton
-            v-if="person.status !== 'absent'"
-            variant="ghost" :pending="pending" @click="emit('status', 'absent')"
-          >Nije došao</UiButton>
-          <UiButton
-            v-if="person.status !== 'sick'"
-            variant="ghost" :pending="pending" @click="emit('status', 'sick')"
-          >Bolestan</UiButton>
-          <UiButton
-            v-if="person.status !== 'planned'"
-            variant="ghost" :pending="pending" @click="emit('status', 'planned')"
-          >Vrati u planirano</UiButton>
-        </template>
-
-        <template v-else>
-          <UiButton
-            v-if="person.status !== 'sick'"
-            variant="ghost" :pending="pending" @click="emit('status', 'sick')"
-          >Bolestan</UiButton>
-          <UiButton
-            v-if="person.status !== 'planned'"
-            variant="ghost" :pending="pending" @click="emit('status', 'planned')"
-          >Vrati u planirano</UiButton>
-          <UiButton variant="danger" :pending="pending" @click="emit('remove')">
-            Ukloni sa smjene
-          </UiButton>
-        </template>
+      <div v-if="!past && person.status !== 'removed'" class="r-acts">
+        <UiButton variant="danger" :pending="pending" @click="emit('remove')">
+          Ukloni sa smjene
+        </UiButton>
       </div>
 
       <p v-if="past" class="r-quiet">
-        Prošli dan se ne uklanja — ostaje zapisano ko je bio na rasporedu.
+        Prošli dan se ne mijenja — ostaje zapisano ko je bio na rasporedu.
       </p>
 
       <p v-if="error" class="r-error" role="alert">{{ error }}</p>
