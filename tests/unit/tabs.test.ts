@@ -20,11 +20,12 @@ import { createPayment } from '../../server/services/payments'
 import { requestAdjustment } from '../../server/services/adjustments'
 import {
   acceptTab, assignTab, decideUnpaid, getTab, getTablesState, markUnpaid, moveTab,
-  pendingFor, tabMoney,
+  tabMoney,
 } from '../../server/services/tabs'
 import { clearTab } from '../../server/services/clearTable'
 import { summarizeUser } from '../../server/services/summaries'
 import { expectedCash } from '../../server/services/cash'
+import { pendingCounts } from '../../server/services/changes'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
 import { refuses } from '../helpers/shifts'
 
@@ -617,8 +618,8 @@ describe('naplati, and očisti sto', () => {
  * settlement, which is what these two assert.
  *
  * The whole of the difference is `pending_review`: `expectedCash` counts only
- * flagged unpaid tabs against a waiter, and `pendingFor` shows only flagged
- * ones to the owner. An authorised category is not flagged, so it is on neither.
+ * flagged unpaid tabs against a waiter, and the change feed's `pending.unpaid`
+ * counts only flagged ones. An authorised category is not flagged, so it is on neither.
  */
 describe('policija, rashod and osoblje', () => {
   function closeAs(reason: string, table: string) {
@@ -641,7 +642,7 @@ describe('policija, rashod and osoblje', () => {
     }
   })
 
-  it('leaves it off the waiter and off the owner\'s attention list', () => {
+  it('leaves it off the waiter and out of the unpaid queue', () => {
     const shiftId = f.openShift({ members: ['Amar'] })
     const before = expectedCash(f.db, f.venueId, shiftId, f.userId('Amar'))
       .waiters[0]?.expected_fen ?? 0
@@ -651,7 +652,7 @@ describe('policija, rashod and osoblje', () => {
     const after = expectedCash(f.db, f.venueId, shiftId, f.userId('Amar')).waiters[0]!
     expect(after.expected_fen).toBe(before)
     expect(after.unpaid_fen).toBe(0)
-    expect(pendingFor(f.db, f.venueId, f.clock.now())).toEqual([])
+    expect(pendingCounts(f.db, f.venueId).unpaid).toBe(0)
   })
 
   it('still puts a walk-out on his line, because nobody authorised that', () => {
@@ -661,6 +662,6 @@ describe('policija, rashod and osoblje', () => {
     expect(tab.pendingReview).toBe(1)
     const waiter = expectedCash(f.db, f.venueId, shiftId, f.userId('Amar')).waiters[0]!
     expect(waiter.unpaid_fen).toBeGreaterThan(0)
-    expect(pendingFor(f.db, f.venueId, f.clock.now())).toHaveLength(1)
+    expect(pendingCounts(f.db, f.venueId).unpaid).toBe(1)
   })
 })

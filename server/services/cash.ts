@@ -23,7 +23,7 @@ import type {
 import type { Actor, Db, Queryable, Tx } from './types'
 import { getSettings, joinShift, log, bump } from './contracts'
 import {
-  type AttentionItem, requireApprover, requireOpenShift, requireShift, shiftView, userNames,
+  requireApprover, requireOpenShift, requireShift, shiftView, userNames,
 } from './shifts'
 import { writeSummaryVersion } from './summaries'
 
@@ -400,30 +400,6 @@ export function listCashMovements(
     .orderBy(schema.cashMovements.createdAt)
     .all()
     .map(row => toMovement(row, names))
-}
-
-/** The pending `payout` and `float_out` rows — somebody has to say yes or no. */
-export function pendingFor(q: Queryable, venueId: string, _now: string): AttentionItem[] {
-  const names = userNames(q, venueId)
-  return q.select().from(schema.cashMovements)
-    .where(and(
-      eq(schema.cashMovements.venueId, venueId),
-      eq(schema.cashMovements.status, 'pending'),
-      inArray(schema.cashMovements.type, ['payout', 'float_out']),
-    ))
-    .orderBy(schema.cashMovements.createdAt)
-    .all()
-    .map(row => ({
-      kind: row.type === 'payout' ? 'payout' as const : 'float_out' as const,
-      ref_type: 'cash_movement' as const,
-      ref_id: row.id,
-      title_bs: row.type === 'payout'
-        ? `Isplata iz kase · ${names.get(row.userId) ?? '—'}`
-        : `Pazar iz kase · ${names.get(row.createdBy) ?? '—'} → ${names.get(row.userId) ?? '—'}`,
-      amount_fen: row.amountFen,
-      at: row.createdAt,
-      actions: ['approve', 'reject'] as ('approve' | 'reject' | 'note')[],
-    }))
 }
 
 // ===========================================================================

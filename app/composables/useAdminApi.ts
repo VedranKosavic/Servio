@@ -199,23 +199,11 @@ export function useAdminApi() {
 
     // -- Puls -----------------------------------------------------------------
 
-    /** Everything on *Puls*, in one read: tiles, pažnja, flags, feed, stolovi. */
+    /** Everything on *Puls*, in one read: tiles, flags, feed, stolovi. */
     getLive: () => request<OwnerLive>('/api/owner/live'),
 
     /** One table's rounds, for the sheet that opens when a tile is tapped. */
     getTab: (tabId: string) => request<TabDetail>(`/api/tabs/${tabId}`),
-
-    /**
-     * *Odobri* / *Odbij* on a *Zahtijeva pažnju* row.
-     *
-     * The path is never written in a component: `attentionTarget()` resolves it
-     * from `ATTENTION_ROUTES`, and this posts whatever came back. `"POST /api/…"`
-     * is the shape that function returns — method and path in one string.
-     */
-    postAttention: (target: string, body: Record<string, unknown> = {}) => {
-      const [, path] = target.split(' ') as [string, string]
-      return request<unknown>(path, { method: 'POST', body })
-    },
 
     // -- Smjena ---------------------------------------------------------------
 
@@ -320,7 +308,6 @@ export function useAdminApi() {
      *
      * The route answers `CountView[]` — `listCounts` in `server/services/
      * counts.ts` builds a full view per row, lines and totals included.
-     * `PendingCount` is the *Puls* attention shape and is a different thing.
      */
     getCounts: (q: { shift_id?: string, status?: string } = {}) =>
       request<CountView[]>(`/api/stock/counts${qs(q)}`),

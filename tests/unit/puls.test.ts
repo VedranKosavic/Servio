@@ -17,10 +17,6 @@
  *   total, and on a day the first shift worked those are different numbers.
  * - **the room's geometry**, which is the catalogue's col/row and never this
  *   code's.
- * - **the decide bodies.** No screen posts one tonight — *Čeka odluku* is gone —
- *   but three routes each mean something different by *Odobri*, and that
- *   vocabulary is kept under test so whichever screen is given those doors later
- *   does not have to guess at it a second time.
  */
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -29,9 +25,6 @@ import type {
   LineRow, LiveRostered, LiveWho, ShiftTemplateView, TableState, VenueTable,
 } from '../../shared/types'
 import {
-  NOTE_MIN,
-  decisionBody,
-  decisionNeedsNote,
   floorZones,
   greetingBs,
   shiftClock,
@@ -46,47 +39,6 @@ import {
   whoStateBs,
   zoneLabel,
 } from '../../app/utils/puls'
-
-// ===========================================================================
-
-describe('decisionBody', () => {
-  it('speaks each decide route’s own vocabulary', () => {
-    expect(decisionBody('line_adjustment', 'approve')).toEqual({ outcome: 'applied' })
-    expect(decisionBody('line_adjustment', 'reject')).toEqual({ outcome: 'rejected' })
-    expect(decisionBody('cash_movement', 'approve')).toEqual({ outcome: 'approved' })
-    expect(decisionBody('cash_movement', 'reject')).toEqual({ outcome: 'rejected' })
-  })
-
-  it('approves an unpaid tab as otpis and refuses it as naplatiti', () => {
-    // *Odobri* approves the waiter's request to write the tab off; *Odbij*
-    // means somebody has to go and collect. Getting this pair the wrong way
-    // round would write off exactly the tabs the owner wanted chased.
-    expect(decisionBody('tab', 'approve')).toEqual({ outcome: 'otpis' })
-    expect(decisionBody('tab', 'reject')).toEqual({ outcome: 'naplatiti' })
-  })
-
-  it('sends an empty body for an accept and a confirm', () => {
-    expect(decisionBody('waiter_settlement', 'approve')).toEqual({})
-    expect(decisionBody('stock_count', 'approve')).toEqual({})
-    expect(decisionBody('waste_event', 'approve')).toEqual({})
-  })
-
-  it('carries a written note, trimmed, and never an empty one', () => {
-    expect(decisionBody('line_adjustment', 'reject', '  gost je platio  '))
-      .toEqual({ outcome: 'rejected', note: 'gost je platio' })
-    expect(decisionBody('line_adjustment', 'reject', '   ')).toEqual({ outcome: 'rejected' })
-  })
-
-  it('makes force-close the one action that needs a sentence', () => {
-    expect(decisionNeedsNote('waiter_settlement', 'note')).toBe(true)
-    expect(decisionNeedsNote('waiter_settlement', 'approve')).toBe(false)
-    expect(decisionNeedsNote('line_adjustment', 'reject')).toBe(false)
-    expect(decisionBody('waiter_settlement', 'note', 'otišao kući'))
-      .toEqual({ note: 'otišao kući' })
-    // `forceCloseBody` is `z.string().trim().min(3)`.
-    expect(NOTE_MIN).toBe(3)
-  })
-})
 
 // ===========================================================================
 

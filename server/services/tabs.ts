@@ -23,7 +23,7 @@ import type { Actor, Db, Queryable, Tx } from './types'
 import { bump, getSettings, log, writeSummaryVersion } from './contracts'
 import { changeTag, maxSeq } from './changes'
 import { emitChange } from '../utils/bus'
-import { type AttentionItem, shiftBrief, userNames } from './shifts'
+import { shiftBrief, userNames } from './shifts'
 
 type TabRow = typeof schema.tabs.$inferSelect
 
@@ -429,35 +429,6 @@ export function getTab(q: Queryable, venueId: string, tabId: string, _actor: Act
   }
 }
 
-/** The unpaid tabs waiting for the owner's *Otpis* or *Naplatiti*. */
-export function pendingFor(q: Queryable, venueId: string, _now: string): AttentionItem[] {
-  const names = userNames(q, venueId)
-  // LEFT: an unpaid tab opened at the bar must reach the owner's list too.
-  const rows = q.select({
-    tab: schema.tabs,
-    tableName: sql<string>`coalesce(${schema.tables.name}, 'Bez stola')`,
-  })
-    .from(schema.tabs)
-    .leftJoin(schema.tables, eq(schema.tables.id, schema.tabs.tableId))
-    .where(and(
-      eq(schema.tabs.venueId, venueId),
-      eq(schema.tabs.status, 'unpaid'),
-      eq(schema.tabs.pendingReview, 1),
-    ))
-    .all()
-
-  const money = tabMoneyMany(q, venueId, rows.map(r => r.tab.id))
-  return rows.map(({ tab, tableName }) => ({
-    kind: 'unpaid_tab' as const,
-    ref_type: 'tab' as const,
-    ref_id: tab.id,
-    title_bs: `Nije plaćeno · ${names.get(tab.unpaidBy ?? '') ?? '—'} · ${tableName}`,
-    amount_fen: money.get(tab.id)?.remaining_fen ?? 0,
-    at: tab.closedAt ?? tab.openedAt,
-    actions: ['approve', 'reject'] as ('approve' | 'reject' | 'note')[],
-  }))
-}
-
 // ===========================================================================
 // Writes
 // ===========================================================================
@@ -535,9 +506,8 @@ export function markUnpaid(
      * A police coffee, an admin's drink and a worker's own allowance were
      * authorised before they were poured: there is nothing for the owner to
      * decide, so they are not flagged — which is what takes them off the
-     * waiter's expected cash (`expectedCash` counts only flagged unpaid tabs)
-     * and keeps them out of *Zahtijeva pažnju* (`pendingFor` filters the same
-     * way). They come off the shift by category at the settlement instead.
+     * waiter's expected cash (`expectedCash` counts only flagged unpaid tabs).
+     * They come off the shift by category at the settlement instead.
      *
      * A walk-out is not authorised and stays flagged: the money is gone and
      * only the owner says who eats it.

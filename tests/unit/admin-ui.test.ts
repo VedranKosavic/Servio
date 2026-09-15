@@ -6,10 +6,6 @@
  * mounting components to assert that a button says "Odobri" tests Vue, not Šank.
  * What is worth a test is what a rendering cannot catch:
  *
- * - `attentionTarget()` fills the right ids into the right paths. It moved to
- *   `shared/` in Phase 2 precisely so that the server and `UiAttentionRow` fill
- *   them the same way, and a wrong id here is a button that decides somebody
- *   else's storno.
  * - the formatters that every amount, date and duration on the dashboard goes
  *   through, including the real minus sign.
  * - the period presets, which are business dates and not calendar dates.
@@ -23,81 +19,11 @@ import { describe, expect, it } from 'vitest'
 import { adminBack, adminBackAria, adminBackLabel } from '../../app/utils/adminNav'
 import { KONTROLA } from '../../app/utils/kontrola'
 import { costBasis, fenFromMfen, mfenFromFen, stockCostText } from '../../app/utils/stockCost'
-import { attentionTarget } from '../../shared/attention'
-import { ATTENTION_ROUTES } from '../../shared/types/owner'
-import type { AttentionItem } from '../../shared/types/owner'
 import { ROUTE_ROLES } from '../../shared/routeRoles'
 import {
   dateBs, dateTimeBs, durationBs, formatKm, signedAmount, signedKm, spanBs, timeBs,
 } from '../../app/utils/adminFormat'
 import { PERIOD_OPTIONS, resolvePeriod } from '../../app/composables/useAdminPeriod'
-
-const ID = '3f9a1c22-0000-4000-8000-000000000001'
-
-function item(patch: Partial<AttentionItem>): AttentionItem {
-  return {
-    kind: 'void',
-    ref_type: 'line_adjustment',
-    ref_id: ID,
-    title_bs: 'Traži storno · Dino · Sto 9',
-    at: '2026-09-08T20:41:00Z',
-    actions: ['approve', 'reject'],
-    ...patch,
-  }
-}
-
-// ===========================================================================
-
-describe('attentionTarget', () => {
-  it('fills the row id into the path for the simple ref types', () => {
-    expect(attentionTarget(item({}), 'approve'))
-      .toBe(`POST /api/adjustments/${ID}/decide`)
-    expect(attentionTarget(item({ ref_type: 'tab', kind: 'unpaid_tab' }), 'reject'))
-      .toBe(`POST /api/tabs/${ID}/unpaid/decide`)
-    expect(attentionTarget(item({ ref_type: 'cash_movement', kind: 'payout' }), 'approve'))
-      .toBe(`POST /api/cash-movements/${ID}/decide`)
-    expect(attentionTarget(item({ ref_type: 'stock_count', kind: 'count' }), 'approve'))
-      .toBe(`POST /api/stock/counts/${ID}/confirm`)
-  })
-
-  it('fills both ids for a settlement, and the shift alone for a pair', () => {
-    const shift = 'aaaaaaaa-0000-4000-8000-000000000009'
-
-    // A real settlement row: the shift comes from the page, the id from the row.
-    expect(attentionTarget(
-      item({ ref_type: 'waiter_settlement', kind: 'settlement' }), 'approve', shift,
-    )).toBe(`POST /api/shifts/${shift}/settlements/${ID}/accept`)
-
-    // `shifts.pendingFor` has no settlement to point at — nobody handed anything
-    // in — so it names the `shiftId:userId` pair it does have.
-    expect(attentionTarget(
-      item({ ref_type: 'waiter_settlement', kind: 'settlement', ref_id: `${shift}:user-7` }),
-      'note',
-    )).toBe(`POST /api/shifts/${shift}/force-close`)
-  })
-
-  it('returns null for a pair that has no route, rather than a half-filled path', () => {
-    // A submitted count is confirmed or left alone; Korak 2 has no reject.
-    expect(attentionTarget(item({ ref_type: 'stock_count', kind: 'count' }), 'reject')).toBeNull()
-  })
-
-  /**
-   * The invariant behind the whole *Zahtijeva pažnju* list: every button the
-   * kit can draw posts to a route that exists and that an admin may call. A row
-   * the owner cannot clear is the one thing that list must never contain.
-   */
-  it('every route in the table is declared and admin-callable', () => {
-    for (const [refType, actions] of Object.entries(ATTENTION_ROUTES)) {
-      for (const [action, route] of Object.entries(actions)) {
-        const roles = ROUTE_ROLES[route!]
-        expect(roles, `${refType}.${action} → ${route}`).toBeDefined()
-        expect(roles === 'any' || (Array.isArray(roles) && roles.includes('admin'))).toBe(true)
-      }
-    }
-  })
-})
-
-// ===========================================================================
 
 describe('adminFormat', () => {
   it('writes money the Bosnian way, through the shared formatter', () => {

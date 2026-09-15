@@ -5,7 +5,7 @@
  * **Why the tag carries a minute.** The default `changeTag` is
  * `MAX(seq)-role-user`, which is right for every screen whose body only changes
  * when something is *written*. This one is not: a device goes stale, a table
- * gets older and an attention row climbs the list purely because time passed,
+ * and a flag appears or clears purely because time passed,
  * with no `changes` row anywhere. Without the minute the owner's browser would
  * revalidate into a 304 all night and *Puls* would freeze on a quiet hour, which
  * is exactly the hour he is watching it. One minute is the resolution of every

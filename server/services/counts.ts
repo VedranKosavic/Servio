@@ -23,7 +23,7 @@ import { schema } from '../database/client'
 import { conflict, forbidden, notFound, unprocessable } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
 import type {
-  ConfirmCountBody, ConfirmResult, ConfirmResultLine, CountLineView, CountView, PendingCount,
+  ConfirmCountBody, ConfirmResult, ConfirmResultLine, CountLineView, CountView,
   StaleDevice, SubmitCountBody,
 } from '#shared/types'
 import type { Actor } from '#shared/types'
@@ -446,39 +446,6 @@ export function listCounts(
     .all()
 
   return rows.map(row => countView(q, venueId, row, []))
-}
-
-/**
- * Counts waiting for an admin — WP7's *Puls* turns each of these into an
- * `AttentionItem` with the confirm route as its action (§6.10). It stays a plain
- * row shape here because `AttentionItem` is WP7's type and this package must not
- * define it.
- */
-export function pendingCounts(q: Queryable, venueId: string): PendingCount[] {
-  const rows = q.select({ c: schema.stockCounts, countedByName: schema.users.name })
-    .from(schema.stockCounts)
-    .innerJoin(schema.users, eq(schema.users.id, schema.stockCounts.countedBy))
-    .where(and(
-      eq(schema.stockCounts.venueId, venueId),
-      eq(schema.stockCounts.status, 'submitted'),
-    ))
-    .orderBy(desc(schema.stockCounts.submittedAt))
-    .all()
-
-  return rows.map(({ c, countedByName }) => {
-    const totals = countTotals(q, venueId, c.id)
-    return {
-      count_id: c.id,
-      kind: c.kind,
-      phase: c.phase,
-      shift_id: c.shiftId,
-      counted_by: c.countedBy,
-      counted_by_name: countedByName,
-      submitted_at: c.submittedAt,
-      variance_fen: totals.variance_fen,
-      out_of_tolerance: totals.out_of_tolerance,
-    }
-  })
 }
 
 function countView(

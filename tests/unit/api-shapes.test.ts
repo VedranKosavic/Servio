@@ -496,7 +496,7 @@ describe('GET /api/owner/live', () => {
     const live = getLive(f.db, f.venueId, f.adminActor())
 
     expect(Object.keys(live).sort()).toEqual([
-      'attention', 'expected_cash_fen', 'flags', 'gratis', 'last_lines', 'log_max_at',
+      'expected_cash_fen', 'flags', 'gratis', 'last_lines', 'log_max_at',
       'open', 'pending', 'promet_danas_fen', 'rostered', 'self_voids', 'seq', 'shift',
       'storna', 'tables', 'unsent', 'waste', 'who',
     ])
@@ -528,10 +528,7 @@ describe('GET /api/owner/live', () => {
       'template_name', 'user_id',
     ])
 
-    // The decidable list and the derived one, each with its own fixed shape.
-    const payout = live.attention.find(a => a.kind === 'payout')!
-    expect(Object.keys(payout).sort())
-      .toEqual(['actions', 'amount_fen', 'at', 'kind', 'ref_id', 'ref_type', 'title_bs'])
+    // The derived list, with its own fixed shape.
     for (const flag of live.flags) {
       expect(Object.keys(flag).sort()).toEqual(['at', 'kind', 'ref_id', 'ref_type', 'title_bs'])
     }

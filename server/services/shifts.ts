@@ -39,18 +39,6 @@ type ShiftRow = typeof schema.shifts.$inferSelect
  */
 export { currentShift, ensureOpenShift, joinShift, nextShiftSeq } from './contracts'
 
-/**
- * A row on the owner's *treba odlučiti* list.
- *
- * WP2 declared this shape here because WP7's `shared/types/owner.ts` did not
- * exist yet, and said the declaration would go away when it landed. It has: the
- * type is now the shared one, re-exported from this file so the four packages
- * that import `AttentionItem` from `./shifts` keep importing it from `./shifts`
- * and nothing else moved. The objects they already build satisfy it unchanged —
- * that was the point of writing it out identically.
- */
-export type { AttentionItem } from '#shared/types/owner'
-
 // ===========================================================================
 // Small shared reads
 // ===========================================================================
@@ -644,31 +632,6 @@ export function listOwnerShifts(
       za_predati_fen: closings.get(shift.id) ?? null,
     }
   })
-}
-
-/**
- * A `closing` shift's unsettled waiters — the one thing on the owner's list that
- * only the shift knows about. `note` and not `approve`: nobody approves a person
- * into settling, somebody goes and finds him.
- */
-export function pendingFor(q: Queryable, venueId: string, now: string): AttentionItem[] {
-  const shift = q.select().from(schema.shifts)
-    .where(and(eq(schema.shifts.venueId, venueId), eq(schema.shifts.status, 'closing')))
-    .get()
-  if (!shift) return []
-
-  const ec = expectedCash(q, venueId, shift.id, undefined, now)
-  return ec.waiters
-    .filter(w => !w.settled && w.expected_fen !== 0)
-    .map(w => ({
-      kind: 'settlement' as const,
-      ref_type: 'waiter_settlement' as const,
-      ref_id: `${shift.id}:${w.user_id}`,
-      title_bs: `Nije predao pazar · ${w.name}`,
-      amount_fen: w.expected_fen,
-      at: shift.closingStartedAt ?? shift.openedAt,
-      actions: ['note'] as ('approve' | 'reject' | 'note')[],
-    }))
 }
 
 // ===========================================================================

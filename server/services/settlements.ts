@@ -29,7 +29,7 @@ import {
   assertNoPendingOutbox, bump, getSettings, joinShift, log, verifyPinMetered,
 } from './contracts'
 import { expectedCash, toleranceFen, withinTolerance } from './cash'
-import { type AttentionItem, requireApprover, requireShift, userNames } from './shifts'
+import { requireApprover, requireShift, userNames } from './shifts'
 import { summarizeUser, writeSummaryVersion } from './summaries'
 
 /**
@@ -303,25 +303,4 @@ export function acceptSettlement(
     const updated = listSettlements(tx, venueId, shiftId).find(s => s.id === settlementId)
     return updated!
   })
-}
-
-/** Envelopes counted but not signed for — somebody at the bar has to take them. */
-export function pendingFor(q: Queryable, venueId: string, _now: string): AttentionItem[] {
-  const names = userNames(q, venueId)
-  return q.select().from(schema.waiterSettlements)
-    .where(and(
-      eq(schema.waiterSettlements.venueId, venueId),
-      eq(schema.waiterSettlements.selfSealed, 1),
-    ))
-    .all()
-    .filter(row => row.acceptedBy === null)
-    .map(row => ({
-      kind: 'settlement' as const,
-      ref_type: 'waiter_settlement' as const,
-      ref_id: row.id,
-      title_bs: `Predaja čeka potvrdu · ${names.get(row.userId) ?? '—'}`,
-      amount_fen: row.declaredFen,
-      at: row.createdAt,
-      actions: ['approve'] as ('approve' | 'reject' | 'note')[],
-    }))
 }

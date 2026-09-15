@@ -1,8 +1,8 @@
 /**
  * *Puls*, *Smjena* and the drill-down (`docs/BACKEND.md` §6.10, §11).
  *
- * Four things are worth proving about a screen that is only ever *read*, and
- * they are the four blocks below.
+ * Three things are worth proving about a screen that is only ever *read*, and
+ * they are the three blocks below.
  *
  * **The numbers are the same numbers.** `owner.ts` re-reads nothing: promet on
  * *Puls* and promet on *Smjena* are one call to `summarizeShift`, and
@@ -10,13 +10,6 @@
  * arithmetic anywhere. So the assertions are equalities to the fen against the
  * functions that own those ledgers — if the two ever diverge, somebody has added
  * a second definition of the café's takings and this file says so.
- *
- * **Every attention row can be cleared.** In-app acknowledgement is Korak 3
- * (§1), which makes an un-clearable row a design error rather than a cosmetic
- * one: it would sit on the owner's screen forever. The invariant is that every
- * `(ref_type, action)` pair on the list names a route in `ROUTE_ROLES`, and it
- * is checked over the whole `ATTENTION_ROUTES` table, not only over the rows a
- * fixture happens to produce.
  *
  * **Every flag clears itself.** A flag is a sentence about the present. The two
  * cases §11 names are here: a stale phone that checks in, and an unpriced item
@@ -31,23 +24,15 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { eq } from 'drizzle-orm'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
 import {
-  attentionItems, attentionTarget, getLive, getOwnerShift, listOwnerShifts, ownerShiftSummary,
+  getLive, getOwnerShift, listOwnerShifts, ownerShiftSummary,
 } from '../../server/services/owner'
 import { latestSummary, shiftLines, summarizeShift } from '../../server/services/summaries'
-import { expectedCash, pendingFor as cashPending } from '../../server/services/cash'
-import { pendingFor as adjustmentsPending } from '../../server/services/adjustments'
-import { markUnpaid, pendingFor as tabsPending } from '../../server/services/tabs'
-import { pendingFor as shiftsPending } from '../../server/services/shifts'
-import { pendingFor as settlementsPending, settle } from '../../server/services/settlements'
-import { pendingCounts } from '../../server/services/counts'
+import { expectedCash } from '../../server/services/cash'
 import { setOpeningStock } from '../../server/services/stock'
 import { authorizeRequest, loginWithPin } from '../../server/services/auth'
 import { enrolDevice, mintEnrolCode } from '../../server/services/devices'
 import { heartbeat } from '../../server/services/heartbeat'
 import { ROUTE_ROLES } from '#shared/routeRoles'
-import { ATTENTION_ROUTES } from '#shared/types/owner'
-import type { AttentionAction, AttentionRefType } from '#shared/types'
-import { randomUUID } from 'node:crypto'
 
 const IP = '10.0.0.9'
 
@@ -223,157 +208,6 @@ describe('the live numbers are the shift summary\'s numbers', () => {
 
 // ===========================================================================
 
-describe('attention is the six pendingFor()s and nothing else', () => {
-  /** One row of every kind the six packages can produce. */
-  function everyKind(): { shiftId: string } {
-    const { shiftId, openTab } = aNight()
-
-    // A void waiting for a decision.
-    const asked = f.lock('Amar', 'Sto 6', [{ product: 'Kafa' }])
-    f.voidLine('Amar', asked.lineIds[0]!, { status: 'pending' })
-
-    // A tab the guests walked out on, waiting for *Otpis* or *Naplatiti*.
-    const tab = f.db.select().from(schema.tabs).where(eq(schema.tabs.id, openTab)).get()!
-    markUnpaid(f.db, f.venueId, f.actor('Amar'), {
-      client_id: randomUUID(), tab_client_id: tab.clientId, reason: 'walked_out',
-    })
-
-    // Cash out of the drawer, and cash handed to a colleague — both born pending.
-    f.cashMovement({ type: 'payout', amountFen: 6000, user: 'Emir', status: 'pending' })
-    f.cashMovement({ type: 'float_out', amountFen: 5000, user: 'Lejla', createdBy: 'Emir', status: 'pending' })
-
-    // A count somebody submitted and nobody has confirmed.
-    f.submitCount('Emir', ['Coca-Cola 0,25 l'])
-
-    // An envelope counted alone, with nobody to sign for it.
-    settle(f.db, f.venueId, f.actor('Lejla'), shiftId, { declared_fen: 1000, outbox_len: 0 })
-
-    return { shiftId }
-  }
-
-  it('is exactly the concatenation, oldest first', () => {
-    const { shiftId } = everyKind()
-    const now = f.clock.now()
-
-    const assembled = attentionItems(f.db, f.venueId, now)
-    const sources = [
-      ...adjustmentsPending(f.db, f.venueId, now),
-      ...tabsPending(f.db, f.venueId, now),
-      ...cashPending(f.db, f.venueId, now),
-      ...shiftsPending(f.db, f.venueId, now),
-      ...settlementsPending(f.db, f.venueId, now),
-      ...pendingCounts(f.db, f.venueId)
-        .map(c => ({ ref_type: 'stock_count', ref_id: c.count_id })),
-    ]
-
-    // Nothing is invented and nothing is dropped: exactly the refs the six
-    // packages report, each once.
-    const refs = (rows: { ref_type: string, ref_id: string }[]) =>
-      rows.map(r => `${r.ref_type}:${r.ref_id}`).sort()
-    expect(refs(assembled)).toEqual(refs(sources))
-    expect(new Set(refs(assembled)).size).toBe(assembled.length)
-    expect(assembled.length).toBeGreaterThanOrEqual(6)
-
-    // Oldest first, so an hour-old decision outranks a minute-old one.
-    const times = assembled.map(a => a.at)
-    expect([...times].sort()).toEqual(times)
-
-    expect(getLive(f.db, f.venueId, f.adminActor(), now).attention).toEqual(assembled)
-    expect(shiftId).toBeTruthy()
-  })
-
-  it('raises one row for each of the five things that need a decision', () => {
-    everyKind()
-    const kinds = attentionItems(f.db, f.venueId, f.clock.now()).map(a => a.kind)
-
-    expect(kinds).toContain('void')
-    expect(kinds).toContain('unpaid_tab')
-    expect(kinds).toContain('payout')
-    expect(kinds).toContain('float_out')
-    expect(kinds).toContain('count')
-    expect(kinds).toContain('settlement')
-  })
-
-  it('writes a Bosnian sentence and an amount on every row', () => {
-    everyKind()
-    for (const item of attentionItems(f.db, f.venueId, f.clock.now())) {
-      expect(item.title_bs.length).toBeGreaterThan(3)
-      expect(item.title_bs).not.toMatch(/[a-z]+_[a-z]+/)   // no raw column names
-      expect(item.actions.length).toBeGreaterThan(0)
-      expect(Number.isInteger(item.at.length)).toBe(true)
-    }
-  })
-
-  it('keeps the four badges in step with the list', () => {
-    everyKind()
-    const live = getLive(f.db, f.venueId, f.adminActor(), f.clock.now())
-    const of = (...kinds: string[]) =>
-      live.attention.filter(a => kinds.includes(a.kind)).length
-
-    expect(live.pending.adjustments).toBe(of('void', 'comp'))
-    expect(live.pending.unpaid).toBe(of('unpaid_tab'))
-    expect(live.pending.payouts).toBe(of('payout', 'float_out'))
-  })
-})
-
-// ===========================================================================
-
-describe('every button on the list has a route behind it', () => {
-  it('resolves every (ref_type, action) pair in ATTENTION_ROUTES to a declared route', () => {
-    const pairs = Object.entries(ATTENTION_ROUTES).flatMap(([refType, actions]) =>
-      Object.entries(actions).map(([action, route]) => ({ refType, action, route })))
-
-    // The table itself must not be empty or the assertion below passes vacuously.
-    expect(pairs.length).toBeGreaterThanOrEqual(9)
-
-    for (const { refType, action, route } of pairs) {
-      expect(ROUTE_ROLES[route], `${refType}/${action} → ${route}`).toBeDefined()
-      // Deciding is the owner's, or the owner's and the bartender's — never a
-      // waiter's: "a waiter never decides anybody's money" (§ intro).
-      expect(ROUTE_ROLES[route]).not.toContain('waiter')
-    }
-  })
-
-  it('resolves every action on every row a real night produces', () => {
-    const shiftId = f.openShift({ members: ['Amar'] })
-    const asked = f.lock('Amar', 'Sto 1', [{ product: 'Kafa' }])
-    f.voidLine('Amar', asked.lineIds[0]!, { status: 'pending' })
-    f.cashMovement({ type: 'payout', amountFen: 500, user: 'Emir', status: 'pending' })
-    f.submitCount('Emir', ['Coca-Cola 0,25 l'])
-    settle(f.db, f.venueId, f.actor('Amar'), shiftId, { declared_fen: 0, outbox_len: 0 })
-
-    const items = attentionItems(f.db, f.venueId, f.clock.now())
-    expect(items.length).toBeGreaterThan(3)
-
-    for (const item of items) {
-      for (const action of item.actions) {
-        const route = ATTENTION_ROUTES[item.ref_type as AttentionRefType]?.[action as AttentionAction]
-        expect(route, `${item.kind}/${action} has no route`).toBeDefined()
-        expect(ROUTE_ROLES[route!]).toBeDefined()
-
-        // And the concrete path the button posts to has its ids filled in.
-        const target = attentionTarget(item, action, shiftId)!
-        expect(target).not.toContain(':id')
-        expect(target.startsWith('POST /api/')).toBe(true)
-      }
-    }
-  })
-
-  it('fills both ids on the settlement accept route', () => {
-    const shiftId = f.openShift({ members: ['Amar'] })
-    const settlementId = settle(
-      f.db, f.venueId, f.actor('Amar'), shiftId, { declared_fen: 0, outbox_len: 0 },
-    ).settlement_id
-
-    const item = attentionItems(f.db, f.venueId, f.clock.now())
-      .find(a => a.ref_type === 'waiter_settlement' && a.ref_id === settlementId)!
-    expect(attentionTarget(item, 'approve', shiftId))
-      .toBe(`POST /api/shifts/${shiftId}/settlements/${settlementId}/accept`)
-  })
-})
-
-// ===========================================================================
-
 describe('a flag is a sentence about the present', () => {
   function enrolPhone(label: string) {
     const code = mintEnrolCode(f.db, f.venueId, f.adminActor(), { mode: 'shared', label })
@@ -434,16 +268,12 @@ describe('a flag is a sentence about the present', () => {
       .map(fl => fl.kind)).not.toContain('no_opening_count')
   })
 
-  it('never puts a decidable row in flags, or an informational one in attention', () => {
+  it('points every flag at something', () => {
     const { shiftId } = { shiftId: f.openShift({ members: ['Amar', 'Lejla'] }) }
     const asked = f.lock('Amar', 'Sto 1', [{ product: 'Kafa' }])
     f.voidLine('Amar', asked.lineIds[0]!, { status: 'pending' })
 
     const live = getLive(f.db, f.venueId, f.adminActor(), f.clock.now())
-    const flagKinds = new Set(live.flags.map(fl => fl.kind))
-    for (const item of live.attention) {
-      expect(flagKinds.has(item.kind as never)).toBe(false)
-    }
     // Every flag carries something to point at, so no row is a dead end.
     for (const flag of live.flags) {
       expect(flag.ref_id.length).toBeGreaterThan(0)
