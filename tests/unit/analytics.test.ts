@@ -19,7 +19,9 @@ import { closeTab } from '../helpers/shifts'
 import { closeByBar } from '../../server/services/closings'
 import { markUnpaid } from '../../server/services/tabs'
 import { createDelivery } from '../../server/services/stock'
-import { monthAnalytics, setMonthCost } from '../../server/services/analytics'
+import {
+  addMonthExtraCost, deleteMonthExtraCost, monthAnalytics, setMonthCost,
+} from '../../server/services/analytics'
 import { addMonths, monthOf, totalCostFen, totalUnpaidFen } from '#shared/analytics'
 import { businessDate } from '#shared/dates'
 import { putMonthCostBody } from '#shared/schemas'
@@ -74,8 +76,6 @@ describe('pazar, za predati and dnevnice', () => {
     expect(a.closed_shifts).toBe(3)
     // Three closes, the default 90,00 KM each.
     expect(a.costs.dnevnice).toBe(27_000)
-    // Nothing paid out, no otpis: each night handed over its pazar less its day wage.
-    expect(a.za_predati_fen).toBe(2_450 - 27_000)
 
     // Every day of the month is on the chart, the ones with nothing at zero.
     expect(a.days[0]).toEqual({ business_date: `${month}-01`, pazar_fen: 2_150, shifts: 2 })
@@ -104,6 +104,21 @@ describe('pazar, za predati and dnevnice', () => {
     const earlier = monthAnalytics(f.db, f.venueId, addMonths(month, -1))
     expect(earlier.records[0]!.month).toBeNull()
     expect(earlier.records[0]!.all_time?.pazar_fen).toBe(1_000)
+  })
+
+  it('lists the month\'s articles by category, most sold first', () => {
+    night(1, 'prva', [{ product: 'Kafa', qty: 3 }, { product: 'Red Bull' }])
+    night(2, 'druga', [{ product: 'Kafa' }, { product: 'Nargila' }])
+
+    const a = monthAnalytics(f.db, f.venueId, month)
+    const all = a.sold_by_category.flatMap(c => c.items.map(i => [i.name, i.qty, i.fen]))
+    expect(all).toEqual(expect.arrayContaining([
+      ['Kafa', 4, 600], ['Red Bull', 1, 500], ['Nargila', 1, 1_500],
+    ]))
+    // Biggest category by KM first; the categories add up to the pazar.
+    const fens = a.sold_by_category.map(c => c.fen)
+    expect([...fens].sort((x, y) => y - x)).toEqual(fens)
+    expect(fens.reduce((sum, fen) => sum + fen, 0)).toBe(a.pazar_fen)
   })
 
   it('draws twelve months ending with this one', () => {
@@ -141,9 +156,11 @@ describe('neplaćeno and the till payouts', () => {
     mark(f.lock('Amar', 'Sto 2', [{ product: 'Red Bull' }]).tabId, 'policija') // 500
     mark(f.lock('Amar', 'Sto 3', [{ product: 'Kafa' }]).tabId, 'osoblje') //      150
 
-    // Tonight's unpaid counts before the close, too.
+    // A shift still open counts for nothing — not its pazar, not its unpaid.
     const open = monthAnalytics(f.db, f.venueId, month)
-    expect(open.unpaid).toEqual({ otpis: 0, rashod: 0, policija: 500, osoblje: 150 })
+    expect(open.pazar_fen).toBe(0)
+    expect(open.shifts).toBe(0)
+    expect(open.unpaid_fen).toBe(0)
 
     closeByBar(f.db, f.venueId, sanker(), shiftId, {
       client_id: randomUUID(),
@@ -235,6 +252,35 @@ describe('the costs the owner types', () => {
       .map(e => JSON.parse(e.bodyJson) as { key: string, before: number, after: number })
       .filter(b => b.key.startsWith('month_cost.'))
     expect(entries.map(b => [b.before, b.after])).toEqual([[0, 3_000], [3_000, 3_500]])
+  })
+
+  it('adds named extra costs, once per tap, and takes them off Ostaje', () => {
+    night(1, 'prva', [{ product: 'Nargila' }]) // 1 500
+
+    const clientId = randomUUID()
+    const body = { client_id: clientId, month, label: '  popravka aparata ', amount_fen: 8_000 }
+    addMonthExtraCost(f.db, f.venueId, f.adminActor(), body)
+    // The same tap again, on bad wifi: the same cost, not a second one.
+    const again = addMonthExtraCost(f.db, f.venueId, f.adminActor(), body)
+    const withTaxi = addMonthExtraCost(f.db, f.venueId, f.adminActor(), {
+      client_id: randomUUID(), month, label: 'taksi', amount_fen: 1_200,
+    })
+
+    expect(again.extra_costs).toHaveLength(1)
+    expect(withTaxi.extra_costs.map(e => [e.label, e.amount_fen]))
+      .toEqual([['popravka aparata', 8_000], ['taksi', 1_200]])
+    expect(withTaxi.costs.dodatni).toBe(9_200)
+    expect(withTaxi.total_cost_fen).toBe(9_000 + 9_200)
+    expect(withTaxi.neto_fen).toBe(1_500 - 9_000 - 9_200)
+
+    // Another month has none of them.
+    expect(monthAnalytics(f.db, f.venueId, addMonths(month, -1)).costs.dodatni).toBe(0)
+
+    const removed = deleteMonthExtraCost(
+      f.db, f.venueId, f.adminActor(), withTaxi.extra_costs[0]!.id,
+    )
+    expect(removed.extra_costs.map(e => e.label)).toEqual(['taksi'])
+    expect(removed.costs.dodatni).toBe(1_200)
   })
 
   it('refuses a month that is not YYYY-MM and a kind the ledger already knows', () => {

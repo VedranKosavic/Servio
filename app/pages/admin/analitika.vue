@@ -2,13 +2,16 @@
 /**
  * *Analitika* — one month of the café, for the owner (16.09.2026).
  *
- * The page answers his list in the order he wrote it: what the month took (and
- * what was handed over), what of that was never paid for (*Otpis*, *Rashod*,
+ * The page answers his list in the order he wrote it: what the month took and
+ * what it leaves at the end (*Ostaje* — every day's every shift less every cost;
+ * *Za predati* is a night's number and left this page on his word), what of the
+ * takings was never paid for (*Otpis*, *Rashod*,
  * *Policija*, *Osoblje*), what it cost — goods, flavours and coal out of *Prijem
  * robe*, the day wages and the till payouts out of the closings, electricity,
- * water and rent typed in here — what is left after all of it, how the takings
- * rose and fell day by day and month by month, which days were best, and the
- * record night of each shift.
+ * water and rent typed in here, and any other cost he adds by name — what is left
+ * after all of it, how the takings
+ * rose and fell day by day and month by month, which days were best, which
+ * articles sold most in each category, and the record night of each shift.
  *
  * Every number is the server's (`GET /api/owner/analitika`, written up in
  * `server/services/analytics.ts`); this page only lays them out. The one thing
@@ -81,18 +84,78 @@ function goMonth(step: number) {
 const canGoNext = computed(() =>
   !!data.value && (currentMonth.value === null || data.value.month < currentMonth.value))
 
-/** 1 smjena, 2–4 smjene, 5 smjena — and 21 smjena, 22 smjene, as Bosnian counts. */
-function smjena(n: number): string {
+/** 1 zaključena smjena, 2–4 zaključene smjene, 5 zaključenih smjena — as Bosnian counts. */
+function zakljucenih(n: number): string {
   const tens = n % 100
   const ones = n % 10
-  if (ones === 1 && tens !== 11) return 'smjena'
-  if (ones >= 2 && ones <= 4 && (tens < 12 || tens > 14)) return 'smjene'
-  return 'smjena'
+  if (ones === 1 && tens !== 11) return 'zaključena smjena'
+  if (ones >= 2 && ones <= 4 && (tens < 12 || tens > 14)) return 'zaključene smjene'
+  return 'zaključenih smjena'
 }
 
 // -- the costs ----------------------------------------------------------------
 
 const MANUAL = new Set<MonthCostKey>(['struja', 'voda', 'kirija'])
+
+/** Every fixed line; *Dodatni troškovi* are drawn one by one under them instead. */
+const LISTED_COSTS = MONTH_COST_KEYS.filter(key => key !== 'dodatni')
+
+// -- Dodatni troškovi ------------------------------------------------------------
+
+const adding = ref(false)
+const addLabel = ref<string | number | null>('')
+const addFen = ref<string | number | null>(null)
+const addPending = ref(false)
+const addError = ref('')
+const addLabelError = ref('')
+/** One id per opening of the sheet: a retried tap is the same cost, not a second one. */
+const addClientId = ref(crypto.randomUUID())
+const removing = ref<string | null>(null)
+
+function openAdd() {
+  addLabel.value = ''
+  addFen.value = null
+  addError.value = ''
+  addLabelError.value = ''
+  addClientId.value = crypto.randomUUID()
+  adding.value = true
+}
+
+async function saveAdd() {
+  if (!data.value) return
+  const label = String(addLabel.value ?? '').trim()
+  const fen = typeof addFen.value === 'number' ? addFen.value : null
+  addLabelError.value = label === '' ? 'Upiši naziv troška' : ''
+  addError.value = fen === null || fen <= 0 ? 'Upiši iznos, npr. 80' : ''
+  if (addLabelError.value || addError.value || fen === null) return
+
+  addPending.value = true
+  try {
+    data.value = await api.addMonthExtraCost({
+      client_id: addClientId.value,
+      month: data.value.month,
+      label,
+      amount_fen: fen,
+    })
+    adding.value = false
+  } catch (err) {
+    addError.value = apiErrorText(err)
+  } finally {
+    addPending.value = false
+  }
+}
+
+async function removeExtra(id: string) {
+  removing.value = id
+  try {
+    data.value = await api.deleteMonthExtraCost(id)
+    error.value = ''
+  } catch (err) {
+    error.value = apiErrorText(err)
+  } finally {
+    removing.value = null
+  }
+}
 
 /** The small print under a cost: where it came from, or where it was carried from. */
 function sourceOf(key: MonthCostKey): string {
@@ -111,13 +174,15 @@ const saveError = ref('')
 function openEdit(key: MonthCostKey) {
   if (!data.value || !MANUAL.has(key)) return
   editing.value = key as ManualCostKind
-  editFen.value = data.value.costs[key]
+  // Empty, not "0,00": the owner types a plain number ("120") and the field
+  // starts clean. What is stored now is said under it instead.
+  editFen.value = null
   saveError.value = ''
 }
 
 async function saveEdit() {
   if (!data.value || !editing.value || editFen.value === null || editFen.value < 0) {
-    saveError.value = 'Upiši iznos, npr. 120,00'
+    saveError.value = 'Upiši iznos, npr. 120'
     return
   }
   saving.value = true
@@ -134,6 +199,15 @@ async function saveEdit() {
     saving.value = false
   }
 }
+
+/** What is stored now, and for *Kirija* the rule it follows. */
+const editHint = computed(() => {
+  if (!editing.value || !data.value) return undefined
+  const now = `Trenutno: ${formatKm(data.value.costs[editing.value])}.`
+  return editing.value === 'kirija'
+    ? `${now} Kirija se prenosi u svaki sljedeći mjesec dok je ne promijeniš.`
+    : now
+})
 
 const editTitle = computed(() =>
   editing.value && data.value
@@ -210,7 +284,7 @@ const change = computed(() => {
     <p v-if="loading && !data" class="an-muted">Učitavanje…</p>
 
     <template v-if="data">
-      <!-- 9. Pazar and Za predati -->
+      <!-- 9. Pazar, and what the month leaves -->
       <UiCard title="Pazar">
         <div class="an-figures">
           <div class="an-figure">
@@ -218,13 +292,12 @@ const change = computed(() => {
             <strong class="num">{{ formatKm(data.pazar_fen) }}</strong>
           </div>
           <div class="an-figure">
-            <small>Ukupno za predati</small>
-            <strong class="num">{{ formatKm(data.za_predati_fen) }}</strong>
+            <small>Ostaje na kraju mjeseca</small>
+            <strong class="num" :class="{ 'an-bad': data.neto_fen < 0 }">{{ formatKm(data.neto_fen) }}</strong>
           </div>
         </div>
         <p class="an-muted">
-          {{ data.shifts }} {{ smjena(data.shifts) }} ·
-          {{ data.closed_shifts }} zaključeno
+          {{ data.shifts }} {{ zakljucenih(data.shifts) }}
           <template v-if="change !== null">
             · <span :class="change < 0 ? 'an-down' : 'an-up'">
               {{ change > 0 ? '+' : '' }}{{ change }} % u odnosu na prošli mjesec
@@ -275,7 +348,7 @@ const change = computed(() => {
       <!-- 1–5, 7. Troškovi -->
       <UiCard title="Troškovi">
         <ul class="an-costs">
-          <li v-for="key in MONTH_COST_KEYS" :key="key" class="an-cost">
+          <li v-for="key in LISTED_COSTS" :key="key" class="an-cost">
             <span class="an-cost-text">
               <strong>{{ MONTH_COST_LABELS[key] }}</strong>
               <small>{{ sourceOf(key) }}</small>
@@ -288,6 +361,28 @@ const change = computed(() => {
             </span>
           </li>
         </ul>
+        <!-- Dodatni troškovi: named lines the owner adds himself -->
+        <ul v-if="data.extra_costs.length" class="an-costs an-extras">
+          <li v-for="extra in data.extra_costs" :key="extra.id" class="an-cost">
+            <span class="an-cost-text">
+              <strong>{{ extra.label }}</strong>
+              <small>Dodatni trošak</small>
+            </span>
+            <span class="an-cost-value">
+              <span class="num">{{ formatKm(extra.amount_fen) }}</span>
+              <UiButton small variant="ghost" :disabled="removing === extra.id" @click="removeExtra(extra.id)">
+                Ukloni
+              </UiButton>
+            </span>
+          </li>
+        </ul>
+
+        <div class="an-add">
+          <UiButton variant="soft" @click="openAdd">
+            + Dodaj trošak
+          </UiButton>
+        </div>
+
         <dl class="an-lines">
           <div class="an-row an-total">
             <dt>Ukupno</dt>
@@ -328,6 +423,33 @@ const change = computed(() => {
             <small class="an-tick">{{ bar.label }}</small>
           </div>
         </div>
+      </UiCard>
+
+      <!-- Best-sellers, by category -->
+      <UiCard title="Artikli po kategorijama">
+        <p v-if="data.sold_by_category.length === 0" class="an-muted">
+          Ovaj mjesec još nema prodanih artikala u zaključenim smjenama.
+        </p>
+        <details
+          v-for="(category, index) in data.sold_by_category"
+          :key="category.category_id"
+          class="an-cat"
+          :open="index === 0"
+        >
+          <summary class="an-cat-head">
+            <strong>{{ category.name }}</strong>
+            <span class="an-cat-sum num">{{ category.qty }} kom · {{ formatKm(category.fen) }}</span>
+          </summary>
+          <ol class="an-items">
+            <li v-for="item in category.items" :key="item.name" class="an-row">
+              <span class="an-item-name">
+                <span class="an-rank num">{{ item.qty }}×</span>
+                {{ item.name }}
+              </span>
+              <span class="num">{{ formatKm(item.fen) }}</span>
+            </li>
+          </ol>
+        </details>
       </UiCard>
 
       <!-- 6. Best days -->
@@ -372,6 +494,29 @@ const change = computed(() => {
     </template>
 
     <UiSheet
+      :open="adding"
+      :title="data ? `Dodatni trošak · ${monthLabelBs(data.month)}` : 'Dodatni trošak'"
+      action="Dodaj"
+      :pending="addPending"
+      @close="adding = false"
+      @confirm="saveAdd"
+    >
+      <UiField
+        v-model="addLabel"
+        label="Naziv"
+        placeholder="npr. popravka aparata"
+        :error="addLabelError"
+      />
+      <UiField
+        v-model="addFen"
+        kind="money"
+        label="Iznos (KM)"
+        placeholder="npr. 80"
+        :error="addError"
+      />
+    </UiSheet>
+
+    <UiSheet
       :open="editing !== null"
       :title="editTitle"
       action="Sačuvaj"
@@ -383,9 +528,9 @@ const change = computed(() => {
         v-model="editFen"
         kind="money"
         label="Iznos (KM)"
-        placeholder="0,00"
+        placeholder="npr. 120"
         :error="saveError"
-        :hint="editing === 'kirija' ? 'Kirija se prenosi u svaki sljedeći mjesec dok je ne promijeniš.' : undefined"
+        :hint="editHint"
       />
     </UiSheet>
   </div>
@@ -435,6 +580,7 @@ const change = computed(() => {
 .an-cost-text { display: flex; flex-direction: column; min-width: 0; }
 .an-cost-text small { color: var(--muted); font-size: var(--text-label); }
 .an-cost-value { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.an-add { padding: 12px 0 4px; }
 
 .an-chart {
   display: flex;
@@ -460,6 +606,23 @@ const change = computed(() => {
   text-align: center;
   white-space: nowrap;
 }
+
+.an-cat { border-top: 1px solid var(--line-soft); }
+.an-cat:first-of-type { border-top: 0; }
+.an-cat-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 12px 0;
+  cursor: pointer;
+  list-style: none;
+}
+.an-cat-head::-webkit-details-marker { display: none; }
+.an-cat-sum { color: var(--ink-2); white-space: nowrap; }
+.an-items { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.an-item-name { min-width: 0; overflow-wrap: anywhere; }
 
 .an-best { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .an-rank { display: inline-block; min-width: 1.5em; color: var(--muted); }

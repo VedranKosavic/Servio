@@ -4,15 +4,14 @@
  * Every number here is read from something that already exists and already has
  * one definition; this file adds folds, not new arithmetic:
  *
- *   *Pazar*       — `promet_fen` of each shift whose **business day** is in the
- *                   month, through `listOwnerShifts` (the stored summary for a
- *                   closed night, the live one for tonight). The same number
- *                   *Smjene* and `dnevni_pazar.csv` print.
- *   *Za predati*  — Σ `shift_closings.za_predati_fen`: what the šanker handed
- *                   over. A night closed any other way has none, and adds none.
+ *   *Pazar*       — `promet_fen` of each **closed** shift whose business day is
+ *                   in the month, through `listOwnerShifts` (the summary stored
+ *                   at the close). An open shift counts for nothing anywhere on
+ *                   the page until it is closed.
  *   *Neplaćeno*   — `shiftCategories` of every shift in the month: the tabs
  *                   closed as *Otpis*, *Rashod*, *Policija*, *Osoblje*, at what
- *                   was left on them. The same reader *Zaključi smjenu* uses.
+ *                   was left on them, over the same closed shifts. The same
+ *                   reader *Zaključi smjenu* uses.
  *   *Roba, Okusi, Žar* — `nabavkaByKind`, the *Kategorije* report's *nabavka*
  *                   grouped by stock item kind, over the month's
  *                   `[06:00 on the 1st, 06:00 after the last day)`.
@@ -21,6 +20,7 @@
  *                   paid out of the till, and not goods.
  *   *Struja, Voda, Kirija* — `month_costs`, typed by the owner. *Kirija* with no
  *                   row this month is **carried** from the latest earlier one.
+ *   *Dodatni troškovi* — `month_extra_costs`, named lines the owner adds.
  *
  * *Ostaje* is `pazar − neplaćeno − Σ troškovi` (`shared/analytics.ts` says why,
  * and why goods come from deliveries rather than from the closings).
@@ -28,21 +28,24 @@
 import { and, desc, eq, inArray, lt } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { newId, nowIso } from '../utils/ids'
+import { notFound } from '../utils/errors'
 import {
   addMonths, costKeyOfStockKind, daysInMonth, type ManualCostKind, MONTH_COST_LABELS,
   monthLabelBs, monthOf, totalCostFen, totalUnpaidFen, UNPAID_KEYS, type UnpaidKey,
 } from '#shared/analytics'
 import { slotOf } from '#shared/shiftSlots'
 import type {
-  AnalyticsDay, AnalyticsManualCost, AnalyticsRecord, AnalyticsSlotRecords, MonthAnalytics,
+  AnalyticsDay, AnalyticsManualCost, AnalyticsRecord, AnalyticsSlotRecords, AnalyticsSoldCategory,
+  MonthAnalytics,
   OwnerShiftRow,
 } from '#shared/types'
-import type { PutMonthCostBody } from '#shared/schemas'
+import type { AddMonthExtraCostBody, PutMonthCostBody } from '#shared/schemas'
 import type { Actor, Db, Queryable } from './types'
 import { bump, log } from './contracts'
 import { shiftCategories } from './cash'
 import { listOwnerShifts } from './owner'
 import { monthBounds, nabavkaByKind, periodBounds } from './reports'
+import { soldByCategory } from './summaries'
 
 /** How many months the trend chart draws, this one included. */
 const TREND_MONTHS = 12
@@ -55,9 +58,15 @@ export function monthAnalytics(
 ): MonthAnalytics {
   const { fromDay, toDay } = monthBounds(month)
 
-  // Every shift ever, once. The month, the trend and the all-time records are
-  // three cuts of one list, so they can never be three different readings.
+  // Every **closed** shift ever, once. The month, the trend and the all-time
+  // records are three cuts of one list, so they can never be three different
+  // readings.
+  //
+  // Open shifts are not counted at all (the owner, 16.09.2026): a night still
+  // running has no final pazar, its unpaid tabs may still be paid, and a month
+  // whose *Ostaje* moves with every round is not a number anybody can plan by.
   const all = listOwnerShifts(q, venueId, '0000-01-01', '9999-12-31', now)
+    .filter(s => s.status === 'closed' || s.status === 'reviewed')
   const inMonth = all.filter(s => s.business_date >= fromDay && s.business_date <= toDay)
 
   // -- pazar, by day ---------------------------------------------------------
@@ -84,7 +93,6 @@ export function monthAnalytics(
   const closings = inMonth.length === 0
     ? []
     : q.select({
-        zaPredati: schema.shiftClosings.zaPredatiFen,
         dnevnica: schema.shiftClosings.dnevnicaFen,
         kafa: schema.shiftClosings.kafaFen,
         merkator: schema.shiftClosings.merkatorFen,
@@ -125,6 +133,17 @@ export function monthAnalytics(
   const sumOf = (pick: (c: typeof closings[number]) => number) =>
     closings.reduce((sum, c) => sum + pick(c), 0)
 
+  const extraCosts = q.select().from(schema.monthExtraCosts)
+    .where(and(
+      eq(schema.monthExtraCosts.venueId, venueId),
+      eq(schema.monthExtraCosts.month, month),
+    ))
+    .orderBy(schema.monthExtraCosts.createdAt, schema.monthExtraCosts.id)
+    .all()
+    .map(row => ({
+      id: row.id, label: row.label, amount_fen: row.amountFen, created_at: row.createdAt,
+    }))
+
   const costs = {
     ...goods,
     kafa: sumOf(c => c.kafa),
@@ -134,18 +153,19 @@ export function monthAnalytics(
     struja: manual.struja.amount_fen,
     voda: manual.voda.amount_fen,
     kirija: manual.kirija.amount_fen,
+    dodatni: extraCosts.reduce((sum, row) => sum + row.amount_fen, 0),
   }
   const totalCost = totalCostFen(costs)
 
   return {
     month,
     pazar_fen: pazar,
-    za_predati_fen: sumOf(c => c.zaPredati),
     shifts: inMonth.length,
     closed_shifts: closings.length,
     unpaid,
     unpaid_fen: unpaidTotal,
     costs,
+    extra_costs: extraCosts,
     manual,
     total_cost_fen: totalCost,
     neto_fen: pazar - unpaidTotal - totalCost,
@@ -153,7 +173,48 @@ export function monthAnalytics(
     best_days: bestDays,
     trend: trend(all, month),
     records: records(q, venueId, all, fromDay, toDay),
+    sold_by_category: soldCategories(q, venueId, inMonth.map(s => s.id)),
   }
+}
+
+/**
+ * The month's articles, by category. A category with nothing sold is left out;
+ * an article from a category that was deleted since still shows, under
+ * *Bez kategorije*, because the round happened.
+ */
+function soldCategories(
+  q: Queryable, venueId: string, shiftIds: string[],
+): AnalyticsSoldCategory[] {
+  if (shiftIds.length === 0) return []
+  const names = new Map(
+    q.select({ id: schema.categories.id, name: schema.categories.name })
+      .from(schema.categories)
+      .where(eq(schema.categories.venueId, venueId))
+      .all()
+      .map(c => [c.id, c.name]),
+  )
+
+  const byCategory = new Map<string, AnalyticsSoldCategory>()
+  for (const row of soldByCategory(q, venueId, shiftIds)) {
+    let category = byCategory.get(row.category_id)
+    if (!category) {
+      category = {
+        category_id: row.category_id,
+        name: names.get(row.category_id) ?? 'Bez kategorije',
+        qty: 0, fen: 0, items: [],
+      }
+      byCategory.set(row.category_id, category)
+    }
+    category.qty += row.qty
+    category.fen += row.fen
+    category.items.push({ name: row.name, qty: row.qty, fen: row.fen })
+  }
+
+  for (const category of byCategory.values()) {
+    category.items.sort((a, b) => b.qty - a.qty || b.fen - a.fen || a.name.localeCompare(b.name, 'bs'))
+  }
+  return [...byCategory.values()]
+    .sort((a, b) => b.fen - a.fen || a.name.localeCompare(b.name, 'bs'))
 }
 
 /** Twelve months ending with `month`, oldest first, zeros included. */
@@ -301,4 +362,86 @@ export function setMonthCost(
   })
 
   return monthAnalytics(db, venueId, body.month, now)
+}
+
+/**
+ * `POST /api/owner/analitika/dodatni-troskovi` — one more named cost.
+ *
+ * A retry of the same tap (same `client_id`) is the stored row and writes
+ * nothing, so a repair entered on bad wifi is never on the month twice.
+ */
+export function addMonthExtraCost(
+  db: Db, venueId: string, actor: Actor, body: AddMonthExtraCostBody, now = nowIso(),
+): MonthAnalytics {
+  let month = body.month
+  db.transaction((tx) => {
+    const replay = tx.select().from(schema.monthExtraCosts)
+      .where(and(
+        eq(schema.monthExtraCosts.venueId, venueId),
+        eq(schema.monthExtraCosts.clientId, body.client_id),
+      ))
+      .get()
+    if (replay) {
+      month = replay.month
+      return
+    }
+
+    const label = body.label.trim()
+    const id = newId()
+    tx.insert(schema.monthExtraCosts).values({
+      id,
+      venueId,
+      clientId: body.client_id,
+      month: body.month,
+      label,
+      amountFen: body.amount_fen,
+      createdBy: actor.userId,
+      createdAt: now,
+    }).run()
+
+    log(tx, venueId, {
+      kind: 'settings_changed',
+      body: {
+        key: `month_extra_cost.${body.month}.${id}.amount_fen`,
+        label: `Dodatni trošak · ${label} · ${monthLabelBs(body.month)}`,
+        before: 0,
+        after: body.amount_fen,
+      },
+      actorId: actor.userId,
+      ref: { type: 'venue', id: venueId },
+      at: now,
+    })
+    bump(tx, venueId, 'settings', venueId)
+  })
+  return monthAnalytics(db, venueId, month, now)
+}
+
+/** `DELETE /api/owner/analitika/dodatni-troskovi/:id` — take one off the month. */
+export function deleteMonthExtraCost(
+  db: Db, venueId: string, actor: Actor, id: string, now = nowIso(),
+): MonthAnalytics {
+  const month = db.transaction((tx) => {
+    const row = tx.select().from(schema.monthExtraCosts)
+      .where(and(eq(schema.monthExtraCosts.venueId, venueId), eq(schema.monthExtraCosts.id, id)))
+      .get()
+    if (!row) throw notFound('EXTRA_COST_NOT_FOUND', `extra cost ${id} not found`)
+
+    tx.delete(schema.monthExtraCosts).where(eq(schema.monthExtraCosts.id, id)).run()
+
+    log(tx, venueId, {
+      kind: 'settings_changed',
+      body: {
+        key: `month_extra_cost.${row.month}.${row.id}.amount_fen`,
+        label: `Dodatni trošak uklonjen · ${row.label} · ${monthLabelBs(row.month)}`,
+        before: row.amountFen,
+        after: 0,
+      },
+      actorId: actor.userId,
+      ref: { type: 'venue', id: venueId },
+      at: now,
+    })
+    bump(tx, venueId, 'settings', venueId)
+    return row.month
+  })
+  return monthAnalytics(db, venueId, month, now)
 }

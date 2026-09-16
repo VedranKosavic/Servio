@@ -1316,6 +1316,31 @@ export const monthCosts = sqliteTable('month_costs', {
   uniqueIndex('month_costs_uq').on(t.venueId, t.month, t.kind),
 ])
 
+/**
+ * *Dodatni troškovi* in *Analitika* — anything else the month cost that has no
+ * line of its own ("popravka aparata 80 KM"), as many as the owner adds
+ * (16.09.2026).
+ *
+ * `client_id` because the owner adds them from a phone on café wifi, and a tap
+ * that is retried must not become the same repair twice. Removal is a real
+ * delete: these are his own typed figures, not money that moved through the
+ * till, and every add and delete leaves a *Dnevnik* line.
+ */
+export const monthExtraCosts = sqliteTable('month_extra_costs', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  clientId: text('client_id').notNull(),
+  /** `YYYY-MM`. */
+  month: text('month').notNull(),
+  label: text('label').notNull(),
+  amountFen: integer('amount_fen').notNull(),
+  createdBy: text('created_by').notNull().references(() => users.id),
+  createdAt: text('created_at').notNull(),
+}, t => [
+  uniqueIndex('month_extra_costs_client_uq').on(t.venueId, t.clientId),
+  index('month_extra_costs_month_idx').on(t.venueId, t.month),
+])
+
 export const shiftTemplates = sqliteTable('shift_templates', {
   id: text('id').primaryKey(),
   venueId: text('venue_id').notNull().references(() => venues.id),

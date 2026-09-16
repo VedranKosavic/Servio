@@ -223,3 +223,15 @@ export const putMonthCostBody = z.object({
   amount_fen: moneyFen,
 }).strict()
 export type PutMonthCostBody = z.infer<typeof putMonthCostBody>
+
+/**
+ * `POST /api/owner/analitika/dodatni-troskovi` — one more cost for the month,
+ * with the name the owner gives it. Replayable by `client_id`.
+ */
+export const addMonthExtraCostBody = z.object({
+  client_id: uuid,
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+  label: z.string().trim().min(1).max(60),
+  amount_fen: moneyFen.min(1),
+}).strict()
+export type AddMonthExtraCostBody = z.infer<typeof addMonthExtraCostBody>

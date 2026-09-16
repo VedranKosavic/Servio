@@ -40,7 +40,9 @@ import {
 import { acceptSettlement, settle } from '../../server/services/settlements'
 import { closeByBar } from '../../server/services/closings'
 import { clearTab } from '../../server/services/clearTable'
-import { setMonthCost } from '../../server/services/analytics'
+import {
+  addMonthExtraCost, deleteMonthExtraCost, setMonthCost,
+} from '../../server/services/analytics'
 import { putStaffNote } from '../../server/services/summaries'
 import { resetPin } from '../../server/services/auth'
 import {
@@ -367,6 +369,19 @@ const CALLS: Record<string, () => void | Promise<void>> = {
     setMonthCost(f.db, f.venueId, f.adminActor(), {
       month: '2026-09', kind: 'struja', amount_fen: 12_000,
     })
+  },
+
+  [join('owner', 'analitika', 'dodatni-troskovi', 'index.post.ts')]: () => {
+    addMonthExtraCost(f.db, f.venueId, f.adminActor(), {
+      client_id: randomUUID(), month: '2026-09', label: 'popravka', amount_fen: 8_000,
+    })
+  },
+
+  [join('owner', 'analitika', 'dodatni-troskovi', '[id].delete.ts')]: () => {
+    const month = addMonthExtraCost(f.db, f.venueId, f.adminActor(), {
+      client_id: randomUUID(), month: '2026-09', label: 'popravka', amount_fen: 8_000,
+    })
+    deleteMonthExtraCost(f.db, f.venueId, f.adminActor(), month.extra_costs[0]!.id)
   },
 
   // *Zaključi smjenu*: the šanker closes the whole night. A shift is a thing

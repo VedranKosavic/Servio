@@ -24,6 +24,7 @@ export const ADMIN_ERRORS = {
 
   /** Deleting it would silently take live articles off the waiter's phone. */
   CATEGORY_HAS_PRODUCTS: 'Kategorija ima artikle. Prvo ih ukloni ili premjesti u drugu kategoriju.',
+  EXTRA_COST_NOT_FOUND: 'Taj trošak više ne postoji — osvježi Analitiku.',
 
   /** Nothing to change: a PATCH with no keys would write an empty Dnevnik entry. */
   EMPTY_PATCH: 'Nema izmjena za snimiti.',

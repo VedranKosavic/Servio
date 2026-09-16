@@ -14,7 +14,12 @@
  *
  * **Troškovi** are what the month cost: the goods out of *Prijem robe*, the day
  * wages, the payouts the šanker made from the till that are not goods (*Kafa*,
- * *Merkator*, *Dodatna plaćanja*), and the three bills the owner types.
+ * *Merkator*, *Dodatna plaćanja*), the three bills the owner types, and
+ * *Dodatni troškovi* — anything else he adds himself, one named line at a time.
+ *
+ * *Ostaje* is the end of the month: every day's every shift, less every cost.
+ * *Za predati* is deliberately **not** on the page any more (the owner,
+ * 16.09.2026): it is what one night hands over, not what a month leaves.
  *
  * **Why goods come from *Prijem robe* and not from the closings' *Plaćanje
  * robe / okusa / žara*.** Both describe the same crates — one as delivered, one
@@ -25,6 +30,7 @@
 /** Every cost line, in the order the page lists them. */
 export const MONTH_COST_KEYS = [
   'roba', 'okusi', 'zar', 'kafa', 'merkator', 'dodatna', 'dnevnice', 'struja', 'voda', 'kirija',
+  'dodatni',
 ] as const
 export type MonthCostKey = (typeof MONTH_COST_KEYS)[number]
 
@@ -43,6 +49,7 @@ export const MONTH_COST_LABELS: Record<MonthCostKey, string> = {
   struja: 'Struja',
   voda: 'Voda',
   kirija: 'Kirija',
+  dodatni: 'Dodatni troškovi',
 }
 
 /** Where a line's number comes from — the small print under it. */
@@ -57,6 +64,7 @@ export const MONTH_COST_SOURCES: Record<MonthCostKey, string> = {
   struja: 'Unosi se ručno',
   voda: 'Unosi se ručno',
   kirija: 'Fiksno, prenosi se svaki mjesec',
+  dodatni: 'Dodaje admin, ovdje',
 }
 
 /**

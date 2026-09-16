@@ -73,6 +73,7 @@ import type {
 // against, so a field renamed in a schema is a compile error in the screen
 // that sends it — one definition, two uses.
 import type {
+  AddMonthExtraCostBody,
   AdminLoginBody,
   PutMonthCostBody,
   CreateCategoryBody,
@@ -286,6 +287,14 @@ export function useAdminApi() {
     /** *Struja*, *Voda* or *Kirija* for one month; answers the month again. */
     putMonthCost: (body: PutMonthCostBody) =>
       request<MonthAnalytics>('/api/owner/analitika/troskovi', { method: 'PUT', body }),
+
+    /** *Dodatni troškovi* — add one named cost; answers the month again. */
+    addMonthExtraCost: (body: AddMonthExtraCostBody) =>
+      request<MonthAnalytics>('/api/owner/analitika/dodatni-troskovi', { method: 'POST', body }),
+
+    /** …and take one off; answers the month it was in. */
+    deleteMonthExtraCost: (id: string) =>
+      request<MonthAnalytics>(`/api/owner/analitika/dodatni-troskovi/${id}`, { method: 'DELETE' }),
 
     /** *Nargila* — grams per bowl per aroma, for one month (`YYYY-MM`). */
     getNargila: (month: string) =>

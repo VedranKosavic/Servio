@@ -38,8 +38,39 @@ const inputType = computed(() => {
   }
 })
 
+/**
+ * **What the person typed, while they are typing it.**
+ *
+ * A money field used to redraw itself from the model on every keystroke:
+ * "1" became 100 feninga, 100 feninga was drawn back as "1,00", the caret sat
+ * wherever the browser left it, and the next "0" landed inside that text —
+ * so typing 10 stored 0,01 KM (found on *Analitika*, 16.09.2026). A number
+ * field is the one place a reformat mid-word destroys what was typed.
+ *
+ * So the raw text is kept while the field is being edited and only replaced by
+ * the formatted value on blur, or when the model is changed from outside to
+ * something that text does not mean.
+ */
+const draft = ref<string | null>(null)
+
+function parsed(raw: string): string | number | null {
+  if (props.kind === 'money') {
+    const km = parseDecimalInput(raw)
+    return km === null ? null : Math.round(km * 100)
+  }
+  if (props.kind === 'decimal') return parseDecimalInput(raw)
+  return raw
+}
+
+const typesNumbers = computed(() => props.kind === 'money' || props.kind === 'decimal')
+
+watch(() => props.modelValue, (value) => {
+  if (draft.value !== null && parsed(draft.value) !== value) draft.value = null
+})
+
 /** A money field shows KM, so 1250 feninga renders as "12,50". */
 const shown = computed(() => {
+  if (typesNumbers.value && draft.value !== null) return draft.value
   if (props.modelValue === null || props.modelValue === undefined) return ''
   if (props.kind === 'money' && typeof props.modelValue === 'number') {
     return formatAmount(props.modelValue)
@@ -49,16 +80,12 @@ const shown = computed(() => {
 
 function onInput(event: Event) {
   const raw = (event.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement).value
-  if (props.kind === 'money') {
-    const km = parseDecimalInput(raw)
-    emit('update:modelValue', km === null ? null : Math.round(km * 100))
-    return
-  }
-  if (props.kind === 'decimal') {
-    emit('update:modelValue', parseDecimalInput(raw))
-    return
-  }
-  emit('update:modelValue', raw)
+  if (typesNumbers.value) draft.value = raw
+  emit('update:modelValue', parsed(raw))
+}
+
+function onBlur() {
+  draft.value = null
 }
 </script>
 
@@ -111,6 +138,7 @@ function onInput(event: Event) {
       :disabled="disabled"
       :aria-invalid="error ? 'true' : undefined"
       @input="onInput"
+      @blur="onBlur"
     >
 
     <p v-if="error" class="a-field-error">{{ error }}</p>

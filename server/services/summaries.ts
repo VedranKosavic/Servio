@@ -987,6 +987,36 @@ export function soldNight(q: Queryable, venueId: string, shiftId: string): {
 }
 
 /**
+ * What a set of shifts sold, **per category and article** — *Analitika*'s
+ * "koji artikli se najviše prodaju" (16.09.2026).
+ *
+ * The same rule `soldNight` uses for *Moja smjena*, over many shifts and keyed
+ * by category as well: grouped by the snapshotted name, a cancelled round out
+ * of the list rather than in it at zero, and `fen` as promet. So an article's
+ * count on *Analitika* and on a night's *Moja smjena* are one arithmetic.
+ */
+export function soldByCategory(
+  q: Queryable, venueId: string, shiftIds: string[],
+): { category_id: string, name: string, qty: number, fen: number }[] {
+  const rows = new Map<string, { category_id: string, name: string, qty: number, fen: number }>()
+  for (const shiftId of shiftIds) {
+    for (const line of loadLines(q, venueId, shiftId)) {
+      if (line.tabStatus === 'voided') continue
+      if (line.adjKind === 'void' && line.adjStatus === 'applied') continue
+      const key = `${line.categoryId}\u0000${line.nameSnapshot}`
+      let row = rows.get(key)
+      if (!row) {
+        row = { category_id: line.categoryId, name: line.nameSnapshot, qty: 0, fen: 0 }
+        rows.set(key, row)
+      }
+      row.qty += line.qty
+      row.fen += prometOf(line)
+    }
+  }
+  return [...rows.values()]
+}
+
+/**
  * `GET /api/me/shift` — the waiter's own night.
  *
  * **Blindness is a nudge, not a control.** `summary` stays `null` until he has

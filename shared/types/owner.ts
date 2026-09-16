@@ -159,6 +159,30 @@ export interface AnalyticsSlotRecords {
   all_time: AnalyticsRecord | null
 }
 
+/** One article on *Analitika*'s best-sellers, inside its category. */
+export interface AnalyticsSoldItem {
+  name: string
+  qty: number
+  fen: number
+}
+
+/** A menu category, with what the month sold of it — most sold article first. */
+export interface AnalyticsSoldCategory {
+  category_id: string
+  name: string
+  qty: number
+  fen: number
+  items: AnalyticsSoldItem[]
+}
+
+/** One *Dodatni trošak*: what the owner called it, and what it cost. */
+export interface AnalyticsExtraCost {
+  id: string
+  label: string
+  amount_fen: number
+  created_at: string
+}
+
 /** A cost the owner types, as stored for one month. */
 export interface AnalyticsManualCost {
   amount_fen: number
@@ -175,17 +199,14 @@ export interface AnalyticsManualCost {
 /** `GET /api/owner/analitika?month=YYYY-MM` */
 export interface MonthAnalytics {
   month: string
-  /** Σ promet of every shift whose business day is in the month. */
+  /** Σ promet of every **closed** shift whose business day is in the month. Open ones count for nothing. */
   pazar_fen: number
-  /** Σ *Za predati* of the month's closings. Open or force-closed nights add nothing. */
-  za_predati_fen: number
   shifts: number
   /** How many of them the šanker closed — the ones *Za predati* and *Dnevnice* can see. */
   closed_shifts: number
   /**
    * Rung up, in the pazar, and paid for by nobody: the tabs of the month's
-   * shifts closed as *Otpis*, *Rashod*, *Policija* or *Osoblje* — open shifts
-   * included, so tonight's counts before the šanker closes it.
+   * closed shifts closed as *Otpis*, *Rashod*, *Policija* or *Osoblje*.
    */
   unpaid: {
     otpis: number
@@ -206,7 +227,11 @@ export interface MonthAnalytics {
     struja: number
     voda: number
     kirija: number
+    /** Σ of `extra_costs`. */
+    dodatni: number
   }
+  /** *Dodatni troškovi*, each as the owner named it, oldest first. */
+  extra_costs: AnalyticsExtraCost[]
   /** How struja, voda and kirija got their number. */
   manual: {
     struja: AnalyticsManualCost
@@ -224,4 +249,9 @@ export interface MonthAnalytics {
   trend: AnalyticsMonthPoint[]
   /** One entry per active template, in the templates' own order. */
   records: AnalyticsSlotRecords[]
+  /**
+   * What the month's closed shifts sold, by category — the biggest category
+   * (by KM) first, and inside each the most sold article (by quantity) first.
+   */
+  sold_by_category: AnalyticsSoldCategory[]
 }
