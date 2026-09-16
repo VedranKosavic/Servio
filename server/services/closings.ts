@@ -6,7 +6,7 @@
  *
  *     Sav prihod − Dnevnica − Otpis − Rashod − Policija − Osoblje
  *       − Plaćanje robe − Plaćanje okusa za nargilu − Plaćanje žara
- *       − Merkator = Za predati
+ *       − Plaćanje kafe − Merkator − Dodatna plaćanja = Za predati
  *
  * **The server owns the first six.** *Sav prihod* is the shift's promet, read
  * out of `summarizeShift` — the same call that writes `shift_summaries`, so the
@@ -25,7 +25,11 @@
  * put them in the promet; this is where they come back out, once. Nobody types
  * them, so nobody can type them twice.
  *
- * The phone sends only the four amounts nobody but the šanker can know.
+ * The phone sends the five amounts nobody but the šanker can know, and
+ * *Dodatna plaćanja* — a label and an amount each, for the payouts that have no
+ * fixed name ("config 15 KM"). **Their sum is the server's**: the phone sends
+ * the lines, `extra_fen` is added up here, and a phone that sent a total would
+ * be sending a number nobody checked.
  *
  * **Who may.** A session whose screen tonight is `sanker` (`Actor.mode`); a
  * konobar session and an admin session are both 403 `NOT_SANKER`. The admin
@@ -42,6 +46,7 @@ import { schema } from '../database/client'
 import { conflict, forbidden } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
 import { zaPredati } from '#shared/closing'
+import type { ClosingExtra } from '#shared/closing'
 import type { ClosingPreview, ShiftClosing, UnpaidReason } from '#shared/types'
 import type { Actor, Db, Queryable } from './types'
 import { bump, getSettings, log } from './contracts'
@@ -53,14 +58,47 @@ import { summarizeShift, writeSummaryVersion } from './summaries'
 
 type ClosingRow = typeof schema.shiftClosings.$inferSelect
 
-/** The four typed amounts, as `closeByBarBody` has already parsed them. */
+/** The typed amounts and the free lines, as `closeByBarBody` parsed them. */
 export interface CloseByBarInput {
   client_id: string
   roba_fen: number
   okusi_fen: number
   zar_fen: number
+  kafa_fen: number
   merkator_fen: number
+  extras: { label: string, amount_fen: number }[]
   note?: string
+}
+
+/**
+ * The extras as they are stored and read back.
+ *
+ * A row's worth of JSON rather than a child table: they are display lines of
+ * one closing, never joined, never aggregated, and a table for them would be a
+ * migration every time the café invents a new kind of payout. A label that
+ * survived Zod is trimmed and non-empty; a zero amount is dropped, because a
+ * line that subtracts nothing is noise on a receipt.
+ */
+function cleanExtras(extras: CloseByBarInput['extras']): ClosingExtra[] {
+  return extras
+    .map(extra => ({ label: extra.label.trim(), fen: extra.amount_fen }))
+    .filter(extra => extra.label !== '' && extra.fen > 0)
+}
+
+function readExtras(json: string | null): ClosingExtra[] {
+  if (!json) return []
+  try {
+    const parsed: unknown = JSON.parse(json)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((row): row is ClosingExtra =>
+      typeof row === 'object' && row !== null
+      && typeof (row as ClosingExtra).label === 'string'
+      && Number.isFinite((row as ClosingExtra).fen))
+  } catch {
+    // A row written by hand, or by a version that stored something else. A
+    // closing that cannot print one line is better than a 500 on *Smjena*.
+    return []
+  }
 }
 
 /** Only a šanker-mode session closes the shift. The role is not the question. */
@@ -128,7 +166,10 @@ function toView(q: Queryable, venueId: string, row: ClosingRow): ShiftClosing {
     roba_fen: row.robaFen,
     okusi_fen: row.okusiFen,
     zar_fen: row.zarFen,
+    kafa_fen: row.kafaFen,
     merkator_fen: row.merkatorFen,
+    extras: readExtras(row.extrasJson),
+    extra_fen: row.extraFen,
     za_predati_fen: row.zaPredatiFen,
     note: row.note,
   }
@@ -222,12 +263,15 @@ export function closeByBar(
     assertNoOpenTabs(tx, venueId, shiftId)
 
     const numbers = serverNumbers(tx, venueId, shiftId, at)
+    const extras = cleanExtras(body.extras)
     const amounts = {
       ...numbers,
       roba_fen: body.roba_fen,
       okusi_fen: body.okusi_fen,
       zar_fen: body.zar_fen,
+      kafa_fen: body.kafa_fen,
       merkator_fen: body.merkator_fen,
+      extra_fen: extras.reduce((sum, extra) => sum + extra.fen, 0),
     }
     const result = zaPredati(amounts)
     const note = body.note?.trim() ?? ''
@@ -249,7 +293,10 @@ export function closeByBar(
       robaFen: amounts.roba_fen,
       okusiFen: amounts.okusi_fen,
       zarFen: amounts.zar_fen,
+      kafaFen: amounts.kafa_fen,
       merkatorFen: amounts.merkator_fen,
+      extraFen: amounts.extra_fen,
+      extrasJson: extras.length > 0 ? JSON.stringify(extras) : null,
       zaPredatiFen: result,
       note: note === '' ? null : note,
       createdAt: at,

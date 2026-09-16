@@ -69,20 +69,37 @@ export const reviewShiftBody = z.object({
 /**
  * `POST /api/shifts/:id/zakljucenje` — *Zaključi smjenu*, the šanker's close.
  *
- * Four amounts the šanker paid out of the takings tonight, each typed and each
- * optional (a field he left empty is 0). They are the only money in this body,
+ * Five amounts the šanker paid out of the takings tonight, each typed and each
+ * optional (a field he left empty is 0), plus *Dodatna plaćanja* — the same
+ * thing without a fixed name. They are the only money in this body,
  * and they are allowed for the same reason `declared_fen` is: nobody but the
  * person at the bar knows what the supplier was paid. Prihod, dnevnica, otpis,
  * rashod and policija are **not** here — the server computes all five from the
  * ledger, and a phone that sent them would be ignored. `rashod_fen` left this
  * body on 16.09.2026, when *Rashod* became a mark on a table.
  */
+/**
+ * One *Dodatno plaćanje*: a name the šanker types and what it cost.
+ *
+ * It exists because the fixed five never cover a real night — "config 15 KM",
+ * a taxi, a plumber — and a *Napomena* nobody could subtract was the wrong
+ * shape for it (the owner, 16.09.2026). The label is short on purpose: it is a
+ * line on a receipt, not a story, and the story still belongs in *Dnevnik*.
+ */
+export const closingExtraBody = z.object({
+  label: z.string().trim().min(1).max(40),
+  amount_fen: moneyFen,
+}).strict()
+
 export const closeByBarBody = z.object({
   client_id: uuid,
   roba_fen: moneyFen.default(0),
   okusi_fen: moneyFen.default(0),
   zar_fen: moneyFen.default(0),
+  kafa_fen: moneyFen.default(0),
   merkator_fen: moneyFen.default(0),
+  /** Their **sum** is never sent: the server adds them up itself. */
+  extras: z.array(closingExtraBody).max(20).default([]),
   note: closingNote.optional(),
 }).strict()
 

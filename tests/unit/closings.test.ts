@@ -42,7 +42,9 @@ afterEach(() => {
   f.close()
 })
 
-const ZERO = { roba_fen: 0, okusi_fen: 0, zar_fen: 0, merkator_fen: 0 }
+const ZERO = {
+  roba_fen: 0, okusi_fen: 0, zar_fen: 0, kafa_fen: 0, merkator_fen: 0, extras: [],
+}
 
 const sanker = () => f.actor('Emir', { mode: 'sanker' })
 
@@ -112,7 +114,10 @@ describe('the numbers', () => {
     expect(preview.open_tabs).toEqual([])
     expect(preview.closing).toBeNull()
 
-    const typed = { roba_fen: 2_000, okusi_fen: 300, zar_fen: 400, merkator_fen: 500 }
+    const typed = {
+      roba_fen: 2_000, okusi_fen: 300, zar_fen: 400, kafa_fen: 250,
+      merkator_fen: 500, extras: [],
+    }
     const closing = closeByBar(f.db, f.venueId, sanker(), shiftId, { client_id: randomUUID(), ...typed })
 
     // The stored server numbers are the ones the šanker was shown.
@@ -120,7 +125,7 @@ describe('the numbers', () => {
     expect(closing.otpis_fen).toBe(preview.otpis_fen)
     expect(closing.dnevnica_fen).toBe(preview.dnevnica_fen)
     expect(closing.za_predati_fen).toBe(
-      preview.prihod_fen - 5_000 - 350 - 2_000 - 300 - 400 - 500,
+      preview.prihod_fen - 5_000 - 350 - 2_000 - 300 - 400 - 250 - 500,
     )
     expect(closing.closed_by_name).toBe('Emir')
 
@@ -157,8 +162,9 @@ describe('the numbers', () => {
     expect(zaPredati({
       prihod_fen: 50_000, dnevnica_fen: 9_000, otpis_fen: 700,
       rashod_fen: 100, policija_fen: 50, osoblje_fen: 25, roba_fen: 200,
-      okusi_fen: 300, zar_fen: 400, merkator_fen: 500,
-    })).toBe(38_725)
+      okusi_fen: 300, zar_fen: 400, kafa_fen: 150, merkator_fen: 500,
+      extra_fen: 1_500,
+    })).toBe(37_075)
   })
 
   /**
@@ -204,6 +210,38 @@ describe('the numbers', () => {
     // What is left to hand over is the one round somebody actually paid for,
     // minus the day's wage.
     expect(closing.za_predati_fen).toBe(1_450 - 9_000 - 200 - 300 - 300 - 150)
+  })
+
+  /**
+   * *Dodatna plaćanja* (the owner, 16.09.2026): the payouts with no fixed
+   * field, each a name and an amount — and their **sum is the server's**, so a
+   * phone cannot subtract more than the lines it sent.
+   */
+  it('stores the free lines, adds them up itself and drops the empty ones', () => {
+    const shiftId = night()
+    const closing = closeByBar(f.db, f.venueId, sanker(), shiftId, {
+      client_id: randomUUID(),
+      ...ZERO,
+      extras: [
+        { label: '  config  ', amount_fen: 1_500 },
+        { label: 'taksi', amount_fen: 800 },
+        // Nothing was paid, so it is not a line on anybody's receipt.
+        { label: 'ništa', amount_fen: 0 },
+      ],
+    })
+
+    expect(closing.extras).toEqual([
+      { label: 'config', fen: 1_500 },
+      { label: 'taksi', fen: 800 },
+    ])
+    expect(closing.extra_fen).toBe(2_300)
+    expect(closing.za_predati_fen).toBe(
+      closing.prihod_fen - 9_000 - closing.otpis_fen - 2_300,
+    )
+
+    // And they come back with the stored row, for *Kasa* and for a reload.
+    const again = closingPreview(f.db, f.venueId, sanker(), shiftId).closing!
+    expect(again.extras).toEqual(closing.extras)
   })
 
   it('adds a tab marked Otpis to the otpis of the store room', () => {
@@ -280,12 +318,14 @@ describe('what it refuses and what it replays', () => {
   it('answers a replay of the same client_id with the stored row and writes nothing', () => {
     const shiftId = night()
     const clientId = randomUUID()
-    const first = closeByBar(f.db, f.venueId, sanker(), shiftId, { client_id: clientId, ...ZERO, roba_fen: 700 })
+    const first = closeByBar(f.db, f.venueId, sanker(), shiftId,
+      { client_id: clientId, ...ZERO, roba_fen: 700 })
     const changesBefore = f.db.select().from(schema.changes).all().length
     const logsBefore = f.db.select().from(schema.logEntries).all().length
 
     // Different amounts on the retry change nothing: the first answer stands.
-    const replay = closeByBar(f.db, f.venueId, sanker(), shiftId, { client_id: clientId, ...ZERO, roba_fen: 1 })
+    const replay = closeByBar(f.db, f.venueId, sanker(), shiftId,
+      { client_id: clientId, ...ZERO, roba_fen: 1 })
     expect(replay).toEqual(first)
     expect(closingRows(shiftId)).toHaveLength(1)
     expect(f.db.select().from(schema.changes).all()).toHaveLength(changesBefore)
@@ -294,14 +334,17 @@ describe('what it refuses and what it replays', () => {
 
   it('validates the body: defaults to 0, no negatives, nothing the server computes', () => {
     const parsed = closeByBarBody.parse({ client_id: randomUUID(), roba_fen: 500 })
-    expect(parsed).toMatchObject({ roba_fen: 500, okusi_fen: 0, zar_fen: 0, merkator_fen: 0 })
+    expect(parsed).toMatchObject({
+      roba_fen: 500, okusi_fen: 0, zar_fen: 0, kafa_fen: 0, merkator_fen: 0, extras: [],
+    })
     expect(closeByBarBody.safeParse({ client_id: randomUUID(), roba_fen: -1 }).success).toBe(false)
     expect(closeByBarBody.safeParse({ client_id: randomUUID(), roba_fen: 1.5 }).success).toBe(false)
     expect(closeByBarBody.safeParse({ client_id: randomUUID(), prihod_fen: 1 }).success).toBe(false)
     // The six the server computes are refused by name, so a phone cannot
     // subtract a rashod twice by sending one.
     for (const key of [
-      'prihod_fen', 'dnevnica_fen', 'otpis_fen', 'rashod_fen', 'policija_fen', 'osoblje_fen',
+      'prihod_fen', 'dnevnica_fen', 'otpis_fen', 'rashod_fen', 'policija_fen',
+      'osoblje_fen', 'extra_fen',
     ]) {
       expect(closeByBarBody.safeParse({ client_id: randomUUID(), [key]: 1 }).success).toBe(false)
     }

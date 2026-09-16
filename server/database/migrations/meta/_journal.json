@@ -92,6 +92,13 @@
       "when": 1789546057548,
       "tag": "0012_closing_osoblje",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1789547427553,
+      "tag": "0013_closing_kafa_extras",
+      "breakpoints": true
     }
   ]
 }

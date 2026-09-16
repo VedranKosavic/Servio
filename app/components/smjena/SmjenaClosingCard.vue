@@ -5,12 +5,13 @@
  * Every number is the stored `shift_closings` row, never recomputed here: the
  * point of storing it is that a void decided on Tuesday does not rewrite what
  * was handed over on Monday night. *Sav prihod*, *Dnevnica* and *Otpis* were
- * the server's at that moment; the five below them are what the šanker typed.
+ * the server's at that moment; the typed ones and *Dodatna plaćanja* are the
+ * šanker's own.
  * A negative *Za predati* is shown as it is, in the danger colour. A shift the
  * šanker has not closed yet has no row, and the card says so.
  */
 import { formatKm } from '#shared/money'
-import { CLOSING_LINES } from '#shared/closing'
+import { closingLines } from '#shared/closing'
 import type { ShiftClosing } from '#shared/types'
 
 defineProps<{ closing: ShiftClosing | null }>()
@@ -28,9 +29,13 @@ defineProps<{ closing: ShiftClosing | null }>()
           <dt>Sav prihod</dt>
           <dd class="num">{{ formatKm(closing.prihod_fen) }}</dd>
         </div>
-        <div v-for="line in CLOSING_LINES" :key="line.key" class="c-row">
+        <div
+          v-for="(line, index) in closingLines(closing, closing.extras)"
+          :key="`${line.label}-${index}`"
+          class="c-row"
+        >
           <dt>− {{ line.label }}</dt>
-          <dd class="num">{{ formatKm(closing[line.key]) }}</dd>
+          <dd class="num">{{ formatKm(line.fen) }}</dd>
         </div>
         <div class="c-row c-total">
           <dt>Za predati</dt>

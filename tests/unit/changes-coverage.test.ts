@@ -365,7 +365,10 @@ const CALLS: Record<string, () => void | Promise<void>> = {
   [join('shifts', '[id]', 'zakljucenje.post.ts')]: () => {
     closeByBar(
       f.db, f.venueId, f.actor('Emir', { mode: 'sanker' }), f.openShift({ members: ['Amar', 'Emir'] }),
-      { client_id: randomUUID(), rashod_fen: 0, roba_fen: 0, okusi_fen: 0, zar_fen: 0, merkator_fen: 0 },
+      {
+        client_id: randomUUID(),
+        roba_fen: 0, okusi_fen: 0, zar_fen: 0, kafa_fen: 0, merkator_fen: 0, extras: [],
+      },
     )
   },
 

@@ -22,6 +22,7 @@
  * already handed his envelope over: `expected_cash_fen` (drawer + the waiters
  * who settled) + `outstanding_fen` (everybody who has not) === venue expected.
  */
+import type { ClosingExtra } from '../closing'
 import type { Role } from '../types'
 import type { StaleDevice } from './auth'
 
@@ -547,8 +548,13 @@ export interface ShiftClosing {
   roba_fen: number
   okusi_fen: number
   zar_fen: number
+  kafa_fen: number
   merkator_fen: number
-  /** `prihod − dnevnica − the four marked categories − the four typed`. May be negative. */
+  /** *Dodatna plaćanja*, each with the name the šanker gave it. */
+  extras: ClosingExtra[]
+  /** Their sum — what the subtraction below actually used. */
+  extra_fen: number
+  /** `prihod − dnevnica − the marked categories − the typed ones`. May be negative. */
   za_predati_fen: number
   note: string | null
 }

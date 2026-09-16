@@ -20,7 +20,9 @@
  */
 import { useOnline } from '@vueuse/core'
 import { formatKm, parseKm } from '#shared/money'
-import { CLOSING_LINES, TYPED_KEYS, type TypedKey, zaPredati } from '#shared/closing'
+import {
+  closingLines, TYPED_KEYS, type ClosingExtra, type TypedKey, zaPredati,
+} from '#shared/closing'
 import { localTime, shortDateBs } from '#shared/dates'
 import type { ClosingPreview, ShiftClosing } from '#shared/types'
 import { ApiSideError } from '~/composables/useApi'
@@ -48,13 +50,45 @@ const LABELS: Record<TypedKey, string> = {
   roba_fen: 'Plaćanje robe',
   okusi_fen: 'Plaćanje okusa za nargilu',
   zar_fen: 'Plaćanje žara',
+  kafa_fen: 'Plaćanje kafe',
   merkator_fen: 'Merkator',
 }
 
 const raw = reactive<Record<TypedKey, string>>({
-  roba_fen: '', okusi_fen: '', zar_fen: '', merkator_fen: '',
+  roba_fen: '', okusi_fen: '', zar_fen: '', kafa_fen: '', merkator_fen: '',
 })
-const note = ref('')
+
+/**
+ * *Dodatna plaćanja* — the payouts with no fixed field.
+ *
+ * It replaced *Napomena* on the owner's word (16.09.2026): a sentence nobody
+ * could subtract was the wrong shape for "config 15 KM". Each line is a name
+ * and an amount, both typed here, and the sum comes off *Za predati* while he
+ * is still looking at it. The server adds them up again when it stores them.
+ */
+const extras = ref<ClosingExtra[]>([])
+const extrasOpen = ref(false)
+const extraLabel = ref('')
+const extraAmount = ref('')
+
+const extraFen = computed(() => extras.value.reduce((sum, extra) => sum + extra.fen, 0))
+
+const extraInvalid = computed(() => {
+  const fen = parseKm(extraAmount.value.trim())
+  return extraLabel.value.trim() === '' || fen === null || fen <= 0
+})
+
+function addExtra() {
+  const fen = parseKm(extraAmount.value.trim())
+  if (extraLabel.value.trim() === '' || fen === null || fen <= 0) return
+  extras.value = [...extras.value, { label: extraLabel.value.trim().slice(0, 40), fen }]
+  extraLabel.value = ''
+  extraAmount.value = ''
+}
+
+function removeExtra(index: number) {
+  extras.value = extras.value.filter((_, i) => i !== index)
+}
 
 const confirming = ref(false)
 const posting = ref(false)
@@ -110,6 +144,7 @@ const result = computed(() => {
   return zaPredati({
     prihod_fen: p.prihod_fen, dnevnica_fen: p.dnevnica_fen, otpis_fen: p.otpis_fen,
     rashod_fen: p.rashod_fen, policija_fen: p.policija_fen, osoblje_fen: p.osoblje_fen,
+    extra_fen: extraFen.value,
     ...amounts.value,
   })
 })
@@ -154,7 +189,7 @@ async function close() {
     done.value = await api.closeShiftByBar(shiftId, {
       client_id: clientId.value,
       ...amounts.value,
-      ...(note.value.trim() ? { note: note.value.trim() } : {}),
+      extras: extras.value.map(extra => ({ label: extra.label, amount_fen: extra.fen })),
     })
     confirming.value = false
   } catch (err) {
@@ -171,8 +206,8 @@ async function close() {
 }
 
 /** The done card's lines, from the stored row — never recomputed here. */
-function lineValue(closing: ShiftClosing, key: (typeof CLOSING_LINES)[number]['key']): number {
-  return closing[key]
+function storedLines(closing: ShiftClosing) {
+  return closingLines(closing, closing.extras)
 }
 </script>
 
@@ -222,9 +257,13 @@ function lineValue(closing: ShiftClosing, key: (typeof CLOSING_LINES)[number]['k
               <span class="text-text-2">Sav prihod</span>
               <span class="num font-semibold">{{ formatKm(done.prihod_fen) }}</span>
             </div>
-            <div v-for="line in CLOSING_LINES" :key="line.key" class="flex justify-between gap-3">
+            <div
+              v-for="(line, index) in storedLines(done)"
+              :key="`${line.label}-${index}`"
+              class="flex justify-between gap-3"
+            >
               <span class="text-text-2">− {{ line.label }}</span>
-              <span class="num">{{ formatKm(lineValue(done, line.key)) }}</span>
+              <span class="num">{{ formatKm(line.fen) }}</span>
             </div>
             <div class="flex justify-between gap-3 border-t border-line-soft pt-2">
               <span class="font-semibold">Za predati</span>
@@ -335,16 +374,32 @@ function lineValue(closing: ShiftClosing, key: (typeof CLOSING_LINES)[number]['k
               </span>
             </label>
 
-            <label class="flex flex-col gap-1.5">
-              <span class="text-label text-text-2">Napomena</span>
-              <input
-                v-model="note"
-                type="text"
-                maxlength="500"
-                placeholder="Nije obavezno"
-                class="input px-4"
+            <!-- Everything else that was paid out of the takings tonight. -->
+            <div class="flex flex-col gap-2 border-t border-line-soft pt-3">
+              <div
+                v-for="(extra, index) in extras"
+                :key="`${extra.label}-${index}`"
+                class="flex items-center justify-between gap-3 text-body"
               >
-            </label>
+                <span class="truncate text-text-2">{{ extra.label }}</span>
+                <span class="flex shrink-0 items-center gap-3">
+                  <span class="num font-semibold">{{ formatKm(extra.fen) }}</span>
+                  <button
+                    type="button"
+                    class="btn btn-ghost h-10 px-3 text-label"
+                    :aria-label="`Ukloni ${extra.label}`"
+                    @click="removeExtra(index)"
+                  >
+                    Ukloni
+                  </button>
+                </span>
+              </div>
+
+              <button type="button" class="btn btn-secondary btn-lg" @click="extrasOpen = true">
+                Dodatna plaćanja<span v-if="extras.length" class="num">
+                  · {{ formatKm(extraFen) }}</span>
+              </button>
+            </div>
           </section>
 
           <!-- The answer, live -->
@@ -375,6 +430,63 @@ function lineValue(closing: ShiftClosing, key: (typeof CLOSING_LINES)[number]['k
           </button>
         </template>
       </main>
+
+      <!-- Dodatna plaćanja: a name and an amount, as many as the night had -->
+      <template v-if="extrasOpen">
+        <div class="sheet-scrim fixed inset-0 z-40" @click="extrasOpen = false" />
+        <div
+          class="sheet-panel fixed inset-x-0 bottom-0 z-50 flex flex-col gap-3 px-4 pb-5 pt-4"
+          role="dialog"
+          aria-label="Dodatna plaćanja"
+        >
+          <h2 class="section-title">
+            Dodatno plaćanje
+          </h2>
+          <p class="text-label text-text-2">
+            Upiši šta je plaćeno i koliko — na primjer <em>config</em> i 15,00 KM.
+          </p>
+
+          <label class="flex flex-col gap-1.5">
+            <span class="text-label text-text-2">Naziv</span>
+            <input
+              v-model="extraLabel"
+              type="text"
+              maxlength="40"
+              placeholder="npr. config"
+              class="input px-4"
+            >
+          </label>
+
+          <label class="flex flex-col gap-1.5">
+            <span class="text-label text-text-2">Iznos</span>
+            <span class="input input-num flex items-center gap-2 px-4">
+              <input
+                v-model="extraAmount"
+                type="text"
+                inputmode="decimal"
+                placeholder="0,00"
+                aria-label="Iznos"
+                class="num min-w-0 flex-1 self-stretch bg-transparent text-right text-title font-semibold outline-none placeholder:text-muted"
+              >
+              <span class="shrink-0 text-label font-normal text-text-2">KM</span>
+            </span>
+          </label>
+
+          <div class="flex gap-2">
+            <button type="button" class="btn btn-secondary btn-lg flex-1" @click="extrasOpen = false">
+              Gotovo
+            </button>
+            <button
+              type="button"
+              class="btn btn-primary btn-lg flex-1"
+              :disabled="extraInvalid"
+              @click="addExtra"
+            >
+              Dodaj
+            </button>
+          </div>
+        </div>
+      </template>
 
       <!-- Zaključiti smjenu? -->
       <template v-if="confirming && preview">

@@ -585,7 +585,17 @@ export const shiftClosings = sqliteTable('shift_closings', {
   robaFen: integer('roba_fen').notNull(),
   okusiFen: integer('okusi_fen').notNull(),
   zarFen: integer('zar_fen').notNull(),
+  /** *Plaćanje kafe* — typed, like the four around it (16.09.2026). */
+  kafaFen: integer('kafa_fen').notNull().default(0),
   merkatorFen: integer('merkator_fen').notNull(),
+  /**
+   * *Dodatna plaćanja* — anything else paid out of the takings tonight, each
+   * with the name the šanker typed ("config 15,00 KM"). The sum is `extra_fen`
+   * and is what the subtraction uses; the JSON is what the screens read back,
+   * so a line nobody foresaw needs no column and no migration.
+   */
+  extraFen: integer('extra_fen').notNull().default(0),
+  extrasJson: text('extras_json'),
   zaPredatiFen: integer('za_predati_fen').notNull(),
   note: text('note'),
   createdAt: text('created_at').notNull(),
