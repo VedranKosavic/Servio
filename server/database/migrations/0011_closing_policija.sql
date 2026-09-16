@@ -1,0 +1,1 @@
+ALTER TABLE `shift_closings` ADD `policija_fen` integer DEFAULT 0 NOT NULL;

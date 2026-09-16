@@ -80,11 +80,12 @@ const emit = defineEmits<{
   move: []
   /**
    * The table was drunk and nobody is paying for it, and everybody knew that
-   * before it was poured — the police, or an admin. The round is rung up like
-   * any other, so the stock moves and the promet counts it; the amount comes
-   * off the shift by category at the settlement rather than off the waiter.
+   * before it was poured — the police, an admin, or a glass that went over.
+   * The round is rung up like any other, so the stock moves and the promet
+   * counts it; the amount comes straight off *Zaključi smjenu* by category,
+   * next to *Dnevnica*, rather than off the waiter.
    */
-  unpaid: [reason: 'policija' | 'rashod']
+  unpaid: [reason: 'policija' | 'rashod' | 'otpis']
   /**
    * A locked line was tapped — the way to a storno. It came over from the table
    * page with the rest: a waiter who rings up the wrong drink has to be able to
@@ -292,11 +293,14 @@ const rounds = computed(() => props.detail?.orders ?? [])
         <!--
           The rest of what a table can need, one step quieter.
 
-          *Pokaži gostu* and *Nije plaćeno* left at the owner's word; the row
-          they were in is where *Policija* and *Rashod* are going, once the
-          shift's deduction categories exist to put them in.
+          *Pokaži gostu* and *Nije plaćeno* left at the owner's word. The three
+          that stayed with *Premjesti* are the categories that come off the
+          night by themselves at *Zaključi smjenu* — and *Otpis* is here (the
+          owner's call, 16.09.2026) because a glass goes over at the table, not
+          at the bar: marking it on the tab is what takes the right bottle out
+          of *Stanje šanka*.
         -->
-        <div class="grid grid-cols-3 gap-2 pt-1">
+        <div class="grid grid-cols-2 gap-2 pt-1">
           <button
             type="button"
             class="btn btn-secondary px-2 text-label"
@@ -320,6 +324,14 @@ const rounds = computed(() => props.detail?.orders ?? [])
             @click="emit('unpaid', 'rashod')"
           >
             Rashod
+          </button>
+          <button
+            type="button"
+            class="btn btn-secondary px-2 text-label"
+            :disabled="!hasTab || paid || remainingFen <= 0"
+            @click="emit('unpaid', 'otpis')"
+          >
+            Otpis
           </button>
         </div>
       </div>

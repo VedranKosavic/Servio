@@ -533,14 +533,20 @@ export interface ShiftClosing {
   prihod_fen: number
   /** Server: `settings.dnevnica_fen` as it stood at the close. */
   dnevnica_fen: number
-  /** Server: the shift's otpis, the same number as `summary.waste_fen`. */
+  /**
+   * Server: the shift's otpis — `summary.waste_fen` **plus** the tabs marked
+   * *Otpis* on the floor, which are a tab and not a `product_waste` row.
+   */
   otpis_fen: number
+  /** Server: the tabs marked *Rashod* on the floor, at what was left on them. */
   rashod_fen: number
+  /** Server: the tabs marked *Policija*, the same way. */
+  policija_fen: number
   roba_fen: number
   okusi_fen: number
   zar_fen: number
   merkator_fen: number
-  /** `prihod − dnevnica − otpis − the five`. May be negative. */
+  /** `prihod − dnevnica − otpis − rashod − policija − the four`. May be negative. */
   za_predati_fen: number
   note: string | null
 }
@@ -553,6 +559,8 @@ export interface ClosingPreview {
   prihod_fen: number
   dnevnica_fen: number
   otpis_fen: number
+  rashod_fen: number
+  policija_fen: number
   /** Tabs still open; the close is refused (409 `OPEN_TABS`) while any are. */
   open_tabs: { tab_id: string, table_name: string }[]
   /** Already closed: the stored row, so a reload shows the done state. */

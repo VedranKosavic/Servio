@@ -2,9 +2,10 @@
 /**
  * `/sanker/zakljuci` — *Zaključi smjenu*, the šanker's end of the night.
  *
- * The owner's close is a subtraction, not a cash count. The server says three
- * numbers (*Sav prihod*, *Dnevnica*, *Otpis*), the šanker types what he paid out
- * of the takings tonight, and the screen shows *Za predati* live as he types —
+ * The owner's close is a subtraction, not a cash count. The server says five
+ * numbers (*Sav prihod*, *Dnevnica*, *Otpis*, *Rashod*, *Policija* — the last
+ * three counted from the tables marked with them tonight), the šanker types what
+ * he paid out of the takings, and the screen shows *Za predati* live as he types —
  * computed by `zaPredati` from `shared/closing.ts`, the same function the server
  * stores its own number with. A negative result is shown as it is.
  *
@@ -44,7 +45,6 @@ const loadError = ref<string | null>(null)
 const clientId = ref(crypto.randomUUID())
 
 const LABELS: Record<TypedKey, string> = {
-  rashod_fen: 'Rashod',
   roba_fen: 'Plaćanje robe',
   okusi_fen: 'Plaćanje okusa za nargilu',
   zar_fen: 'Plaćanje žara',
@@ -52,7 +52,7 @@ const LABELS: Record<TypedKey, string> = {
 }
 
 const raw = reactive<Record<TypedKey, string>>({
-  rashod_fen: '', roba_fen: '', okusi_fen: '', zar_fen: '', merkator_fen: '',
+  roba_fen: '', okusi_fen: '', zar_fen: '', merkator_fen: '',
 })
 const note = ref('')
 
@@ -109,6 +109,7 @@ const result = computed(() => {
   if (!p) return 0
   return zaPredati({
     prihod_fen: p.prihod_fen, dnevnica_fen: p.dnevnica_fen, otpis_fen: p.otpis_fen,
+    rashod_fen: p.rashod_fen, policija_fen: p.policija_fen,
     ...amounts.value,
   })
 })
@@ -265,8 +266,17 @@ function lineValue(closing: ShiftClosing, key: (typeof CLOSING_LINES)[number]['k
               <span class="text-text-2">− Otpis</span>
               <span class="num">{{ formatKm(preview.otpis_fen) }}</span>
             </div>
+            <div class="flex justify-between gap-3">
+              <span class="text-text-2">− Rashod</span>
+              <span class="num">{{ formatKm(preview.rashod_fen) }}</span>
+            </div>
+            <div class="flex justify-between gap-3">
+              <span class="text-text-2">− Policija</span>
+              <span class="num">{{ formatKm(preview.policija_fen) }}</span>
+            </div>
             <p class="text-label text-text-2">
-              Ovo računa server: prihod je sve prodato u smjeni, otpis po cijeni s menija.
+              Ovo računa server: prihod je sve prodato u smjeni, a otpis, rashod i
+              policija su stolovi koje ste večeras tako označili — po cijeni s menija.
             </p>
           </section>
 

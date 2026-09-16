@@ -3,13 +3,14 @@
  *
  * The owner's rule is a subtraction:
  *
- *     Sav prihod − Dnevnica − Otpis − Rashod − Plaćanje robe
+ *     Sav prihod − Dnevnica − Otpis − Rashod − Policija − Plaćanje robe
  *       − Plaćanje okusa za nargilu − Plaćanje žara − Merkator = Za predati
  *
  * and what this file pins is where each term comes from: prihod **is** the
- * summary's promet, otpis **is** the summary's waste value, dnevnica is the
- * venue setting taken once per shift, and nothing the phone could send changes
- * any of those three.
+ * summary's promet, otpis **is** the summary's waste value *plus* the tabs
+ * marked *Otpis*, rashod and policija **are** the tabs marked with them,
+ * dnevnica is the venue setting taken once per shift, and nothing the phone
+ * could send changes any of those five.
  *
  * No `vi.mock` here, on purpose: `log` and `bump` run for real against the
  * in-memory database, so "the close wrote an entry and moved the feed" is an
@@ -21,6 +22,7 @@ import { and, eq } from 'drizzle-orm'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
 import { closeTab, refuses } from '../helpers/shifts'
 import { closeByBar, closingPreview } from '../../server/services/closings'
+import { markUnpaid } from '../../server/services/tabs'
 import { forceClose } from '../../server/services/shifts'
 import { getMyShift, latestSummary, summarizeShift } from '../../server/services/summaries'
 import { ensureOpenShift } from '../../server/services/contracts'
@@ -39,7 +41,7 @@ afterEach(() => {
   f.close()
 })
 
-const ZERO = { rashod_fen: 0, roba_fen: 0, okusi_fen: 0, zar_fen: 0, merkator_fen: 0 }
+const ZERO = { roba_fen: 0, okusi_fen: 0, zar_fen: 0, merkator_fen: 0 }
 
 const sanker = () => f.actor('Emir', { mode: 'sanker' })
 
@@ -71,6 +73,17 @@ function night(): string {
   return shiftId
 }
 
+/**
+ * Close a tab the way the floor sheet does: *Policija*, *Rashod* or *Otpis*,
+ * through the real route, so what the closing reads is what a waiter writes.
+ */
+function markCategory(tabId: string, by: string, reason: 'policija' | 'rashod' | 'otpis') {
+  const tab = f.db.select().from(schema.tabs).where(eq(schema.tabs.id, tabId)).get()!
+  markUnpaid(f.db, f.venueId, f.actor(by), {
+    client_id: randomUUID(), tab_client_id: tab.clientId, reason,
+  })
+}
+
 function closingRows(shiftId: string) {
   return f.db.select().from(schema.shiftClosings)
     .where(and(eq(schema.shiftClosings.venueId, f.venueId), eq(schema.shiftClosings.shiftId, shiftId)))
@@ -89,10 +102,13 @@ describe('the numbers', () => {
     expect(preview.otpis_fen).toBe(summary.waste_fen)
     expect(preview.otpis_fen).toBe(350)
     expect(preview.dnevnica_fen).toBe(5_000)
+    // Nothing was marked on a table tonight, so these two are the empty sum.
+    expect(preview.rashod_fen).toBe(0)
+    expect(preview.policija_fen).toBe(0)
     expect(preview.open_tabs).toEqual([])
     expect(preview.closing).toBeNull()
 
-    const typed = { rashod_fen: 1_000, roba_fen: 2_000, okusi_fen: 300, zar_fen: 400, merkator_fen: 500 }
+    const typed = { roba_fen: 2_000, okusi_fen: 300, zar_fen: 400, merkator_fen: 500 }
     const closing = closeByBar(f.db, f.venueId, sanker(), shiftId, { client_id: randomUUID(), ...typed })
 
     // The stored server numbers are the ones the šanker was shown.
@@ -100,7 +116,7 @@ describe('the numbers', () => {
     expect(closing.otpis_fen).toBe(preview.otpis_fen)
     expect(closing.dnevnica_fen).toBe(preview.dnevnica_fen)
     expect(closing.za_predati_fen).toBe(
-      preview.prihod_fen - 5_000 - 350 - 1_000 - 2_000 - 300 - 400 - 500,
+      preview.prihod_fen - 5_000 - 350 - 2_000 - 300 - 400 - 500,
     )
     expect(closing.closed_by_name).toBe('Emir')
 
@@ -136,8 +152,58 @@ describe('the numbers', () => {
   it('has one arithmetic, shared with the screen', () => {
     expect(zaPredati({
       prihod_fen: 50_000, dnevnica_fen: 9_000, otpis_fen: 700,
-      rashod_fen: 100, roba_fen: 200, okusi_fen: 300, zar_fen: 400, merkator_fen: 500,
-    })).toBe(38_800)
+      rashod_fen: 100, policija_fen: 50, roba_fen: 200, okusi_fen: 300,
+      zar_fen: 400, merkator_fen: 500,
+    })).toBe(38_750)
+  })
+
+  /**
+   * The owner's call of 16.09.2026: a table marked *Policija*, *Rashod* or
+   * *Otpis* comes off the night by itself, the way *Dnevnica* does. It was rung
+   * up like any round — that is what moved the stock and put it in the promet —
+   * so the closing is where it comes back out, once, and nobody types it.
+   */
+  it('subtracts what was marked on the tables, with nothing typed', () => {
+    const shiftId = f.openShift({ members: ['Amar', 'Emir'] })
+
+    const paid = f.lock('Amar', 'Sto 1', [{ product: 'Red Bull' }]) // 500
+    f.pay('Amar', paid.tabId, paid.totalFen)
+    closeTab(f, paid.tabId, 'Amar')
+
+    const police = f.lock('Amar', 'Sto 2', [{ product: 'Kafa', qty: 2 }]) // 300
+    markCategory(police.tabId, 'Amar', 'policija')
+    const admin = f.lock('Amar', 'Sto 3', [{ product: 'Coca-Cola' }]) // 300
+    markCategory(admin.tabId, 'Amar', 'rashod')
+    const spilled = f.lock('Amar', 'Sto 4', [{ product: 'Čaj' }]) // 200
+    markCategory(spilled.tabId, 'Amar', 'otpis')
+
+    const preview = closingPreview(f.db, f.venueId, sanker(), shiftId)
+    expect(preview.prihod_fen).toBe(1_300) // all four rounds are in the promet
+    expect(preview.policija_fen).toBe(300)
+    expect(preview.rashod_fen).toBe(300)
+    expect(preview.otpis_fen).toBe(200) // no product_waste row tonight
+    expect(preview.open_tabs).toEqual([])
+
+    const closing = closeByBar(f.db, f.venueId, sanker(), shiftId, {
+      client_id: randomUUID(), ...ZERO,
+    })
+    expect(closing.policija_fen).toBe(300)
+    expect(closing.rashod_fen).toBe(300)
+    expect(closing.otpis_fen).toBe(200)
+    // What is left to hand over is the one round somebody actually paid for,
+    // minus the day's wage.
+    expect(closing.za_predati_fen).toBe(1_300 - 9_000 - 200 - 300 - 300)
+  })
+
+  it('adds a tab marked Otpis to the otpis of the store room', () => {
+    const shiftId = night() // 350 of product_waste + waste_events
+    const spilled = f.lock('Amar', 'Sto 5', [{ product: 'Kafa' }]) // 150
+    markCategory(spilled.tabId, 'Amar', 'otpis')
+
+    const closing = closeByBar(f.db, f.venueId, sanker(), shiftId, {
+      client_id: randomUUID(), ...ZERO,
+    })
+    expect(closing.otpis_fen).toBe(350 + 150)
   })
 })
 
@@ -203,12 +269,12 @@ describe('what it refuses and what it replays', () => {
   it('answers a replay of the same client_id with the stored row and writes nothing', () => {
     const shiftId = night()
     const clientId = randomUUID()
-    const first = closeByBar(f.db, f.venueId, sanker(), shiftId, { client_id: clientId, ...ZERO, rashod_fen: 700 })
+    const first = closeByBar(f.db, f.venueId, sanker(), shiftId, { client_id: clientId, ...ZERO, roba_fen: 700 })
     const changesBefore = f.db.select().from(schema.changes).all().length
     const logsBefore = f.db.select().from(schema.logEntries).all().length
 
     // Different amounts on the retry change nothing: the first answer stands.
-    const replay = closeByBar(f.db, f.venueId, sanker(), shiftId, { client_id: clientId, ...ZERO, rashod_fen: 1 })
+    const replay = closeByBar(f.db, f.venueId, sanker(), shiftId, { client_id: clientId, ...ZERO, roba_fen: 1 })
     expect(replay).toEqual(first)
     expect(closingRows(shiftId)).toHaveLength(1)
     expect(f.db.select().from(schema.changes).all()).toHaveLength(changesBefore)
@@ -217,10 +283,15 @@ describe('what it refuses and what it replays', () => {
 
   it('validates the body: defaults to 0, no negatives, nothing the server computes', () => {
     const parsed = closeByBarBody.parse({ client_id: randomUUID(), roba_fen: 500 })
-    expect(parsed).toMatchObject({ rashod_fen: 0, roba_fen: 500, okusi_fen: 0, zar_fen: 0, merkator_fen: 0 })
-    expect(closeByBarBody.safeParse({ client_id: randomUUID(), rashod_fen: -1 }).success).toBe(false)
-    expect(closeByBarBody.safeParse({ client_id: randomUUID(), rashod_fen: 1.5 }).success).toBe(false)
+    expect(parsed).toMatchObject({ roba_fen: 500, okusi_fen: 0, zar_fen: 0, merkator_fen: 0 })
+    expect(closeByBarBody.safeParse({ client_id: randomUUID(), roba_fen: -1 }).success).toBe(false)
+    expect(closeByBarBody.safeParse({ client_id: randomUUID(), roba_fen: 1.5 }).success).toBe(false)
     expect(closeByBarBody.safeParse({ client_id: randomUUID(), prihod_fen: 1 }).success).toBe(false)
+    // The five the server computes are refused by name, so a phone cannot
+    // subtract a rashod twice by sending one.
+    for (const key of ['prihod_fen', 'dnevnica_fen', 'otpis_fen', 'rashod_fen', 'policija_fen']) {
+      expect(closeByBarBody.safeParse({ client_id: randomUUID(), [key]: 1 }).success).toBe(false)
+    }
     expect(closeByBarBody.safeParse({ ...ZERO }).success).toBe(false)
   })
 })

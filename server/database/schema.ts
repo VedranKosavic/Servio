@@ -573,6 +573,13 @@ export const shiftClosings = sqliteTable('shift_closings', {
   dnevnicaFen: integer('dnevnica_fen').notNull(),
   otpisFen: integer('otpis_fen').notNull(),
   rashodFen: integer('rashod_fen').notNull(),
+  /**
+   * *Policija* — added on 16.09.2026, when the owner asked for the three
+   * categories marked on a table (policija, rashod, otpis) to come off the
+   * night by themselves. `DEFAULT 0` so the closings written before it stay
+   * readable and still add up.
+   */
+  policijaFen: integer('policija_fen').notNull().default(0),
   robaFen: integer('roba_fen').notNull(),
   okusiFen: integer('okusi_fen').notNull(),
   zarFen: integer('zar_fen').notNull(),
