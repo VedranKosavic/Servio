@@ -58,8 +58,6 @@ unaprijed nije pravilo.
 ## Roba i šank
 
 - Šanker sipa; konobar ne uzima flaše sa police.
-- Otpis iznad {{waste_pin_threshold_fen}} potvrđuje šanker ili vlasnik svojim PIN-om.
-- Najviše {{waste_events_per_shift_per_user}} otpisa po osobi po smjeni.
 
 ## Storno i gratis
 

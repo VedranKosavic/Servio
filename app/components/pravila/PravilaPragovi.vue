@@ -49,12 +49,6 @@ const rules = computed(() => {
         + 'očekivanog iznosa je u toleranciji. Iznad toga se stavka označava za razgovor.',
     },
     {
-      title: 'Otpis traži PIN',
-      value: value('waste_pin_threshold_fen'),
-      detail: `Otpis iznad ${value('waste_pin_threshold_fen')} potvrđuje šanker ili vlasnik svojim PIN-om. `
-        + `Najviše ${value('waste_events_per_shift_per_user')} otpisa po osobi po smjeni.`,
-    },
-    {
       title: 'Kašnjenje',
       value: value('roster_late_grace_min'),
       detail: `Prva akcija poslije početka smjene preko ${value('roster_late_grace_min')} se ispiše u Satima. `
