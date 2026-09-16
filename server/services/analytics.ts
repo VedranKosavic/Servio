@@ -10,22 +10,27 @@
  *                   *Smjene* and `dnevni_pazar.csv` print.
  *   *Za predati*  — Σ `shift_closings.za_predati_fen`: what the šanker handed
  *                   over. A night closed any other way has none, and adds none.
+ *   *Neplaćeno*   — `shiftCategories` of every shift in the month: the tabs
+ *                   closed as *Otpis*, *Rashod*, *Policija*, *Osoblje*, at what
+ *                   was left on them. The same reader *Zaključi smjenu* uses.
  *   *Roba, Okusi, Žar* — `nabavkaByKind`, the *Kategorije* report's *nabavka*
  *                   grouped by stock item kind, over the month's
  *                   `[06:00 on the 1st, 06:00 after the last day)`.
  *   *Dnevnice*    — Σ `shift_closings.dnevnica_fen`, once per closed shift.
+ *   *Kafa, Merkator, Dodatna plaćanja* — Σ of those columns of the closings:
+ *                   paid out of the till, and not goods.
  *   *Struja, Voda, Kirija* — `month_costs`, typed by the owner. *Kirija* with no
  *                   row this month is **carried** from the latest earlier one.
  *
- * *Neto* is `pazar − Σ costs` (`shared/analytics.ts` says why gross pazar and
- * not *Za predati*).
+ * *Ostaje* is `pazar − neplaćeno − Σ troškovi` (`shared/analytics.ts` says why,
+ * and why goods come from deliveries rather than from the closings).
  */
 import { and, desc, eq, inArray, lt } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { newId, nowIso } from '../utils/ids'
 import {
   addMonths, costKeyOfStockKind, daysInMonth, type ManualCostKind, MONTH_COST_LABELS,
-  monthLabelBs, monthOf, totalCostFen,
+  monthLabelBs, monthOf, totalCostFen, totalUnpaidFen, UNPAID_KEYS, type UnpaidKey,
 } from '#shared/analytics'
 import { slotOf } from '#shared/shiftSlots'
 import type {
@@ -35,6 +40,7 @@ import type {
 import type { PutMonthCostBody } from '#shared/schemas'
 import type { Actor, Db, Queryable } from './types'
 import { bump, log } from './contracts'
+import { shiftCategories } from './cash'
 import { listOwnerShifts } from './owner'
 import { monthBounds, nabavkaByKind, periodBounds } from './reports'
 
@@ -80,6 +86,9 @@ export function monthAnalytics(
     : q.select({
         zaPredati: schema.shiftClosings.zaPredatiFen,
         dnevnica: schema.shiftClosings.dnevnicaFen,
+        kafa: schema.shiftClosings.kafaFen,
+        merkator: schema.shiftClosings.merkatorFen,
+        extra: schema.shiftClosings.extraFen,
       })
         .from(schema.shiftClosings)
         .where(and(
@@ -87,6 +96,17 @@ export function monthAnalytics(
           inArray(schema.shiftClosings.shiftId, inMonth.map(s => s.id)),
         ))
         .all()
+
+  // -- rung up and never paid -------------------------------------------------
+  const unpaid: Record<UnpaidKey, number> = { otpis: 0, rashod: 0, policija: 0, osoblje: 0 }
+  for (const shift of inMonth) {
+    for (const category of shiftCategories(q, venueId, shift.id)) {
+      if ((UNPAID_KEYS as readonly string[]).includes(category.reason)) {
+        unpaid[category.reason as UnpaidKey] += category.fen
+      }
+    }
+  }
+  const unpaidTotal = totalUnpaidFen(unpaid)
 
   // -- goods, by what was bought ---------------------------------------------
   const bounds = periodBounds(q, venueId, fromDay, toDay)
@@ -102,9 +122,15 @@ export function monthAnalytics(
     kirija: manualCost(q, venueId, month, 'kirija', true),
   }
 
+  const sumOf = (pick: (c: typeof closings[number]) => number) =>
+    closings.reduce((sum, c) => sum + pick(c), 0)
+
   const costs = {
     ...goods,
-    dnevnice: closings.reduce((sum, c) => sum + c.dnevnica, 0),
+    kafa: sumOf(c => c.kafa),
+    merkator: sumOf(c => c.merkator),
+    dodatna: sumOf(c => c.extra),
+    dnevnice: sumOf(c => c.dnevnica),
     struja: manual.struja.amount_fen,
     voda: manual.voda.amount_fen,
     kirija: manual.kirija.amount_fen,
@@ -114,13 +140,15 @@ export function monthAnalytics(
   return {
     month,
     pazar_fen: pazar,
-    za_predati_fen: closings.reduce((sum, c) => sum + c.zaPredati, 0),
+    za_predati_fen: sumOf(c => c.zaPredati),
     shifts: inMonth.length,
     closed_shifts: closings.length,
+    unpaid,
+    unpaid_fen: unpaidTotal,
     costs,
     manual,
     total_cost_fen: totalCost,
-    neto_fen: pazar - totalCost,
+    neto_fen: pazar - unpaidTotal - totalCost,
     days,
     best_days: bestDays,
     trend: trend(all, month),

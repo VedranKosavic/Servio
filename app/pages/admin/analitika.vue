@@ -3,10 +3,12 @@
  * *Analitika* — one month of the café, for the owner (16.09.2026).
  *
  * The page answers his list in the order he wrote it: what the month took (and
- * what was handed over), what it cost — goods, flavours and coal out of *Prijem
- * robe*, the day wages out of the closings, electricity, water and rent typed in
- * here — what is left after both, how the takings rose and fell day by day and
- * month by month, which days were best, and the record night of each shift.
+ * what was handed over), what of that was never paid for (*Otpis*, *Rashod*,
+ * *Policija*, *Osoblje*), what it cost — goods, flavours and coal out of *Prijem
+ * robe*, the day wages and the till payouts out of the closings, electricity,
+ * water and rent typed in here — what is left after all of it, how the takings
+ * rose and fell day by day and month by month, which days were best, and the
+ * record night of each shift.
  *
  * Every number is the server's (`GET /api/owner/analitika`, written up in
  * `server/services/analytics.ts`); this page only lays them out. The one thing
@@ -20,7 +22,7 @@ import { formatKm } from '#shared/money'
 import { shortDateBs, weekdayBs } from '#shared/dates'
 import {
   addMonths, type ManualCostKind, MONTH_COST_KEYS, MONTH_COST_LABELS, MONTH_COST_SOURCES,
-  MONTH_RE, monthLabelBs, monthShortBs, type MonthCostKey,
+  MONTH_RE, monthLabelBs, monthShortBs, type MonthCostKey, UNPAID_KEYS, UNPAID_LABELS,
 } from '#shared/analytics'
 import type { MonthAnalytics } from '#shared/types'
 
@@ -239,12 +241,33 @@ const change = computed(() => {
             <dd class="num">{{ formatKm(data.pazar_fen) }}</dd>
           </div>
           <div class="an-row">
+            <dt>− Neplaćeno</dt>
+            <dd class="num">{{ formatKm(data.unpaid_fen) }}</dd>
+          </div>
+          <div class="an-row">
             <dt>− Ukupni troškovi</dt>
             <dd class="num">{{ formatKm(data.total_cost_fen) }}</dd>
           </div>
           <div class="an-row an-total">
             <dt>Ostaje</dt>
             <dd class="num" :class="{ 'an-bad': data.neto_fen < 0 }">{{ formatKm(data.neto_fen) }}</dd>
+          </div>
+        </dl>
+      </UiCard>
+
+      <!-- Rung up, never paid -->
+      <UiCard title="Neplaćeno">
+        <p class="an-muted an-lead">
+          Ukucano u pazar, ali za to nije ušao novac — računi označeni kao otpis, rashod, policija ili osoblje.
+        </p>
+        <dl class="an-lines">
+          <div v-for="key in UNPAID_KEYS" :key="key" class="an-row">
+            <dt>{{ UNPAID_LABELS[key] }}</dt>
+            <dd class="num">{{ formatKm(data.unpaid[key]) }}</dd>
+          </div>
+          <div class="an-row an-total">
+            <dt>Ukupno</dt>
+            <dd class="num">{{ formatKm(data.unpaid_fen) }}</dd>
           </div>
         </dl>
       </UiCard>
@@ -372,6 +395,7 @@ const change = computed(() => {
 .a-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
 .an-muted { margin: 0; color: var(--muted); font-size: var(--text-label); }
+.an-lead { margin-bottom: 8px; }
 
 .an-month { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .an-month-label { font-size: var(--text-body); }

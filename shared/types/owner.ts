@@ -182,10 +182,26 @@ export interface MonthAnalytics {
   shifts: number
   /** How many of them the šanker closed — the ones *Za predati* and *Dnevnice* can see. */
   closed_shifts: number
+  /**
+   * Rung up, in the pazar, and paid for by nobody: the tabs of the month's
+   * shifts closed as *Otpis*, *Rashod*, *Policija* or *Osoblje* — open shifts
+   * included, so tonight's counts before the šanker closes it.
+   */
+  unpaid: {
+    otpis: number
+    rashod: number
+    policija: number
+    osoblje: number
+  }
+  unpaid_fen: number
   costs: {
     roba: number
     okusi: number
     zar: number
+    /** *Plaćanje kafe*, *Merkator* and *Dodatna plaćanja* from the month's closings. */
+    kafa: number
+    merkator: number
+    dodatna: number
     dnevnice: number
     struja: number
     voda: number
@@ -198,7 +214,7 @@ export interface MonthAnalytics {
     kirija: AnalyticsManualCost
   }
   total_cost_fen: number
-  /** `pazar_fen − total_cost_fen`. May be negative, and is shown as it is. */
+  /** `pazar_fen − unpaid_fen − total_cost_fen`. May be negative, and is shown as it is. */
   neto_fen: number
   /** Every day of the month, zeros included, oldest first. */
   days: AnalyticsDay[]

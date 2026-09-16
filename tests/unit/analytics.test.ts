@@ -17,9 +17,10 @@ import { and, eq } from 'drizzle-orm'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
 import { closeTab } from '../helpers/shifts'
 import { closeByBar } from '../../server/services/closings'
+import { markUnpaid } from '../../server/services/tabs'
 import { createDelivery } from '../../server/services/stock'
 import { monthAnalytics, setMonthCost } from '../../server/services/analytics'
-import { addMonths, monthOf, totalCostFen } from '#shared/analytics'
+import { addMonths, monthOf, totalCostFen, totalUnpaidFen } from '#shared/analytics'
 import { businessDate } from '#shared/dates'
 import { putMonthCostBody } from '#shared/schemas'
 
@@ -114,6 +115,61 @@ describe('pazar, za predati and dnevnice', () => {
   })
 })
 
+describe('neplaćeno and the till payouts', () => {
+  /**
+   * The owner's correction of the first *Analitika* (16.09.2026): *Ostaje* was
+   * too high, because it kept rounds nobody paid for inside the pazar and did
+   * not see what the šanker paid out of the till that is not goods.
+   */
+  it('takes the unpaid categories off the pazar and the payouts as costs', () => {
+    const date = `${month}-01`
+    const shiftId = f.openShift({
+      members: ['Amar', 'Emir'], businessDate: date, at: `${date}T16:00:00.000Z`,
+    })
+
+    const paid = f.lock('Amar', 'Sto 1', [{ product: 'Nargila' }]) //   1 500
+    f.pay('Amar', paid.tabId, paid.totalFen)
+    closeTab(f, paid.tabId, 'Amar')
+
+    // Two rounds that were drunk and paid for by nobody.
+    const mark = (tabId: string, reason: 'policija' | 'osoblje') => {
+      const tab = f.db.select().from(schema.tabs).where(eq(schema.tabs.id, tabId)).get()!
+      markUnpaid(f.db, f.venueId, f.actor('Amar'), {
+        client_id: randomUUID(), tab_client_id: tab.clientId, reason,
+      })
+    }
+    mark(f.lock('Amar', 'Sto 2', [{ product: 'Red Bull' }]).tabId, 'policija') // 500
+    mark(f.lock('Amar', 'Sto 3', [{ product: 'Kafa' }]).tabId, 'osoblje') //      150
+
+    // Tonight's unpaid counts before the close, too.
+    const open = monthAnalytics(f.db, f.venueId, month)
+    expect(open.unpaid).toEqual({ otpis: 0, rashod: 0, policija: 500, osoblje: 150 })
+
+    closeByBar(f.db, f.venueId, sanker(), shiftId, {
+      client_id: randomUUID(),
+      ...NOTHING_PAID,
+      roba_fen: 1_000, // goods paid from the till: NOT a cost here — Prijem robe is
+      kafa_fen: 400,
+      merkator_fen: 250,
+      extras: [{ label: 'config', amount_fen: 1_500 }],
+    })
+
+    const a = monthAnalytics(f.db, f.venueId, month)
+    expect(a.pazar_fen).toBe(2_150)
+    expect(a.unpaid_fen).toBe(650)
+    expect(a.unpaid_fen).toBe(totalUnpaidFen(a.unpaid))
+
+    expect(a.costs.kafa).toBe(400)
+    expect(a.costs.merkator).toBe(250)
+    expect(a.costs.dodatna).toBe(1_500)
+    // The crates paid out of the till are counted once, from the delivery.
+    expect(a.costs.roba).toBe(0)
+
+    expect(a.total_cost_fen).toBe(9_000 + 400 + 250 + 1_500)
+    expect(a.neto_fen).toBe(2_150 - 650 - a.total_cost_fen)
+  })
+})
+
 describe('goods from Prijem robe', () => {
   it('cuts posted deliveries into roba, okusi and žar by stock kind', () => {
     createDelivery(f.db, f.venueId, f.adminActor(), {
@@ -154,7 +210,7 @@ describe('the costs the owner types', () => {
 
     expect(a.total_cost_fen).toBe(totalCostFen(a.costs))
     expect(a.total_cost_fen).toBe(9_000 + 12_000 + 50_000)
-    expect(a.neto_fen).toBe(500 - a.total_cost_fen)
+    expect(a.neto_fen).toBe(500 - a.unpaid_fen - a.total_cost_fen)
 
     // Raising the rent this month does not rewrite last month.
     setMonthCost(f.db, f.venueId, f.adminActor(), { month, kind: 'kirija', amount_fen: 60_000 })
