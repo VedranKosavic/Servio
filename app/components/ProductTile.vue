@@ -31,7 +31,13 @@ const props = withDefaults(defineProps<{
   qty: number
   /** Nargila: the tap opens the aroma sheet instead of adding straight away. */
   shisha?: boolean
-}>(), { shortName: null, shisha: false })
+  /**
+   * Nothing of it on *Stanje šanka* (16.09.2026): the name and price are struck
+   * through, the tile is dimmed and says *nema*, and a tap adds nothing. A long
+   * press still opens nothing either.
+   */
+  unavailable?: boolean
+}>(), { shortName: null, shisha: false, unavailable: false })
 
 const emit = defineEmits<{ add: [], remove: [], long: [] }>()
 
@@ -52,6 +58,7 @@ function clear() {
 
 function onPointerDown(event: PointerEvent) {
   fired.value = false
+  if (props.unavailable) return
   start = { x: event.clientX, y: event.clientY }
   timer = setTimeout(() => {
     fired.value = true
@@ -70,6 +77,7 @@ function onPointerMove(event: PointerEvent) {
 }
 
 function onClick() {
+  if (props.unavailable) return
   if (fired.value) {
     fired.value = false
     return
@@ -85,7 +93,9 @@ const label = computed(() => props.shortName ?? props.name)
     <button
       type="button"
       class="tile-btn"
-      :class="{ 'has-qty': qty > 0 }"
+      :class="{ 'has-qty': qty > 0, 'tile-off': unavailable }"
+      :aria-disabled="unavailable ? 'true' : undefined"
+      :aria-label="unavailable ? `${name} — nema na stanju` : undefined"
       @pointerdown="onPointerDown"
       @pointermove="onPointerMove"
       @pointerup="clear"
@@ -103,6 +113,7 @@ const label = computed(() => props.shortName ?? props.name)
         </span>
       </span>
       <span class="num tile-price">{{ formatKm(priceFen) }}</span>
+      <span v-if="unavailable" class="tile-none">nema</span>
     </button>
 
     <span v-if="qty > 0" class="num tile-qty">{{ qty }}</span>
@@ -122,6 +133,24 @@ const label = computed(() => props.shortName ?? props.name)
 </template>
 
 <style scoped>
+/** Struck through and dimmed, and still readable: the waiter must see *what* is missing. */
+.tile-off {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.tile-off .tile-name,
+.tile-off .tile-price {
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+}
+.tile-none {
+  font-size: var(--text-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--danger);
+}
+
 /**
  * The tile is a card, not a button-shaped thing: material, an edge, and the two
  * facts a waiter reads out loud — the name at body size and the price under it

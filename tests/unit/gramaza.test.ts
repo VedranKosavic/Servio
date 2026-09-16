@@ -99,3 +99,25 @@ describe('grama po luli', () => {
     expect(mentaBefore - onHand(menta)).toBeCloseTo(12, 6)
   })
 })
+
+describe('what the menu strikes through', () => {
+  it('follows the shelf: pieces at zero, coffee under a dose, nargila with no aroma', async () => {
+    const { menuAvailability } = await import('../../server/services/stock')
+    f.openShift({ members: ['Amar'] })
+    const { beans, espresso } = coffee()
+
+    // A brand-new coffee article has no movement at all: nothing to pour.
+    expect(menuAvailability(f.db, f.venueId).products).toContain(espresso)
+
+    // One dose on the shelf, and it is back.
+    f.db.insert(schema.stockMovements).values({
+      id: randomUUID(), venueId: f.venueId, stockItemId: beans, type: 'opening',
+      qtyDelta: 8, occurredAt: f.clock.now(), createdAt: f.clock.now(), unitCostMfen: 0,
+    }).run()
+    expect(menuAvailability(f.db, f.venueId).products).not.toContain(espresso)
+
+    // …and sold, it is gone again: 0 g is less than 8 g.
+    sell(espresso, 1)
+    expect(menuAvailability(f.db, f.venueId).products).toContain(espresso)
+  })
+})

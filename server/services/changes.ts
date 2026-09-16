@@ -28,7 +28,7 @@ import type {
 import type { Db, Queryable, Tx } from './types'
 import { getTablesState } from './tabs'
 import { getPrep } from './prep'
-import { getStock } from './stock'
+import { getStock, menuAvailability } from './stock'
 import { shiftBrief } from './shifts'
 import { getMe } from './auth'
 import { rulesVersion } from './rules'
@@ -83,8 +83,20 @@ export function minSeq(db: Queryable, venueId: string): number {
  * out of his own browser cache with the server never being asked.
  */
 export function changeTag(db: Queryable, venueId: string, actor: Actor): string {
-  return `${maxSeq(db, venueId)}-${actor.role}-${actor.userId.slice(0, 8)}`
+  return `${maxSeq(db, venueId)}-${actor.role}-${actor.userId.slice(0, 8)}-v${FEED_SHAPE}`
 }
+
+/**
+ * **Bump this whenever the feed's answer gains or loses a field.**
+ *
+ * The tag above is a promise that an unchanged sequence means an unchanged
+ * answer, and that holds for the *data* but not for the *code*: when a deploy
+ * added `unavailable` (16.09.2026) the sequence had not moved, the browser sent
+ * back its old tag, got a 304, and replayed a cached answer from before the
+ * field existed — so the menu struck nothing through until the next sale. The
+ * shape version makes a cached answer from an older build a different tag.
+ */
+const FEED_SHAPE = 2
 
 /**
  * `GET /api/changes?since=` — the one call the waiter and bartender screens make.
@@ -132,6 +144,11 @@ export function getChanges(
   if (entities.has('table')) result.tables_state = getTablesState(db, venueId, actor)
   if (entities.has('prep')) result.prep = { seq: top, ...getPrep(db, venueId) }
   if (entities.has('stock')) result.stock = getStock(db, venueId)
+  // What the waiter's menu strikes through. A sale moves `stock`, a new article
+  // or a changed link moves `menu`, a new dose moves `settings`.
+  if (entities.has('stock') || entities.has('menu') || entities.has('settings')) {
+    result.unavailable = menuAvailability(db, venueId)
+  }
   if (entities.has('count')) result.counts = listCountBriefs(db, venueId)
   if (entities.has('shift')) result.shift = shiftSnapshot(db, venueId, actor)
   // The queues are decisions, and somebody who decides nothing has no use for

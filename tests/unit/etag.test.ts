@@ -96,6 +96,10 @@ describe('changeTag', () => {
     expect(changeTag(f.db, f.venueId, f.adminActor())).not.toBe(before)
   })
 
+  it('carries the feed shape, so a cached answer from an older build is never replayed', () => {
+    expect(changeTag(f.db, f.venueId, f.adminActor())).toMatch(/-v\d+$/)
+  })
+
   it('differs by role AND by user at the same maxSeq', () => {
     lockOne()
     const admin = changeTag(f.db, f.venueId, f.adminActor())

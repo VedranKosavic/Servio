@@ -43,9 +43,19 @@ import type { Flavour, Product } from '#shared/types'
 const props = withDefaults(defineProps<{
   product: Product
   flavours: Flavour[]
+  /**
+   * Aromas with nothing left, from the live poll. `null` falls back to the
+   * catalogue's own `on_hand`, which is only as fresh as the last menu read.
+   */
+  unavailableIds?: Set<string> | null
   /** From the product's category (`note_chips`). Empty is normal. */
   noteChips?: string[]
-}>(), { noteChips: () => [] })
+}>(), { noteChips: () => [], unavailableIds: null })
+
+/** Nothing of this aroma on the shelf — struck through and not tappable. */
+function empty(flavour: Flavour): boolean {
+  return props.unavailableIds ? props.unavailableIds.has(flavour.id) : flavour.on_hand <= 0
+}
 
 const emit = defineEmits<{
   close: []
@@ -90,7 +100,7 @@ const nameById = computed(() => new Map(props.flavours.map(f => [f.id, f.name]))
 const ceilingPerFlavour = computed(() => MAX_PARTS - (picked.value.length - 1))
 
 function tap(flavour: Flavour) {
-  if (flavour.on_hand <= 0) return
+  if (empty(flavour)) return
   const id = flavour.id
 
   if (!picked.value.includes(id)) {
@@ -220,15 +230,15 @@ const canAdd = computed(() => picked.value.length > 0)
           class="pill h-12"
           :class="[
             picked.includes(flavour.id) ? 'pill-on' : '',
-            flavour.on_hand <= 0 ? 'opacity-45' : '',
+            empty(flavour) ? 'opacity-45 line-through' : '',
           ]"
-          :disabled="flavour.on_hand <= 0"
+          :disabled="empty(flavour)"
           :aria-pressed="picked.includes(flavour.id)"
           @click="tap(flavour)"
         >
           {{ flavour.name }}
           <span v-if="(parts[flavour.id] ?? 0) > 1" class="num chip chip-accent">×{{ parts[flavour.id] }}</span>
-          <span v-if="flavour.on_hand <= 0" class="chip chip-danger">Nema</span>
+          <span v-if="empty(flavour)" class="chip chip-danger">Nema</span>
         </button>
       </div>
 

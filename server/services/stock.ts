@@ -170,6 +170,62 @@ export function onHand(q: Queryable, venueId: string, stockItemId: string): numb
 }
 
 /** On hand per stock item, for one venue, in one query. */
+/**
+ * What the waiter's menu must strike through — articles the shelf cannot serve
+ * right now (the owner, 16.09.2026: "ukoliko na stanju šanka nema tog artikla
+ * treba prekrižiti taj artikal u meniju").
+ *
+ * Read the way a sale takes goods off (`resolveStock`), so "unavailable" means
+ * exactly "a sale would drive the shelf below zero":
+ *
+ *   po komadu    its article has nothing left (`on_hand <= 0`)
+ *   troši kafu   its coffee has less than one dose (`grams_per_coffee`)
+ *   nargila      no aroma has anything left
+ *   ne oduzima   never
+ *
+ * A switched-off shelf article counts as empty. **The server does not refuse a
+ * sale** on this: the ledger's rule is that the till is never blocked because
+ * the books disagree with the shelf (`resolveStock`), so this only guides the
+ * menu. Aromas are listed too, for the aroma picker.
+ */
+export function menuAvailability(
+  q: Queryable, venueId: string,
+): { products: string[], aromas: string[] } {
+  const settings = getSettings(q, venueId)
+  const onHand = onHandByItem(q, venueId)
+  const items = q.select({ id: schema.stockItems.id, kind: schema.stockItems.kind, active: schema.stockItems.active })
+    .from(schema.stockItems)
+    .where(eq(schema.stockItems.venueId, venueId))
+    .all()
+  const activeIds = new Set(items.filter(i => i.active === 1).map(i => i.id))
+  const have = (id: string | null, atLeast: number) =>
+    !!id && activeIds.has(id) && (onHand.get(id) ?? 0) >= atLeast
+
+  const aromas = items.filter(i => i.kind === 'duhan' && i.active === 1)
+  const emptyAromas = aromas.filter(i => (onHand.get(i.id) ?? 0) <= 0).map(i => i.id)
+  const anyAroma = aromas.length > emptyAromas.length
+
+  const products = q.select({
+    id: schema.products.id,
+    kind: schema.products.kind,
+    sells: schema.products.sellsStockItemId,
+    coffee: schema.products.coffeeStockItemId,
+  })
+    .from(schema.products)
+    .where(and(eq(schema.products.venueId, venueId), eq(schema.products.active, 1)))
+    .all()
+
+  const unavailable = products.filter((p) => {
+    if (p.kind === 'shisha') return !anyAroma
+    if (p.coffee) return !have(p.coffee, settings.grams_per_coffee)
+    // "Nothing left" is no whole piece: 0,5 of a bottle cannot be served.
+    if (p.sells) return !have(p.sells, 1)
+    return false
+  })
+
+  return { products: unavailable.map(p => p.id), aromas: emptyAromas }
+}
+
 export function onHandByItem(q: Queryable, venueId: string): Map<string, number> {
   const rows = q.select({
     stockItemId: schema.stockMovements.stockItemId,

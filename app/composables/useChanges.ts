@@ -36,6 +36,8 @@ export interface ChangeHandlers {
   prep?: (prep: Prep) => void
   /** *Stanje šanka* — the whole list; there is no partial mode. */
   stock?: (items: StockItem[]) => void
+  /** What the menu strikes through: articles and aromas the shelf cannot serve. */
+  unavailable?: (unavailable: { products: string[], aromas: string[] }) => void
   /** The four queues. Admins and bartenders only; a waiter never gets these. */
   pending?: (counts: PendingCounts) => void
   /** The catalogue changed: refetch `/api/bootstrap`, and only then. */
@@ -108,6 +110,7 @@ export function useChanges(handlers: ChangeHandlers, options: ChangesOptions = {
     if (result.tables_state) handlers.tables?.(result.tables_state)
     if (result.prep) handlers.prep?.(result.prep)
     if (result.stock) handlers.stock?.(result.stock)
+    if (result.unavailable) handlers.unavailable?.(result.unavailable)
     if (result.pending) handlers.pending?.(result.pending)
 
     // The catalogue is fetched once at boot and again only when this number

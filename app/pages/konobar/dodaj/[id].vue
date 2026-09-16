@@ -76,9 +76,23 @@ const backTo = computed(() => `/konobar?sto=${tableId.value ?? 'bez-stola'}`)
 
 // The one poll. Nothing on this screen needs the floor plan, but the catalogue
 // has to follow a price change made in `/admin` mid-evening.
+/**
+ * **What the shelf cannot serve** (16.09.2026): articles struck through and not
+ * tappable, aromas greyed out in the picker. It follows the same 15 s poll as
+ * everything else, so a crate booked on *Prijem robe* un-strikes its article on
+ * the next tick. `null` until the first answer: nothing is struck through on a
+ * guess.
+ */
+const unavailableProducts = ref<Set<string> | null>(null)
+const unavailableAromas = ref<Set<string> | null>(null)
+
 useChanges({
   menu: () => refreshBoot(),
   me: () => me.load(),
+  unavailable: (u) => {
+    unavailableProducts.value = new Set(u.products)
+    unavailableAromas.value = new Set(u.aromas)
+  },
 }, { intervalMs: 15_000 })
 
 // -- The menu ---------------------------------------------------------------
@@ -162,6 +176,9 @@ function chipsFor(product: Product): string[] {
 }
 
 function onTile(product: Product) {
+  // Struck through: the shelf has none. A tile that still took a tap would put
+  // a round on the bill the bar cannot pour.
+  if (unavailableProducts.value?.has(product.id)) return
   // A nargila cannot be added blind: the aromas decide what leaves the shelf.
   if (product.kind === 'shisha') {
     shishaProduct.value = product
@@ -471,6 +488,7 @@ async function confirm() {
             :price-fen="product.price_fen"
             :qty="cart.qtyOfProduct(tableId, product.id)"
             :shisha="product.kind === 'shisha'"
+            :unavailable="unavailableProducts?.has(product.id) ?? false"
             @add="onTile(product)"
             @remove="cart.removeOne(tableId, product.id)"
             @long="noteFor = { product, lineId: null }"
@@ -529,6 +547,7 @@ async function confirm() {
       v-if="shishaProduct && boot"
       :product="shishaProduct"
       :flavours="boot.flavours"
+      :unavailable-ids="unavailableAromas"
       :note-chips="chipsFor(shishaProduct)"
       @close="shishaProduct = null"
       @confirm="addShisha"

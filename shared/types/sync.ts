@@ -78,6 +78,12 @@ export interface ChangesResult {
   tables_state?: TablesStateSnapshot
   prep?: { seq: number } & Prep
   stock?: StockSnapshot
+  /**
+   * Menu articles the shelf cannot serve right now, and empty aromas — the
+   * waiter's menu strikes them through (16.09.2026). Attached whenever `stock`,
+   * `menu` or `settings` moved.
+   */
+  unavailable?: { products: string[], aromas: string[] }
   counts?: CountBrief[]
   shift?: ShiftSnapshot | null
   /** Admins and bartenders only — the staff floor never sees the queues. */
