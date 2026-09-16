@@ -36,6 +36,7 @@
  * shift worked out of two is not the same as two shifts and one of them empty.
  */
 import { localTime } from '#shared/dates'
+import { toMinutes, windowCovers } from '#shared/shiftSlots'
 import type { OwnerShiftRow, ShiftTemplateView } from '#shared/types'
 
 /**
@@ -76,13 +77,6 @@ export interface ShiftDay {
   worked: number
 }
 
-/** `"07:30"` → 450. `NaN` for anything that is not a wall-clock string. */
-function toMinutes(hhmm: string): number {
-  const parts = /^(\d{1,2}):(\d{2})$/.exec(hhmm)
-  if (!parts) return Number.NaN
-  return Number(parts[1]) * 60 + Number(parts[2])
-}
-
 /**
  * The minute of the café's day a shift was opened at, 0–1439.
  *
@@ -97,14 +91,7 @@ export function openingMinute(shift: OwnerShiftRow): number {
 
 /** Is `minute` inside this template's window? Start inclusive, end exclusive. */
 function covers(template: ShiftTemplateView, minute: number): boolean {
-  const start = toMinutes(template.start_time)
-  const end = toMinutes(template.end_time)
-  if (Number.isNaN(start) || Number.isNaN(end) || Number.isNaN(minute)) return false
-  // `end <= start` is the template's own convention for a window that ends the
-  // next day (schema: "Večernja 16:00–01:00"), so it is two ranges, not one.
-  return end <= start
-    ? minute >= start || minute < end
-    : minute >= start && minute < end
+  return windowCovers(template.start_time, template.end_time, minute)
 }
 
 /** The template whose window a shift opened in, or `null` if none does. */

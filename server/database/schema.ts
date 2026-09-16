@@ -1291,6 +1291,31 @@ export const uploads = sqliteTable('uploads', {
  * tomorrow must not rewrite anybody's past hours — which is why an assignment
  * copies the two times at insert, like a price at lock.
  */
+/**
+ * *Analitika*: the costs the ledger cannot know — *Struja*, *Voda*, *Kirija* —
+ * one row per venue, month and kind (16.09.2026).
+ *
+ * Not append-only, deliberately: these are the owner's own typed figures, not
+ * money that moved through the till, and correcting a mistyped electricity
+ * bill is an edit. Every edit still leaves a *Dnevnik* entry (`settings_changed`)
+ * with the before and after, which is the accountability.
+ *
+ * *Kirija* is written for the month it changed in and **carried forward** by the
+ * read (`analytics.ts`), so raising the rent in March does not rewrite January.
+ */
+export const monthCosts = sqliteTable('month_costs', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  /** `YYYY-MM`. */
+  month: text('month').notNull(),
+  kind: text('kind', { enum: ['struja', 'voda', 'kirija'] }).notNull(),
+  amountFen: integer('amount_fen').notNull(),
+  updatedBy: text('updated_by').notNull().references(() => users.id),
+  updatedAt: text('updated_at').notNull(),
+}, t => [
+  uniqueIndex('month_costs_uq').on(t.venueId, t.month, t.kind),
+])
+
 export const shiftTemplates = sqliteTable('shift_templates', {
   id: text('id').primaryKey(),
   venueId: text('venue_id').notNull().references(() => venues.id),

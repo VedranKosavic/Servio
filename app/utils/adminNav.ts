@@ -49,6 +49,9 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { id: 'puls', to: '/admin', label: 'Puls', icon: 'pulse', sub: 'Večeras, uživo', tab: true, ready: true },
   { id: 'smjene', to: '/admin/smjene', label: 'Smjena', icon: 'money', sub: 'Noći, pazar i predaje', tab: true, ready: true },
   { id: 'roba', to: '/admin/roba', label: 'Roba', icon: 'box', sub: 'Stanje, prijem, popisi, otpis', tab: true, ready: true },
+  // *Analitika* (the owner's call, 16.09.2026): the month's pazar, costs and
+  // records. First under *Više*, because it is the screen he opens it for.
+  { id: 'analitika', to: '/admin/analitika', label: 'Analitika', icon: 'money', sub: 'Mjesečni pazar, troškovi i rekordi', ready: true },
   { id: 'raspored', to: '/admin/raspored', label: 'Raspored', icon: 'calendar', sub: 'Sedmica po smjenama', ready: true },
   // *Kontrolna ploča* replaced *Meni i postavke*: one door to every table the
   // owner may edit (`app/utils/kontrola.ts`). `match` keeps the row lit on the
@@ -115,6 +118,8 @@ const BACK_OVERRIDES: Array<[RegExp, string]> = [
   [/^\/admin\/meni$/, '/admin/vise'],
   [/^\/admin\/postavke\/[^/]+$/, '/admin/vise'],
   [/^\/admin\/kontrola\/[^/]+$/, '/admin/vise'],
+  // *Analitika* is opened from *Više*, and climbing its path would land on *Puls*.
+  [/^\/admin\/analitika$/, '/admin/vise'],
 ]
 
 export function adminBack(path: string, exists: (candidate: string) => boolean): string | null {

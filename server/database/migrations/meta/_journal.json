@@ -99,6 +99,13 @@
       "when": 1789547427553,
       "tag": "0013_closing_kafa_extras",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1789552502227,
+      "tag": "0014_month_costs",
+      "breakpoints": true
     }
   ]
 }

@@ -41,6 +41,7 @@ import type {
   LogQuery,
   LogWasteBody,
   MeContext,
+  MonthAnalytics,
   NargilaReport,
   OpeningStockBody,
   OwnerLive,
@@ -73,6 +74,7 @@ import type {
 // that sends it — one definition, two uses.
 import type {
   AdminLoginBody,
+  PutMonthCostBody,
   CreateCategoryBody,
   DiscardScanBody,
   LinkAliasBody,
@@ -276,6 +278,14 @@ export function useAdminApi() {
     /** One article's ledger, newest first. `before` is the keyset cursor. */
     getItemMovements: (itemId: string, q: { before?: string, limit?: number } = {}) =>
       request<ItemMovementsPage>(`/api/owner/stock/${itemId}/movements${qs(q)}`),
+
+    /** *Analitika* — one month: pazar, costs, neto, the best days and records. */
+    getAnalytics: (month: string) =>
+      request<MonthAnalytics>(`/api/owner/analitika${qs({ month })}`),
+
+    /** *Struja*, *Voda* or *Kirija* for one month; answers the month again. */
+    putMonthCost: (body: PutMonthCostBody) =>
+      request<MonthAnalytics>('/api/owner/analitika/troskovi', { method: 'PUT', body }),
 
     /** *Nargila* — grams per bowl per aroma, for one month (`YYYY-MM`). */
     getNargila: (month: string) =>

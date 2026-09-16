@@ -40,6 +40,7 @@ import {
 import { acceptSettlement, settle } from '../../server/services/settlements'
 import { closeByBar } from '../../server/services/closings'
 import { clearTab } from '../../server/services/clearTable'
+import { setMonthCost } from '../../server/services/analytics'
 import { putStaffNote } from '../../server/services/summaries'
 import { resetPin } from '../../server/services/auth'
 import {
@@ -357,6 +358,14 @@ const CALLS: Record<string, () => void | Promise<void>> = {
   [join('shifts', '[id]', 'force-close.post.ts')]: () => {
     forceClose(f.db, f.venueId, f.adminActor(), f.openShift({ members: ['Amar'] }), {
       note: 'telefon crko',
+    })
+  },
+
+  // *Analitika*: a typed cost (struja, voda, kirija) for one month. An open
+  // *Analitika* on the laptop has to redraw its neto when the rent changes.
+  [join('owner', 'analitika', 'troskovi.put.ts')]: () => {
+    setMonthCost(f.db, f.venueId, f.adminActor(), {
+      month: '2026-09', kind: 'struja', amount_fen: 12_000,
     })
   },
 

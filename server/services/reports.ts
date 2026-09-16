@@ -321,6 +321,60 @@ export function categoriesReport(
  * `Σ qty_delta × unit_cost_mfen` per category, still in milli-feninga — the
  * caller divides by 1000 once, after summing (§2).
  */
+/**
+ * *Nabavka* by the stock item's `kind` — the three goods costs of *Analitika*.
+ *
+ * The same money `categoriesReport` calls *nabavka*, grouped differently: posted
+ * delivery lines, less what a reversal took back and what went back to the
+ * supplier. It is written here, next to that report, so the two cannot drift —
+ * the owner's *Kategorije* total and his *Analitika* goods for the same month
+ * are one number cut two ways.
+ */
+export function nabavkaByKind(
+  q: Queryable, venueId: string, fromIso: string, toIso: string,
+): Map<string, number> {
+  const out = new Map<string, number>()
+  const add = (kind: string, fen: number) => out.set(kind, (out.get(kind) ?? 0) + fen)
+
+  const delivered = q.select({
+    kind: schema.stockItems.kind,
+    fen: sql<number>`coalesce(sum(${schema.deliveryLines.lineCostFen}), 0)`,
+  })
+    .from(schema.deliveryLines)
+    .innerJoin(schema.deliveries, eq(schema.deliveries.id, schema.deliveryLines.deliveryId))
+    .innerJoin(schema.stockItems, eq(schema.stockItems.id, schema.deliveryLines.stockItemId))
+    .where(and(
+      eq(schema.deliveries.venueId, venueId),
+      eq(schema.deliveries.status, 'posted'),
+      gte(schema.deliveries.deliveredAt, fromIso),
+      lt(schema.deliveries.deliveredAt, toIso),
+    ))
+    .groupBy(schema.stockItems.kind)
+    .all()
+  for (const row of delivered) add(row.kind, row.fen)
+
+  // Both are negative movements, so both reduce the figure by plain addition —
+  // exactly as `categoriesReport` does it.
+  const takenBack = q.select({
+    kind: schema.stockItems.kind,
+    mfen: sql<number>`sum(${schema.stockMovements.qtyDelta} * ${schema.stockMovements.unitCostMfen})`,
+  })
+    .from(schema.stockMovements)
+    .innerJoin(schema.stockItems, eq(schema.stockItems.id, schema.stockMovements.stockItemId))
+    .where(and(
+      eq(schema.stockMovements.venueId, venueId),
+      sql`(${schema.stockMovements.type} = 'return_supplier'
+        or (${schema.stockMovements.type} = 'correction' and ${schema.stockMovements.refType} = 'delivery_line'))`,
+      gte(schema.stockMovements.occurredAt, fromIso),
+      lt(schema.stockMovements.occurredAt, toIso),
+    ))
+    .groupBy(schema.stockItems.kind)
+    .all()
+  for (const row of takenBack) add(row.kind, Math.round((row.mfen ?? 0) / 1000))
+
+  return out
+}
+
 function movementValueByCategory(
   q: Queryable, venueId: string, fromIso: string, toIso: string,
   filter: { types: MovementType[], refType?: string },

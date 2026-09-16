@@ -211,3 +211,15 @@ export type UpdateStockItemBody = z.infer<typeof updateStockItemBody>
 export type CreateUserBody = z.infer<typeof createUserBody>
 export type UpdateUserBody = z.infer<typeof updateUserBody>
 export type ResetUserPinBody = z.infer<typeof resetUserPinBody>
+
+/**
+ * `PUT /api/owner/analitika/troskovi` — one of the three costs the owner types,
+ * for one month. A PUT because it **sets** the figure: sending 120,00 twice is
+ * 120,00, not 240,00. `0` is a real answer ("no bill this month") and is kept.
+ */
+export const putMonthCostBody = z.object({
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+  kind: z.enum(['struja', 'voda', 'kirija']),
+  amount_fen: moneyFen,
+}).strict()
+export type PutMonthCostBody = z.infer<typeof putMonthCostBody>

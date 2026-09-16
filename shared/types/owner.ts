@@ -123,3 +123,89 @@ export interface OwnerLive {
   /** The Dnevnik's newest entry: when it moves, *Puls* fetches `?after=` once. */
   log_max_at: string
 }
+
+// ---------------------------------------------------------------------------
+// Analitika (16.09.2026)
+// ---------------------------------------------------------------------------
+
+/** One day of the month on the chart: what its shifts took. */
+export interface AnalyticsDay {
+  business_date: string
+  pazar_fen: number
+  /** How many shifts ran that day; 0 on a day the café did not open. */
+  shifts: number
+}
+
+/** One month on the twelve-month chart. */
+export interface AnalyticsMonthPoint {
+  month: string
+  pazar_fen: number
+}
+
+/** The best night a slot (*Prva smjena*, *Druga smjena*) has had. */
+export interface AnalyticsRecord {
+  shift_id: string
+  business_date: string
+  pazar_fen: number
+}
+
+export interface AnalyticsSlotRecords {
+  template_id: string
+  /** The template's own name — *Prva smjena*, *Druga smjena*. */
+  name: string
+  /** Best in the month on screen, or `null` when that slot never ran in it. */
+  month: AnalyticsRecord | null
+  /** Best ever. */
+  all_time: AnalyticsRecord | null
+}
+
+/** A cost the owner types, as stored for one month. */
+export interface AnalyticsManualCost {
+  amount_fen: number
+  /**
+   * `true` when this month has no row of its own and the number is carried
+   * from an earlier month — *Kirija* does that, being the same every month
+   * until somebody changes it.
+   */
+  carried: boolean
+  /** The month the number was actually entered for. `null` when never. */
+  from_month: string | null
+}
+
+/** `GET /api/owner/analitika?month=YYYY-MM` */
+export interface MonthAnalytics {
+  month: string
+  /** Σ promet of every shift whose business day is in the month. */
+  pazar_fen: number
+  /** Σ *Za predati* of the month's closings. Open or force-closed nights add nothing. */
+  za_predati_fen: number
+  shifts: number
+  /** How many of them the šanker closed — the ones *Za predati* and *Dnevnice* can see. */
+  closed_shifts: number
+  costs: {
+    roba: number
+    okusi: number
+    zar: number
+    dnevnice: number
+    struja: number
+    voda: number
+    kirija: number
+  }
+  /** How struja, voda and kirija got their number. */
+  manual: {
+    struja: AnalyticsManualCost
+    voda: AnalyticsManualCost
+    kirija: AnalyticsManualCost
+  }
+  total_cost_fen: number
+  /** `pazar_fen − total_cost_fen`. May be negative, and is shown as it is. */
+  neto_fen: number
+  /** Every day of the month, zeros included, oldest first. */
+  days: AnalyticsDay[]
+  /** The five days with the biggest pazar, biggest first. Days with none left out. */
+  best_days: AnalyticsDay[]
+  /** Twelve months ending with this one, oldest first. */
+  trend: AnalyticsMonthPoint[]
+  /** One entry per active template, in the templates' own order. */
+  records: AnalyticsSlotRecords[]
+}
