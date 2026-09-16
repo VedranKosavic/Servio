@@ -68,9 +68,10 @@ const search = ref('')
  */
 const sheetId = ref<string | null>(null)
 
-const recipeFor = ref<ProductAdmin | null>(null)
-const recipePending = ref(false)
-const recipeError = ref<string | null>(null)
+/** The article whose *Oduzima sa stanja* sheet is open. */
+const zalihaFor = ref<ProductAdmin | null>(null)
+const zalihaPending = ref(false)
+const zalihaError = ref<string | null>(null)
 
 const newOpen = ref(false)
 const newPending = ref(false)
@@ -148,11 +149,10 @@ const sheetProduct = computed(() =>
 const columns = [
   { key: 'artikal', label: 'Artikal' },
   { key: 'cijena', label: 'Cijena', align: 'r' as const, width: '150px' },
-  { key: 'grami', label: 'g / lula', align: 'r' as const, width: '130px' },
+  { key: 'zaliha', label: 'Oduzima sa stanja', width: '220px' },
   { key: 'omiljeno', label: 'Omiljeno', width: '90px' },
   { key: 'ukloni', label: '', width: '100px' },
   { key: 'osoblje', label: 'Osoblje', width: '90px' },
-  { key: 'normativ', label: 'Normativ', align: 'r' as const, width: '130px' },
 ]
 
 async function patch(product: ProductAdmin, body: UpdateProductBody) {
@@ -173,29 +173,29 @@ async function patch(product: ProductAdmin, body: UpdateProductBody) {
 }
 
 /**
- * The product sheet hands over to the recipe editor rather than stacking on top
- * of it: two scrims on a phone is one scrim too many, and the editor is a
- * different job with its own Save.
+ * The product sheet hands over to *Oduzima sa stanja* rather than stacking on
+ * top of it: two scrims on a phone is one scrim too many.
  */
-function openRecipe(product: ProductAdmin) {
+function openZaliha(product: ProductAdmin) {
   sheetId.value = null
-  recipeError.value = null
-  recipeFor.value = product
+  zalihaError.value = null
+  zalihaFor.value = product
 }
 
-async function saveRecipe(lines: Array<{ stock_item_id: string, qty: number }>) {
-  const product = recipeFor.value
+async function saveZaliha(body: UpdateProductBody) {
+  const product = zalihaFor.value
   if (!product) return
-  recipePending.value = true
+  zalihaPending.value = true
   try {
-    await api.setRecipe(product.id, { lines })
-    recipeError.value = null
-    recipeFor.value = null
-    await load()
+    const fresh = await api.updateProduct(product.id, body)
+    const index = products.value.findIndex(row => row.id === product.id)
+    if (index >= 0) products.value[index] = fresh
+    zalihaError.value = null
+    zalihaFor.value = null
   } catch (err) {
-    recipeError.value = apiErrorText(err, 'Normativ nije snimljen.')
+    zalihaError.value = apiErrorText(err, 'Izmjena nije snimljena.')
   } finally {
-    recipePending.value = false
+    zalihaPending.value = false
   }
 }
 
@@ -270,10 +270,11 @@ async function createProduct(body: CreateProductBody) {
             v-for="product in group.rows"
             :key="product.id"
             :product="product"
+            :items="stockItems"
             :favourite-full="favouriteCount >= FAVOURITE_CAP"
             :pending="busyId === product.id"
             @patch="body => patch(product, body)"
-            @recipe="recipeFor = product; recipeError = null"
+            @zaliha="openZaliha(product)"
             @remove="askRemove(product)"
           />
         </UiTable>
@@ -302,34 +303,36 @@ async function createProduct(body: CreateProductBody) {
       </template>
     </UiSheet>
 
-    <!-- Mounted before the recipe editor on purpose: both sheets lock the page
-         behind them, and when this one closes to hand over, the editor's lock
+    <!-- Mounted before *Oduzima sa stanja* on purpose: both sheets lock the page
+         behind them, and when this one closes to hand over, that sheet's lock
          has to be the one that wins. -->
     <PostavkeMeniSheet
       :open="sheetProduct !== null"
       :product="sheetProduct"
+      :items="stockItems"
       :favourite-full="favouriteCount >= FAVOURITE_CAP"
       :favourite-cap="FAVOURITE_CAP"
       :pending="busyId !== null && busyId === sheetId"
       @close="sheetId = null"
       @patch="body => sheetProduct && patch(sheetProduct, body)"
-      @recipe="sheetProduct && openRecipe(sheetProduct)"
+      @zaliha="sheetProduct && openZaliha(sheetProduct)"
       @remove="sheetProduct && askRemove(sheetProduct)"
     />
 
-    <PostavkeRecipeEditor
-      :open="recipeFor !== null"
-      :product="recipeFor"
+    <PostavkeZalihaSheet
+      :open="zalihaFor !== null"
+      :product="zalihaFor"
       :items="stockItems"
-      :pending="recipePending"
-      :error="recipeError"
-      @close="recipeFor = null"
-      @save="saveRecipe"
+      :pending="zalihaPending"
+      :error="zalihaError"
+      @close="zalihaFor = null"
+      @save="saveZaliha"
     />
 
     <PostavkeProductSheet
       :open="newOpen"
       :categories="categories"
+      :items="stockItems"
       :pending="newPending"
       :error="newError"
       @close="newOpen = false"

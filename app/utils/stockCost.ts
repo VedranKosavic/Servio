@@ -31,7 +31,40 @@ export const STOCK_KIND_OPTIONS: ReadonlyArray<{ value: StockKind, label: string
   { value: 'zar', label: 'Žar' },
   { value: 'potrosni', label: 'Potrošni' },
   { value: 'hrana', label: 'Hrana' },
+  { value: 'kafa', label: 'Kafa' },
 ]
+
+/**
+ * The owner's three kinds of article (16.09.2026): everything is counted by
+ * the piece, except coffee and nargila aromas, which are kept in grams.
+ *
+ * It is one choice on the form and two columns on the row — `kind` (what the
+ * reports and the aroma picker ask) and `base_unit` (what the ledger sums in).
+ * Choosing *Po komadu* keeps an older article's own piece kind (žar, hrana,
+ * potrošni) rather than flattening it to *piće*.
+ */
+export type ArticleVrsta = 'komad' | 'kafa' | 'okus'
+
+export const ARTICLE_VRSTA_OPTIONS: ReadonlyArray<{ value: ArticleVrsta, label: string }> = [
+  { value: 'komad', label: 'Po komadu' },
+  { value: 'kafa', label: 'Kafa (grami)' },
+  { value: 'okus', label: 'Okus za nargilu (grami)' },
+]
+
+export function vrstaOf(kind: StockKind): ArticleVrsta {
+  if (kind === 'kafa') return 'kafa'
+  if (kind === 'duhan') return 'okus'
+  return 'komad'
+}
+
+export function kindAndUnitOf(
+  vrsta: ArticleVrsta, currentKind: StockKind,
+): { kind: StockKind, base_unit: BaseUnit } {
+  if (vrsta === 'kafa') return { kind: 'kafa', base_unit: 'g' }
+  if (vrsta === 'okus') return { kind: 'duhan', base_unit: 'g' }
+  const pieceKind = currentKind === 'kafa' || currentKind === 'duhan' ? 'pice' : currentKind
+  return { kind: pieceKind, base_unit: 'kom' }
+}
 
 export const BASE_UNIT_OPTIONS: ReadonlyArray<{ value: BaseUnit, label: string }> = [
   { value: 'kom', label: 'komad' },

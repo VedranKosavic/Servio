@@ -72,6 +72,8 @@ const isPhone = computed(() => mounted.value && narrow.value)
 const report = ref<OwnerStockReport | null>(null)
 const live = ref<StockItem[]>([])
 const counts = ref<CountView[]>([])
+/** Category ids in the owner's order, so the shelf reads like the menu. */
+const categoryOrder = ref<string[]>([])
 const loading = ref(true)
 const error = ref('')
 const filter = ref<StanjeFilter>('sve')
@@ -80,14 +82,18 @@ const filter = ref<StanjeFilter>('sve')
 async function load() {
   try {
     // Three independent reads, so they go out together rather than in a chain.
-    const [stockReport, stockLive, confirmed] = await Promise.all([
+    const [stockReport, stockLive, confirmed, categories] = await Promise.all([
       api.getOwnerStock(),
       api.getStock(),
       api.getCounts({ status: 'confirmed' }),
+      api.getAdminCategories(),
     ])
     report.value = stockReport
     live.value = stockLive.items
     counts.value = confirmed
+    categoryOrder.value = [...categories]
+      .sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name, 'bs'))
+      .map(category => category.id)
     error.value = ''
   } catch (err) {
     error.value = apiErrorText(err)
@@ -98,7 +104,7 @@ async function load() {
 
 useAdminChanges({
   onEntity: (entity) => {
-    if (entity === 'stock' || entity === 'count') void load()
+    if (entity === 'stock' || entity === 'count' || entity === 'menu') void load()
   },
 })
 
@@ -112,8 +118,8 @@ const rows = computed<StanjeRow[]>(() =>
 
 const shown = computed(() => rows.value.filter(row => matchesFilter(row, filter.value)))
 
-/** *Kafa*, *Nargila*, *Ostalo* — of what the filter left standing. */
-const sections = computed(() => groupStanjeRows(shown.value))
+/** The shared categories, in the owner's order — of what the filter left standing. */
+const sections = computed(() => groupStanjeRows(shown.value, categoryOrder.value))
 
 
 /**

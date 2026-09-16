@@ -52,6 +52,9 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // *Analitika* (the owner's call, 16.09.2026): the month's pazar, costs and
   // records. First under *Više*, because it is the screen he opens it for.
   { id: 'analitika', to: '/admin/analitika', label: 'Analitika', icon: 'money', sub: 'Mjesečni pazar, troškovi i rekordi', ready: true },
+  // *Gramaža* (16.09.2026): grams per coffee and per bowl — what a sale takes
+  // off *Stanje šanka*. Admins only, like everything under `/admin`.
+  { id: 'gramaza', to: '/admin/gramaza', label: 'Gramaža', icon: 'box', sub: 'Grama po kafi i po luli', ready: true },
   { id: 'raspored', to: '/admin/raspored', label: 'Raspored', icon: 'calendar', sub: 'Sedmica po smjenama', ready: true },
   // *Kontrolna ploča* replaced *Meni i postavke*: one door to every table the
   // owner may edit (`app/utils/kontrola.ts`). `match` keeps the row lit on the
@@ -120,6 +123,7 @@ const BACK_OVERRIDES: Array<[RegExp, string]> = [
   [/^\/admin\/kontrola\/[^/]+$/, '/admin/vise'],
   // *Analitika* is opened from *Više*, and climbing its path would land on *Puls*.
   [/^\/admin\/analitika$/, '/admin/vise'],
+  [/^\/admin\/gramaza$/, '/admin/vise'],
 ]
 
 export function adminBack(path: string, exists: (candidate: string) => boolean): string | null {

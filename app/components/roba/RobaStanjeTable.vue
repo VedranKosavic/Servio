@@ -44,84 +44,72 @@ export interface StanjeRow {
   last_movement: StockLastMovement | null
   /** A round arrived for this item after a popis had already counted it. */
   late_sync: boolean
-  /** Which of the three sections of the shelf this article belongs to. */
+  /** Which category of the shelf this article belongs to (`category_id`). */
   group: StanjeGroup
+  category_id: string | null
+  category_name: string | null
 }
 
 /** The three nag lists of PLAN §9 that are still warnings worth a chip. */
 export type StanjeFilter = 'sve' | 'u-minusu' | 'bez-cijene' | 'kasno'
 
 /**
- * The shelf in three sections — the owner's own division of it: *Kafa*,
- * *Nargila*, and everything else.
+ * The shelf **by category** — the same categories *Meni* and *Prijem robe* use
+ * (the owner, 16.09.2026: "kategorije su iste za sve").
  *
- * Nineteen articles in one flat list is a list nobody reads to the end on a
- * phone, and the three things it holds are not one kind of thing: the tobacco
- * and the coal are the shisha side of the café, the coffee corner is its own
- * shelf, and the rest is bottles.
- *
- * **It is read off the data, not off a list of names.** *Nargila* is the
- * article's own `kind` — `duhan` (a tin of tobacco) or `zar` (coal) — which is
- * the same column `coalStockItem()` resolves the coal by, so it needs no name to
- * be right. *Kafa* is the article's **menu category**, the one the owner
- * maintains himself on *Meni*: the category whose name is *Kafa*. Everything
- * else falls to *Ostalo*, and a section with nothing in it is not drawn.
- *
- * Which means an article the owner wants under *Kafa* is moved there by giving
- * it the *Kafa* category — and today that is a `category_id` on the article,
- * which no screen edits since the *Kategorije* tab under *Roba* was removed. On
- * the café's own catalogue that leaves *Mlijeko* and *Čaj (vrećice)* under
- * *Ostalo*, which is honest (milk goes in more than coffee) and is written down
- * in the handoff rather than hidden behind a hard-coded name list here.
+ * It used to be three fixed sections (*Kafa*, *Nargila*, *Ostalo*) guessed from
+ * an article's kind and a category name. Now every article sits in the category
+ * it was received into, and the sections are exactly those categories, in the
+ * order the owner put them in. An older article that never got one is under
+ * *Bez kategorije*, last, so it is visible and can be moved.
  */
-export type StanjeGroup = 'kafa' | 'nargila' | 'ostalo'
+export type StanjeGroup = string
+
+/** The key of an article with no category. */
+export const NO_CATEGORY = 'bez-kategorije'
 
 export interface StanjeSection {
   key: StanjeGroup
-  /** The Bosnian heading. */
+  /** The Bosnian heading — the category's own name. */
   label: string
   rows: StanjeRow[]
 }
 
-/** The sections in the order the screen draws them. */
-const GROUP_LABELS: Array<{ key: StanjeGroup, label: string }> = [
-  { key: 'kafa', label: 'Kafa' },
-  { key: 'nargila', label: 'Nargila' },
-  { key: 'ostalo', label: 'Ostalo' },
-]
-
-/** Fold a category name to one comparable key: "Kafa", "kafa" and "KAFA". */
-function categoryKey(name: string | null): string {
-  return (name ?? '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .trim()
+export function stanjeGroup(item: { category_id: string | null }): StanjeGroup {
+  return item.category_id ?? NO_CATEGORY
 }
 
 /**
- * The categories that belong on the *Kafa* shelf.
- *
- * The owner's line was "kafa, nargile and all the rest", and when asked which
- * articles that leaves he answered "nes and caj stay" — so the section is the
- * hot drinks, not the coffee category alone. *Čaj (vrećice)* carries its own
- * menu category, which is why matching `kafa` by itself put the tea in
- * *Ostalo* and left *Kafa* holding one row.
+ * Sections in the categories' own order (`categoryOrder`, ids by `sort`), empty
+ * ones dropped. A category the order does not know — one deleted since, say —
+ * comes after the known ones, and *Bez kategorije* is always last.
  */
-const KAFA_CATEGORIES: ReadonlySet<string> = new Set(['kafa', 'caj'])
-
-export function stanjeGroup(item: { kind: StockKind, category_name: string | null }): StanjeGroup {
-  const category = categoryKey(item.category_name)
-  if (item.kind === 'duhan' || item.kind === 'zar' || category === 'nargila') return 'nargila'
-  if (KAFA_CATEGORIES.has(category)) return 'kafa'
-  return 'ostalo'
+export function groupSections<T extends { category_id: string | null, category_name: string | null }>(
+  rows: T[], categoryOrder: string[] = [],
+): Array<{ key: StanjeGroup, label: string, rows: T[] }> {
+  const byKey = new Map<string, { key: StanjeGroup, label: string, rows: T[] }>()
+  for (const row of rows) {
+    const key = stanjeGroup(row)
+    let section = byKey.get(key)
+    if (!section) {
+      section = { key, label: row.category_name ?? 'Bez kategorije', rows: [] }
+      if (key === NO_CATEGORY) section.label = 'Bez kategorije'
+      byKey.set(key, section)
+    }
+    section.rows.push(row)
+  }
+  const rank = (key: string) => {
+    if (key === NO_CATEGORY) return Number.MAX_SAFE_INTEGER
+    const at = categoryOrder.indexOf(key)
+    return at === -1 ? categoryOrder.length : at
+  }
+  return [...byKey.values()]
+    .sort((a, b) => rank(a.key) - rank(b.key) || a.label.localeCompare(b.label, 'bs'))
 }
 
 /** The rows in sections, empty sections dropped. */
-export function groupStanjeRows(rows: StanjeRow[]): StanjeSection[] {
-  return GROUP_LABELS
-    .map(group => ({ ...group, rows: rows.filter(row => row.group === group.key) }))
-    .filter(section => section.rows.length > 0)
+export function groupStanjeRows(rows: StanjeRow[], categoryOrder: string[] = []): StanjeSection[] {
+  return groupSections(rows, categoryOrder)
 }
 
 /**
@@ -198,6 +186,8 @@ export function buildStanjeRows(
       last_movement: last,
       late_sync: late.has(item.id) || last?.type === 'late_sync',
       group: stanjeGroup(item),
+      category_id: item.category_id,
+      category_name: item.category_name,
     }
   })
 }

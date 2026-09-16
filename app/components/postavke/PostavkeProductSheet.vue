@@ -7,16 +7,24 @@
  * together. The price opens the product's first `price_history` row in the same
  * transaction, which is why "what did this cost in March" has an answer from the
  * first minute.
+ *
+ * **What it takes off the shelf is chosen here too** (the owner, 16.09.2026):
+ * *Po komadu* an article of *Stanje šanka*, *Troši kafu*, *Nargila*, or *Ne
+ * oduzima*. Picking a shelf article with the name still empty names the menu
+ * article after it — the menu shows the shelf's articles by their own names.
  */
-import type { CategoryAdmin } from '#shared/types'
+import type { CategoryAdmin, StockItemAdmin } from '#shared/types'
 import type { CreateProductBody } from '#shared/schemas'
+import { zalihaPatch, zalihaReady, type ZalihaMode } from '~/utils/menuZaliha'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   open: boolean
   categories: CategoryAdmin[]
+  /** *Stanje šanka*, for *Oduzima sa stanja*. */
+  items?: StockItemAdmin[]
   pending: boolean
   error: string | null
-}>()
+}>(), { items: () => [] })
 
 const emit = defineEmits<{ close: [], save: [body: CreateProductBody] }>()
 
@@ -24,10 +32,16 @@ const categoryId = ref('')
 const name = ref('')
 const shortName = ref('')
 const priceFen = ref<number | null>(null)
-const kind = ref<'simple' | 'shisha'>('simple')
-const shishaGrams = ref<number | null>(null)
-const coalPcs = ref<number | null>(null)
+const mode = ref<ZalihaMode>('komad')
+const articleId = ref<string | null>(null)
 const staffDrink = ref(false)
+
+/** Name the menu article after the shelf article, while nobody has typed one. */
+watch(articleId, (id) => {
+  if (!id || name.value.trim() !== '') return
+  const item = props.items.find(row => row.id === id)
+  if (item) name.value = item.name.slice(0, 60)
+})
 
 const categoryOptions = computed(() => props.categories
   .filter(category => category.active)
@@ -39,14 +53,14 @@ watch(() => props.open, (open) => {
   name.value = ''
   shortName.value = ''
   priceFen.value = null
-  kind.value = 'simple'
-  shishaGrams.value = null
-  coalPcs.value = null
+  mode.value = 'komad'
+  articleId.value = null
   staffDrink.value = false
 })
 
 const canSave = computed(() =>
-  categoryId.value !== '' && name.value.trim() !== '' && priceFen.value !== null)
+  categoryId.value !== '' && name.value.trim() !== '' && priceFen.value !== null
+  && zalihaReady(mode.value, articleId.value))
 
 function save() {
   if (!canSave.value) return
@@ -55,10 +69,7 @@ function save() {
     name: name.value.trim(),
     short_name: shortName.value.trim() || null,
     price_fen: priceFen.value as number,
-    kind: kind.value,
-    ...(kind.value === 'shisha'
-      ? { shisha_grams: shishaGrams.value, coal_pcs: coalPcs.value }
-      : {}),
+    ...zalihaPatch(mode.value, articleId.value),
     staff_drink_allowed: staffDrink.value,
   })
 }
@@ -91,43 +102,18 @@ function save() {
       @input="value => priceFen = value"
     />
 
-    <div class="p-seg-row">
-      <span class="p-caption">Vrsta</span>
-      <UiSeg
-        :model-value="kind"
-        label="Vrsta artikla"
-        :options="[
-          { value: 'simple', label: 'Obično' },
-          { value: 'shisha', label: 'Nargila' },
-        ]"
-        @update:model-value="value => kind = value as 'simple' | 'shisha'"
-      />
-    </div>
-
-    <template v-if="kind === 'shisha'">
-      <PostavkeNumField
-        label="Grama po luli"
-        :model-value="shishaGrams"
-        kind="decimal"
-        suffix="g"
-        hint="Prazno znači da se uzima vrijednost iz Podešavanja."
-        @commit="value => shishaGrams = value"
-      />
-      <PostavkeNumField
-        label="Žara po luli"
-        :model-value="coalPcs"
-        kind="int"
-        suffix="kom"
-        @commit="value => coalPcs = value"
-      />
-    </template>
+    <PostavkeZalihaFields
+      v-model:mode="mode"
+      v-model:article-id="articleId"
+      :items="items"
+      :category-id="categoryId"
+    />
 
     <div class="p-seg-row">
       <span class="p-caption">Piće za osoblje</span>
       <PostavkeToggle v-model="staffDrink" label="Piće za osoblje" words />
     </div>
 
-    <p class="p-note">Normativ se dodaje nakon što artikal postoji.</p>
       <template #footer>
         <UiButton variant="ghost" @click="emit('close')">Odustani</UiButton>
         <UiButton

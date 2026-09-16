@@ -49,11 +49,13 @@
  *   which is exactly what makes the history worth reading.
  */
 import type { CreateDeliveryBody, CreateStockItemBody } from '#shared/schemas'
-import type { StockItemAdmin } from '#shared/types'
+import type { CategoryAdmin, StockItemAdmin } from '#shared/types'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   items: StockItemAdmin[]
-}>()
+  /** The shared categories, for an article created from this document. */
+  categories?: CategoryAdmin[]
+}>(), { categories: () => [] })
 
 const emit = defineEmits<{
   posted: []
@@ -92,6 +94,23 @@ const lines = ref<DocLine[]>([])
 const pickId = ref('')
 const pickQty = ref<number | null>(null)
 const pickCost = ref<number | null>(null)
+
+/**
+ * *g* or *kg* for an article kept in grams — coffee and nargila aromas (the
+ * owner, 16.09.2026: "prijem kafe unosimo po gramima ili kilogramima"). The
+ * ledger always gets grams; this is only which number is easier to type off
+ * the invoice. Everything else is pieces and shows no choice.
+ */
+const pickUnit = ref<'g' | 'kg'>('kg')
+
+const pickIsGrams = computed(() => itemOf(pickId.value)?.base_unit === 'g')
+
+/** The quantity in the article's own base unit — what the line stores. */
+const baseQty = computed(() => {
+  const typed = pickQty.value
+  if (typed === null || typed <= 0) return null
+  return pickIsGrams.value && pickUnit.value === 'kg' ? Math.round(typed * 1000 * 1000) / 1000 : typed
+})
 
 /** The picker sheet. Closed by a choice, which is its only job. */
 const pickerOpen = ref(false)
@@ -152,11 +171,15 @@ function pick(id: string) {
   // The suggestion follows the article: a cost typed for the previous one is
   // not this one's price, so the field goes back to suggesting.
   costTouched.value = false
-  pickCost.value = suggestedCost(itemOf(id), pickQty.value)
+  pickCost.value = suggestedCost(itemOf(id), baseQty.value)
 }
 
 /** "kom" — the unit the quantity is typed in. There is no pack to multiply. */
-const qtyHint = computed(() => itemOf(pickId.value)?.base_unit ?? '')
+const qtyHint = computed(() => {
+  const item = itemOf(pickId.value)
+  if (!item) return ''
+  return item.base_unit === 'g' ? `u ${pickUnit.value === 'kg' ? 'kilogramima' : 'gramima'}` : 'komada'
+})
 
 /**
  * The amount fills itself in from the last invoice, and the owner corrects it
@@ -190,16 +213,16 @@ function suggestedCost(item: StockItemAdmin | undefined, qty: number | null): nu
   return Math.round((item.last_cost_mfen * qty) / 1000)
 }
 
-watch([pickId, pickQty], () => {
+watch([pickId, baseQty], () => {
   if (costTouched.value) return
-  pickCost.value = suggestedCost(itemOf(pickId.value), pickQty.value)
+  pickCost.value = suggestedCost(itemOf(pickId.value), baseQty.value)
 })
 
 /** True while the field is showing a guess the owner has not confirmed. */
 const costIsSuggested = computed(() =>
   !costTouched.value
   && pickCost.value !== null
-  && pickCost.value === suggestedCost(itemOf(pickId.value), pickQty.value))
+  && pickCost.value === suggestedCost(itemOf(pickId.value), baseQty.value))
 
 const costHint = computed(() => {
   if (!costIsSuggested.value) return 'sa fakture'
@@ -208,14 +231,14 @@ const costHint = computed(() => {
 })
 
 const canAdd = computed(() =>
-  !!itemOf(pickId.value) && (pickQty.value ?? 0) > 0 && (pickCost.value ?? 0) > 0)
+  !!itemOf(pickId.value) && (baseQty.value ?? 0) > 0 && (pickCost.value ?? 0) > 0)
 
 function add() {
   if (!canAdd.value) return
   lines.value = [...lines.value, {
     key: crypto.randomUUID(),
     stock_item_id: pickId.value,
-    qty: pickQty.value!,
+    qty: baseQty.value!,
     line_cost_fen: pickCost.value!,
   }]
   // The article stays picked and the two numbers clear: a delivery note is
@@ -371,7 +394,16 @@ async function send() {
         </button>
       </div>
 
-      <UiField v-model="pickQty" label="Količina" kind="decimal" :hint="qtyHint" />
+      <div class="d-qty">
+        <UiField v-model="pickQty" label="Količina" kind="decimal" :hint="qtyHint" />
+        <UiSeg
+          v-if="pickIsGrams"
+          :model-value="pickUnit"
+          label="Jedinica"
+          :options="[{ value: 'kg', label: 'kg' }, { value: 'g', label: 'g' }]"
+          @update:model-value="value => pickUnit = value as 'g' | 'kg'"
+        />
+      </div>
       <UiField
         v-model="pickCost"
         label="Iznos (KM)"
@@ -453,6 +485,7 @@ async function send() {
 
     <RobaArtikalSheet
       :open="creating"
+      :categories="categories"
       :initial-name="createName"
       action="Dodaj artikal"
       :pending="createPending"
@@ -462,8 +495,7 @@ async function send() {
     >
       <template #note>
         <p class="d-note">
-          Ostalo — kategorija, tolerancija, minimalna zaliha — podesi kasnije na
-          Kontrolna ploča → Artikli zalihe.
+          Ostalo — tolerancija, minimalna zaliha — podesi kasnije u Roba → Artikli.
         </p>
       </template>
     </RobaArtikalSheet>
@@ -502,6 +534,9 @@ async function send() {
 }
 
 .d-add-act { display: flex; align-self: end; }
+
+/* The quantity, and under it g / kg when the article is kept in grams. */
+.d-qty { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 
 /* ---- the article, as a field that opens a sheet ------------------------- */
 

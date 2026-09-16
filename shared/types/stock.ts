@@ -46,6 +46,11 @@ export interface StockItem {
   name: string
   kind: StockKind
   base_unit: BaseUnit
+  /** The shared category (*Meni*, *Prijem robe*, *Stanje šanka*), or `null`. */
+  category_id: string | null
+  category_name: string | null
+  /** The category's place in the owner's order, for grouping the shelf. */
+  category_sort: number | null
   pack_name: string | null
   pack_qty: number | null
   is_spot: boolean

@@ -8,7 +8,13 @@
  *   owner may set, for a new article or an existing one.
  * - *Prijem robe*, from the article picker, **short**: an unknown article is on
  *   the bar and the owner has a delivery note in his hand, so the sheet asks only
- *   what the delivery needs — name, kind, unit, cost.
+ *   what the delivery needs — name, category, vrsta, cost.
+ *
+ * **Vrsta is one choice, not two selects** (the owner, 16.09.2026): an article
+ * is *Po komadu*, *Kafa (grami)* or *Okus za nargilu (grami)*, and that decides
+ * both its `kind` and its unit. **The category is asked on both forms and is
+ * required on a new article**: *Stanje šanka*, *Prijem robe* and *Meni* are one
+ * list by one set of categories, and an article with none is on none of them.
  *
  * **The sheet writes nothing.** It emits a body and the screen that opened it
  * does the write, because the writes differ (the typed delivery picks the new
@@ -28,6 +34,9 @@
  * and the server's refusal is still shown if a stale list let one through.
  */
 import type { CategoryAdmin, StockItemAdmin } from '#shared/types'
+import {
+  ARTICLE_VRSTA_OPTIONS, type ArticleVrsta, kindAndUnitOf, vrstaOf,
+} from '~/utils/stockCost'
 import type { CreateStockItemBody, UpdateStockItemBody } from '#shared/schemas'
 
 const props = withDefaults(defineProps<{
@@ -36,7 +45,7 @@ const props = withDefaults(defineProps<{
   item?: StockItemAdmin | null
   /** Every field, not the delivery's short form. */
   full?: boolean
-  /** For the category select in the full form. */
+  /** For the category select — on both forms. */
   categories?: CategoryAdmin[]
   /** What a new article's name starts as: the picker's query. */
   initialName?: string
@@ -55,6 +64,17 @@ const emit = defineEmits<{
 const name = ref('')
 const kind = ref<CreateStockItemBody['kind']>('pice')
 const baseUnit = ref<CreateStockItemBody['base_unit']>('kom')
+
+const vrsta = computed(() => vrstaOf(kind.value))
+
+function setVrsta(value: ArticleVrsta) {
+  const next = kindAndUnitOf(value, kind.value)
+  // A unit the ledger already sums in cannot move; the choice is disabled then,
+  // and this is the belt to that braces.
+  if (unitFrozen.value && next.base_unit !== baseUnit.value) return
+  kind.value = next.kind
+  baseUnit.value = next.base_unit
+}
 /** In feninga, for `basis.qty` base units — not the stored per-unit cost. */
 const costFen = ref<number | null>(null)
 const categoryId = ref('')
@@ -102,7 +122,11 @@ const categoryOptions = computed(() => {
   const missing = own && !listed.some(option => option.value === own)
     ? [{ value: own, label: props.item?.category_name ?? 'Obrisana kategorija' }]
     : []
-  return [{ value: '', label: 'Bez kategorije' }, ...listed, ...missing]
+  // A new article must be put in a category; an old one may still sit in none.
+  const none = props.item && !props.item.category_id
+    ? [{ value: '', label: 'Bez kategorije' }]
+    : [{ value: '', label: 'Izaberi kategoriju' }]
+  return [...none, ...listed, ...missing]
 })
 
 const unitFrozen = computed(() => props.item?.unit_frozen ?? false)
@@ -110,6 +134,7 @@ const unitFrozen = computed(() => props.item?.unit_frozen ?? false)
 const canSave = computed(() =>
   name.value.trim().length > 0
   && (props.item !== null || (costFen.value ?? 0) > 0)
+  && (props.item !== null || categoryId.value !== '')
   && !props.pending)
 
 function save() {
@@ -117,13 +142,13 @@ function save() {
   const common = {
     name: name.value.trim(),
     kind: kind.value,
+    category_id: categoryId.value || null,
     // No pack, ever — and on an edit this clears one an old row still holds.
     pack_name: null,
     pack_qty: null,
   }
   const extra = props.full
     ? {
-        category_id: categoryId.value || null,
         brand: brand.value.trim() || null,
         count_method: countMethod.value,
         tare_g: countMethod.value === 'weigh' ? tareG.value : null,
@@ -170,20 +195,21 @@ function save() {
 
     <UiField v-model="name" label="Naziv" placeholder="Npr. Coca-Cola 0,25" />
     <UiField
-      :model-value="kind"
-      label="Vrsta"
+      :model-value="categoryId"
+      label="Kategorija"
       kind="select"
-      :options="[...STOCK_KIND_OPTIONS]"
-      @update:model-value="value => kind = value as CreateStockItemBody['kind']"
+      :options="categoryOptions"
+      :hint="item ? undefined : 'Obavezno — ista kategorija je na stanju šanka, prijemu i meniju.'"
+      @update:model-value="value => categoryId = String(value ?? '')"
     />
     <UiField
-      :model-value="baseUnit"
-      label="Osnovna jedinica"
+      :model-value="vrsta"
+      label="Vrsta"
       kind="select"
-      :options="[...BASE_UNIT_OPTIONS]"
+      :options="[...ARTICLE_VRSTA_OPTIONS]"
       :disabled="unitFrozen"
-      :hint="unitFrozen ? 'Roba već ima promet — jedinica se više ne mijenja.' : undefined"
-      @update:model-value="value => baseUnit = value as CreateStockItemBody['base_unit']"
+      :hint="unitFrozen ? 'Roba već ima promet — vrsta se više ne mijenja.' : 'Kafa i okusi se vode u gramima, sve ostalo po komadu.'"
+      @update:model-value="value => setVrsta(value as ArticleVrsta)"
     />
 
     <PostavkeNumField
@@ -197,13 +223,6 @@ function save() {
     />
 
     <template v-if="full">
-      <UiField
-        :model-value="categoryId"
-        label="Kategorija"
-        kind="select"
-        :options="categoryOptions"
-        @update:model-value="value => categoryId = String(value ?? '')"
-      />
       <UiField v-model="brand" label="Brend" placeholder="Neobavezno" />
 
       <div class="s-row">

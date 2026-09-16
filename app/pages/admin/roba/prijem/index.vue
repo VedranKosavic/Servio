@@ -17,7 +17,7 @@
  * document is on *Stanje šanka* the moment it is concluded, with no second step
  * and nothing deferred.
  */
-import type { StockItemAdmin } from '#shared/types'
+import type { CategoryAdmin, StockItemAdmin } from '#shared/types'
 
 definePageMeta({ middleware: 'admin', layout: 'admin' })
 
@@ -26,11 +26,16 @@ useHead({ title: 'Roba — prijem robe' })
 const api = useAdminApi()
 
 const items = ref<StockItemAdmin[]>([])
+const categories = ref<CategoryAdmin[]>([])
 const error = ref('')
 
 async function loadCatalogue() {
   try {
-    items.value = await api.getStockItems()
+    // The categories too: a new article is created from this screen, and it
+    // goes into one of the same categories *Stanje šanka* and *Meni* use.
+    const [stock, cats] = await Promise.all([api.getStockItems(), api.getAdminCategories()])
+    items.value = stock
+    categories.value = cats
     error.value = ''
   } catch (err) {
     error.value = apiErrorText(err)
@@ -45,7 +50,7 @@ onMounted(() => { void loadCatalogue() })
  * history is a page away — so this only keeps the article list honest.
  */
 useAdminChanges({
-  onEntity: (entity) => { if (entity === 'stock') void loadCatalogue() },
+  onEntity: (entity) => { if (entity === 'stock' || entity === 'menu') void loadCatalogue() },
 })
 </script>
 
@@ -63,6 +68,7 @@ useAdminChanges({
 
     <RobaPrijemDoc
       :items="items"
+      :categories="categories"
       @posted="loadCatalogue"
       @catalogue="loadCatalogue"
     />

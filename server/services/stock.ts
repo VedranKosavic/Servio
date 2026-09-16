@@ -361,6 +361,15 @@ export function getStock(q: Queryable, venueId: string): StockItem[] {
   const lastMap = lastMovements(q, venueId)
   const shift = currentShift(q, venueId)
   const pendingMap = shift ? shiftDeltaByItem(q, venueId, shift.id) : null
+  // The shared categories (16.09.2026): the bar reads its shelf by the same
+  // categories the menu and *Prijem robe* use, in the owner's order.
+  const categories = new Map(
+    q.select({ id: schema.categories.id, name: schema.categories.name, sort: schema.categories.sort })
+      .from(schema.categories)
+      .where(eq(schema.categories.venueId, venueId))
+      .all()
+      .map(c => [c.id, c]),
+  )
 
   return items.map((item) => {
     const hand = onHandMap.get(item.id) ?? 0
@@ -371,6 +380,9 @@ export function getStock(q: Queryable, venueId: string): StockItem[] {
       name: item.name,
       kind: item.kind,
       base_unit: item.baseUnit,
+      category_id: item.categoryId,
+      category_name: item.categoryId ? categories.get(item.categoryId)?.name ?? null : null,
+      category_sort: item.categoryId ? categories.get(item.categoryId)?.sort ?? null : null,
       pack_name: item.packName,
       pack_qty: item.packQty,
       is_spot: item.isSpot === 1,
@@ -1416,6 +1428,9 @@ export function correctStock(
     name: row.name,
     kind: row.kind,
     base_unit: row.baseUnit as BaseUnit,
+    category_id: row.categoryId,
+    category_name: null,
+    category_sort: null,
     pack_name: row.packName,
     pack_qty: row.packQty,
     is_spot: row.isSpot === 1,

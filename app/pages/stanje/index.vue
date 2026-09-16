@@ -17,7 +17,7 @@
  * distrust the app.
  */
 import { useTimeoutFn } from '@vueuse/core'
-import type { StockItem, StockKind } from '#shared/types'
+import type { StockItem } from '#shared/types'
 
 useHead({ title: 'Stanje šanka' })
 
@@ -42,19 +42,29 @@ onMounted(() => {
 /** Only an admin receives goods; a šanker reads this screen and never adds to it. */
 const canReceive = computed(() => me.user.value?.role === 'admin')
 
-/** The four kinds, in the order the bar thinks about them. */
-const GROUPS: Array<{ kind: StockKind, title: string }> = [
-  { kind: 'pice', title: 'Pića' },
-  { kind: 'duhan', title: 'Duhan' },
-  { kind: 'zar', title: 'Žar' },
-  { kind: 'potrosni', title: 'Potrošni' },
-]
-
-const groups = computed(() =>
-  GROUPS.map(group => ({
-    ...group,
-    items: items.value.filter(item => item.kind === group.kind),
-  })))
+/**
+ * The shelf by the shared categories (16.09.2026) — the ones *Meni* and *Prijem
+ * robe* use — in the owner's order, with *Bez kategorije* last. It used to be
+ * four fixed kinds, which left coffee and food off this screen entirely.
+ */
+const groups = computed(() => {
+  const byKey = new Map<string, { key: string, title: string, sort: number, items: StockItem[] }>()
+  for (const item of items.value) {
+    const key = item.category_id ?? 'bez-kategorije'
+    let group = byKey.get(key)
+    if (!group) {
+      group = {
+        key,
+        title: item.category_name ?? 'Bez kategorije',
+        sort: item.category_id ? item.category_sort ?? 0 : Number.MAX_SAFE_INTEGER,
+        items: [],
+      }
+      byKey.set(key, group)
+    }
+    group.items.push(item)
+  }
+  return [...byKey.values()].sort((a, b) => a.sort - b.sort || a.title.localeCompare(b.title, 'bs'))
+})
 
 /** The header's second line: how much shelf there is to read. */
 const subtitle = computed(() => {
@@ -170,7 +180,7 @@ async function postDelivery(delivery: {
       <div class="flex flex-col gap-5">
         <StockGroup
           v-for="group in groups"
-          :key="group.kind"
+          :key="group.key"
           :title="group.title"
           :items="group.items"
         />

@@ -17,12 +17,15 @@
  * while the sheet is open moves the switch under it rather than leaving a state
  * the database does not have.
  */
-import type { ProductAdmin } from '#shared/types'
+import type { ProductAdmin, StockItemAdmin } from '#shared/types'
 import type { UpdateProductBody } from '#shared/schemas'
+import { zalihaSummary } from '~/utils/menuZaliha'
 
 const props = defineProps<{
   open: boolean
   product: ProductAdmin | null
+  /** *Stanje šanka*, to name what this article takes off it. */
+  items: StockItemAdmin[]
   /** The favourite tab is full and this product is not on it. */
   favouriteFull: boolean
   /** How many favourites the waiter's tab holds — 12. */
@@ -34,28 +37,18 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   patch: [patch: UpdateProductBody]
-  /** Hand over to `PostavkeRecipeEditor`; the page closes this sheet first. */
-  recipe: []
+  /** Hand over to `PostavkeZalihaSheet`; the page closes this sheet first. */
+  zaliha: []
   /** Ask to take this product off the menu; the page closes this sheet and confirms. */
   remove: []
 }>()
 
-const isShisha = computed(() => props.product?.kind === 'shisha')
-
 const starDisabled = computed(() =>
   props.favouriteFull && !props.product?.is_favourite)
 
-/** What the *Normativ* row says about itself before it is opened. */
-const recipeLine = computed(() => {
-  const product = props.product
-  if (!product) return ''
-  if (product.sells_stock_item_id) return 'Vezano direktno za robu.'
-  const count = product.recipe.length
-  if (count === 0) return 'Prodaja ne skida robu.'
-  if (count === 1) return '1 stavka'
-  if (count < 5) return `${count} stavke`
-  return `${count} stavki`
-})
+/** What the *Stanje šanka* row says about itself before it is opened. */
+const zalihaLine = computed(() =>
+  props.product ? zalihaSummary(props.product, props.items) : '')
 </script>
 
 <template>
@@ -106,33 +99,12 @@ const recipeLine = computed(() => {
           />
         </div>
 
-        <div v-if="isShisha" class="p-set">
-          <span class="p-set-text">
-            <span class="p-set-label">Grama po luli</span>
-            <span class="p-set-hint">
-              <UiPill v-if="product.shisha_grams_measured_at" tone="good">izmjereno</UiPill>
-              <template v-else>Procijenjeno — izmjeri lulu na vagi.</template>
-            </span>
-          </span>
-          <PostavkeNum
-            :model-value="product.shisha_grams"
-            kind="decimal"
-            :label="`Grama po luli, ${product.name}`"
-            suffix="g"
-            width="104px"
-            :pending="pending"
-            @commit="value => emit('patch', { shisha_grams: value })"
-          />
-        </div>
-
         <div class="p-set">
           <span class="p-set-text">
-            <span class="p-set-label">
-              Normativ
-            </span>
-            <span class="p-set-hint">{{ recipeLine }}</span>
+            <span class="p-set-label">Stanje šanka</span>
+            <span class="p-set-hint">{{ zalihaLine }}</span>
           </span>
-          <UiButton small variant="ghost" @click="emit('recipe')">
+          <UiButton small variant="ghost" @click="emit('zaliha')">
             Uredi
             <UiIcon name="chevron-right" :size="18" />
           </UiButton>

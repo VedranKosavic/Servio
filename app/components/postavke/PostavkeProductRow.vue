@@ -11,11 +11,14 @@
  *
  * It renders a `<tr>`, so it is used inside `UiTable`'s row slot.
  */
-import type { ProductAdmin } from '#shared/types'
+import type { ProductAdmin, StockItemAdmin } from '#shared/types'
 import type { UpdateProductBody } from '#shared/schemas'
+import { zalihaSummary } from '~/utils/menuZaliha'
 
 const props = defineProps<{
   product: ProductAdmin
+  /** *Stanje šanka*, to name what this article takes off it. */
+  items: StockItemAdmin[]
   /** Twelve favourites are already taken and this one is not one of them. */
   favouriteFull: boolean
   /** A write for this row is in flight. */
@@ -24,12 +27,13 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   patch: [patch: UpdateProductBody]
-  recipe: []
+  /** Open *Oduzima sa stanja* for this article. */
+  zaliha: []
   /** Ask to take this product off the menu; the page confirms first. */
   remove: []
 }>()
 
-const isShisha = computed(() => props.product.kind === 'shisha')
+const zalihaLine = computed(() => zalihaSummary(props.product, props.items))
 
 const starDisabled = computed(() => props.favouriteFull && !props.product.is_favourite)
 </script>
@@ -56,23 +60,11 @@ const starDisabled = computed(() => props.favouriteFull && !props.product.is_fav
       <div v-if="product.price_since" class="p-since">od {{ dateBs(product.price_since) }}</div>
     </td>
 
-    <td class="r">
-      <template v-if="isShisha">
-        <PostavkeNum
-          :model-value="product.shisha_grams"
-          kind="decimal"
-          :label="`Grama po luli, ${product.name}`"
-          suffix="g"
-          width="94px"
-          :pending="pending"
-          @commit="value => emit('patch', { shisha_grams: value })"
-        />
-        <div class="p-since">
-          <UiPill v-if="product.shisha_grams_measured_at" tone="good">izmjereno</UiPill>
-          <span v-else>procijenjeno</span>
-        </div>
-      </template>
-      <span v-else class="p-dash">—</span>
+    <td>
+      <button type="button" class="p-zaliha" @click="emit('zaliha')">
+        <span>{{ zalihaLine }}</span>
+        <UiIcon name="chevron-right" :size="16" />
+      </button>
     </td>
 
     <td>
@@ -119,17 +111,26 @@ const starDisabled = computed(() => props.favouriteFull && !props.product.is_fav
       />
     </td>
 
-    <td class="r">
-      <UiButton small variant="ghost" @click="emit('recipe')">
-        Normativ
-        <UiIcon name="chevron-right" :size="18" />
-      </UiButton>
-    </td>
   </tr>
 </template>
 
 <style scoped>
 .inactive td { opacity: 0.55; }
+
+.p-zaliha {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--text-label);
+  text-align: left;
+  cursor: pointer;
+}
+.p-zaliha:hover { color: var(--ink); }
 
 .p-name { display: flex; flex-direction: column; gap: 1px; min-width: 140px; }
 .p-name small { color: var(--muted); font-size: var(--text-caption); }

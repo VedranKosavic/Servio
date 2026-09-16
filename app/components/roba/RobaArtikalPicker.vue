@@ -10,8 +10,8 @@
  * on the screen — every line of every delivery note starts here — so it is worth
  * being a real sheet.
  *
- * What it is instead: a search field, then the same three sections *Stanje
- * šanka* draws — *Kafa*, *Nargila*, *Ostalo* (`stanjeGroup()` in
+ * What it is instead: a search field, then the same sections *Stanje šanka*
+ * draws — the shared categories (`groupSections()` in
  * `RobaStanjeTable.vue`, so the two screens can never disagree about where an
  * article belongs) — each a sticky label over a card of 44 px rows. A row says
  * the name and, quietly beside it, the unit — *kom* — which is what somebody
@@ -32,7 +32,7 @@
  * over, not stacked, because two scrims on a phone is one too many.
  */
 import { fold } from '~/components/order/OrderText'
-import { stanjeGroup } from './RobaStanjeTable.vue'
+import { groupSections } from './RobaStanjeTable.vue'
 import type { StockItemAdmin } from '#shared/types'
 
 const props = defineProps<{
@@ -62,20 +62,11 @@ function matches(item: StockItemAdmin, needle: string): boolean {
   return haystack.split(/[\s·,\-/()]+/).some(word => word.startsWith(needle))
 }
 
-/** The sections, in the shelf's own order, with the empty ones dropped. */
+/** The sections — the shared categories, as *Stanje šanka* draws them — with the empty ones dropped. */
 const sections = computed(() => {
   const needle = fold(query.value).trim()
   const hits = active.value.filter(item => matches(item, needle))
-  return ([
-    { key: 'kafa', label: 'Kafa' },
-    { key: 'nargila', label: 'Nargila' },
-    { key: 'ostalo', label: 'Ostalo' },
-  ] as const)
-    .map(group => ({
-      ...group,
-      rows: hits.filter(item => stanjeGroup(item) === group.key),
-    }))
-    .filter(section => section.rows.length > 0)
+  return groupSections(hits)
 })
 
 const found = computed(() => sections.value.reduce((n, section) => n + section.rows.length, 0))
