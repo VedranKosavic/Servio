@@ -85,9 +85,9 @@ function mark(row: StanjeRow): { tone: 'warn' | 'bad', text: string } | null {
             <span
               class="r-settled num"
               :class="{ 'r-low': row.status === 'nisko' || row.status === 'u_minusu' }"
-            >{{ formatStockQty(row.settled, row.base_unit) }}</span>
-            <span v-if="row.pending !== 0" class="r-pending num">
-              {{ formatMovementQty(row.pending, row.base_unit) }}
+            >{{ formatStockQty(row.on_hand, row.base_unit) }}</span>
+            <span v-if="row.consumed > 0" class="r-pending num">
+              potrošeno {{ formatStockQty(row.consumed, row.base_unit) }}
             </span>
           </span>
         </div>
@@ -178,7 +178,7 @@ function mark(row: StanjeRow): { tone: 'warn' | 'bad', text: string } | null {
 
 /* Tonight. The sentence under the card says what the colour means, once —
    a colour never carries a meaning alone (DESIGN §2). */
-.r-pending { font-size: var(--text-body); font-weight: 600; color: var(--danger); }
+.r-pending { font-size: var(--text-label); font-weight: 600; color: var(--ink-2); }
 
 /* Bars, not a spinner over stale numbers — the shape `UiTable` draws. */
 .r-skel-row {

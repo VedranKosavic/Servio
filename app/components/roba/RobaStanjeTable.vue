@@ -37,6 +37,11 @@ export interface StanjeRow {
    * none is open. Drawn in `--danger` beside `settled` and nowhere else.
    */
   pending: number
+  /**
+   * *Potrošeno u smjeni* — what the open shift sold or wrote off, positive
+   * (16.09.2026). Deliveries during the shift are not consumption.
+   */
+  consumed: number
   status: StockStatus
   value_fen: number
   par_qty: number | null
@@ -180,6 +185,7 @@ export function buildStanjeRows(
       // second apart and one of them is a lock older than the other.
       settled: item.on_hand - pending,
       pending,
+      consumed: now?.consumed ?? 0,
       status: item.status,
       value_fen: item.value_fen,
       par_qty: item.par_qty,
@@ -216,7 +222,7 @@ defineProps<{
 const COLUMNS: UiColumn[] = [
   { key: 'name', label: 'Artikal' },
   { key: 'on_hand', label: 'Na stanju', align: 'r' },
-  { key: 'pending', label: 'Večeras', align: 'r' },
+  { key: 'consumed', label: 'Potrošeno u smjeni', align: 'r' },
   { key: 'value', label: 'Vrijednost', align: 'r' },
   { key: 'status', label: 'Status' },
 ]
@@ -250,12 +256,12 @@ function statusPill(row: StanjeRow): { tone: 'good' | 'warn' | 'bad', text: stri
         <td
           class="r"
           :class="{ 'a-roba-low': row.status === 'nisko' || row.status === 'u_minusu' }"
-        >{{ formatStockQty(row.settled, row.base_unit) }}</td>
+        >{{ formatStockQty(row.on_hand, row.base_unit) }}</td>
         <!-- Only when there is something to say. A column of dashes down a
              quiet afternoon is a column the eye stops reading. -->
         <td class="r">
-          <span v-if="row.pending !== 0" class="a-roba-pending num">
-            {{ formatMovementQty(row.pending, row.base_unit) }}
+          <span v-if="row.consumed > 0" class="a-roba-pending num">
+            {{ formatStockQty(row.consumed, row.base_unit) }}
           </span>
         </td>
         <td class="r"><UiMoney :fen="row.value_fen" :currency="false" /></td>
@@ -292,7 +298,7 @@ function statusPill(row: StanjeRow): { tone: 'good' | 'warn' | 'bad', text: stri
 /* Tonight, in the one colour on this screen that means "still moving". The
    word for it is in the column header and in the sentence under the card —
    colour never carries the meaning alone (DESIGN §2). */
-.a-roba-pending { color: var(--danger); font-weight: 600; white-space: nowrap; }
+.a-roba-pending { color: var(--ink-2); font-weight: 600; white-space: nowrap; }
 
 .a-roba-status { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 .a-roba-status small { font-size: var(--text-caption); color: var(--muted); }

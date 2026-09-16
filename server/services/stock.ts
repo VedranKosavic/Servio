@@ -277,6 +277,34 @@ export function shiftDeltaByItem(
 }
 
 /**
+ * What the open shift **used** of each article — *Potrošeno u smjeni*
+ * (16.09.2026), a positive number.
+ *
+ * Sales and waste only, with a storno giving back what it cancelled. A delivery
+ * booked during the shift is goods arriving, not goods used, so it is not in
+ * here even though it carries the shift — which is why this is not simply the
+ * negative of `shiftDeltaByItem`.
+ */
+export function shiftConsumedByItem(
+  q: Queryable, venueId: string, shiftId: string,
+): Map<string, number> {
+  const rows = q.select({
+    stockItemId: schema.stockMovements.stockItemId,
+    delta: sql<number>`sum(${schema.stockMovements.qtyDelta})`,
+  })
+    .from(schema.stockMovements)
+    .where(and(
+      eq(schema.stockMovements.venueId, venueId),
+      eq(schema.stockMovements.shiftId, shiftId),
+      inArray(schema.stockMovements.type, ['sale', 'sale_storno', 'waste']),
+    ))
+    .groupBy(schema.stockMovements.stockItemId)
+    .all()
+
+  return new Map(rows.map(r => [r.stockItemId, Math.max(0, -(r.delta ?? 0))]))
+}
+
+/**
  * On hand **as of** a moment: the same sum, bounded by `occurred_at`.
  *
  * This is what a count compares its counted quantity against, and the bound is
@@ -419,6 +447,7 @@ export function getStock(q: Queryable, venueId: string): StockItem[] {
   const lastMap = lastMovements(q, venueId)
   const shift = currentShift(q, venueId)
   const pendingMap = shift ? shiftDeltaByItem(q, venueId, shift.id) : null
+  const consumedMap = shift ? shiftConsumedByItem(q, venueId, shift.id) : null
   // The shared categories (16.09.2026): the bar reads its shelf by the same
   // categories the menu and *Prijem robe* use, in the owner's order.
   const categories = new Map(
@@ -455,6 +484,7 @@ export function getStock(q: Queryable, venueId: string): StockItem[] {
       // other screen and every invariant test computes.
       settled: hand - pending,
       pending,
+      consumed: consumedMap?.get(item.id) ?? 0,
       status: stockStatus(item, hand),
       estimated: cost.estimated,
       unit_cost_mfen: cost.mfen,
@@ -1498,6 +1528,7 @@ export function correctStock(
     on_hand: hand,
     settled: hand - pending,
     pending,
+    consumed: shift ? shiftConsumedByItem(db, venueId, shift.id).get(row.id) ?? 0 : 0,
     status: stockStatus(row, hand),
     estimated: cost.estimated,
     unit_cost_mfen: cost.mfen,

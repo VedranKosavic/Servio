@@ -90,6 +90,11 @@ export interface StockItem {
    * `settled + pending === on_hand`, always.
    */
   pending: number
+  /**
+   * *Potrošeno u smjeni* — what the open shift sold or wrote off of it, as a
+   * positive number (a storno gives back). 0 with no shift open.
+   */
+  consumed: number
   status: StockStatus
   /** The unit cost is the `last_cost_mfen` fallback, not a real average (§6.8). */
   estimated: boolean

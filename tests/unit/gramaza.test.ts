@@ -121,3 +121,23 @@ describe('what the menu strikes through', () => {
     expect(menuAvailability(f.db, f.venueId).products).toContain(espresso)
   })
 })
+
+describe('potrošeno u smjeni', () => {
+  it('counts what the shift sold, positive, and not goods that arrived during it', async () => {
+    const { getStock } = await import('../../server/services/stock')
+    const { createDelivery } = await import('../../server/services/stock')
+    f.openShift({ members: ['Amar'] })
+    const { beans, espresso } = coffee()
+
+    sell(espresso, 2)
+    createDelivery(f.db, f.venueId, f.adminActor(), {
+      client_id: randomUUID(),
+      lines: [{ stock_item_id: beans, packs: 0, loose: 1000, line_cost_fen: 3_000 }],
+    })
+
+    const row = getStock(f.db, f.venueId).find(item => item.id === beans)!
+    expect(row.consumed).toBe(16)
+    // On hand already has the sale taken off and the delivery added.
+    expect(row.on_hand).toBe(1000 - 16)
+  })
+})

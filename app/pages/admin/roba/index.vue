@@ -143,7 +143,7 @@ const sections = computed(() => groupStanjeRows(shown.value, categoryOrder.value
  * screen with no red number on it is a sentence that teaches nobody anything
  * and costs a row of every quiet afternoon.
  */
-const anyPending = computed(() => rows.value.some(row => row.pending !== 0))
+const anyPending = computed(() => rows.value.some(row => row.consumed > 0))
 
 /** The nag lists of PLAN §9 that survived, each with the count of its rows. */
 const CHIPS: Array<{ key: StanjeFilter, label: string }> = [
@@ -207,7 +207,7 @@ function toggle(key: StanjeFilter) {
          explain. `role="status"` because it appears when the first round of
          the night lands, under somebody who is already looking at the list. -->
     <p v-if="anyPending" class="a-legend" role="status">
-      Crveno je večerašnja smjena; ulazi u stanje kad se smjena zatvori.
+      Na stanju je trenutna količina — svaka potvrđena tura se odmah oduzima. Potrošeno u smjeni je koliko je otišlo od otvaranja smjene.
     </p>
 
     <!-- ---- the phone ---------------------------------------------------- -->
