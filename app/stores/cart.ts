@@ -199,6 +199,21 @@ export const useCartStore = defineStore('cart', () => {
   }
 
   /**
+   * Point the next round at a tab that already exists on the server.
+   *
+   * *Bez stola* is the one place that needs it: a loose round joins a tab
+   * **only** through the id its own phone minted (`orders.ts`), so adding to the
+   * second party at the bar means taking on that party's `tab_client_id` first.
+   * A table answers the same question by itself and never calls this.
+   */
+  function adoptTab(tableId: string | null, tabClientId: string): void {
+    const key = keyFor(tableId)
+    if (tabIds.value[key] === tabClientId) return
+    tabIds.value = { ...tabIds.value, [key]: tabClientId }
+    void persist()
+  }
+
+  /**
    * The table is settled — paid, or marked *nije plaćeno*. Forget its tab id,
    * so the next guests at that table open a tab of their own rather than
    * queueing money onto the last party's.
@@ -357,6 +372,7 @@ export const useCartStore = defineStore('cart', () => {
     clientIdFor,
     tabClientIdFor,
     ensureTabClientId,
+    adoptTab,
     closeTab,
     countFor,
     qtyOfProduct,

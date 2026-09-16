@@ -102,6 +102,17 @@ export interface TablesStateResponse {
    * `table_id: null` and a `tab_id`.
    */
   loose_tabs: TableState[]
+  /**
+   * Open tabs whose table was already given back — *Očisti sto* on a tab that
+   * still owed money, with the *Nije plaćeno* that should have followed never
+   * said.
+   *
+   * They are on no tile and in no `loose_tabs` row, and until 16.09.2026 they
+   * were on no screen at all while still refusing *Zaključi smjenu*. `/konobar`
+   * draws one card each, and the table sheet opens over them so the money can
+   * be taken or written off.
+   */
+  stranded_tabs: TableState[]
 }
 
 // ---------------------------------------------------------------------------

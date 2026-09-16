@@ -350,6 +350,7 @@ const { paying, payError, pay: payTab, markUnpaid: unpaidTab } = useTabPay({
   tableId: () => tableId.value,
   tableName: () => tableName.value,
   tabId: () => tabState.value?.tab_id ?? null,
+  tabClientId: () => tabState.value?.tab_client_id ?? null,
   remainingFen: () => localRemainingFen.value,
   refresh: () => refreshState(),
 })

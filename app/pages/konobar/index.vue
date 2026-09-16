@@ -31,6 +31,7 @@ import type {
 import type { AdjustmentOutcome } from '~/composables/useAdjustments'
 import { unpaidWordBs } from '#shared/logTemplates'
 import type { UnpaidReason } from '#shared/types'
+import { ApiSideError } from '~/composables/useApi'
 // Explicit, not auto-imported: Nuxt names a component after its path from the
 // components root, so `adjust/AdjVoidSheet.vue` would be `<AdjustAdjVoidSheet>`
 // — and an unresolved tag renders nothing at all in a production build,
@@ -52,6 +53,8 @@ const cart = useCartStore()
 
 const states = ref<TableState[]>([])
 const looseTabs = ref<TableState[]>([])
+/** Open tabs whose table was given back before the money was settled. */
+const strandedTabs = ref<TableState[]>([])
 const shift = ref<ShiftBrief | null>(null)
 
 const { data: boot, pending: bootPending, refresh: refreshBoot } = useBootstrapData()
@@ -67,6 +70,7 @@ const { refresh: refreshState } = useChanges({
   tables: (state) => {
     states.value = state.tables
     looseTabs.value = state.loose_tabs
+    strandedTabs.value = state.stranded_tabs
     shift.value = state.shift
     // The catalogue's own recovery. `useAsyncData` runs once and never retries,
     // so a first client fetch that failed with no cached copy behind it would
@@ -226,16 +230,33 @@ const LOOSE = 'bez-stola'
  */
 function looseRow(tabId: string | null): TableState | null {
   const mine = cart.tabClientIdFor(null)
-  // The card that was tapped wins; with none named it is this phone's own tab,
-  // then any of this person's. Without the first rule a phone holding two open
-  // bar tabs drew one card's amount and opened the other one's rounds.
-  const row = (tabId === null ? null : looseTabs.value.find(r => r.tab_id === tabId))
-    ?? looseTabs.value.find(r => mine !== null && r.tab_client_id === mine)
+
+  // **A named tab is that tab, or nothing.** The fallbacks below are for a
+  // sheet that has not been told which party it is about yet; once it has, a
+  // fallback is how *Naplati i očisti* on one bar tab cleared the other — the
+  // payment forgets this phone's tab id, the row it named disappears from the
+  // list, and the next-best row is a different party's money.
+  if (tabId !== null) return withQueue(looseTabs.value.find(r => r.tab_id === tabId) ?? null, mine)
+
+  // With none named: this phone's own tab, then any of this person's.
+  const row = looseTabs.value.find(r => mine !== null && r.tab_client_id === mine)
     ?? looseTabs.value.find(r => r.assigned_to === me.user.value?.id)
     ?? null
 
-  // The queue belongs to the tab this phone is adding to, which is the one the
-  // cart minted — never to a second bar tab somebody else's round opened.
+  return withQueue(row, mine, true)
+}
+
+/**
+ * The row plus whatever this phone has not managed to send.
+ *
+ * The queue belongs to the tab the cart is adding to and to no other, so a
+ * second bar tab never shows a colleague's queued round on top of its own.
+ * `mint` is for the un-named sheet only: with nothing on the server yet, the
+ * queued round is still a party at the bar and needs a row to be drawn as.
+ */
+function withQueue(
+  row: TableState | null, mine: string | null, mint = false,
+): TableState | null {
   const fen = row === null || (mine !== null && row.tab_client_id === mine)
     ? queuedLooseFen.value
     : 0
@@ -245,7 +266,7 @@ function looseRow(tabId: string | null): TableState | null {
       ? row
       : { ...row, total_fen: row.total_fen + fen, remaining_fen: row.remaining_fen + fen }
   }
-  if (fen === 0) return null
+  if (!mint || fen === 0) return null
 
   return {
     table_id: null,
@@ -495,7 +516,13 @@ async function addZar(parentLineId: string) {
  * `/konobar/sto/<id>`, one tap further in, because each of those is a decision
  * with a PIN, a reason or a countdown on it.
  */
-const sheetFor = ref<{ tableId: string | null, name: string, looseTabId?: string | null } | null>(null)
+const sheetFor = ref<{
+  tableId: string | null
+  name: string
+  looseTabId?: string | null
+  /** A tab whose table is already back in the room: found by its own id. */
+  strandedTabId?: string
+} | null>(null)
 const sheetDetail = ref<TabDetail | null>(null)
 const sheetLoading = ref(false)
 const sheetError = ref<string | null>(null)
@@ -508,6 +535,8 @@ const sheetError = ref<string | null>(null)
  */
 const sheetState = computed(() => {
   if (!sheetFor.value) return null
+  const stranded = sheetFor.value.strandedTabId
+  if (stranded) return strandedTabs.value.find(r => r.tab_id === stranded) ?? null
   const id = sheetFor.value.tableId
   if (id === null) return looseRow(sheetFor.value.looseTabId ?? null)
   return shownStates.value.find(s => s.table_id === id) ?? null
@@ -585,6 +614,18 @@ function openSheet(tableId: string | null, looseTabId: string | null = null) {
   void loadSheetDetail()
 }
 
+/** The sheet over a tab whose table is already back in the room. */
+function openStranded(row: TableState) {
+  sheetFor.value = {
+    tableId: row.table_id,
+    name: draftName(row.table_id),
+    strandedTabId: row.tab_id ?? undefined,
+  }
+  sheetError.value = null
+  sheetDetail.value = null
+  void loadSheetDetail()
+}
+
 /**
  * The rounds, read when there is something to read them by.
  *
@@ -594,7 +635,16 @@ function openSheet(tableId: string | null, looseTabId: string | null = null) {
  * a server id only once the outbox has drained. Either way the sheet is
  * already on screen, and this fills it in when the id turns up.
  */
-watch(() => (sheetFor.value ? sheetState.value?.tab_id ?? null : null), () => {
+watch(() => (sheetFor.value ? sheetState.value?.tab_id ?? null : null), (tabId) => {
+  // **The bar sheet pins itself to its tab.** Until it does it is resolved by
+  // "this phone's bar tab", and that answer changes under it the moment the
+  // payment forgets the tab id — which is how settling one party cleared the
+  // next one's table. A table needs none of this: its id is the question.
+  const open = sheetFor.value
+  if (open && open.tableId === null && !open.looseTabId
+    && tabId && !tabId.startsWith('local:')) {
+    open.looseTabId = tabId
+  }
   void loadSheetDetail()
 })
 
@@ -738,11 +788,15 @@ const { paying, payError, pay: payTab, markUnpaid: unpaidTab } = useTabPay({
     const id = sheetState.value?.tab_id ?? null
     return id && !id.startsWith('local:') ? id : null
   },
+  // The row's own id, so a bar card settles the party it is drawn for.
+  tabClientId: () => sheetState.value?.tab_client_id ?? null,
   remainingFen: () => sheetMoney.remainingFen.value,
   refresh: () => refreshState(),
 })
 
 async function onPay(payment: { method: PaymentMethod, amount_fen: number, received_fen?: number }) {
+  // Read before the payment: taking the money moves the floor under the sheet.
+  const paidTabId = sheetState.value?.tab_id ?? null
   const done = await payTab(payment)
   if (!done) return
   payOpen.value = false
@@ -753,7 +807,7 @@ async function onPay(payment: { method: PaymentMethod, amount_fen: number, recei
   // Settled. *Naplati i očisti* gives the table back in the same breath;
   // *Naplati* leaves the guests sitting there behind a checkmark, so the sheet
   // stays open on the table they are still at.
-  if (payAndClear.value) await clearCurrentTable()
+  if (payAndClear.value) await clearCurrentTable(paidTabId)
   else await loadSheetDetail()
 }
 
@@ -765,8 +819,8 @@ async function onPay(payment: { method: PaymentMethod, amount_fen: number, recei
  * queue against a tab the server has never seen. It fails loudly instead, and
  * the table stays as it was until it is tapped again.
  */
-async function clearCurrentTable() {
-  const tabId = sheetState.value?.tab_id
+async function clearCurrentTable(only?: string | null) {
+  const tabId = only ?? sheetState.value?.tab_id
   if (!tabId || tabId.startsWith('local:')) {
     closeSheet()
     return
@@ -777,6 +831,13 @@ async function clearCurrentTable() {
     await refreshState()
     closeSheet()
   } catch (err) {
+    // Already given back — which is the state *Naplati i očisti* was asking
+    // for. A stranded tab reaches this every time, and it is not a failure.
+    if (err instanceof ApiSideError && err.code === 'TAB_ALREADY_CLEARED') {
+      await refreshState()
+      closeSheet()
+      return
+    }
     sheetError.value = apiErrorText(err, 'Sto se nije očistio — pokušaj ponovo')
     void me.handleAuthError(err)
   } finally {
@@ -842,15 +903,35 @@ const ZONES = [
 ] as const
 
 /**
- * *+ Bez stola*, and the card above the plan: the bar behaves like a table.
+ * *+ Bez stola* — **always the menu, never the money** (the owner, 16.09.2026).
  *
- * Something on it opens the sheet, nothing on it goes straight to the menu —
- * the same two branches `openTable` has, because the owner asked for the two to
- * work the same way (16.09.2026).
+ * The button is how a new party at the bar gets its first round, so it opens
+ * the menu every time and forgets whatever bar tab this phone was last adding
+ * to: two people standing at the bar are two parties, not one tab that grows
+ * all night. Charging one of them is the card's job, one card per tab.
  */
 function openLoose() {
-  if (shownLoose.value?.tab_id || draftCount(null) > 0) openSheet(null)
-  else navigateTo('/konobar/dodaj/bez-stola')
+  cart.closeTab(null)
+  navigateTo('/konobar/dodaj/bez-stola')
+}
+
+/**
+ * *+ Dodaj* from the sheet: another round on **this** tab.
+ *
+ * At a table the server finds the open tab by the table. At the bar it cannot —
+ * a loose round joins a tab only through the id the phone minted — so the phone
+ * takes on this card's tab id before walking to the menu.
+ */
+function addToSheet() {
+  const open = sheetFor.value
+  if (!open) return
+  if (open.tableId !== null) {
+    void navigateTo(`/konobar/dodaj/${open.tableId}`)
+    return
+  }
+  const clientId = sheetState.value?.tab_client_id
+  if (clientId && !open.strandedTabId) cart.adoptTab(null, clientId)
+  void navigateTo('/konobar/dodaj/bez-stola')
 }
 </script>
 
@@ -973,6 +1054,33 @@ function openLoose() {
             </p>
           </div>
         </div>
+
+        <!--
+          A tab whose table is already back in the room and whose money never
+          was: *Očisti sto* on a tab that still owed, with no *Nije plaćeno*
+          after it. It is on no tile, so it gets a card — without one it was
+          invisible everywhere and still refused *Zaključi smjenu*.
+        -->
+        <button
+          v-for="row in strandedTabs"
+          :key="row.tab_id!"
+          type="button"
+          class="card flex items-center gap-3 border-warn p-4 text-left"
+          @click="openStranded(row)"
+        >
+          <div class="grow">
+            <p class="eyebrow">
+              Nezatvoren račun · {{ draftName(row.table_id) }}
+            </p>
+            <p class="metric num mt-1">
+              {{ formatKm(row.remaining_fen) }}
+            </p>
+            <p class="text-label text-text-2">
+              Račun je ostao otvoren. Naplati ga ili označi zašto nije plaćen.
+            </p>
+          </div>
+          <span class="chip chip-warn">nezatvoren</span>
+        </button>
 
         <!-- Bez stola: the guests at the bar, on nobody's table.
              The card opens the same sheet a tile does. -->
@@ -1106,7 +1214,7 @@ function openLoose() {
       :has-tab="sheetMoney.hasTab.value"
       :loose="sheetFor.tableId === null"
       @close="closeSheet"
-      @add="navigateTo(`/konobar/dodaj/${sheetFor.tableId ?? 'bez-stola'}`)"
+      @add="addToSheet()"
       @pay="(andClear) => { payAndClear = andClear; payError = null; payOpen = true }"
       @clear="clearCurrentTable"
       @move="moveError = null; moveOpen = true"

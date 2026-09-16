@@ -27,6 +27,17 @@ export interface TabPayContext {
   tableName: () => string
   /** The server's id once it has one; null while the tab lives only in the outbox. */
   tabId: () => string | null
+  /**
+   * **Which tab this is**, by the client id the ledger keys on.
+   *
+   * A table answers that by itself, but the bar does not: two *Bez stola* tabs
+   * are two parties standing next to each other, and until 16.09.2026 both the
+   * payment and the *Nije plaćeno* took `cart.ensureTabClientId(null)` — this
+   * phone's own bar tab — so settling the card for one party could name the
+   * other. The screen passes the row's own id; `null` falls back to minting
+   * one, which is what an offline tab the server has never seen needs.
+   */
+  tabClientId: () => string | null
   /** What is still owed, the phone's own figure including anything queued. */
   remainingFen: () => number
   /** Re-read the floor after the queue has taken the payment. */
@@ -61,7 +72,7 @@ export function useTabPay(ctx: TabPayContext) {
   }): Promise<PaidOutcome | null> {
     if (paying.value) return null
     const tabId = ctx.tabId()
-    const clientTabId = cart.ensureTabClientId(ctx.tableId())
+    const clientTabId = ctx.tabClientId() ?? cart.ensureTabClientId(ctx.tableId())
 
     paying.value = true
     payError.value = null
@@ -101,8 +112,10 @@ export function useTabPay(ctx: TabPayContext) {
       }
 
       // Settled: the tab's client id is forgotten, because the next guests at
-      // this table are a new tab and must not inherit this one's.
-      cart.closeTab(ctx.tableId())
+      // this table are a new tab and must not inherit this one's. Only when it
+      // *is* the one this phone is adding to — settling a second bar tab must
+      // not detach the phone from the party it is still serving.
+      if (cart.tabClientIdFor(ctx.tableId()) === clientTabId) cart.closeTab(ctx.tableId())
       return {
         remainingFen: 0,
         changeFen,
@@ -129,7 +142,7 @@ export function useTabPay(ctx: TabPayContext) {
    */
   async function markUnpaid(reason: UnpaidReason): Promise<boolean> {
     if (paying.value) return false
-    const clientTabId = cart.ensureTabClientId(ctx.tableId())
+    const clientTabId = ctx.tabClientId() ?? cart.ensureTabClientId(ctx.tableId())
 
     paying.value = true
     payError.value = null
@@ -151,7 +164,7 @@ export function useTabPay(ctx: TabPayContext) {
         },
       })
       await ctx.refresh()
-      cart.closeTab(ctx.tableId())
+      if (cart.tabClientIdFor(ctx.tableId()) === clientTabId) cart.closeTab(ctx.tableId())
       return true
     } catch (err) {
       payError.value = apiErrorText(err)

@@ -27,6 +27,8 @@ import { createOrder } from '../../server/services/orders'
 import { getPrep, markPrepared } from '../../server/services/prep'
 import { createDelivery, getStock } from '../../server/services/stock'
 import { getTab, getTablesState } from '../../server/services/tabs'
+import { clearTab } from '../../server/services/clearTable'
+import { openTabsOn } from '../../server/services/shifts'
 import { getLive, getOwnerShift, listOwnerShifts, shiftLines } from '../../server/services/owner'
 import { listLoginUsers, listMySessions } from '../../server/services/auth'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
@@ -244,11 +246,40 @@ describe('GET /api/tables/state', () => {
 
   it('answers the envelope §6.2 shapes, not a bare array', () => {
     const state = getTablesState(f.db, f.venueId, f.actor('Amar'))
-    expect(Object.keys(state).sort()).toEqual(['loose_tabs', 'seq', 'shift', 'tables'])
+    expect(Object.keys(state).sort()).toEqual([
+      'loose_tabs', 'seq', 'shift', 'stranded_tabs', 'tables',
+    ])
     // No shift has been opened, so the strip is null and the floor plan is not.
     expect(state.shift).toBeNull()
     expect(Array.isArray(state.tables)).toBe(true)
     expect(state.loose_tabs).toEqual([])
+    expect(state.stranded_tabs).toEqual([])
+  })
+
+  /**
+   * A tab cleared with money still on it (*Očisti sto* takes none, on purpose)
+   * used to be on no screen at all while still refusing *Zaključi smjenu*:
+   * `tables` and `loose_tabs` both filter on `cleared_at IS NULL`, and
+   * `openTabsOn` does not. `/konobar` draws these as their own cards instead.
+   */
+  it('keeps a cleared tab that still owes money in stranded_tabs, and on no tile', () => {
+    const round = createOrder(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(),
+      table_id: null,
+      lines: [{ id: randomUUID(), product_id: f.productId('Kafa'), qty: 1 }],
+    })
+    clearTab(f.db, f.venueId, f.actor('Amar'), round.tab_id)
+
+    const state = getTablesState(f.db, f.venueId, f.actor('Amar'))
+    expect(state.loose_tabs).toEqual([])
+    expect(state.tables.every(t => t.tab_id === null)).toBe(true)
+    expect(state.stranded_tabs).toHaveLength(1)
+    expect(state.stranded_tabs[0]!.tab_id).toBe(round.tab_id)
+    expect(state.stranded_tabs[0]!.remaining_fen).toBe(150)
+
+    // …and it is still what the close refuses over, which is the point.
+    expect(openTabsOn(f.db, f.venueId, round.shift_id)
+      .map(t => t.table_name)).toEqual(['Bez stola'])
   })
 
   /**

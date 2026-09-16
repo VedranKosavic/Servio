@@ -8,7 +8,7 @@
  * 23:00 needs no correcting write anywhere: the number simply comes out
  * different the next time somebody asks.
  */
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { badRequest, conflict, forbidden, notFound } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
@@ -178,6 +178,35 @@ export function getTablesState(
     .all()
 
   /**
+   * **Open, cleared, and therefore on no screen at all** — the rows this third
+   * list exists to rescue.
+   *
+   * *Očisti sto* takes no money on purpose (`clearTable.ts`): the guests walked
+   * out, the table goes back to the room, and *Nije plaćeno* is the sentence the
+   * waiter is meant to say next. When he does not, the tab keeps `status =
+   * 'open'` with a balance on it — and because the list above filters on
+   * `cleared_at IS NULL`, it vanished from the plan while still blocking
+   * *Zaključi smjenu* with the name of a table that looks empty (found
+   * 16.09.2026: "nemam aktivnih stolova u Bez stola ali mi ne da zaključiti").
+   *
+   * A close that refuses is right — that is money nobody has accounted for. A
+   * close that refuses over something no screen will show is a dead end, so
+   * these come back as cards over the plan, and the same sheet resolves them.
+   */
+  const strandedRows = q.select({
+    tab: schema.tabs,
+    openedByName: schema.users.name,
+  })
+    .from(schema.tabs)
+    .innerJoin(schema.users, eq(schema.users.id, schema.tabs.openedBy))
+    .where(and(
+      eq(schema.tabs.venueId, venueId),
+      isNotNull(schema.tabs.clearedAt),
+      eq(schema.tabs.status, 'open'),
+    ))
+    .all()
+
+  /**
    * Which shift of its own business day a tab belongs to — 1 for the morning,
    * 2 for the evening — which is the **colour of its tile**.
    *
@@ -201,7 +230,8 @@ export function getTablesState(
     }
   }
 
-  const money = tabMoneyMany(q, venueId, openTabs.map(t => t.tab.id))
+  const money = tabMoneyMany(q, venueId,
+    [...openTabs, ...strandedRows].map(t => t.tab.id))
 
   const lastOrder = new Map<string, string>(
     q.select({
@@ -287,6 +317,7 @@ export function getTablesState(
     shift: shiftBrief(q, venueId, actor),
     tables: rows,
     loose_tabs: looseTabs,
+    stranded_tabs: strandedRows.map(t => stateOf(t.tab, t.openedByName)),
   }
 }
 
