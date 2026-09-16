@@ -338,9 +338,6 @@ watch(detail, (value) => {
 const payOpen = ref(false)
 const payMode = ref<'main' | 'unpaid'>('main')
 
-const paymentMethods = computed<PaymentMethod[]>(() =>
-  me.settings.value?.payment_methods ?? ['cash'])
-
 /**
  * Taking the money. The queueing itself is `useTabPay`, shared with the floor
  * plan's review sheet; what stays here is what this screen does afterwards —
@@ -1034,7 +1031,6 @@ function lateWasNotPaid(row: TableState) {
       :table-name="tableName"
       :remaining-fen="localRemainingFen"
       :total-fen="localTotalFen"
-      :methods="paymentMethods"
       :initial-mode="payMode"
       :busy="paying"
       :error="payError"

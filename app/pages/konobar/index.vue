@@ -680,10 +680,6 @@ function closeSheet() {
 
 const payOpen = ref(false)
 
-/** The venue's own list, from the session context — the same source S2 reads. */
-const paymentMethods = computed<PaymentMethod[]>(() =>
-  me.settings.value?.payment_methods ?? ['cash'])
-
 /**
  * *Naplati* or *Naplati i očisti* — which of the two the waiter tapped.
  *
@@ -1271,7 +1267,6 @@ function addToSheet() {
       :table-name="sheetFor.name"
       :remaining-fen="sheetMoney.remainingFen.value"
       :total-fen="sheetMoney.totalFen.value"
-      :methods="paymentMethods"
       :initial-mode="payMode"
       :busy="paying"
       :error="payError"

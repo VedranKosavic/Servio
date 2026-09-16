@@ -2,25 +2,22 @@
 /**
  * *Naplati* (S8) — the sheet that closes a table.
  *
- * The shape of it comes from what actually happens at a table: the guest hands
- * over a note, and the waiter needs the change in his head before he reaches
- * into his apron. So the buttons are the notes people pay with — 20, 50, 100 —
- * and the sheet does the subtraction. *Tačno* is the common case and sits first.
+ * **Two buttons, on the owner's word (16.09.2026): *Naplati* and *Otkaži*.**
+ * It used to offer the notes people pay with (20, 50, 100) with the change
+ * worked out under each, *Drugi iznos* for a partial payment, *Kartica* where
+ * the venue takes cards, and *Nije plaćeno*. All of that is gone from the main
+ * screen: the guests pay what they owe, in cash, and the waiter taps once.
  *
- * Two rules from BACKEND §6.3 shape it:
+ * `amount_fen` is what the café keeps and there is no `received_fen` any more —
+ * with the exact amount the only amount, the change is always nothing, and the
+ * server was never told a price here anyway (it priced the round at lock).
  *
- * - **`amount_fen` is what the café keeps, `received_fen` is what the guest
- *   handed over.** Only the first one moves what is owed; the difference is the
- *   change. Neither is a price — the server priced the round at lock and this
- *   sheet has no idea what a coffee costs.
- * - **Card only when the venue takes cards.** `payment_methods` is a setting,
- *   and posting `card` to a café that has no terminal is 400 `METHOD_NOT_ALLOWED`
- *   — so the button is simply not drawn.
- *
- * *Nije plaćeno* lives here too, because it is the other way a table ends and
- * hiding it somewhere else would make walking out feel like something to hide.
+ * *Nije plaćeno* is still **reachable, but not from here**: the table's own ⋯
+ * menu opens this sheet with `initial-mode="unpaid"`, which is the screen a
+ * waiter needs when guests walk out. Losing it entirely would mean a night that
+ * cannot say where the money went.
  */
-import { formatKm, parseKm } from '#shared/money'
+import { formatKm } from '#shared/money'
 import type { PaymentMethod } from '#shared/types'
 
 const props = withDefaults(defineProps<{
@@ -29,8 +26,6 @@ const props = withDefaults(defineProps<{
   remainingFen: number
   /** What the guests were charged in total, for the line above it. */
   totalFen: number
-  /** From `venue.settings.payment_methods`. */
-  methods: PaymentMethod[]
   /**
    * Which half the sheet opens on. ⋯ → *Nije plaćeno* comes straight here, so
    * a guest who walked out costs the same two taps as one who paid.
@@ -48,44 +43,22 @@ const emit = defineEmits<{
 
 useSheetDismiss(() => emit('close'))
 
-type Mode = 'main' | 'custom' | 'unpaid'
+type Mode = 'main' | 'unpaid'
 const mode = ref<Mode>(props.initialMode)
-const receivedRaw = ref('')
 
-const cardAllowed = computed(() => props.methods.includes('card'))
-
-/** The notes worth offering: only the ones bigger than the bill. */
-const NOTES_FEN = [2000, 5000, 10_000]
-const notes = computed(() => NOTES_FEN.filter(fen => fen > props.remainingFen))
-
-const received = computed(() => parseKm(receivedRaw.value))
-const customChange = computed(() => {
-  const value = received.value
-  if (value === null) return null
-  return Math.max(0, value - props.remainingFen)
-})
-const customReady = computed(() => received.value !== null && received.value > 0 && !props.busy)
-
-function payCash(receivedFen: number) {
-  if (props.busy) return
-  // A guest who hands over less than the bill has paid part of it: the tab stays
-  // open for the rest rather than the sheet refusing him.
-  const amount = Math.min(receivedFen, props.remainingFen)
-  emit('pay', { method: 'cash', amount_fen: amount, received_fen: receivedFen })
-}
+/**
+ * **One tap is one payment.** `busy` alone is not enough: queueing is fast
+ * enough that a double tap can land either side of it, and the second one is a
+ * second payment for a tab that is already settled — a 409 and a red card in
+ * the outbox at the exact moment a guest is walking away. The latch is per
+ * opening of the sheet, so re-opening a tab that is still owed works normally.
+ */
+const sent = ref(false)
 
 function payExact() {
-  payCash(props.remainingFen)
-}
-
-function payCard() {
-  if (props.busy) return
-  emit('pay', { method: 'card', amount_fen: props.remainingFen })
-}
-
-function payCustom() {
-  if (!customReady.value || received.value === null) return
-  payCash(received.value)
+  if (props.busy || sent.value) return
+  sent.value = true
+  emit('pay', { method: 'cash', amount_fen: props.remainingFen })
 }
 
 const UNPAID_REASONS = [
@@ -124,100 +97,23 @@ const UNPAID_REASONS = [
           {{ error }}
         </p>
 
-        <!-- The notes people actually pay with -->
+        <!-- One tap takes the money, one closes the sheet. -->
         <template v-if="mode === 'main'">
-          <button type="button" class="btn btn-primary btn-lg" :disabled="busy" @click="payExact">
-            Tačno ·<span class="num">{{ formatKm(remainingFen) }}</span>
+          <button
+            type="button"
+            class="btn btn-primary btn-lg"
+            :disabled="busy || sent"
+            @click="payExact"
+          >
+            {{ busy || sent ? 'Naplaćujem…' : 'Naplati' }}
           </button>
-
-          <div v-if="notes.length" class="grid grid-cols-3 gap-2.5">
-            <button
-              v-for="note in notes"
-              :key="note"
-              type="button"
-              class="note-btn"
-              :disabled="busy"
-              @click="payCash(note)"
-            >
-              <span class="num note-value">{{ formatKm(note) }}</span>
-              <small class="num note-change">vrati {{ formatKm(note - remainingFen) }}</small>
-            </button>
-          </div>
-
-          <div class="flex flex-col gap-2.5">
-            <button type="button" class="btn btn-secondary" :disabled="busy" @click="mode = 'custom'">
-              Drugi iznos
-            </button>
-
-            <button
-              v-if="cardAllowed"
-              type="button"
-              class="btn btn-secondary"
-              :disabled="busy"
-              @click="payCard"
-            >
-              Kartica
-            </button>
-          </div>
-
-          <!-- One weighted action and one way out. These two used to be the same
-               ghost button, stacked and identical, at one in the morning on the
-               screen where money is taken: *Nije plaćeno* leaves an unpaid tab
-               on the waiter's name for the owner to decide on, *Otkaži* only
-               closes the sheet. `.btn-danger` is the system's soft ground with
-               danger ink, which is what it is for. -->
-          <div class="mt-1 flex flex-col gap-2.5 border-t border-line-soft pt-3">
-            <button type="button" class="btn btn-danger" :disabled="busy" @click="mode = 'unpaid'">
-              Nije plaćeno
-            </button>
-            <button type="button" class="btn btn-ghost" @click="emit('close')">
-              Otkaži
-            </button>
-          </div>
-        </template>
-
-        <!-- Drugi iznos: what the guest handed over -->
-        <template v-else-if="mode === 'custom'">
-          <label class="flex flex-col gap-2">
-            <span class="eyebrow">Koliko je gost dao</span>
-            <!-- `self-stretch`, so the input's own box is the whole 60 px well
-                 rather than the 28 px of text inside it: a waiter counting an
-                 envelope taps the visible slot, not the glyphs in it.
-                 `.input-num` sets a *min*-height, so a percentage height would
-                 resolve against nothing — the flex item has to stretch. The
-                 wrapping `<label>` is what makes the well focus the field, and
-                 a second one nested inside it would not be valid HTML. -->
-            <span class="input input-num flex items-center gap-2 px-4">
-              <input
-                v-model="receivedRaw"
-                type="text"
-                inputmode="decimal"
-                placeholder="0,00"
-                aria-label="Koliko je gost dao"
-                class="num min-w-0 flex-1 self-stretch bg-transparent text-right text-title font-semibold outline-none placeholder:text-muted"
-              >
-              <span class="shrink-0 text-label font-normal text-text-2">KM</span>
-            </span>
-          </label>
-
-          <p v-if="customChange !== null" class="note text-center">
-            <span class="text-text-2">Vrati</span>
-            <span class="num ml-1 font-semibold text-text">{{ formatKm(customChange) }}</span>
-          </p>
-          <p v-if="received !== null && received < remainingFen" class="note note-warn">
-            Manje od duga — sto ostaje otvoren za
-            <span class="num font-semibold">{{ formatKm(remainingFen - received) }}</span>.
-          </p>
-
-          <button type="button" class="btn btn-primary btn-lg" :disabled="!customReady" @click="payCustom">
-            {{ busy ? 'Naplaćujem…' : 'Naplati' }}
-          </button>
-          <button type="button" class="btn btn-ghost" :disabled="busy" @click="mode = 'main'">
-            Nazad
+          <button type="button" class="btn btn-ghost" :disabled="busy" @click="emit('close')">
+            Otkaži
           </button>
         </template>
 
-        <!-- Nije plaćeno: why -->
+        <!-- Nije plaćeno: why. Opened from the table's ⋯ menu, never from
+             the buttons above. -->
         <template v-else>
           <p class="note">
             Sto ostaje na tebi dok vlasnik ne odluči. Reci šta se desilo.
@@ -241,41 +137,3 @@ const UNPAID_REASONS = [
   </div>
 </template>
 
-<style scoped>
-/**
- * A note button is not a plain `.btn`: it carries two lines — what the guest
- * hands over, and what goes back — and the change is the line that stops a
- * waiter doing arithmetic in his head at one in the morning.
- */
-.note-btn {
-  display: flex;
-  min-height: 64px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  padding: 8px 6px;
-  border-radius: var(--radius-control);
-  border: 1px solid var(--line);
-  background: var(--surface-2);
-  cursor: pointer;
-  transition:
-    background var(--dur-fast) var(--ease-standard),
-    transform var(--dur-tap) var(--ease-standard);
-}
-
-.note-btn:active:not(:disabled) { transform: scale(0.97); }
-.note-btn:disabled { opacity: 0.45; cursor: default; }
-
-.note-value {
-  font-size: var(--text-body);
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.note-change {
-  font-size: var(--text-caption);
-  letter-spacing: 0.01em;
-  color: var(--muted);
-}
-</style>
