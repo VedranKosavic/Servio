@@ -69,7 +69,6 @@ const columns = [
   { key: 'vrsta', label: 'Vrsta', width: '100px' },
   { key: 'jedinica', label: 'Jedinica', width: '90px' },
   { key: 'cijena', label: 'Nabavna cijena', width: '220px' },
-  { key: 'tolerancija', label: 'Tolerancija', width: '110px' },
   { key: 'stanje', label: 'Stanje', width: '100px' },
   { key: 'akcije', label: '', align: 'r' as const, width: '190px' },
 ]
@@ -136,7 +135,7 @@ async function setActive(item: StockItemAdmin, active: boolean) {
 
 <template>
   <div class="k-page">
-    <RobaTabs sub="artikli · jedinica, nabavna cijena, tolerancija">
+    <RobaTabs sub="artikli · jedinica i nabavna cijena">
       <template #actions>
         <UiButton variant="primary" @click="open(null)">Novi artikal</UiButton>
       </template>
@@ -172,7 +171,6 @@ async function setActive(item: StockItemAdmin, active: boolean) {
           <tr v-for="item in rows" :key="item.id" :class="{ off: !item.active }">
             <td>
               <strong>{{ item.name }}</strong>
-              <span v-if="item.brand" class="k-muted"> · {{ item.brand }}</span>
             </td>
             <td>{{ stockKindLabel(item.kind) }}</td>
             <td>
@@ -182,7 +180,6 @@ async function setActive(item: StockItemAdmin, active: boolean) {
               {{ stockCostText(item) }}
               <span v-if="item.estimated_cost && item.last_cost_mfen > 0" class="k-muted k-block">procijenjeno</span>
             </td>
-            <td class="num">{{ formatStockQty(item.tolerance_qty, item.base_unit) }}</td>
             <td>
               <UiPill :tone="item.active ? 'good' : 'neutral'">
                 {{ item.active ? 'aktivan' : 'ugašen' }}

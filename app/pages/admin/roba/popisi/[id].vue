@@ -110,7 +110,7 @@ const PHASE_LABELS: Record<CountView['phase'], string> = {
 
     <div v-if="count" class="a-tiles">
       <UiTile label="Popisao" :value="count.counted_by_name" :sub="dateTimeBs(count.submitted_at)" />
-      <UiTile label="Stavki" :value="count.totals.lines" :sub="`${count.totals.out_of_tolerance} van tolerancije`" />
+      <UiTile label="Stavki" :value="count.totals.lines" />
       <UiTile
         label="Manjak / višak"
         :value="signedKm(count.totals.variance_fen)"

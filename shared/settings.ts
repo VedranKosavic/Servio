@@ -222,6 +222,6 @@ export const SETTINGS_LABELS: Partial<Record<keyof Settings, string>> = {
   coals_per_bowl_alert: 'Žara po luli',
   upload_user_day_bytes: 'Slike po osobi — dnevno',
   upload_user_day_files: 'Slika po osobi dnevno',
-  roster_late_grace_min: 'Tolerancija kašnjenja (min)',
+  roster_late_grace_min: 'Dozvoljeno kašnjenje (min)',
   swap_needs_owner: 'Zamjenu potvrđuje vlasnik',
 }

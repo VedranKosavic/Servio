@@ -49,10 +49,8 @@ const GROUPS: Group[] = [
   {
     id: 'pazar',
     title: 'Pazar',
-    note: 'Koliko predaja smije odstupati od očekivanog prije nego se označi za razgovor.',
+    note: 'Kada manjak robe ide u obavijesti.',
     fields: [
-      { key: 'cash_tolerance_fen', kind: 'money', hint: 'Razlika do ovog iznosa je u toleranciji.' },
-      { key: 'cash_tolerance_pct', kind: 'pct', hint: 'Ili ovaj dio očekivanog iznosa — vrijedi veće od ova dva.' },
       { key: 'variance_alert_fen', kind: 'money', hint: 'Manjak robe na popisu iznad ovoga ide u obavijesti.' },
     ],
   },

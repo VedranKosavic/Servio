@@ -173,9 +173,9 @@ async function send() {
         sub="stanje × cijena"
       />
       <UiTile
-        label="Tolerancija popisa"
-        :value="admin ? formatStockQty(admin.tolerance_qty, admin.base_unit) : '—'"
-        :sub="admin?.count_method === 'weigh' ? 'mjeri se na vagi' : 'broji se'"
+        label="Minimalna zaliha"
+        :value="admin && admin.par_qty !== null ? formatStockQty(admin.par_qty, admin.base_unit) : '—'"
+        sub="ispod ovoga pocrveni na stanju šanka"
       />
     </div>
 

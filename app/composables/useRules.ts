@@ -53,7 +53,6 @@ unaprijed nije pravilo.
 
 - Dolazak je na vrijeme; kašnjenje preko {{roster_late_grace_min}} se vidi u *Satima* i o njemu se razgovara.
 - Smjenu zaključuje šanker kroz *Zaključi smjenu*: od prihoda se oduzmu dnevnica ({{dnevnica_fen}}), otpis i plaćanja, a ostatak se predaje.
-- Tolerancija pazara je {{cash_tolerance_fen}} ili {{cash_tolerance_pct}} očekivanog iznosa.
 
 ## Roba i šank
 

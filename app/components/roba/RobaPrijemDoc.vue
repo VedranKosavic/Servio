@@ -495,7 +495,7 @@ async function send() {
     >
       <template #note>
         <p class="d-note">
-          Ostalo — tolerancija, minimalna zaliha — podesi kasnije u Roba → Artikli.
+          Minimalnu zalihu možeš podesiti kasnije u Roba → Artikli.
         </p>
       </template>
     </RobaArtikalSheet>

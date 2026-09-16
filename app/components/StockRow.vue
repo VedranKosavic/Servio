@@ -27,6 +27,13 @@ const props = defineProps<{ item: StockItem }>()
 
 const negative = computed(() => props.item.on_hand < 0)
 
+/**
+ * At or under *Minimalna zaliha* (the owner, 16.09.2026: "neka pocrveni kada
+ * dođemo do minimalne zalihe"). The server's own status says it — `nisko` is
+ * `on_hand <= par_qty` — so this screen and the owner's cannot disagree.
+ */
+const low = computed(() => !negative.value && props.item.status === 'nisko')
+
 /** The opening count is not news — every item has one, so it is not shown. */
 const movement = computed(() => {
   const last = props.item.last_movement
@@ -55,15 +62,16 @@ const qty = computed(() => {
 </script>
 
 <template>
-  <div class="st" :class="{ minus: negative }">
+  <div class="st" :class="{ minus: negative || low }">
     <div class="st-top">
       <span class="st-name">{{ item.name }}</span>
       <span class="num st-value">{{ qty.value }}</span>
       <span class="st-unit">{{ qty.unit }}</span>
     </div>
 
-    <div v-if="negative || movement" class="st-under">
+    <div v-if="negative || low || movement" class="st-under">
       <span v-if="negative" class="chip chip-danger">u minusu</span>
+      <span v-else-if="low" class="chip chip-danger">minimalna zaliha</span>
       <span v-if="movement" class="num st-move">{{ movementText }}</span>
     </div>
   </div>

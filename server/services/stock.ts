@@ -248,8 +248,10 @@ export function stockStatus(
   hand: number,
 ): StockStatus {
   if (hand < 0) return 'u_minusu'
-  if (unitCost(item).mfen === 0) return 'bez_cijene'
+  // Before *bez cijene*: reaching the minimum is what the owner watches the
+  // shelf for, and it must turn red whatever the article's price record says.
   if (item.parQty !== null && hand <= item.parQty) return 'nisko'
+  if (unitCost(item).mfen === 0) return 'bez_cijene'
   return 'ok'
 }
 

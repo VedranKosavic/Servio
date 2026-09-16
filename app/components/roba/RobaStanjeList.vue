@@ -46,7 +46,8 @@ function mark(row: StanjeRow): { tone: 'warn' | 'bad', text: string } | null {
   switch (row.status) {
     case 'u_minusu': return { tone: 'bad', text: 'u minusu' }
     case 'bez_cijene': return { tone: 'warn', text: 'bez cijene' }
-    case 'nisko': return { tone: 'warn', text: 'nisko' }
+    // At or under *Minimalna zaliha*: red, like a shelf in the minus (the owner).
+    case 'nisko': return { tone: 'bad', text: 'minimalna zaliha' }
     default: return null
   }
 }
@@ -81,7 +82,10 @@ function mark(row: StanjeRow): { tone: 'warn' | 'bad', text: string } | null {
           </span>
 
           <span class="r-qty">
-            <span class="r-settled num">{{ formatStockQty(row.settled, row.base_unit) }}</span>
+            <span
+              class="r-settled num"
+              :class="{ 'r-low': row.status === 'nisko' || row.status === 'u_minusu' }"
+            >{{ formatStockQty(row.settled, row.base_unit) }}</span>
             <span v-if="row.pending !== 0" class="r-pending num">
               {{ formatMovementQty(row.pending, row.base_unit) }}
             </span>
@@ -94,6 +98,8 @@ function mark(row: StanjeRow): { tone: 'warn' | 'bad', text: string } | null {
 
 <style scoped>
 .r-list { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+.r-low { color: var(--danger); }
 
 .r-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 

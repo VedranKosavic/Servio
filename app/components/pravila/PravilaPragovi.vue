@@ -43,12 +43,6 @@ const rules = computed(() => {
         + 'Sve ostalo se zaključava po punoj cijeni i neko odlučuje.',
     },
     {
-      title: 'Tolerancija pazara',
-      value: value('cash_tolerance_fen'),
-      detail: `Razlika do ${value('cash_tolerance_fen')} ili ${value('cash_tolerance_pct')} `
-        + 'očekivanog iznosa je u toleranciji. Iznad toga se stavka označava za razgovor.',
-    },
-    {
       title: 'Kašnjenje',
       value: value('roster_late_grace_min'),
       detail: `Prva akcija poslije početka smjene preko ${value('roster_late_grace_min')} se ispiše u Satima. `

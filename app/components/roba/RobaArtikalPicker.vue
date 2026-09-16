@@ -58,7 +58,7 @@ const active = computed(() => props.items.filter(item => item.active))
 /** Does this article match what has been typed? Per word, by prefix (see above). */
 function matches(item: StockItemAdmin, needle: string): boolean {
   if (needle === '') return true
-  const haystack = fold(`${item.name} ${item.brand ?? ''}`)
+  const haystack = fold(item.name)
   return haystack.split(/[\s·,\-/()]+/).some(word => word.startsWith(needle))
 }
 

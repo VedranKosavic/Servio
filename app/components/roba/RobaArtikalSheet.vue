@@ -16,6 +16,15 @@
  * required on a new article**: *Stanje šanka*, *Prijem robe* and *Meni* are one
  * list by one set of categories, and an article with none is on none of them.
  *
+ * **Minimalna zaliha is required, on both forms**, in the article's own unit
+ * (pieces, or grams for coffee and aromas): *Stanje šanka* turns the row red
+ * when the shelf reaches it.
+ *
+ * **There is no *Brend* and no *Tolerancija popisa*** (the owner, 16.09.2026:
+ * "tolerancija nam ne treba nikako"). Both columns stay on the row and are
+ * simply not asked any more; a save sends neither, so nothing is cleared by
+ * accident.
+ *
  * **The sheet writes nothing.** It emits a body and the screen that opened it
  * does the write, because the writes differ (the typed delivery picks the new
  * article onto its document) and the form does not.
@@ -78,10 +87,8 @@ function setVrsta(value: ArticleVrsta) {
 /** In feninga, for `basis.qty` base units — not the stored per-unit cost. */
 const costFen = ref<number | null>(null)
 const categoryId = ref('')
-const brand = ref('')
 const countMethod = ref<'count' | 'weigh'>('count')
 const tareG = ref<number | null>(null)
-const toleranceQty = ref<number | null>(null)
 const parQty = ref<number | null>(null)
 const active = ref(true)
 
@@ -100,10 +107,8 @@ watch(() => props.open, (open) => {
   kind.value = item?.kind ?? 'pice'
   baseUnit.value = item?.base_unit ?? 'kom'
   categoryId.value = item?.category_id ?? ''
-  brand.value = item?.brand ?? ''
   countMethod.value = item?.count_method ?? 'count'
   tareG.value = item?.tare_g ?? null
-  toleranceQty.value = item?.tolerance_qty ?? null
   parQty.value = item?.par_qty ?? null
   active.value = item?.active ?? true
   costFen.value = item && item.last_cost_mfen > 0
@@ -135,6 +140,7 @@ const canSave = computed(() =>
   name.value.trim().length > 0
   && (props.item !== null || (costFen.value ?? 0) > 0)
   && (props.item !== null || categoryId.value !== '')
+  && parQty.value !== null && parQty.value >= 0
   && !props.pending)
 
 function save() {
@@ -143,17 +149,17 @@ function save() {
     name: name.value.trim(),
     kind: kind.value,
     category_id: categoryId.value || null,
+    // Required on every article (the owner, 16.09.2026), so it is sent from
+    // both forms and never as null.
+    par_qty: parQty.value ?? 0,
     // No pack, ever — and on an edit this clears one an old row still holds.
     pack_name: null,
     pack_qty: null,
   }
   const extra = props.full
     ? {
-        brand: brand.value.trim() || null,
         count_method: countMethod.value,
         tare_g: countMethod.value === 'weigh' ? tareG.value : null,
-        tolerance_qty: toleranceQty.value ?? 0,
-        par_qty: parQty.value,
       }
     : {}
 
@@ -213,6 +219,16 @@ function save() {
     />
 
     <PostavkeNumField
+      label="Minimalna zaliha"
+      :model-value="parQty"
+      kind="decimal"
+      :suffix="baseUnit"
+      :hint="`Obavezno · u ${baseUnit === 'g' ? 'gramima' : 'komadima'} — kad stanje dođe do ovoga, pocrveni.`"
+      @input="value => parQty = value"
+      @commit="value => parQty = value"
+    />
+
+    <PostavkeNumField
       label="Nabavna cijena"
       :model-value="costFen"
       kind="money"
@@ -223,7 +239,6 @@ function save() {
     />
 
     <template v-if="full">
-      <UiField v-model="brand" label="Brend" placeholder="Neobavezno" />
 
       <div class="s-row">
         <span class="s-caption">Popis</span>
@@ -248,26 +263,6 @@ function save() {
         @commit="value => tareG = value"
       />
 
-      <div class="s-pair">
-        <PostavkeNumField
-          label="Tolerancija popisa"
-          :model-value="toleranceQty"
-          kind="decimal"
-          :suffix="baseUnit"
-          hint="Razlika do ove količine nije manjak."
-          @input="value => toleranceQty = value"
-          @commit="value => toleranceQty = value"
-        />
-        <PostavkeNumField
-          label="Minimalna zaliha"
-          :model-value="parQty"
-          kind="decimal"
-          :suffix="baseUnit"
-          hint="Neobavezno"
-          @input="value => parQty = value"
-          @commit="value => parQty = value"
-        />
-      </div>
 
       <div v-if="item" class="s-row">
         <span class="s-caption">Aktivan</span>

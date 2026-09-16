@@ -139,7 +139,7 @@ export const RULE_TOKENS: { key: keyof Settings, label: string }[] = [
   { key: 'waste_events_per_shift_per_user', label: 'Otpisa po osobi po smjeni' },
   { key: 'shared_device_idle_s', label: 'Zajednički uređaj — zaključavanje' },
   { key: 'upload_user_day_files', label: 'Slika po osobi dnevno' },
-  { key: 'roster_late_grace_min', label: 'Kašnjenje — tolerancija' },
+  { key: 'roster_late_grace_min', label: 'Kašnjenje — dozvoljeno' },
 ]
 
 /** "5 minuta", "15 sekundi" — a threshold said the way a person says it. */

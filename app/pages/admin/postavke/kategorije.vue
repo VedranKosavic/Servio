@@ -67,7 +67,9 @@ const moving = ref(false)
 
 async function load() {
   try {
-    categories.value = await api.getAdminCategories()
+    // A deleted category is switched off rather than removed (past articles
+    // still name it), and a deleted thing is not a row on this screen.
+    categories.value = (await api.getAdminCategories()).filter(category => category.active)
     error.value = null
   } catch (err) {
     error.value = apiErrorText(err, 'Kategorije se nisu učitale.')

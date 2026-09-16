@@ -226,10 +226,13 @@ function statusPill(row: StanjeRow): { tone: 'good' | 'warn' | 'bad', text: stri
   switch (row.status) {
     case 'u_minusu': return { tone: 'bad', text: 'u minusu' }
     case 'bez_cijene': return { tone: 'warn', text: 'bez cijene' }
+    // At or under *Minimalna zaliha*: red, like a shelf in the minus (the owner).
     case 'nisko':
       return {
-        tone: 'warn',
-        text: row.par_qty === null ? 'nisko' : `nisko · minimum ${row.par_qty}`,
+        tone: 'bad',
+        text: row.par_qty === null
+          ? 'minimalna zaliha'
+          : `minimalna zaliha · ${formatStockQty(row.par_qty, row.base_unit)}`,
       }
     default: return { tone: 'good', text: 'ok' }
   }
@@ -244,7 +247,10 @@ function statusPill(row: StanjeRow): { tone: 'good' | 'warn' | 'bad', text: stri
           <span class="a-roba-link">{{ row.name }}</span>
           <span v-if="row.late_sync" class="a-roba-note">kasno sinhronizovano</span>
         </td>
-        <td class="r">{{ formatStockQty(row.settled, row.base_unit) }}</td>
+        <td
+          class="r"
+          :class="{ 'a-roba-low': row.status === 'nisko' || row.status === 'u_minusu' }"
+        >{{ formatStockQty(row.settled, row.base_unit) }}</td>
         <!-- Only when there is something to say. A column of dashes down a
              quiet afternoon is a column the eye stops reading. -->
         <td class="r">
@@ -264,6 +270,8 @@ function statusPill(row: StanjeRow): { tone: 'good' | 'warn' | 'bad', text: stri
 </template>
 
 <style scoped>
+.a-roba-low { color: var(--danger); font-weight: 600; }
+
 .a-roba-link {
   color: var(--ink);
   text-decoration: none;
