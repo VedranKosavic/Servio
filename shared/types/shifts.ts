@@ -374,6 +374,45 @@ export interface MyShiftCounts {
   hours: number
 }
 
+/**
+ * One article the shift sold, and what it took for it.
+ *
+ * Grouped by the **snapshotted** name, not by product id: a price list that was
+ * edited mid-night leaves two rows with the same name and different prices, and
+ * one row saying *Coca-Cola 12* is what a person reading this actually wants.
+ * `fen` is promet — charged, minus an applied storno — so a cancelled round
+ * leaves this list entirely rather than sitting in it at zero.
+ */
+export interface SoldItem {
+  name: string
+  qty: number
+  fen: number
+}
+
+/**
+ * *Moja smjena*, whole: what the shift sold and what it took (the owner's call,
+ * 16.09.2026 — the screen is these rows and this total, and nothing else).
+ *
+ * **The shift's rows, not one person's.** The screen reads `/api/me/*` and
+ * still names nobody, but what it shows is the night both people are working:
+ * a šanker locks no round of his own, so his own list would always be empty,
+ * and the pazar he is about to hand over is the shift's. There is still no
+ * per-person money anywhere on a staff screen — this has no by-waiter split in
+ * it at all.
+ *
+ * Which night: the open shift, else the last closed one he worked, so the
+ * screen is worth opening the morning after as well.
+ */
+export interface SoldNight {
+  shift_id: string | null
+  business_date: string | null
+  /** False when these are last night's numbers rather than tonight's. */
+  open: boolean
+  rows: SoldItem[]
+  /** Ukupan pazar smjene: the sum of `rows`. */
+  total_fen: number
+}
+
 export interface MyShift {
   shift: ShiftBrief | null
   joined_at: string | null
@@ -404,6 +443,8 @@ export interface MyShift {
    * numbers are his to read (settlement or not); `null` when he has none.
    */
   last_closed: LastClosedShift | null
+  /** The whole of what *Moja smjena* draws: sold articles and the pazar. */
+  sold: SoldNight
 }
 
 export interface LastClosedShift {

@@ -124,6 +124,55 @@ describe('the three-way reconciliation', () => {
   })
 })
 
+describe('prodani artikli', () => {
+  /**
+   * *Moja smjena* is these rows and their total since 16.09.2026, so what they
+   * are folded from is worth pinning: the **shift's** lines, grouped by the
+   * snapshotted name, with a cancelled round out of the list rather than in it
+   * at zero, and a total that is the same promet the shift summary reports.
+   */
+  it('lists what the shift sold — not what the reader sold — and totals the promet', () => {
+    const shiftId = f.openShift({ members: ['Amar', 'Lejla'] })
+    const a = f.lock('Amar', 'Sto 1', [{ product: 'Kafa', qty: 2 }, { product: 'Coca-Cola' }])
+    f.lock('Lejla', 'Sto 2', [{ product: 'Kafa' }, { product: 'Red Bull' }])
+    // Somebody rang up a Coca-Cola that was never carried out.
+    f.voidLine('Amar', a.lineIds[1]!, { status: 'applied', approvedBy: 'Emir' })
+
+    const { sold } = getMyShift(f.db, f.venueId, f.userId('Amar'))
+
+    expect(sold.open).toBe(true)
+    expect(sold.shift_id).toBe(shiftId)
+    // Lejla's Kafa is on Amar's screen, in one row with his two.
+    expect(sold.rows).toEqual([
+      { name: 'Kafa', qty: 3, fen: 450 },
+      { name: 'Red Bull', qty: 1, fen: 500 },
+    ])
+    expect(sold.total_fen).toBe(950)
+    expect(sold.total_fen).toBe(summarise(shiftId).promet_fen)
+  })
+
+  it('keeps a staff drink on the list and out of the pazar', () => {
+    f.openShift({ members: ['Amar'] })
+    lockComped(f, 'Amar', 'Sto 1', 'Kafa')
+
+    const { sold } = getMyShift(f.db, f.venueId, f.userId('Amar'))
+    expect(sold.rows).toEqual([{ name: 'Kafa', qty: 1, fen: 0 }])
+    expect(sold.total_fen).toBe(0)
+  })
+
+  it('falls back to the last closed night when nothing is open', () => {
+    const shiftId = f.openShift({ members: ['Amar'] })
+    f.lock('Amar', 'Sto 1', [{ product: 'Red Bull' }])
+    rawClose(f, shiftId)
+
+    const { sold } = getMyShift(f.db, f.venueId, f.userId('Amar'))
+    expect(sold.open).toBe(false)
+    expect(sold.shift_id).toBe(shiftId)
+    expect(sold.rows).toEqual([{ name: 'Red Bull', qty: 1, fen: 500 }])
+    expect(sold.total_fen).toBe(500)
+  })
+})
+
 describe('the line drill-down', () => {
   function threeRounds(): string {
     const shiftId = f.openShift({ members: ['Amar', 'Lejla'] })

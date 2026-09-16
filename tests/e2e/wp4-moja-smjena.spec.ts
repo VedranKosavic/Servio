@@ -3,17 +3,12 @@
  *
  * What is proved here:
  *
- *   1. Before settlement, S11 shows ture, stolovi and category counts and **no
- *      KM at all**, and the raw `GET /api/me/shift` body contains no `*_fen`
- *      key but `max_fen`.
- *   2. The category chip opens the drill-down, whose footer is absent until he
- *      has settled — the same blindness, said the same way.
- *   3. A *Napomena* typed on a night survives a reload.
- *   4. After a settlement (posted straight to the API — the waiter's *Završi
- *      smjenu* screen is gone; the šanker closes the night), the same night
- *      reads in KM with the tolerance word.
- *   5. *Pravila* renders the venue's published thresholds and no English.
- *   6. The re-lock is a screen over a session that is still alive, so the pad
+ *   1. *Moja smjena* is the shift's sold articles and its pazar, and nothing
+ *      else — the counts, the blindness, the thirty nights with a *Napomena*,
+ *      *Moji sati*, *Moji podaci* and the drill-down all went on 16.09.2026.
+ *   2. The same numbers are on the raw `GET /api/me/shift`, under `sold`.
+ *   3. *Pravila* renders the venue's published thresholds and no English.
+ *   4. The re-lock is a screen over a session that is still alive, so the pad
  *      re-opens it with the right PIN **with the network off** and refuses the
  *      wrong one — while nothing on the phone can *create* a session, which is
  *      why a real login still waits for the network.
@@ -135,103 +130,50 @@ test.describe('WP4 — Moja smjena', () => {
     await context?.close()
   })
 
-  test('counts before the envelope, money after it, and a note that survives', async () => {
+  test('the sold articles and the shift\'s pazar, and nothing else', async () => {
     // One page at a time: two pages of one context share IndexedDB, and a page
     // left open keeps polling and writing behind the next test's back.
     for (const open of context.pages()) await open.close()
     const page = await context.newPage()
     const takings = await aNight(context)
 
-    // -- 1. the raw body carries no money but the published ceiling ---------
-    const raw = await (await context.request.get('/api/me/shift')).text()
-    const body = JSON.parse(raw) as {
-      counts: { rounds: number, tabs: number, bowls: number }
-      summary: unknown
+    // -- 1. the read is the screen -----------------------------------------
+    const body = await (await context.request.get('/api/me/shift')).json() as {
+      sold: { open: boolean, rows: { name: string, qty: number, fen: number }[], total_fen: number }
     }
-    expect(body.summary).toBeNull()
-    expect(JSON.stringify(body.counts).match(/\w*_fen"/g)).toEqual(['max_fen"'])
-    expect(body.counts.rounds).toBeGreaterThanOrEqual(2)
+    expect(body.sold.open).toBe(true)
+    expect(body.sold.total_fen).toBeGreaterThanOrEqual(takings)
+    expect(body.sold.rows.map(r => r.name)).toEqual(expect.arrayContaining(['Nargila', 'Kafa', 'Coca-Cola']))
 
-    // -- 2. and neither does the screen ------------------------------------
+    // -- 2. the articles, with the quantities on them ----------------------
     await page.goto('/konobar/moja-smjena')
     await expect(page.getByRole('heading', { name: 'Večeras' })).toBeVisible()
+    await expect(page.getByText('Nargila').first()).toBeVisible()
+    await expect(page.getByText('Kafa').first()).toBeVisible()
+    await expect(page.getByText('3×').first()).toBeVisible()
 
-    const tonight = page.locator('section').filter({ hasText: 'Večeras' }).first()
-    await expect(tonight.getByText('ture')).toBeVisible()
-    await expect(tonight.getByText('stolovi')).toBeVisible()
-    await expect(tonight.getByText('lule')).toBeVisible()
-    // The three tiles are the server's own counts, not a number this test
-    // invented — the database may already hold earlier nights.
-    await expect(tonight.locator('.num').nth(0)).toHaveText(String(body.counts.rounds))
-    await expect(tonight.locator('.num').nth(1)).toHaveText(String(body.counts.tabs))
-    await expect(tonight.locator('.num').nth(2)).toHaveText(String(body.counts.bowls))
+    // -- 3. the pazar, in KM, while the night is still running --------------
+    // The blindness is gone (the owner's call, 16.09.2026): nobody settles any
+    // more, so there is no declaration left for a hidden total to protect.
+    const total = page.locator('section').filter({ hasText: 'Ukupan pazar' }).first()
+    await expect(total).toBeVisible()
+    await expect(total.locator('.num')).toHaveText(/KM/)
 
-    // The only KM anywhere on this screen is the staff-drink ceiling, which is
-    // the published rule and not his money.
-    // `formatKm` joins the number to "KM" with a non-breaking space, so the
-    // amount never wraps away from its unit at the end of a line.
-    const kmBefore = (await page.getByText(/KM/).allInnerTexts())
-      .map(t => t.replace(/\u00a0/g, ' ').trim())
-    expect(kmBefore).toContain('do 3,00 KM')
-    expect(kmBefore.filter(t => t !== 'do 3,00 KM')).toEqual([])
+    // -- 4. and nothing else is on it --------------------------------------
+    for (const gone of ['ture', 'stolovi', 'lule', 'Prošle noći', 'Moji sati', 'Moji podaci', 'Storna']) {
+      await expect(page.getByText(gone, { exact: true })).toHaveCount(0)
+    }
 
-    // Category chips, with the counts on them.
-    await expect(page.getByRole('link', { name: /Nargila/ })).toBeVisible()
-    await expect(page.getByRole('link', { name: /Kafa/ })).toBeVisible()
-
-    // -- 3. no horizontal scroll at 390 px ---------------------------------
+    // -- 5. no horizontal scroll at 390 px ---------------------------------
     const overflows = await page.evaluate(() =>
       document.documentElement.scrollWidth > document.documentElement.clientWidth)
     expect(overflows).toBe(false)
 
-    // -- 4. the drill-down, still blind ------------------------------------
-    await page.getByRole('link', { name: /Kafa/ }).first().click()
-    await expect(page).toHaveURL(/\/konobar\/moja-smjena\/stavke\?kat=/)
-    await expect(page.getByText('Kafa').first()).toBeVisible()
-    await expect(page.getByText(/Zbir vidiš kad šanker zaključi smjenu/)).toBeVisible()
-    await expect(page.getByText('Naplaćeno', { exact: true })).toHaveCount(0)
-
-    await page.goBack()
-
-    // -- 5. Pravila ---------------------------------------------------------
-    await page.getByRole('link', { name: 'Pravila', exact: true }).click()
+    // -- 6. Pravila, from the menu's own address ---------------------------
+    await page.goto('/konobar/pravila')
     await expect(page.getByRole('heading', { name: 'Označeno za razgovor' })).toBeVisible()
     await expect(page.getByText('Tolerancija pazara')).toBeVisible()
     await expect(page.getByText(/vlasnik ima pristup toj datoteci/i)).toBeVisible()
-
-    await page.goto('/konobar/moja-smjena')
-
-    // -- 6. settle, then the money -----------------------------------------
-    const shift = await (await context.request.get('/api/me/shift')).json() as
-      { shift: { id: string } }
-    const settled = await context.request.post(`/api/shifts/${shift.shift.id}/settle`, {
-      data: { declared_fen: takings, outbox_len: 0 },
-    })
-    expect(settled.ok()).toBe(true)
-
-    await page.reload()
-    await expect(page.getByRole('heading', { name: 'Pazar je predan' })).toBeVisible()
-    await expect(page.getByText('U toleranciji')).toBeVisible()
-    await expect(page.getByText('Promet')).toBeVisible()
-    // Twice: once on tonight's card, once on tonight's row in the history.
-    await expect(page.getByText('Tačno')).toHaveCount(2)
-
-    // -- 7. a note on a night, and a reload ---------------------------------
-    const nightRow = page.locator('section').filter({ hasText: 'Prošle noći' }).first()
-    await nightRow.getByRole('button', { name: /Napomena/ }).first().click()
-    await nightRow.getByLabel('Napomena').fill('kasnio sam sat, dogovoreno')
-    await nightRow.getByRole('button', { name: /Sačuvaj|Čuvam/ }).click()
-    await expect(nightRow.getByText('kasnio sam sat, dogovoreno')).toBeVisible()
-
-    // The done-when: it is still there after a reload, which means the server
-    // has it and the screen is not showing what it typed.
-    await page.reload()
-    await expect(page.getByText('kasnio sam sat, dogovoreno')).toBeVisible()
-
-    // -- 8. Moji sati and Moji podaci ---------------------------------------
-    await expect(page.getByRole('heading', { name: 'Moji sati' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Moji podaci' })).toBeVisible()
-    await expect(page.getByText('ovaj telefon')).toBeVisible()
   })
 
   test('the re-locked pad unlocks offline, and refuses the wrong digits', async ({ browser }) => {

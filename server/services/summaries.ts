@@ -31,7 +31,8 @@ import { countBowls } from '#shared/bowls'
 import { mixLabels } from '#shared/flavours'
 import type {
   CategoryLine, CountFen, LastClosedShift, LineRow, LineStatus, LineTotals, LinesPage, MyShift, MyShiftCounts,
-  MyShiftRow, OwnerShift, ShiftCountBrief, ShiftSummary, StornoTotals, SummaryReason, UserSummary,
+  MyShiftRow, OwnerShift, ShiftBrief, ShiftCountBrief, ShiftSummary, SoldItem, SoldNight, StornoTotals,
+  SummaryReason, UserSummary,
 } from '#shared/types'
 import type { Db, Queryable, Tx } from './types'
 import { expectedCash, listCashMovements, toleranceFen, withinTolerance } from './cash'
@@ -938,6 +939,54 @@ function notesByShift(q: Queryable, venueId: string, userId: string): Map<string
 }
 
 /**
+ * Every article the shift sold, and the pazar they add up to.
+ *
+ * This is the whole of *Moja smjena* since 16.09.2026 — the owner asked for the
+ * sold articles and the shift's total, and for nothing else on that screen.
+ *
+ * Three decisions worth the two lines:
+ *
+ * - **The shift, not the person.** No `userId` filter: a šanker locks no round,
+ *   so scoping this to the reader would hand him an empty screen on a night he
+ *   is about to hand over the takings for. There is no by-waiter split in what
+ *   comes back, so no per-person money reaches a staff screen either way.
+ * - **A cancelled line is not sold.** An applied storno (or a voided tab) drops
+ *   out of the list rather than showing up at 0,00 KM, and `prometOf` is the
+ *   same function the shift summary and *Kasa* count with, so this total and
+ *   the *Sav prihod* of *Zaključi smjenu* cannot drift apart.
+ * - **A gratis stays, at what it charged**, which is nothing: the round left
+ *   the bar and somebody should see it, but it is not pazar.
+ */
+export function soldNight(q: Queryable, venueId: string, shiftId: string): {
+  rows: SoldItem[]
+  total_fen: number
+} {
+  const rows = new Map<string, SoldItem>()
+  let total = 0
+
+  for (const line of loadLines(q, venueId, shiftId)) {
+    if (line.tabStatus === 'voided') continue
+    if (line.adjKind === 'void' && line.adjStatus === 'applied') continue
+
+    let row = rows.get(line.nameSnapshot)
+    if (!row) {
+      row = { name: line.nameSnapshot, qty: 0, fen: 0 }
+      rows.set(line.nameSnapshot, row)
+    }
+    row.qty += line.qty
+    row.fen += prometOf(line)
+    total += prometOf(line)
+  }
+
+  // Most sold first; the same name can never tie with itself, so the fallback
+  // is the alphabet and the order is stable between two polls.
+  return {
+    rows: [...rows.values()].sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name, 'bs')),
+    total_fen: total,
+  }
+}
+
+/**
  * `GET /api/me/shift` — the waiter's own night.
  *
  * **Blindness is a nudge, not a control.** `summary` stays `null` until he has
@@ -964,6 +1013,7 @@ export function getMyShift(q: Queryable, venueId: string, userId: string): MyShi
       float_out_fen: 0, cash_movements: [], summary: null,
       counts: emptyCounts(getSettings(q, venueId)),
       last_closed: lastClosedFor(q, venueId, userId, now),
+      sold: soldFor(q, venueId, userId, null),
     }
   }
 
@@ -993,7 +1043,27 @@ export function getMyShift(q: Queryable, venueId: string, userId: string): MyShi
     summary: settlement ? summarizeUser(q, venueId, brief.id, userId, now) : null,
     counts: myShiftCounts(q, venueId, brief.id, userId, now),
     last_closed: lastClosedFor(q, venueId, userId, now),
+    sold: soldFor(q, venueId, userId, brief),
   }
+}
+
+/**
+ * Which night *Moja smjena* draws: the open shift, else the last one he closed.
+ *
+ * A worker opening the app at noon has no open shift and every reason to want
+ * last night back, so an empty screen there would be a screen nobody opens.
+ */
+function soldFor(
+  q: Queryable, venueId: string, userId: string, brief: ShiftBrief | null,
+): SoldNight {
+  if (brief) {
+    return { shift_id: brief.id, business_date: brief.business_date, open: true,
+      ...soldNight(q, venueId, brief.id) }
+  }
+  const closed = lastClosedShiftFor(q, venueId, userId)
+  if (!closed) return { shift_id: null, business_date: null, open: false, rows: [], total_fen: 0 }
+  return { shift_id: closed.id, business_date: closed.businessDate, open: false,
+    ...soldNight(q, venueId, closed.id) }
 }
 
 /**

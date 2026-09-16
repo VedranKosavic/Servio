@@ -1,26 +1,29 @@
 <script setup lang="ts">
 /**
- * S11 *Moja smjena* — a waiter's own night, and the last thirty before it.
+ * S11 *Moja smjena* — what the shift sold, and the pazar it took.
  *
- * **The order of the screen is the rule it enforces.** Before he has handed the
- * envelope in, the top card is counts and only counts: ture, stolovi, lule,
- * *"Nargila 34 · Kafa 52"*, storna with their status, *"Osoblje 1/2"*, sati.
- * Not one KM. After his own settlement, the same card becomes money — promet,
- * per category, gotovina, kartica, and the verdict in words. Nothing here
- * computes an expected amount; the money comes back on `GET /api/me/shift` only
- * once a settlement row exists (BACKEND §6.6).
+ * **Two things, on the owner's call (16.09.2026), and nothing else.** The
+ * screen used to be a night's worth of cards: counts before the envelope,
+ * money after it, the last thirty nights with a *Napomena* on each, *Moji sati*
+ * and *Moji podaci*. All of it is gone, together with the drill-down it opened
+ * (`/konobar/moja-smjena/stavke`) and the blindness strip the counts card was
+ * built around — a worker now reads the article list and the total the moment
+ * the round is locked, without waiting for the šanker to close the night.
  *
- * Below it: the last thirty nights with *Napomena* editable on any own row,
- * *Moji sati* (worked only — the roster is Phase 4 and its column is absent,
- * not zero), and *Moji podaci*, his own sign-ins.
+ * The rows are the **shift's**, not the reader's: a šanker locks no round of his
+ * own, and the pazar he is about to hand over is the night's. Nothing here is
+ * split by person, so no colleague's money appears on anybody's screen
+ * (invariant 9 is about `/me/*` naming nobody, and this read still names
+ * nobody).
  *
- * Everything on this page is about *him*. There is no colleague anywhere on it,
- * by construction: every route it reads is `/api/me/*`, which is scoped by the
- * session and takes no `user` parameter (invariant 9).
+ * `GET /api/me/shift` is the one read, and the app's one poll keeps it current.
+ * The server routes behind the deleted cards (`/api/me/shifts`,
+ * `/api/me/sessions`, the *Napomena* PUT and `/api/me/shift/lines`) are
+ * untouched and still guarded; no screen calls them any more.
  */
-import type { MyShift, MyShiftRow, MySession } from '#shared/types'
-
+import { formatKm } from '#shared/money'
 import { shortDateBs } from '#shared/dates'
+import type { SoldNight } from '#shared/types'
 
 useHead({ title: 'Moja smjena' })
 
@@ -31,8 +34,8 @@ useOutbox()
 /**
  * The screen follows the night on the app's one poll: a round locked by a
  * colleague, a storno decided at the bar or the šanker closing the shift all
- * land here without the waiter reloading. `quiet` keeps the skeleton for the
- * first paint only — a refetch must not blank numbers somebody is reading.
+ * land here without a reload. `quiet` keeps the skeleton for the first paint
+ * only — a refetch must not blank numbers somebody is reading.
  */
 useChanges({
   raw: (result) => {
@@ -44,50 +47,20 @@ useChanges({
   me: () => me.load(),
 })
 
-const shift = ref<MyShift | null>(null)
-const nights = ref<MyShiftRow[]>([])
-const sessions = ref<MySession[]>([])
-
+const sold = ref<SoldNight | null>(null)
 const loading = ref(true)
 const loadError = ref<string | null>(null)
-const noteError = ref<string | null>(null)
-
-/**
- * Did the browser promise to keep our IndexedDB? WP0 asks once, after the first
- * PIN login (§2.4); this only reads the answer back. `null` means the browser
- * has no such API and the row is left off rather than guessed at.
- */
-const persisted = ref<boolean | null>(null)
 
 onMounted(async () => {
   if (!(await me.requireSession())) return
   await load()
-  persisted.value = await readPersisted()
 })
-
-async function readPersisted(): Promise<boolean | null> {
-  if (!import.meta.client || !navigator.storage?.persisted) return null
-  try {
-    return await navigator.storage.persisted()
-  } catch {
-    return null
-  }
-}
 
 async function load(quiet = false) {
   if (!quiet) loading.value = true
   loadError.value = null
   try {
-    // Three reads, in parallel: none of them depends on another, and this
-    // screen is opened between rounds.
-    const [mine, history, mySessions] = await Promise.all([
-      api.getMyShift(),
-      api.getMyShifts(30),
-      api.getMySessions(),
-    ])
-    shift.value = mine
-    nights.value = history
-    sessions.value = mySessions
+    sold.value = (await api.getMyShift()).sold
   } catch (err) {
     if (!(await me.handleAuthError(err))) loadError.value = apiErrorText(err)
   } finally {
@@ -95,29 +68,11 @@ async function load(quiet = false) {
   }
 }
 
-const settled = computed(() => shift.value?.settled === true)
-const summary = computed(() => shift.value?.summary ?? null)
-const settlement = computed(() => shift.value?.settlement ?? null)
-const counts = computed(() => shift.value?.counts ?? null)
-
-/**
- * Save one night's *Napomena*.
- *
- * Straight through `useApi` and **not** through the outbox: the outbox is money
- * and stock only (§2.2), and a note that failed to send is a note the person
- * can retype — nothing in the ledger depends on it. The row it changed is
- * patched in place, so a save does not scroll a thirty-row list back to the top.
- */
-async function saveNote(shiftId: string, body: string) {
-  noteError.value = null
-  try {
-    const result = await api.putShiftNote(shiftId, { body })
-    const row = nights.value.find(n => n.shift_id === shiftId)
-    if (row) row.note = result.note
-  } catch (err) {
-    if (!(await me.handleAuthError(err))) noteError.value = apiErrorText(err)
-  }
-}
+/** *Večeras*, or the date of the night that was closed last. */
+const title = computed(() => {
+  if (!sold.value || sold.value.open) return 'Večeras'
+  return sold.value.business_date ? shortDateBs(sold.value.business_date) : 'Zadnja smjena'
+})
 </script>
 
 <template>
@@ -147,63 +102,37 @@ async function saveNote(shiftId: string, body: string) {
           </button>
         </div>
 
-        <template v-else>
-          <!-- Tonight: counts until the envelope is in, money after it. -->
-          <MineMoneyCard
-            v-if="settled && summary && counts"
-            :summary="summary"
-            :settlement="settlement"
-            :counts="counts"
-          />
-          <MineCountsCard
-            v-else-if="counts"
-            :counts="counts"
-            :persisted="persisted"
-          />
-
-          <!-- The night the šanker closed: his own numbers, in KM now that it is over.
-               Only while no new shift is open, because the category rows link to
-               `/me/shift/lines`, which reads the closed night only then. -->
-          <MineMoneyCard
-            v-if="!shift?.shift && shift?.last_closed"
-            :title="`Zadnja smjena · ${shortDateBs(shift.last_closed.business_date)}`"
-            :summary="shift.last_closed.summary"
-            :settlement="null"
-            :counts="shift.last_closed.counts"
-          />
-
-          <p v-if="!shift?.shift" class="card px-4 py-6 text-center text-text-2">
-            Nema otvorene smjene. Smjena se otvara prvom zaključanom turom.
-          </p>
-
-          <!-- The last thirty nights -->
+        <template v-else-if="sold">
+          <!-- Prodani artikli -->
           <section class="card flex flex-col gap-1 p-4">
             <h2 class="section-title">
-              Prošle noći
+              {{ title }}
             </h2>
-            <p v-if="noteError" class="note note-danger" role="alert">
-              {{ noteError }}
-            </p>
-            <div v-if="nights.length" class="flex flex-col">
-              <MineNightRow
-                v-for="row in nights"
-                :key="row.shift_id"
-                :row="row"
-                :save="saveNote"
-              />
+
+            <div v-if="sold.rows.length" class="flex flex-col">
+              <div
+                v-for="row in sold.rows"
+                :key="row.name"
+                class="flex items-center justify-between gap-3 border-t border-line py-3 first:border-t-0"
+              >
+                <div class="flex min-w-0 items-baseline gap-2">
+                  <span class="num shrink-0 font-semibold">{{ row.qty }}×</span>
+                  <span class="truncate text-body">{{ row.name }}</span>
+                </div>
+                <span class="num shrink-0 text-body font-semibold">{{ formatKm(row.fen) }}</span>
+              </div>
             </div>
+
             <p v-else class="py-6 text-center text-text-2">
-              Ovo ti je prva zabilježena smjena.
+              Još nijedan artikal večeras.
             </p>
           </section>
 
-          <MineHoursCard :rows="nights" />
-
-          <MineSessionsCard :sessions="sessions" />
-
-          <NuxtLink to="/konobar/pravila" class="btn btn-ghost h-14">
-            Pravila
-          </NuxtLink>
+          <!-- Ukupan pazar smjene -->
+          <section class="card flex items-center justify-between gap-3 p-4">
+            <span class="section-title">Ukupan pazar</span>
+            <span class="num metric">{{ formatKm(sold.total_fen) }}</span>
+          </section>
         </template>
       </main>
     </div>
