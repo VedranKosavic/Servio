@@ -438,7 +438,11 @@ const change = computed(() => {
         >
           <summary class="an-cat-head">
             <strong>{{ category.name }}</strong>
-            <span class="an-cat-sum num">{{ category.qty }} kom · {{ formatKm(category.fen) }}</span>
+            <span class="an-cat-end">
+              <span class="an-cat-sum num">{{ category.qty }} kom · {{ formatKm(category.fen) }}</span>
+              <!-- Turns down when the category is open: a row that expands says so. -->
+              <UiIcon name="chevron-right" :size="18" class="an-cat-chevron" aria-hidden="true" />
+            </span>
           </summary>
           <ol class="an-items">
             <li v-for="item in category.items" :key="item.name" class="an-row">
@@ -611,7 +615,7 @@ const change = computed(() => {
 .an-cat:first-of-type { border-top: 0; }
 .an-cat-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   min-height: 48px;
@@ -620,7 +624,13 @@ const change = computed(() => {
   list-style: none;
 }
 .an-cat-head::-webkit-details-marker { display: none; }
+.an-cat-end { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .an-cat-sum { color: var(--ink-2); white-space: nowrap; }
+.an-cat-chevron {
+  color: var(--muted);
+  transition: transform var(--dur-fast, 150ms) var(--ease-standard, ease);
+}
+.an-cat[open] .an-cat-chevron { transform: rotate(90deg); }
 .an-items { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .an-item-name { min-width: 0; overflow-wrap: anywhere; }
 
