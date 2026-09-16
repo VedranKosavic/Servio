@@ -4,17 +4,21 @@
  * The owner's decision (15.09.2026): the waiter no longer settles, nobody counts
  * the drawer, and the only end of a shift a worker has is this one, on the bar.
  *
- *     Sav prihod − Dnevnica − Otpis − Rashod − Policija − Plaćanje robe
- *       − Plaćanje okusa za nargilu − Plaćanje žara − Merkator = Za predati
+ *     Sav prihod − Dnevnica − Otpis − Rashod − Policija − Osoblje
+ *       − Plaćanje robe − Plaćanje okusa za nargilu − Plaćanje žara
+ *       − Merkator = Za predati
  *
- * **The server owns the first five.** *Sav prihod* is the shift's promet, read
+ * **The server owns the first six.** *Sav prihod* is the shift's promet, read
  * out of `summarizeShift` — the same call that writes `shift_summaries`, so the
  * closing, the summary and *Smjena* cannot print three different nights.
  * *Dnevnica* is `settings.dnevnica_fen`, once per shift.
  *
- * *Otpis*, *Rashod* and *Policija* are the three categories a table is marked
- * with while the night runs (the owner's call, 16.09.2026: "if we mark policija
- * or rashod in that sheet it should come off by itself, the same as dnevnica").
+ * *Otpis*, *Rashod*, *Policija* and *Osoblje* are the four categories marked on
+ * the floor while the night runs (the owner's call, 16.09.2026: "if we mark
+ * policija or rashod in that sheet it should come off by itself, the same as
+ * dnevnica" — *Osoblje* joined them the same day). They are every reason a tab
+ * can close authorised: `AUTHORISED_UNPAID_REASONS` is the list, and the close
+ * now subtracts all four of it.
  * They are all one shape in the ledger — a tab closed with money still on it and
  * nobody owing it — so `shiftCategories` is where they are counted, and the
  * closing subtracts what it finds. Ringing them up is what moved the stock and
@@ -67,7 +71,7 @@ export function requireSanker(actor: Actor): void {
 }
 
 /**
- * The server's five numbers for a shift, right now.
+ * The server's six numbers for a shift, right now.
  *
  * `summarizeShift` is the one definition of promet (charged − applied voids)
  * and of the *stock* otpis (`product_waste.value_fen` + legacy
@@ -80,14 +84,15 @@ export function requireSanker(actor: Actor): void {
  * is a `product_waste` row with no tab at all, and the night's otpis is both.
  * They cannot overlap: one is a tab, the other is not.
  *
- * `osoblje`, the fourth authorised category, is deliberately **not** here — the
- * owner named three, and a staff drink is a separate decision he has not made.
+ * `osoblje` is the fourth: a drink a worker had against his own allowance, rung
+ * up like any round and paid for by nobody, so it comes off the night with the
+ * other three.
  */
 function serverNumbers(
   q: Queryable, venueId: string, shiftId: string, now: string,
 ): {
   prihod_fen: number, dnevnica_fen: number
-  otpis_fen: number, rashod_fen: number, policija_fen: number
+  otpis_fen: number, rashod_fen: number, policija_fen: number, osoblje_fen: number
 } {
   const summary = summarizeShift(q, venueId, shiftId, now)
   const categories = shiftCategories(q, venueId, shiftId)
@@ -100,6 +105,7 @@ function serverNumbers(
     otpis_fen: summary.waste_fen + fenOf('otpis'),
     rashod_fen: fenOf('rashod'),
     policija_fen: fenOf('policija'),
+    osoblje_fen: fenOf('osoblje'),
   }
 }
 
@@ -118,6 +124,7 @@ function toView(q: Queryable, venueId: string, row: ClosingRow): ShiftClosing {
     otpis_fen: row.otpisFen,
     rashod_fen: row.rashodFen,
     policija_fen: row.policijaFen,
+    osoblje_fen: row.osobljeFen,
     roba_fen: row.robaFen,
     okusi_fen: row.okusiFen,
     zar_fen: row.zarFen,
@@ -160,6 +167,7 @@ export function closingPreview(
       otpis_fen: closing.otpis_fen,
       rashod_fen: closing.rashod_fen,
       policija_fen: closing.policija_fen,
+      osoblje_fen: closing.osoblje_fen,
       open_tabs: [],
       closing,
     }
@@ -237,6 +245,7 @@ export function closeByBar(
       otpisFen: amounts.otpis_fen,
       rashodFen: amounts.rashod_fen,
       policijaFen: amounts.policija_fen,
+      osobljeFen: amounts.osoblje_fen,
       robaFen: amounts.roba_fen,
       okusiFen: amounts.okusi_fen,
       zarFen: amounts.zar_fen,

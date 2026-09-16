@@ -3,12 +3,13 @@
  *
  * The owner's close is a plain subtraction, not a cash count:
  *
- *     Sav prihod − Dnevnica − Otpis − Rashod − Policija − Plaćanje robe
- *       − Plaćanje okusa za nargilu − Plaćanje žara − Merkator = Za predati
+ *     Sav prihod − Dnevnica − Otpis − Rashod − Policija − Osoblje
+ *       − Plaćanje robe − Plaćanje okusa za nargilu − Plaćanje žara
+ *       − Merkator = Za predati
  *
- * The first five are the server's and nobody types them (the owner's call,
- * 16.09.2026): promet, the venue's fixed daily wage, and the three categories a
- * table is marked with on the floor — *Otpis*, *Rashod* and *Policija* — which
+ * The first six are the server's and nobody types them (the owner's call,
+ * 16.09.2026): promet, the venue's fixed daily wage, and the four categories
+ * marked on the floor — *Otpis*, *Rashod*, *Policija* and *Osoblje* — which
  * come off the night by themselves, the way *Dnevnica* always has. The other
  * four are what the šanker paid out of the takings and only he can know. The
  * šanker's screen shows a live *Za predati* while he types, and the server
@@ -22,6 +23,7 @@ export interface ClosingAmounts {
   otpis_fen: number
   rashod_fen: number
   policija_fen: number
+  osoblje_fen: number
   roba_fen: number
   okusi_fen: number
   zar_fen: number
@@ -44,6 +46,7 @@ export const CLOSING_LINES: { key: Exclude<keyof ClosingAmounts, 'prihod_fen'>, 
   { key: 'otpis_fen', label: 'Otpis' },
   { key: 'rashod_fen', label: 'Rashod' },
   { key: 'policija_fen', label: 'Policija' },
+  { key: 'osoblje_fen', label: 'Osoblje' },
   { key: 'roba_fen', label: 'Plaćanje robe' },
   { key: 'okusi_fen', label: 'Plaćanje okusa za nargilu' },
   { key: 'zar_fen', label: 'Plaćanje žara' },
@@ -57,6 +60,7 @@ export function zaPredati(a: ClosingAmounts): number {
     - a.otpis_fen
     - a.rashod_fen
     - a.policija_fen
+    - a.osoblje_fen
     - a.roba_fen
     - a.okusi_fen
     - a.zar_fen

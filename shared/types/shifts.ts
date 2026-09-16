@@ -542,11 +542,13 @@ export interface ShiftClosing {
   rashod_fen: number
   /** Server: the tabs marked *Policija*, the same way. */
   policija_fen: number
+  /** Server: the tabs marked *Osoblje* — a worker's own allowance. */
+  osoblje_fen: number
   roba_fen: number
   okusi_fen: number
   zar_fen: number
   merkator_fen: number
-  /** `prihod − dnevnica − otpis − rashod − policija − the four`. May be negative. */
+  /** `prihod − dnevnica − the four marked categories − the four typed`. May be negative. */
   za_predati_fen: number
   note: string | null
 }
@@ -561,6 +563,7 @@ export interface ClosingPreview {
   otpis_fen: number
   rashod_fen: number
   policija_fen: number
+  osoblje_fen: number
   /** Tabs still open; the close is refused (409 `OPEN_TABS`) while any are. */
   open_tabs: { tab_id: string, table_name: string }[]
   /** Already closed: the stored row, so a reload shows the done state. */

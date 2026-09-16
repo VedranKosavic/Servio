@@ -580,6 +580,8 @@ export const shiftClosings = sqliteTable('shift_closings', {
    * readable and still add up.
    */
   policijaFen: integer('policija_fen').notNull().default(0),
+  /** *Osoblje* — a worker's own allowance, off the night since 16.09.2026. */
+  osobljeFen: integer('osoblje_fen').notNull().default(0),
   robaFen: integer('roba_fen').notNull(),
   okusiFen: integer('okusi_fen').notNull(),
   zarFen: integer('zar_fen').notNull(),

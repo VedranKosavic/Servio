@@ -3,14 +3,15 @@
  *
  * The owner's rule is a subtraction:
  *
- *     Sav prihod − Dnevnica − Otpis − Rashod − Policija − Plaćanje robe
- *       − Plaćanje okusa za nargilu − Plaćanje žara − Merkator = Za predati
+ *     Sav prihod − Dnevnica − Otpis − Rashod − Policija − Osoblje
+ *       − Plaćanje robe − Plaćanje okusa za nargilu − Plaćanje žara
+ *       − Merkator = Za predati
  *
  * and what this file pins is where each term comes from: prihod **is** the
  * summary's promet, otpis **is** the summary's waste value *plus* the tabs
- * marked *Otpis*, rashod and policija **are** the tabs marked with them,
- * dnevnica is the venue setting taken once per shift, and nothing the phone
- * could send changes any of those five.
+ * marked *Otpis*, rashod, policija and osoblje **are** the tabs marked with
+ * them, dnevnica is the venue setting taken once per shift, and nothing the
+ * phone could send changes any of those six.
  *
  * No `vi.mock` here, on purpose: `log` and `bump` run for real against the
  * in-memory database, so "the close wrote an entry and moved the feed" is an
@@ -77,7 +78,9 @@ function night(): string {
  * Close a tab the way the floor sheet does: *Policija*, *Rashod* or *Otpis*,
  * through the real route, so what the closing reads is what a waiter writes.
  */
-function markCategory(tabId: string, by: string, reason: 'policija' | 'rashod' | 'otpis') {
+function markCategory(
+  tabId: string, by: string, reason: 'policija' | 'rashod' | 'otpis' | 'osoblje',
+) {
   const tab = f.db.select().from(schema.tabs).where(eq(schema.tabs.id, tabId)).get()!
   markUnpaid(f.db, f.venueId, f.actor(by), {
     client_id: randomUUID(), tab_client_id: tab.clientId, reason,
@@ -102,9 +105,10 @@ describe('the numbers', () => {
     expect(preview.otpis_fen).toBe(summary.waste_fen)
     expect(preview.otpis_fen).toBe(350)
     expect(preview.dnevnica_fen).toBe(5_000)
-    // Nothing was marked on a table tonight, so these two are the empty sum.
+    // Nothing was marked tonight, so these three are the empty sum.
     expect(preview.rashod_fen).toBe(0)
     expect(preview.policija_fen).toBe(0)
+    expect(preview.osoblje_fen).toBe(0)
     expect(preview.open_tabs).toEqual([])
     expect(preview.closing).toBeNull()
 
@@ -152,18 +156,21 @@ describe('the numbers', () => {
   it('has one arithmetic, shared with the screen', () => {
     expect(zaPredati({
       prihod_fen: 50_000, dnevnica_fen: 9_000, otpis_fen: 700,
-      rashod_fen: 100, policija_fen: 50, roba_fen: 200, okusi_fen: 300,
-      zar_fen: 400, merkator_fen: 500,
-    })).toBe(38_750)
+      rashod_fen: 100, policija_fen: 50, osoblje_fen: 25, roba_fen: 200,
+      okusi_fen: 300, zar_fen: 400, merkator_fen: 500,
+    })).toBe(38_725)
   })
 
   /**
-   * The owner's call of 16.09.2026: a table marked *Policija*, *Rashod* or
-   * *Otpis* comes off the night by itself, the way *Dnevnica* does. It was rung
-   * up like any round — that is what moved the stock and put it in the promet —
-   * so the closing is where it comes back out, once, and nobody types it.
+   * The owner's call of 16.09.2026: a tab marked *Policija*, *Rashod*, *Otpis*
+   * or *Osoblje* comes off the night by itself, the way *Dnevnica* does. It was
+   * rung up like any round — that is what moved the stock and put it in the
+   * promet — so the closing is where it comes back out, once, and nobody types
+   * it. These four are exactly `AUTHORISED_UNPAID_REASONS`; a tab that closed
+   * unpaid for any *other* reason is money somebody may still be asked for, and
+   * it stays in the night.
    */
-  it('subtracts what was marked on the tables, with nothing typed', () => {
+  it('subtracts every authorised category, with nothing typed', () => {
     const shiftId = f.openShift({ members: ['Amar', 'Emir'] })
 
     const paid = f.lock('Amar', 'Sto 1', [{ product: 'Red Bull' }]) // 500
@@ -176,12 +183,15 @@ describe('the numbers', () => {
     markCategory(admin.tabId, 'Amar', 'rashod')
     const spilled = f.lock('Amar', 'Sto 4', [{ product: 'Čaj' }]) // 200
     markCategory(spilled.tabId, 'Amar', 'otpis')
+    const staff = f.lock('Amar', 'Sto 5', [{ product: 'Kafa' }]) // 150
+    markCategory(staff.tabId, 'Amar', 'osoblje')
 
     const preview = closingPreview(f.db, f.venueId, sanker(), shiftId)
-    expect(preview.prihod_fen).toBe(1_300) // all four rounds are in the promet
+    expect(preview.prihod_fen).toBe(1_450) // every round is in the promet
     expect(preview.policija_fen).toBe(300)
     expect(preview.rashod_fen).toBe(300)
     expect(preview.otpis_fen).toBe(200) // no product_waste row tonight
+    expect(preview.osoblje_fen).toBe(150)
     expect(preview.open_tabs).toEqual([])
 
     const closing = closeByBar(f.db, f.venueId, sanker(), shiftId, {
@@ -190,9 +200,10 @@ describe('the numbers', () => {
     expect(closing.policija_fen).toBe(300)
     expect(closing.rashod_fen).toBe(300)
     expect(closing.otpis_fen).toBe(200)
+    expect(closing.osoblje_fen).toBe(150)
     // What is left to hand over is the one round somebody actually paid for,
     // minus the day's wage.
-    expect(closing.za_predati_fen).toBe(1_300 - 9_000 - 200 - 300 - 300)
+    expect(closing.za_predati_fen).toBe(1_450 - 9_000 - 200 - 300 - 300 - 150)
   })
 
   it('adds a tab marked Otpis to the otpis of the store room', () => {
@@ -287,9 +298,11 @@ describe('what it refuses and what it replays', () => {
     expect(closeByBarBody.safeParse({ client_id: randomUUID(), roba_fen: -1 }).success).toBe(false)
     expect(closeByBarBody.safeParse({ client_id: randomUUID(), roba_fen: 1.5 }).success).toBe(false)
     expect(closeByBarBody.safeParse({ client_id: randomUUID(), prihod_fen: 1 }).success).toBe(false)
-    // The five the server computes are refused by name, so a phone cannot
+    // The six the server computes are refused by name, so a phone cannot
     // subtract a rashod twice by sending one.
-    for (const key of ['prihod_fen', 'dnevnica_fen', 'otpis_fen', 'rashod_fen', 'policija_fen']) {
+    for (const key of [
+      'prihod_fen', 'dnevnica_fen', 'otpis_fen', 'rashod_fen', 'policija_fen', 'osoblje_fen',
+    ]) {
       expect(closeByBarBody.safeParse({ client_id: randomUUID(), [key]: 1 }).success).toBe(false)
     }
     expect(closeByBarBody.safeParse({ ...ZERO }).success).toBe(false)
