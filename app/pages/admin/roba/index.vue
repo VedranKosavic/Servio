@@ -57,6 +57,7 @@ import {
   type StanjeFilter, type StanjeRow,
 } from '~/components/roba/RobaStanjeTable.vue'
 import type { CountView, OwnerStockReport, StockItem } from '#shared/types'
+import { useDocumentVisibility, useIntervalFn } from '@vueuse/core'
 
 definePageMeta({ middleware: 'admin', layout: 'admin' })
 
@@ -102,11 +103,24 @@ async function load() {
   }
 }
 
-useAdminChanges({
+const changes = useAdminChanges({
   onEntity: (entity) => {
     if (entity === 'stock' || entity === 'count' || entity === 'menu') void load()
   },
 })
+
+/**
+ * **Every 5 s on this screen** (the owner, 16.09.2026). A round comes off the
+ * shelf the moment the waiter taps *Potvrdi*, and this is the screen the owner
+ * watches that happen on, so it asks the dashboard's one poll to look again
+ * three times as often as the rest of `/admin` does. Unchanged, the answer is
+ * a 304 of a few bytes; changed, `stock` moves and `load()` runs. Paused while
+ * the tab is hidden, like the poll itself.
+ */
+const visibility = useDocumentVisibility()
+const faster = useIntervalFn(() => { void changes.refresh() }, 5_000, { immediate: false })
+onMounted(() => faster.resume())
+watch(visibility, state => (state === 'visible' ? faster.resume() : faster.pause()))
 
 // The session is an httpOnly cookie the browser holds, so every read on `/admin`
 // happens after mount — a server render would ask `/api/me` with no cookie jar

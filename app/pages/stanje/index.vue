@@ -31,7 +31,9 @@ const { lastOkAt, refresh } = useChanges({
     items.value = list
   },
   me: () => me.load(),
-}, { intervalMs: 15_000 })
+// 5 s, not 15: this is the screen the bar watches a round come off the shelf
+// on, the moment a waiter taps *Potvrdi* (the owner, 16.09.2026).
+}, { intervalMs: 5_000 })
 
 const loaded = computed(() => lastOkAt.value !== null)
 
