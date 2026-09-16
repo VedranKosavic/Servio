@@ -154,6 +154,8 @@ export interface ProductAdmin {
   price_since: string | null
   kind: ProductKind
   sells_stock_item_id: string | null
+  /** *Troši kafu* — the coffee article a dose comes off, or `null`. */
+  coffee_stock_item_id: string | null
   shisha_grams: number | null
   shisha_grams_measured_at: string | null
   coal_pcs: number | null
@@ -193,7 +195,7 @@ export interface TableAdmin {
 export interface StockItemAdmin {
   id: string
   name: string
-  kind: 'pice' | 'duhan' | 'zar' | 'potrosni' | 'hrana'
+  kind: 'pice' | 'duhan' | 'zar' | 'potrosni' | 'hrana' | 'kafa'
   base_unit: 'kom' | 'g' | 'ml'
   category_id: string | null
   category_name: string | null

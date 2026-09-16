@@ -8,7 +8,7 @@
 import type { StaleDevice } from './auth'
 import type { StockItemAdmin } from './admin'
 
-export type StockKind = 'pice' | 'duhan' | 'zar' | 'potrosni' | 'hrana'
+export type StockKind = 'pice' | 'duhan' | 'zar' | 'potrosni' | 'hrana' | 'kafa'
 export type BaseUnit = 'kom' | 'g' | 'ml'
 export type MovementType =
   | 'opening' | 'delivery' | 'sale' | 'sale_storno' | 'late_sync'

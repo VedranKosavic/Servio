@@ -724,13 +724,21 @@ export function requireFlavours(
 export interface PendingMovement { stockItemId: string, qtyDelta: number, unitCostMfen: number }
 
 /**
- * What one line takes off the shelf. Three ways, and a product may use more
+ * What one line takes off the shelf. Four ways, and a product may use more
  * than one of them:
  *
  *   1:1        `sells_stock_item_id` — a bottle of Coca-Cola is a bottle.
- *   normativ   `recipe_lines` — a kafa is 7 g kafa + 5 g šećera.
- *   nargila    `kind='shisha'` — `shisha_grams` split evenly across the chosen
- *              aromas, plus `coal_pcs` off the coal item.
+ *   kafa       `coffee_stock_item_id` — `settings.grams_per_coffee` grams of
+ *              that coffee per cup (the owner's *Gramaža*, 16.09.2026).
+ *   normativ   `recipe_lines` — older articles that still carry one.
+ *   nargila    `kind='shisha'` — `settings.grams_per_bowl_default` split evenly
+ *              across the chosen aromas, plus `coal_pcs` off the coal item.
+ *
+ * **The doses are settings, not columns** (the owner's *Gramaža*): one coffee
+ * is 8 g and one bowl is 20 g for every article on the menu, and changing the
+ * figure once changes it for all of them — from the next round, because a
+ * locked round's movements are already written and the ledger is append-only.
+ * A product's own `shisha_grams` is no longer read.
  *
  * Deltas are negative: a sale removes stock. Stock is allowed to go negative —
  * a sale is never blocked because the ledger disagrees with the shelf. The
@@ -769,6 +777,13 @@ export function resolveStock(
     push(product.sellsStockItemId, -qty)
   }
 
+  const needsDose = product.coffeeStockItemId || product.kind === 'shisha'
+  const settings = needsDose ? getSettings(tx, venueId) : null
+
+  if (product.coffeeStockItemId && settings) {
+    push(product.coffeeStockItemId, -(settings.grams_per_coffee * qty))
+  }
+
   const recipe = tx.select().from(schema.recipeLines)
     .where(and(
       eq(schema.recipeLines.venueId, venueId),
@@ -779,8 +794,8 @@ export function resolveStock(
     push(r.stockItemId, -(r.qty * qty))
   }
 
-  if (product.kind === 'shisha') {
-    const grams = (product.shishaGrams ?? 0) * qty
+  if (product.kind === 'shisha' && settings) {
+    const grams = settings.grams_per_bowl_default * qty
     if (grams > 0 && flavourIds.length > 0) {
       // A mixed bowl splits the venue norm across its aromas: 20 g over two
       // aromas is 10 g + 10 g (PLAN.md §9, the owner's monthly formula).

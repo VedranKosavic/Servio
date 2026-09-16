@@ -113,6 +113,13 @@
       "when": 1789554857491,
       "tag": "0015_month_extra_costs",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1789557325947,
+      "tag": "0016_coffee_dose",
+      "breakpoints": true
     }
   ]
 }

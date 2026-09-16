@@ -30,7 +30,7 @@ const name60 = z.string().trim().min(1).max(60)
 const zone = z.enum(['unutra', 'basta'])
 const productKind = z.enum(['simple', 'shisha'])
 const categoryKind = z.enum(['pice', 'hrana', 'nargila', 'ostalo'])
-const stockKind = z.enum(['pice', 'duhan', 'zar', 'potrosni', 'hrana'])
+const stockKind = z.enum(['pice', 'duhan', 'zar', 'potrosni', 'hrana', 'kafa'])
 const baseUnit = z.enum(['kom', 'g', 'ml'])
 const countMethod = z.enum(['count', 'weigh'])
 const role = z.enum(['admin', 'radnik'])
@@ -54,6 +54,8 @@ export const createProductBody = z.object({
   kind: productKind.optional(),
   /** The 1:1 shelf item this product sells, when it has one. */
   sells_stock_item_id: uuid.nullish(),
+  /** *Troši kafu*: the coffee article (kind `kafa`) a dose comes off per sale. */
+  coffee_stock_item_id: uuid.nullish(),
   /** `kind='shisha'`: grams of tobacco a bowl uses, split across its flavours. */
   shisha_grams: z.number().min(0).max(200).nullish(),
   coal_pcs: z.int().min(0).max(50).nullish(),

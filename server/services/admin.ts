@@ -123,6 +123,7 @@ const PRODUCT_LABELS: Record<string, string> = {
   price_fen: 'cijena',
   kind: 'vrsta',
   sells_stock_item_id: 'roba',
+  coffee_stock_item_id: 'kafa',
   shisha_grams: 'grama po luli',
   coal_pcs: 'žara po luli',
   staff_drink_allowed: 'piće za osoblje',
@@ -139,6 +140,7 @@ const PRODUCT_COLUMNS: Record<string, string> = {
   price_fen: 'priceFen',
   kind: 'kind',
   sells_stock_item_id: 'sellsStockItemId',
+  coffee_stock_item_id: 'coffeeStockItemId',
   shisha_grams: 'shishaGrams',
   coal_pcs: 'coalPcs',
   staff_drink_allowed: 'staffDrinkAllowed',
@@ -181,6 +183,7 @@ export function createProduct(
 ): ProductAdmin {
   requireLiveCategory(db, venueId, body.category_id)
   if (body.sells_stock_item_id) requireStockItem(db, venueId, body.sells_stock_item_id)
+  if (body.coffee_stock_item_id) requireCoffeeItem(db, venueId, body.coffee_stock_item_id)
 
   const id = newId()
 
@@ -195,6 +198,7 @@ export function createProduct(
       priceFen: body.price_fen,
       kind: body.kind ?? 'simple',
       sellsStockItemId: body.sells_stock_item_id ?? null,
+      coffeeStockItemId: body.coffee_stock_item_id ?? null,
       shishaGrams: body.shisha_grams ?? null,
       shishaGramsMeasuredAt: null,
       coalPcs: body.coal_pcs ?? null,
@@ -245,6 +249,7 @@ export function updateProduct(
     requireLiveCategory(db, venueId, patch.category_id)
   }
   if (patch.sells_stock_item_id) requireStockItem(db, venueId, patch.sells_stock_item_id)
+  if (patch.coffee_stock_item_id) requireCoffeeItem(db, venueId, patch.coffee_stock_item_id)
 
   const priceMoved = patch.price_fen !== undefined && patch.price_fen !== before.priceFen
   const labels = changedLabels(before, patch, PRODUCT_LABELS, PRODUCT_COLUMNS)
@@ -260,6 +265,9 @@ export function updateProduct(
       ...(patch.kind !== undefined ? { kind: patch.kind } : {}),
       ...(patch.sells_stock_item_id !== undefined
         ? { sellsStockItemId: patch.sells_stock_item_id ?? null }
+        : {}),
+      ...(patch.coffee_stock_item_id !== undefined
+        ? { coffeeStockItemId: patch.coffee_stock_item_id ?? null }
         : {}),
       ...(patch.shisha_grams !== undefined ? { shishaGrams: patch.shisha_grams ?? null } : {}),
       ...(patch.coal_pcs !== undefined ? { coalPcs: patch.coal_pcs ?? null } : {}),
@@ -1230,6 +1238,18 @@ function requireStockItem(q: Queryable, venueId: string, id: string) {
   return row
 }
 
+/**
+ * *Troši kafu* must point at coffee: a dose of grams taken off a crate of
+ * Coca-Cola would be a number nobody could ever reconcile.
+ */
+function requireCoffeeItem(q: Queryable, venueId: string, id: string) {
+  const row = requireStockItem(q, venueId, id)
+  if (row.kind !== 'kafa') {
+    throw badRequest('NOT_COFFEE', 'coffee_stock_item_id must be a coffee article')
+  }
+  return row
+}
+
 function requireUser(q: Queryable, venueId: string, id: string) {
   const row = q.select().from(schema.users)
     .where(and(eq(schema.users.id, id), eq(schema.users.venueId, venueId)))
@@ -1362,6 +1382,7 @@ function toProduct(
     price_since: priceSince,
     kind: row.kind,
     sells_stock_item_id: row.sellsStockItemId,
+    coffee_stock_item_id: row.coffeeStockItemId,
     shisha_grams: row.shishaGrams,
     shisha_grams_measured_at: row.shishaGramsMeasuredAt,
     coal_pcs: row.coalPcs,

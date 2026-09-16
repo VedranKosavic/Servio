@@ -14,6 +14,7 @@ import { flavourShares, isEvenMix, mixLabels } from '../../shared/flavours'
 import { createOrder } from '../../server/services/orders'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
 import { syncFlavours, TOBACCOS } from '../../server/database/flavours'
+import { DEFAULT_SETTINGS } from '../../shared/settings'
 
 describe('flavourShares', () => {
   it('is one whole aroma when the bowl has one', () => {
@@ -114,8 +115,9 @@ describe('a mix is deducted in the proportion it was tapped', () => {
       }],
     })
 
-    const grams = f.db.select().from(schema.products).all()
-      .find(p => p.name === 'Nargila')!.shishaGrams!
+    // The bowl's grams are the venue's *Gramaža* since 16.09.2026, not the
+    // product's own column: one figure for every nargila on the menu.
+    const grams = DEFAULT_SETTINGS.grams_per_bowl_default
 
     expect(jabukaBefore - onHand(jabuka)).toBeCloseTo((grams * 2) / 3, 6)
     expect(mentaBefore - onHand(menta)).toBeCloseTo(grams / 3, 6)

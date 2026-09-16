@@ -179,6 +179,12 @@ export const products = sqliteTable('products', {
   priceFen: integer('price_fen').notNull(),
   kind: text('kind', { enum: ['simple', 'shisha'] }).notNull().default('simple'),
   sellsStockItemId: text('sells_stock_item_id').references(() => stockItems.id),
+  /**
+   * *Troši kafu* (16.09.2026): the coffee on *Stanje šanka* this article uses.
+   * Each one sold takes `settings.grams_per_coffee` grams off it — a setting and
+   * not a column, so the owner changes the dose once for every coffee on the menu.
+   */
+  coffeeStockItemId: text('coffee_stock_item_id').references(() => stockItems.id),
   shishaGrams: real('shisha_grams'),
   /** When the owner last weighed a bowl of this, so `grams_per_bowl` is honest. */
   shishaGramsMeasuredAt: text('shisha_grams_measured_at'),
@@ -220,7 +226,7 @@ export const stockItems = sqliteTable('stock_items', {
   id: text('id').primaryKey(),
   venueId: text('venue_id').notNull().references(() => venues.id),
   name: text('name').notNull(),
-  kind: text('kind', { enum: ['pice', 'duhan', 'zar', 'potrosni', 'hrana'] }).notNull(),
+  kind: text('kind', { enum: ['pice', 'duhan', 'zar', 'potrosni', 'hrana', 'kafa'] }).notNull(),
   baseUnit: text('base_unit', { enum: ['kom', 'g', 'ml'] }).notNull(),
   /** For the *Roba* report: which menu category this item belongs under. */
   categoryId: text('category_id').references(() => categories.id),

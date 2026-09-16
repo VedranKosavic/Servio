@@ -1,0 +1,1 @@
+ALTER TABLE `products` ADD `coffee_stock_item_id` text REFERENCES stock_items(id);

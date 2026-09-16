@@ -79,6 +79,12 @@ export const DEFAULT_SETTINGS = {
   max_sync_lag_h: 12,
 
   grams_per_bowl_default: 20,
+  /**
+   * *Gramaža*: how many grams of coffee one coffee takes off *Stanje šanka*
+   * (16.09.2026). Every menu article marked *troši kafu* deducts this, and
+   * changing it moves the next round, never one already locked.
+   */
+  grams_per_coffee: 8,
   gpb_band_pct: 15,
   coals_per_bowl_alert: 5,
 
@@ -148,6 +154,7 @@ export const settingsSchema = z.object({
   max_sync_lag_h: z.int().min(1).max(168),
 
   grams_per_bowl_default: z.number().min(1).max(200),
+  grams_per_coffee: z.number().min(1).max(50),
   gpb_band_pct: z.number().min(0).max(100),
   coals_per_bowl_alert: z.int().min(0).max(100),
 
@@ -210,6 +217,7 @@ export const SETTINGS_LABELS: Partial<Record<keyof Settings, string>> = {
   clock_skew_alert_s: 'Odstupanje sata',
   max_sync_lag_h: 'Najstarija tura (sati)',
   grams_per_bowl_default: 'Grama po luli',
+  grams_per_coffee: 'Grama po kafi',
   gpb_band_pct: 'Dozvoljeno odstupanje (%)',
   coals_per_bowl_alert: 'Žara po luli',
   upload_user_day_bytes: 'Slike po osobi — dnevno',
