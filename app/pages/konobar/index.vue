@@ -153,6 +153,26 @@ const queuedByTable = computed(() => {
   return totals
 })
 
+/**
+ * The same sum for *Bez stola*, which has no table id to key on: the guests at
+ * the bar are a tab like any other, and a round queued for them has to show on
+ * their card the way a queued round shows on a tile.
+ */
+const queuedLooseFen = computed(() => {
+  let sum = 0
+  for (const entry of outbox.entries) {
+    if (entry.kind !== 'order') continue
+    const payload = entry.payload as {
+      table_id?: string | null
+      lines?: { product_id: string, qty: number }[]
+    }
+    if (payload.table_id) continue
+    sum += (payload.lines ?? []).reduce(
+      (n, line) => n + (priceById.value.get(line.product_id) ?? 0) * line.qty, 0)
+  }
+  return sum
+})
+
 const shownStates = computed<TableState[]>(() => {
   const myId = me.user.value?.id ?? null
   const merged = [...states.value]
@@ -187,6 +207,65 @@ const shownStates = computed<TableState[]>(() => {
   }
   return merged
 })
+
+/** `bez-stola` in `?sto=`: a tab on no table at all (PHASE3 §1.11). */
+const LOOSE = 'bez-stola'
+
+/**
+ * *Bez stola* as one row of the same shape a table has.
+ *
+ * Which of the loose tabs is **this phone's**: the one whose `tab_client_id`
+ * this phone minted, else one assigned to the person signed in — the same rule
+ * `/konobar/sto/bez-stola` has always used, so the card and the sheet cannot
+ * disagree about which party at the bar is meant. One *Bez stola* tab per phone
+ * is the deliberate limit (PHASE3 §1.11).
+ *
+ * The outbox is folded in exactly as it is for a tile, and a round that exists
+ * only on this phone produces the same `local:` row, so the sheet has something
+ * to open over with no signal.
+ */
+function looseRow(tabId: string | null): TableState | null {
+  const mine = cart.tabClientIdFor(null)
+  // The card that was tapped wins; with none named it is this phone's own tab,
+  // then any of this person's. Without the first rule a phone holding two open
+  // bar tabs drew one card's amount and opened the other one's rounds.
+  const row = (tabId === null ? null : looseTabs.value.find(r => r.tab_id === tabId))
+    ?? looseTabs.value.find(r => mine !== null && r.tab_client_id === mine)
+    ?? looseTabs.value.find(r => r.assigned_to === me.user.value?.id)
+    ?? null
+
+  // The queue belongs to the tab this phone is adding to, which is the one the
+  // cart minted — never to a second bar tab somebody else's round opened.
+  const fen = row === null || (mine !== null && row.tab_client_id === mine)
+    ? queuedLooseFen.value
+    : 0
+
+  if (row) {
+    return fen === 0
+      ? row
+      : { ...row, total_fen: row.total_fen + fen, remaining_fen: row.remaining_fen + fen }
+  }
+  if (fen === 0) return null
+
+  return {
+    table_id: null,
+    tab_id: 'local:bez-stola',
+    tab_client_id: mine,
+    total_fen: fen,
+    remaining_fen: fen,
+    assigned_to: me.user.value?.id ?? null,
+    assigned_to_initials: me.user.value?.initials ?? null,
+    opened_by_name: me.user.value?.name ?? null,
+    opened_at: null,
+    last_order_at: null,
+    pending_review: false,
+    late_sync: false,
+    offered_to: null,
+  }
+}
+
+/** The bar as the plan draws it when nobody has named a particular tab. */
+const shownLoose = computed<TableState | null>(() => looseRow(null))
 
 // -- Nacrti -----------------------------------------------------------------
 
@@ -416,15 +495,23 @@ async function addZar(parentLineId: string) {
  * `/konobar/sto/<id>`, one tap further in, because each of those is a decision
  * with a PIN, a reason or a countdown on it.
  */
-const sheetFor = ref<{ tableId: string, name: string } | null>(null)
+const sheetFor = ref<{ tableId: string | null, name: string, looseTabId?: string | null } | null>(null)
 const sheetDetail = ref<TabDetail | null>(null)
 const sheetLoading = ref(false)
 const sheetError = ref<string | null>(null)
 
-/** The floor's own row for the table the sheet is about. */
-const sheetState = computed(() => (sheetFor.value
-  ? shownStates.value.find(s => s.table_id === sheetFor.value!.tableId) ?? null
-  : null))
+/**
+ * The floor's own row for the table the sheet is about — or, when the sheet is
+ * *Bez stola*, the bar's row. `tableId === null` **is** the bar (the owner's
+ * call, 16.09.2026: the guests standing at the bar get the same sheet, the same
+ * buttons and the same evening as a table).
+ */
+const sheetState = computed(() => {
+  if (!sheetFor.value) return null
+  const id = sheetFor.value.tableId
+  if (id === null) return looseRow(sheetFor.value.looseTabId ?? null)
+  return shownStates.value.find(s => s.table_id === id) ?? null
+})
 
 /**
  * What the guests owe **on this phone** — the server's figure plus anything the
@@ -457,9 +544,23 @@ const sheetDraftFen = computed(() => {
  * dropped again as soon as the sheet is closed, so the back button does not
  * walk him through a reopening sheet.
  */
-watch([() => route.query.sto, shownStates], () => {
-  const tableId = typeof route.query.sto === 'string' ? route.query.sto : null
-  if (!tableId || sheetFor.value?.tableId === tableId) return
+watch([() => route.query.sto, shownStates, shownLoose], () => {
+  const asked = typeof route.query.sto === 'string' ? route.query.sto : null
+  if (!asked) return
+
+  // `?sto=bez-stola` is the bar, and it is the one id that is not a table's.
+  if (asked === LOOSE) {
+    if (sheetFor.value && sheetFor.value.tableId === null) return
+    if (shownLoose.value?.tab_id || draftCount(null) > 0) {
+      openSheet(null)
+      return
+    }
+    if (states.value.length > 0) void navigateTo({ path: '/konobar', query: {} }, { replace: true })
+    return
+  }
+
+  const tableId = asked
+  if (sheetFor.value?.tableId === tableId) return
 
   // `shownStates` folds the outbox in, so a round locked ten seconds ago on a
   // phone with no signal counts as something — which is the whole point of
@@ -477,8 +578,8 @@ watch([() => route.query.sto, shownStates], () => {
   if (states.value.length > 0) void navigateTo({ path: '/konobar', query: {} }, { replace: true })
 }, { immediate: true })
 
-function openSheet(tableId: string) {
-  sheetFor.value = { tableId, name: draftName(tableId) }
+function openSheet(tableId: string | null, looseTabId: string | null = null) {
+  sheetFor.value = { tableId, name: draftName(tableId), looseTabId }
   sheetError.value = null
   sheetDetail.value = null
   void loadSheetDetail()
@@ -740,11 +841,16 @@ const ZONES = [
   { value: 'basta', label: 'Bašta' },
 ] as const
 
-/** *+ Bez stola*: this phone's own table-less tab, or a fresh one. */
+/**
+ * *+ Bez stola*, and the card above the plan: the bar behaves like a table.
+ *
+ * Something on it opens the sheet, nothing on it goes straight to the menu —
+ * the same two branches `openTable` has, because the owner asked for the two to
+ * work the same way (16.09.2026).
+ */
 function openLoose() {
-  navigateTo(draftCount(null) > 0 || looseTabs.value.length > 0
-    ? '/konobar/sto/bez-stola'
-    : '/konobar/dodaj/bez-stola')
+  if (shownLoose.value?.tab_id || draftCount(null) > 0) openSheet(null)
+  else navigateTo('/konobar/dodaj/bez-stola')
 }
 </script>
 
@@ -868,7 +974,8 @@ function openLoose() {
           </div>
         </div>
 
-        <!-- Bez stola: the guests at the bar, on nobody's table -->
+        <!-- Bez stola: the guests at the bar, on nobody's table.
+             The card opens the same sheet a tile does. -->
         <div v-if="looseTabs.length > 0 || draftCount(null) > 0" class="flex flex-col gap-2">
           <button
             v-for="row in looseTabs"
@@ -876,7 +983,7 @@ function openLoose() {
             type="button"
             class="card flex items-center gap-3 p-4 text-left"
             :class="row.assigned_to === me.user.value?.id ? 'border-accent-line' : ''"
-            @click="navigateTo('/konobar/sto/bez-stola')"
+            @click="openSheet(null, row.tab_id)"
           >
             <div class="grow">
               <p class="eyebrow">
@@ -894,7 +1001,7 @@ function openLoose() {
             v-if="draftCount(null) > 0 && looseTabs.length === 0"
             type="button"
             class="card flex items-center gap-3 border-dashed border-accent-line p-4 text-left"
-            @click="navigateTo('/konobar/sto/bez-stola')"
+            @click="openSheet(null)"
           >
             <div class="grow">
               <p class="eyebrow">
@@ -997,8 +1104,9 @@ function openLoose() {
       :paid="sheetState?.paid ?? false"
       :clearing="clearing"
       :has-tab="sheetMoney.hasTab.value"
+      :loose="sheetFor.tableId === null"
       @close="closeSheet"
-      @add="navigateTo(`/konobar/dodaj/${sheetFor.tableId}`)"
+      @add="navigateTo(`/konobar/dodaj/${sheetFor.tableId ?? 'bez-stola'}`)"
       @pay="(andClear) => { payAndClear = andClear; payError = null; payOpen = true }"
       @clear="clearCurrentTable"
       @move="moveError = null; moveOpen = true"

@@ -48,8 +48,18 @@ const props = withDefaults(defineProps<{
   /** Settled and still occupied — the only thing left to do is clear it. */
   paid?: boolean
   clearing?: boolean
-  /** There is a tab here at all: the three secondary actions need one. */
+  /** There is a tab here at all: the secondary actions need one. */
   hasTab?: boolean
+  /**
+   * This sheet is *Bez stola* — the guests standing at the bar.
+   *
+   * It changes one row of buttons and nothing else. A table offers *Premjesti ·
+   * Policija · Rashod*; the bar offers *Premjesti · Rashod · Otpis · Osoblje*
+   * (the owner's call, 16.09.2026) — a spilled drink and a worker's own coffee
+   * are rung up at the bar and never at somebody's table, and the police sit at
+   * a table.
+   */
+  loose?: boolean
 }>(), {
   loading: false,
   error: null,
@@ -62,6 +72,7 @@ const props = withDefaults(defineProps<{
   paid: false,
   clearing: false,
   hasTab: false,
+  loose: false,
 })
 
 const emit = defineEmits<{
@@ -85,7 +96,7 @@ const emit = defineEmits<{
    * counts it; the amount comes straight off *Zaključi smjenu* by category,
    * next to *Dnevnica*, rather than off the waiter.
    */
-  unpaid: [reason: 'policija' | 'rashod' | 'otpis']
+  unpaid: [reason: 'policija' | 'rashod' | 'otpis' | 'osoblje']
   /**
    * A locked line was tapped — the way to a storno. It came over from the table
    * page with the rest: a waiter who rings up the wrong drink has to be able to
@@ -293,12 +304,13 @@ const rounds = computed(() => props.detail?.orders ?? [])
         <!--
           The rest of what a table can need, one step quieter.
 
-          *Pokaži gostu* and *Nije plaćeno* left at the owner's word. The three
-          that stayed with *Premjesti* are the categories that come off the
-          night by themselves at *Zaključi smjenu* — and *Otpis* is here (the
-          owner's call, 16.09.2026) because a glass goes over at the table, not
-          at the bar: marking it on the tab is what takes the right bottle out
-          of *Stanje šanka*.
+          *Pokaži gostu* and *Nije plaćeno* left at the owner's word. What
+          stayed with *Premjesti* are the categories that come off the night by
+          themselves at *Zaključi smjenu*, and each is where it is drunk (the
+          owner's call, 16.09.2026): a table has *Policija* and *Rashod*, the
+          bar has *Rashod*, *Otpis* and *Osoblje*. A guest's table can no longer
+          be marked *Otpis* or *Osoblje*, and the police sit at a table rather
+          than standing at the bar.
         -->
         <div class="grid grid-cols-2 gap-2 pt-1">
           <button
@@ -310,6 +322,7 @@ const rounds = computed(() => props.detail?.orders ?? [])
             Premjesti
           </button>
           <button
+            v-if="!loose"
             type="button"
             class="btn btn-secondary px-2 text-label"
             :disabled="!hasTab || paid || remainingFen <= 0"
@@ -326,12 +339,22 @@ const rounds = computed(() => props.detail?.orders ?? [])
             Rashod
           </button>
           <button
+            v-if="loose"
             type="button"
             class="btn btn-secondary px-2 text-label"
             :disabled="!hasTab || paid || remainingFen <= 0"
             @click="emit('unpaid', 'otpis')"
           >
             Otpis
+          </button>
+          <button
+            v-if="loose"
+            type="button"
+            class="btn btn-secondary px-2 text-label"
+            :disabled="!hasTab || paid || remainingFen <= 0"
+            @click="emit('unpaid', 'osoblje')"
+          >
+            Osoblje
           </button>
         </div>
       </div>

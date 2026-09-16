@@ -68,13 +68,11 @@ useHead({ title: () => `Dodaj · ${tableName.value}` })
  * Where every way out of this screen goes: the floor plan, with this table's
  * sheet open on it.
  *
- * *Bez stola* is the exception and keeps its own page — the plan draws tables
- * and there is no tile for the bar, so there is nothing for a sheet to sit
- * over.
+ * *Bez stola* used to be the exception and go back to a page of its own; since
+ * 16.09.2026 it is a sheet like any table's, sitting over the card above the
+ * plan instead of over a tile (the owner: the bar works the same as a table).
  */
-const backTo = computed(() => (tableId.value === null
-  ? '/konobar/sto/bez-stola'
-  : `/konobar?sto=${tableId.value}`))
+const backTo = computed(() => `/konobar?sto=${tableId.value ?? 'bez-stola'}`)
 
 // The one poll. Nothing on this screen needs the floor plan, but the catalogue
 // has to follow a price change made in `/admin` mid-evening.

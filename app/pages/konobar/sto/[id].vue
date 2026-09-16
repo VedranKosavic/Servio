@@ -959,32 +959,37 @@ function lateWasNotPaid(row: TableState) {
           </button>
 
           <!--
-            The two categories that belong at the bar rather than at a table.
+            The two categories that belong at the bar rather than at a table,
+            and since 16.09.2026 appear **only** there (`v-if="tableId === null"`
+            — the owner's call: a guest's table can no longer be marked either
+            by mistake, because neither is ever drunk at one).
 
             *Otpis* is a drink that was made and then spilled, dropped, or rung
             up by mistake; *Osoblje* is a worker drinking against his own
             allowance. Both are rung up like any round — that is what moves the
             stock and puts them in the night's total — and both close the tab
-            owing nothing, coming off the shift by category at the settlement.
-            *Policija* and *Rashod* are the table's two and live on the floor
-            plan's sheet, because that is where they are drunk.
+            owing nothing, coming off *Zaključi smjenu* by category. *Policija*
+            and *Rashod* are the table's two and live on the floor plan's sheet,
+            because that is where they are drunk.
           -->
-          <button
-            type="button"
-            class="btn btn-secondary btn-lg justify-start"
-            :disabled="!hasTab || localRemainingFen <= 0"
-            @click="markCategory('otpis')"
-          >
-            Otpis — proliveno ili greška
-          </button>
-          <button
-            type="button"
-            class="btn btn-secondary btn-lg justify-start"
-            :disabled="!hasTab || localRemainingFen <= 0"
-            @click="markCategory('osoblje')"
-          >
-            Osoblje
-          </button>
+          <template v-if="tableId === null">
+            <button
+              type="button"
+              class="btn btn-secondary btn-lg justify-start"
+              :disabled="!hasTab || localRemainingFen <= 0"
+              @click="markCategory('otpis')"
+            >
+              Otpis — proliveno ili greška
+            </button>
+            <button
+              type="button"
+              class="btn btn-secondary btn-lg justify-start"
+              :disabled="!hasTab || localRemainingFen <= 0"
+              @click="markCategory('osoblje')"
+            >
+              Osoblje
+            </button>
+          </template>
           <button
             type="button"
             class="btn btn-secondary btn-lg justify-start"
