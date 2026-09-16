@@ -258,6 +258,17 @@ describe('the shift and me snapshots', () => {
     expect(getChanges(f.db, f.venueId, f.actor('Amar'), 0).me).toBeUndefined()
   })
 
+  it('attaches me when the settings moved, so a phone gets them without reopening', () => {
+    // The envelope carries the venue's settings. A threshold or the dnevnica
+    // changed in *Podešavanja* used to reach a phone only on the next login.
+    lockOne()
+    const cursor = maxSeq(f.db, f.venueId)
+    f.db.transaction(tx => bump(tx, f.venueId, 'settings'))
+
+    const incremental = getChanges(f.db, f.venueId, f.actor('Amar'), cursor)
+    expect(incremental.me?.venue.settings).toBeDefined()
+  })
+
   it('does not attach me when nothing about the person moved', () => {
     lockOne()
     const cursor = maxSeq(f.db, f.venueId)

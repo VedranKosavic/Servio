@@ -160,7 +160,10 @@ export function getChanges(
    * moved, so one staff edit last Tuesday would attach `me` to every screen's
    * first poll — and a screen opening has just read `/api/me` anyway.
    */
-  if (!full && (entities.has('user') || entities.has('device'))) {
+  // `settings` is here with `user` and `device` because the envelope carries the
+  // venue's settings: a threshold or the dnevnica changed in *Podešavanja* has to
+  // reach a phone on the next poll, not the next time somebody reopens the app.
+  if (!full && (entities.has('user') || entities.has('device') || entities.has('settings'))) {
     result.me = getMe(db, venueId, actor)
   }
 

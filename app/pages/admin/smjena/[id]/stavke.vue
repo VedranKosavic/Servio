@@ -22,6 +22,18 @@ const route = useRoute()
 const router = useRouter()
 const api = useAdminApi()
 
+// The dashboard's one timer: a round, a decision or a closing rewrites this
+// list without the owner reloading. Quiet, so the skeleton is the first paint
+// only.
+useAdminChanges({
+  onEntity: (entity) => {
+    if (entity === 'shift' || entity === 'adjustment') {
+      void loadShift()
+      void loadLines(true)
+    }
+  },
+})
+
 const shiftId = computed(() => String(route.params.id))
 const user = computed(() => String(route.query.user ?? ''))
 const kat = computed(() => String(route.query.kat ?? 'sve'))
@@ -43,8 +55,8 @@ async function loadShift() {
 }
 
 /** A fresh first page. Every filter change comes through here. */
-async function loadLines() {
-  loading.value = true
+async function loadLines(quiet = false) {
+  if (!quiet) loading.value = true
   try {
     const page = await api.getShiftLines(shiftId.value, {
       ...(user.value ? { user: user.value } : {}),

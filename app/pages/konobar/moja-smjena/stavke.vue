@@ -23,6 +23,21 @@ useHead({ title: 'Stavke' })
 
 const api = useApi()
 const me = useMe()
+
+/**
+ * The list follows the night on the app's one poll: a round locked a minute ago
+ * or a storno decided at the bar appears here with no reload. `quiet` keeps the
+ * skeleton for the first paint, so a refetch never blanks a list being read.
+ */
+useChanges({
+  raw: (result) => {
+    if (result.full) return
+    if (result.changes.some(c => c.entity === 'shift' || c.entity === 'adjustment')) {
+      void load(true)
+    }
+  },
+  me: () => me.load(),
+})
 const route = useRoute()
 
 const kat = computed(() => (typeof route.query.kat === 'string' ? route.query.kat : 'sve'))
@@ -50,10 +65,12 @@ onMounted(async () => {
 
 watch(kat, () => { void load() })
 
-async function load() {
-  loading.value = true
+async function load(quiet = false) {
+  if (!quiet) {
+    loading.value = true
+    rows.value = []
+  }
   loadError.value = null
-  rows.value = []
   cursor.value = undefined
   try {
     const page = await api.getMyShiftLines(kat.value)

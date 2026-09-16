@@ -28,6 +28,22 @@ const api = useApi()
 const me = useMe()
 useOutbox()
 
+/**
+ * The screen follows the night on the app's one poll: a round locked by a
+ * colleague, a storno decided at the bar or the šanker closing the shift all
+ * land here without the waiter reloading. `quiet` keeps the skeleton for the
+ * first paint only — a refetch must not blank numbers somebody is reading.
+ */
+useChanges({
+  raw: (result) => {
+    if (result.full) return
+    if (result.changes.some(c => c.entity === 'shift' || c.entity === 'adjustment')) {
+      void load(true)
+    }
+  },
+  me: () => me.load(),
+})
+
 const shift = ref<MyShift | null>(null)
 const nights = ref<MyShiftRow[]>([])
 const sessions = ref<MySession[]>([])
@@ -58,8 +74,8 @@ async function readPersisted(): Promise<boolean | null> {
   }
 }
 
-async function load() {
-  loading.value = true
+async function load(quiet = false) {
+  if (!quiet) loading.value = true
   loadError.value = null
   try {
     // Three reads, in parallel: none of them depends on another, and this
