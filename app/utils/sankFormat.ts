@@ -70,14 +70,17 @@ function decimalComma(value: number, maxDecimals: number, minDecimals = 0): stri
 }
 
 /**
- * On hand, in the unit a bartender thinks in: "78 kom", "2,386 kg", "633 g",
- * "5,0 l", "250 ml". Grams and millilitres climb to kilos and litres at 1000,
- * because "2386 g" is a number nobody can read at a glance.
+ * On hand, in the unit a bartender thinks in: "78 kom", "992 g", "5,0 l",
+ * "250 ml". Millilitres climb to litres at 1000.
+ *
+ * **Grams stay grams** (the owner, 16.09.2026: "gramaža treba da bude u gramima
+ * a ne u kg — 1 kg = 1000 g"). Coffee and nargila aromas are dosed in grams —
+ * 8 g a coffee, 20 g a bowl — so the shelf reads "992 g", the same unit the
+ * doses are in, and never "0,992 kg".
  */
 export function formatStockQty(qty: number, unit: BaseUnit): string {
   const sign = qty < 0 ? '−' : ''
   const abs = Math.abs(qty)
-  if (unit === 'g' && abs >= 1000) return `${sign}${decimalComma(abs / 1000, 3)} kg`
   if (unit === 'ml' && abs >= 1000) return `${sign}${decimalComma(abs / 1000, 2, 1)} l`
   return `${sign}${decimalComma(abs, 2)} ${unit}`
 }

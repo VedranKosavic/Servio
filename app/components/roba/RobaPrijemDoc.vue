@@ -99,9 +99,10 @@ const pickCost = ref<number | null>(null)
  * *g* or *kg* for an article kept in grams — coffee and nargila aromas (the
  * owner, 16.09.2026: "prijem kafe unosimo po gramima ili kilogramima"). The
  * ledger always gets grams; this is only which number is easier to type off
- * the invoice. Everything else is pieces and shows no choice.
+ * the invoice. Everything else is pieces and shows no choice. It opens on *g*:
+ * the owner keeps aromas and coffee in grams ("1 kg = 1000 g").
  */
-const pickUnit = ref<'g' | 'kg'>('kg')
+const pickUnit = ref<'g' | 'kg'>('g')
 
 const pickIsGrams = computed(() => itemOf(pickId.value)?.base_unit === 'g')
 
@@ -400,7 +401,7 @@ async function send() {
           v-if="pickIsGrams"
           :model-value="pickUnit"
           label="Jedinica"
-          :options="[{ value: 'kg', label: 'kg' }, { value: 'g', label: 'g' }]"
+          :options="[{ value: 'g', label: 'g' }, { value: 'kg', label: 'kg' }]"
           @update:model-value="value => pickUnit = value as 'g' | 'kg'"
         />
       </div>
