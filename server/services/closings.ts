@@ -46,6 +46,7 @@ import { schema } from '../database/client'
 import { conflict, forbidden, notFound } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
 import { zaPredati } from '#shared/closing'
+import { businessDate } from '#shared/dates'
 import type { ClosingExtra } from '#shared/closing'
 import type { ClosingPreview, ShiftClosing, ShiftExtraCost, UnpaidReason } from '#shared/types'
 import type { AddShiftExtraCostBody } from '#shared/schemas'
@@ -205,6 +206,7 @@ export function listShiftExtraCosts(
       kind: row.kind,
       label: row.label,
       amount_fen: row.amountFen,
+      delivery_id: row.deliveryId,
       created_at: row.createdAt,
       created_by_name: names.get(row.createdBy) ?? '—',
     }))
@@ -240,20 +242,40 @@ export function addShiftExtraCost(
       throw conflict('SHIFT_NOT_CLOSED', `shift ${shiftId} has no closing yet`)
     }
 
-    const label = body.kind === 'ostalo' ? body.label?.trim() ?? null : null
+    // The amount is the invoice's, never a number from the page.
+    const delivery = tx.select().from(schema.deliveries)
+      .where(and(eq(schema.deliveries.venueId, venueId), eq(schema.deliveries.id, body.delivery_id)))
+      .get()
+    if (!delivery) throw notFound('DELIVERY_NOT_FOUND', `delivery ${body.delivery_id} not found`)
+    if (delivery.reversedAt) throw conflict('DELIVERY_ALREADY_REVERSED', `delivery ${delivery.id} is reversed`)
+    if (businessDate(delivery.deliveredAt) !== shift.businessDate) {
+      throw conflict('INVOICE_OTHER_DAY', `delivery ${delivery.id} is not from ${shift.businessDate}`)
+    }
+    const paid = tx.select({ id: schema.shiftExtraCosts.id }).from(schema.shiftExtraCosts)
+      .where(and(
+        eq(schema.shiftExtraCosts.venueId, venueId),
+        eq(schema.shiftExtraCosts.deliveryId, delivery.id),
+      ))
+      .get()
+    if (paid) throw conflict('INVOICE_ALREADY_PAID', `delivery ${delivery.id} is already paid from a shift`)
+
+    const kind = 'roba' as const
+    const [y, m, d] = businessDate(delivery.deliveredAt).split('-')
+    const label = `Faktura ${d}.${m}.${y}.${delivery.supplierName ? ` · ${delivery.supplierName}` : ''}`.slice(0, 80)
+    const amountFen = delivery.totalFen
     const id = newId()
     tx.insert(schema.shiftExtraCosts).values({
-      id, venueId, shiftId, clientId: body.client_id, kind: body.kind, label,
-      amountFen: body.amount_fen, createdBy: actor.userId, createdAt: now,
+      id, venueId, shiftId, clientId: body.client_id, kind, label,
+      amountFen, deliveryId: delivery.id, createdBy: actor.userId, createdAt: now,
     }).run()
 
     log(tx, venueId, {
       kind: 'settings_changed',
       body: {
         key: `shift_extra_cost.${shiftId}.${id}.amount_fen`,
-        label: `Naknadni trošak · ${shiftCostText({ kind: body.kind, label })} · smjena ${shift.businessDate}`,
+        label: `Naknadni trošak · ${shiftCostText({ kind, label })} · smjena ${shift.businessDate}`,
         before: 0,
-        after: body.amount_fen,
+        after: amountFen,
       },
       actorId: actor.userId,
       ref: { type: 'shift', id: shiftId },

@@ -576,6 +576,8 @@ export interface ShiftExtraCost {
   /** The owner's own name for *Ostalo*; `null` otherwise. */
   label: string | null
   amount_fen: number
+  /** The *Prijem robe* invoice this pays, when it pays one. */
+  delivery_id: string | null
   created_at: string
   created_by_name: string
 }

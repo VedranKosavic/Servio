@@ -198,10 +198,7 @@ export type StaffNoteBody = z.infer<typeof staffNoteBody>
  */
 export const addShiftExtraCostBody = z.object({
   client_id: uuid,
-  kind: z.enum(['roba', 'okusi', 'zar', 'kafa', 'merkator', 'dnevnica', 'struja', 'voda', 'kirija', 'ostalo']),
-  label: z.string().trim().min(1).max(60).optional(),
-  amount_fen: moneyFen.min(1),
-}).strict().refine(body => body.kind !== 'ostalo' || !!body.label, {
-  message: 'Ostalo needs a label', path: ['label'],
-})
+  /** A *Prijem robe* invoice of the shift's day; the server reads its total. */
+  delivery_id: uuid,
+}).strict()
 export type AddShiftExtraCostBody = z.infer<typeof addShiftExtraCostBody>

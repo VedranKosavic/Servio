@@ -127,6 +127,13 @@
       "when": 1789644799795,
       "tag": "0017_shift_extra_costs",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1789646986452,
+      "tag": "0018_shift_extra_cost_invoice",
+      "breakpoints": true
     }
   ]
 }

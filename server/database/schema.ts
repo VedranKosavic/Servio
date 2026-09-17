@@ -1367,10 +1367,13 @@ export const shiftExtraCosts = sqliteTable('shift_extra_costs', {
   /** The owner's own words, for *Ostalo*; `null` for a named kind. */
   label: text('label'),
   amountFen: integer('amount_fen').notNull(),
+  /** The *Prijem robe* invoice this pays; one invoice is paid out of one shift only. */
+  deliveryId: text('delivery_id').references(() => deliveries.id),
   createdBy: text('created_by').notNull().references(() => users.id),
   createdAt: text('created_at').notNull(),
 }, t => [
   uniqueIndex('shift_extra_costs_client_uq').on(t.venueId, t.clientId),
+  uniqueIndex('shift_extra_costs_delivery_uq').on(t.venueId, t.deliveryId),
   index('shift_extra_costs_shift_idx').on(t.venueId, t.shiftId),
 ])
 

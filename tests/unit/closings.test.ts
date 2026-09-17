@@ -26,6 +26,7 @@ import {
   addShiftExtraCost, closeByBar, closingPreview, deleteShiftExtraCost,
 } from '../../server/services/closings'
 import { markUnpaid } from '../../server/services/tabs'
+import { createDelivery } from '../../server/services/stock'
 import { forceClose } from '../../server/services/shifts'
 import { getMyShift, latestSummary, summarizeShift } from '../../server/services/summaries'
 import { ensureOpenShift } from '../../server/services/contracts'
@@ -426,44 +427,59 @@ describe('append-only', () => {
 
 describe('naknadni troškovi', () => {
   /**
-   * The owner's call of 17.09.2026: a cost paid out of a closed shift afterwards
-   * comes off **that** shift's Za predati and no other, the šanker's own number
-   * stays on the closing, and a mistyped one can be taken off again.
+   * The owner's call of 17.09.2026: a *Prijem robe* invoice of the shift's day,
+   * paid out of a closed shift afterwards, comes off **that** shift's Za predati
+   * and no other; the amount is the invoice's; one invoice is paid once.
    */
-  it('lowers this shift\'s Za predati, keeps the šanker\'s number, and can be removed', () => {
+  const invoice = (fen: number, at = f.clock.now()) => createDelivery(f.db, f.venueId, f.adminActor(), {
+    client_id: randomUUID(),
+    delivered_at: at,
+    lines: [{ stock_item_id: f.stockItemId('Coca-Cola 0,25 l'), packs: 0, loose: 24, line_cost_fen: fen }],
+  }, at)
+
+  it('lowers this shift\'s Za predati by the invoice, keeps the šanker\'s number, and can be removed', () => {
     const first = night()
     const closing = closeByBar(f.db, f.venueId, sanker(), first, { client_id: randomUUID(), ...ZERO })
     const handed = closing.za_predati_fen
+    const a = invoice(2_000)
+    const b = invoice(500)
 
-    const clientId = randomUUID()
-    const body = { client_id: clientId, kind: 'struja' as const, amount_fen: 2_000 }
+    const body = { client_id: randomUUID(), delivery_id: a.id }
     addShiftExtraCost(f.db, f.venueId, f.adminActor(), first, body)
     // A retried tap is the same cost.
-    const withStruja = addShiftExtraCost(f.db, f.venueId, f.adminActor(), first, body)
-    const withBoth = addShiftExtraCost(f.db, f.venueId, f.adminActor(), first, {
-      client_id: randomUUID(), kind: 'ostalo', label: 'popravka', amount_fen: 500,
-    })
+    const once = addShiftExtraCost(f.db, f.venueId, f.adminActor(), first, body)
+    const both = addShiftExtraCost(f.db, f.venueId, f.adminActor(), first, { client_id: randomUUID(), delivery_id: b.id })
 
-    expect(withStruja.naknadni).toHaveLength(1)
-    expect(withBoth.naknadni.map(c => [c.kind, c.label, c.amount_fen]))
-      .toEqual([['struja', null, 2_000], ['ostalo', 'popravka', 500]])
-    expect(withBoth.naknadni_fen).toBe(2_500)
-    expect(withBoth.za_predati_at_close_fen).toBe(handed)
-    expect(withBoth.za_predati_fen).toBe(handed - 2_500)
+    expect(once.naknadni).toHaveLength(1)
+    expect(both.naknadni.map(c => [c.kind, c.delivery_id, c.amount_fen])).toEqual([['roba', a.id, 2_000], ['roba', b.id, 500]])
+    expect(both.naknadni[0]!.label).toMatch(/^Faktura \d{2}\.\d{2}\.\d{4}\.$/)
+    expect(both.za_predati_at_close_fen).toBe(handed)
+    expect(both.za_predati_fen).toBe(handed - 2_500)
 
-    // The stored closing row is the šanker's and did not move.
     const row = f.db.select().from(schema.shiftClosings).where(eq(schema.shiftClosings.shiftId, first)).get()!
     expect(row.zaPredatiFen).toBe(handed)
 
-    const removed = deleteShiftExtraCost(f.db, f.venueId, f.adminActor(), first, withBoth.naknadni[0]!.id)
+    // The same invoice a second time is refused.
+    refuses(() => addShiftExtraCost(f.db, f.venueId, f.adminActor(), first, {
+      client_id: randomUUID(), delivery_id: a.id,
+    }), 'INVOICE_ALREADY_PAID', 409)
+
+    const removed = deleteShiftExtraCost(f.db, f.venueId, f.adminActor(), first, both.naknadni[0]!.id)
     expect(removed.naknadni_fen).toBe(500)
     expect(removed.za_predati_fen).toBe(handed - 500)
   })
 
-  it('refuses a shift the šanker has not closed', () => {
+  it('refuses an invoice from another day, and a shift the šanker has not closed', () => {
+    const first = night()
+    closeByBar(f.db, f.venueId, sanker(), first, { client_id: randomUUID(), ...ZERO })
+    const old = invoice(100, new Date(Date.parse(f.clock.now()) - 3 * 86_400_000).toISOString())
+    refuses(() => addShiftExtraCost(f.db, f.venueId, f.adminActor(), first, {
+      client_id: randomUUID(), delivery_id: old.id,
+    }), 'INVOICE_OTHER_DAY', 409)
+
     const open = f.openShift({ members: ['Amar'] })
     refuses(() => addShiftExtraCost(f.db, f.venueId, f.adminActor(), open, {
-      client_id: randomUUID(), kind: 'voda', amount_fen: 100,
+      client_id: randomUUID(), delivery_id: invoice(100).id,
     }), 'SHIFT_NOT_CLOSED', 409)
   })
 })

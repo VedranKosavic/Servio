@@ -25,7 +25,7 @@ export const SHIFT_COST_LABELS: Record<ShiftCostKind, string> = {
   ostalo: 'Ostalo',
 }
 
-/** How one cost reads on *Kasa*: its own name for *Ostalo*, the kind's otherwise. */
+/** How one cost reads on *Kasa*: its own name ("Faktura 17.09.2026."), the kind's otherwise. */
 export function shiftCostText(cost: { kind: ShiftCostKind, label: string | null }): string {
-  return cost.kind === 'ostalo' && cost.label ? cost.label : SHIFT_COST_LABELS[cost.kind]
+  return cost.label ? cost.label : SHIFT_COST_LABELS[cost.kind]
 }

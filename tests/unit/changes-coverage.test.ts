@@ -386,12 +386,13 @@ const CALLS: Record<string, () => void | Promise<void>> = {
   },
 
   [join('owner', 'shift', '[id]', 'naknadni-troskovi', 'index.post.ts')]: () => {
+    // invoiceToday() is declared below the table; called only when the fixture runs.
     const shiftId = f.openShift({ members: ['Amar', 'Emir'] })
     closeByBar(f.db, f.venueId, f.actor('Emir', { mode: 'sanker' }), shiftId, {
       client_id: randomUUID(), roba_fen: 0, okusi_fen: 0, zar_fen: 0, kafa_fen: 0, merkator_fen: 0, extras: [],
     })
     addShiftExtraCost(f.db, f.venueId, f.adminActor(), shiftId, {
-      client_id: randomUUID(), kind: 'struja', amount_fen: 1_000,
+      client_id: randomUUID(), delivery_id: invoiceToday().id,
     })
   },
 
@@ -401,7 +402,7 @@ const CALLS: Record<string, () => void | Promise<void>> = {
       client_id: randomUUID(), roba_fen: 0, okusi_fen: 0, zar_fen: 0, kafa_fen: 0, merkator_fen: 0, extras: [],
     })
     const closing = addShiftExtraCost(f.db, f.venueId, f.adminActor(), shiftId, {
-      client_id: randomUUID(), kind: 'struja', amount_fen: 1_000,
+      client_id: randomUUID(), delivery_id: invoiceToday().id,
     })
     deleteShiftExtraCost(f.db, f.venueId, f.adminActor(), shiftId, closing.naknadni[0]!.id)
   },
@@ -757,3 +758,13 @@ describe('every mutating route bumps the change feed', () => {
     expect(sep).toBeTruthy()
   })
 })
+
+/** A *Prijem robe* invoice dated now, for the *Naknadni troškovi* fixtures. */
+function invoiceToday() {
+  const at = f.clock.now()
+  return createDelivery(f.db, f.venueId, f.adminActor(), {
+    client_id: randomUUID(),
+    delivered_at: at,
+    lines: [{ stock_item_id: f.stockItemId('Coca-Cola 0,25 l'), packs: 0, loose: 24, line_cost_fen: 1_000 }],
+  }, at)
+}

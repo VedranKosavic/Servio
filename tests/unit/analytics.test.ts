@@ -188,23 +188,22 @@ describe('neplaćeno and the till payouts', () => {
 })
 
 describe('naknadni troškovi of the month\'s shifts', () => {
-  it('land in their own line, and goods paid afterwards are not counted twice', async () => {
+  it('are invoices, already counted as goods from Prijem robe — never twice', async () => {
     const { addShiftExtraCost } = await import('../../server/services/closings')
     const shiftId = night(1, 'prva', [{ product: 'Red Bull' }])
-    const add = (kind: 'dnevnica' | 'struja' | 'roba' | 'ostalo', fen: number) =>
-      addShiftExtraCost(f.db, f.venueId, f.adminActor(), shiftId, {
-        client_id: randomUUID(), kind, amount_fen: fen, ...(kind === 'ostalo' ? { label: 'x' } : {}),
-      })
-    add('dnevnica', 9_000)
-    add('struja', 1_500)
-    add('ostalo', 500)
-    add('roba', 4_000)
+    const at = f.db.select().from(schema.shifts).where(eq(schema.shifts.id, shiftId)).get()!.openedAt
+    const before = monthAnalytics(f.db, f.venueId, month)
+    const delivery = createDelivery(f.db, f.venueId, f.adminActor(), {
+      client_id: randomUUID(),
+      delivered_at: at,
+      lines: [{ stock_item_id: f.stockItemId('Coca-Cola 0,25 l'), packs: 0, loose: 24, line_cost_fen: 4_000 }],
+    }, at)
+    addShiftExtraCost(f.db, f.venueId, f.adminActor(), shiftId, { client_id: randomUUID(), delivery_id: delivery.id })
 
-    const a = monthAnalytics(f.db, f.venueId, month)
-    expect(a.costs.dnevnice).toBe(9_000 + 9_000)
-    expect(a.costs.naknadni).toBe(2_000)
-    expect(a.costs.roba).toBe(0)
-    expect(a.total_cost_fen).toBe(18_000 + 2_000)
+    const after = monthAnalytics(f.db, f.venueId, month)
+    expect(after.costs.naknadni).toBe(0)
+    expect(after.costs.roba - before.costs.roba).toBe(4_000)
+    expect(after.total_cost_fen - before.total_cost_fen).toBe(4_000)
   })
 })
 

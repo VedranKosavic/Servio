@@ -168,6 +168,7 @@ const names = computed<Record<string, string>>(() => {
         v-if="data.closing"
         :open="naknadniOpen"
         :shift-id="data.shift.id"
+        :business-date="data.shift.business_date"
         :closing="data.closing"
         @close="naknadniOpen = false"
         @saved="closing => { if (data) data.closing = closing }"

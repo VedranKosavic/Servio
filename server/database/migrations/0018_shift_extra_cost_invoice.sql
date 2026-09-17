@@ -1,0 +1,2 @@
+ALTER TABLE `shift_extra_costs` ADD `delivery_id` text REFERENCES deliveries(id);--> statement-breakpoint
+CREATE UNIQUE INDEX `shift_extra_costs_delivery_uq` ON `shift_extra_costs` (`venue_id`,`delivery_id`);
