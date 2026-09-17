@@ -44,6 +44,7 @@ Prave fotografije pakovanja, s web prodavnice [Dragstor.ba](https://dragstor.ba)
 | Richard Rooster classic | https://dragstor.ba/wp-content/uploads/2026/02/ART003809.jpg |
 | Hell classic | https://dragstor.ba/wp-content/uploads/2026/02/ART002051.jpg |
 | Hell red grape | https://dragstor.ba/wp-content/uploads/2026/02/ART002052.jpg |
+| Nargila | https://pennyshop.ba/assets/photos/product/medium/241650-1.jpg (izabrao vlasnik) |
 
 ## Pića koja se pripremaju — Wikimedia Commons
 
@@ -64,4 +65,3 @@ Slobodne fotografije; CC BY i CC BY-SA traže navođenje autora, pa je ova lista
 | Topla čokolada | https://commons.wikimedia.org/wiki/File:Hot_chocolate_in_western.jpg | Geoffreyrabbit | CC BY-SA 4.0 |
 | Čaj | https://commons.wikimedia.org/wiki/File:Cup_of_black_tea.JPG | AntanO | CC BY-SA 4.0 |
 | Exotic Naranča | https://commons.wikimedia.org/wiki/File:Photograph_of_orange_soft_drink_served_within_a_glass_in_India,_taken_by_Yogabrata_Chakraborty,_on_August_18,_2023.jpg | Billjones94 | CC BY-SA 4.0 |
-| Nargila | https://commons.wikimedia.org/wiki/File:Flickr_-_DavidDennisPhotos.com_-_Hookah-Shisha_Pipes.jpg | David Dennis from Scotts Valley, CA, USA | CC BY-SA 2.0 |
