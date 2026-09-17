@@ -63,13 +63,15 @@ const total = computed(() => deliveries.value
         v-for="delivery in deliveries"
         :key="delivery.id"
         class="p-doc"
-        :class="{ reversed: delivery.reversed_at }"
+        :class="{ reversed: delivery.reversed_at, paid: delivery.paid_from_shift_id && !delivery.reversed_at }"
       >
         <div class="p-head">
           <span class="p-date num">{{ dateBs(delivery.delivered_at) }}</span>
           <span class="p-cats">{{ categories(delivery) }}</span>
           <span class="p-who">{{ delivery.entered_by_name }}</span>
           <UiPill v-if="delivery.reversed_at" tone="bad">stornirano</UiPill>
+          <!-- Paid out of a shift as a naknadni trošak. -->
+          <UiPill v-else-if="delivery.paid_from_shift_id" tone="good">plaćeno</UiPill>
           <strong class="p-total num">{{ formatKm(delivery.total_fen) }}</strong>
         </div>
         <ul class="p-lines">
@@ -118,5 +120,8 @@ const total = computed(() => deliveries.value
 .p-name { min-width: 0; overflow-wrap: anywhere; color: var(--ink); }
 .p-qty { color: var(--muted); white-space: nowrap; }
 .p-cost { white-space: nowrap; min-width: 80px; text-align: right; }
+.paid { border-color: var(--good); }
+.paid .p-head { background: var(--good-soft); border-bottom-color: var(--good); }
+.paid .p-total { color: var(--good); }
 .reversed .p-lines, .reversed .p-total { text-decoration: line-through; opacity: 0.6; }
 </style>
