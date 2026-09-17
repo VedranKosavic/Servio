@@ -19,6 +19,8 @@ const props = defineProps<{
   /** `kom`, `g` or `ml` — the unit the quantity is counted in. */
   unitHint: string
   qty: number
+  /** *Logistika*: neither counted nor weighed, so no quantity field. */
+  noQty?: boolean
   lineCostFen: number
 }>()
 
@@ -48,7 +50,7 @@ function save() {
 
 <template>
   <UiSheet :open="open" :title="name" @close="emit('close')">
-    <UiField v-model="qty" label="Količina" kind="decimal" :hint="unitHint" />
+    <UiField v-if="!noQty" v-model="qty" label="Količina" kind="decimal" :hint="unitHint" />
     <UiField v-model="cost" label="Iznos (KM)" kind="money" hint="sa fakture" />
 
     <template #footer>

@@ -10,6 +10,7 @@
  */
 import { formatKm, formatQty } from '#shared/money'
 import type { DeliveryView, StockItemAdmin } from '#shared/types'
+import { isLogistika } from '~/utils/stockCost'
 
 const props = defineProps<{ items: StockItemAdmin[] }>()
 
@@ -77,7 +78,7 @@ const total = computed(() => deliveries.value
         <ul class="p-lines">
           <li v-for="(line, i) in delivery.lines" :key="i" class="p-line">
             <span class="p-name">{{ line.item_name }}</span>
-            <span class="p-qty num">{{ formatQty(line.qty, unitOf.get(line.stock_item_id)) }}</span>
+            <span class="p-qty num">{{ isLogistika(categoryOf.get(line.stock_item_id)) ? '' : formatQty(line.qty, unitOf.get(line.stock_item_id)) }}</span>
             <span class="p-cost num">{{ formatKm(line.line_cost_fen) }}</span>
           </li>
         </ul>

@@ -6,6 +6,7 @@
  */
 import { formatKm, formatQty } from '#shared/money'
 import type { ShiftClosing, ShiftCostInvoice } from '#shared/types'
+import { isLogistika } from '~/utils/stockCost'
 
 const props = defineProps<{ closing: ShiftClosing | null }>()
 
@@ -35,7 +36,7 @@ function categories(invoice: ShiftCostInvoice): string {
         <ul class="f-lines">
           <li v-for="(line, i) in cost.invoice.lines" :key="i" class="f-line">
             <span class="f-name">{{ line.item_name }}</span>
-            <span class="f-qty num">{{ formatQty(line.qty, line.base_unit) }}</span>
+            <span class="f-qty num">{{ isLogistika(line.category_name) ? '' : formatQty(line.qty, line.base_unit) }}</span>
             <span class="f-cost num">{{ formatKm(line.line_cost_fen) }}</span>
           </li>
         </ul>

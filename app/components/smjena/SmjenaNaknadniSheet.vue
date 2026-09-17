@@ -13,6 +13,7 @@ import { formatKm, formatQty } from '#shared/money'
 import { addDays, calendarDay, cutoffIso } from '#shared/dates'
 import { shiftCostText } from '#shared/shiftCosts'
 import type { DeliveryView, ShiftClosing, StockItemAdmin } from '#shared/types'
+import { isLogistika } from '~/utils/stockCost'
 
 const props = defineProps<{
   open: boolean
@@ -135,7 +136,7 @@ async function remove(costId: string) {
         <ul class="n-lines">
           <li v-for="(line, i) in delivery.lines" :key="i" class="n-line">
             <span>{{ line.item_name }}</span>
-            <span class="n-qty num">{{ formatQty(line.qty, itemById.get(line.stock_item_id)?.base_unit) }}</span>
+            <span class="n-qty num">{{ isLogistika(itemById.get(line.stock_item_id)?.category_name) ? '' : formatQty(line.qty, itemById.get(line.stock_item_id)?.base_unit) }}</span>
           </li>
         </ul>
         <div class="n-act">

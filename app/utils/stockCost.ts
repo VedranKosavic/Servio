@@ -115,3 +115,12 @@ export function stockCostText(item: Pick<StockItemAdmin, 'last_cost_mfen' | 'bas
   const basis = costBasis(item.base_unit)
   return `${formatKm(fenFromMfen(item.last_cost_mfen, basis.qty))} ${basis.label}`
 }
+
+/**
+ * *Logistika* (the owner, 17.09.2026): transport, dostava — a cost with a name
+ * and a price. It is **neither counted nor weighed**: no quantity on *Prijem
+ * robe* (a line is one of it), no *Popis*, no minimum.
+ */
+export function isLogistika(categoryName: string | null | undefined): boolean {
+  return (categoryName ?? '').trim().toLowerCase() === 'logistika'
+}

@@ -44,7 +44,7 @@
  */
 import type { CategoryAdmin, StockItemAdmin } from '#shared/types'
 import {
-  ARTICLE_VRSTA_OPTIONS, type ArticleVrsta, kindAndUnitOf, vrstaOf,
+  ARTICLE_VRSTA_OPTIONS, type ArticleVrsta, isLogistika as isLogistikaName, kindAndUnitOf, vrstaOf,
 } from '~/utils/stockCost'
 import type { CreateStockItemBody, UpdateStockItemBody } from '#shared/schemas'
 
@@ -142,7 +142,7 @@ const unitFrozen = computed(() => props.item?.unit_frozen ?? false)
  * is a piece article with no minimum, so *Stanje šanka* never turns it red.
  */
 const isLogistika = computed(() =>
-  categoryOptions.value.find(option => option.value === categoryId.value)?.label.trim().toLowerCase() === 'logistika')
+  isLogistikaName(categoryOptions.value.find(option => option.value === categoryId.value)?.label))
 
 watch(isLogistika, (logistika) => {
   if (!logistika) return
@@ -151,6 +151,7 @@ watch(isLogistika, (logistika) => {
     baseUnit.value = 'kom'
   }
   parQty.value = 0
+  countMethod.value = 'count'
 })
 
 const canSave = computed(() =>
@@ -257,7 +258,7 @@ function save() {
       @commit="value => costFen = value"
     />
 
-    <template v-if="full">
+    <template v-if="full && !isLogistika">
 
       <div class="s-row">
         <span class="s-caption">Popis</span>

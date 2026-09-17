@@ -458,7 +458,14 @@ export function getStock(q: Queryable, venueId: string): StockItem[] {
       .map(c => [c.id, c]),
   )
 
-  return items.map((item) => {
+  // *Logistika* (17.09.2026) is a cost with a name and a price, neither
+  // counted nor weighed: it is not on the shelf, so not on *Stanje šanka*.
+  const onShelf = items.filter((item) => {
+    const category = item.categoryId ? categories.get(item.categoryId) : undefined
+    return category?.name.trim().toLowerCase() !== 'logistika'
+  })
+
+  return onShelf.map((item) => {
     const hand = onHandMap.get(item.id) ?? 0
     const pending = pendingMap?.get(item.id) ?? 0
     const cost = unitCost(item)

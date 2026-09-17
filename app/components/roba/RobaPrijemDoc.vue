@@ -50,6 +50,7 @@
  */
 import type { CreateDeliveryBody, CreateStockItemBody } from '#shared/schemas'
 import type { CategoryAdmin, StockItemAdmin } from '#shared/types'
+import { isLogistika } from '~/utils/stockCost'
 
 const props = withDefaults(defineProps<{
   items: StockItemAdmin[]
@@ -106,8 +107,12 @@ const pickUnit = ref<'g' | 'kg'>('g')
 
 const pickIsGrams = computed(() => itemOf(pickId.value)?.base_unit === 'g')
 
+/** A *Logistika* article is neither counted nor weighed: one line is one of it. */
+const pickIsLogistika = computed(() => isLogistika(itemOf(pickId.value)?.category_name))
+
 /** The quantity in the article's own base unit — what the line stores. */
 const baseQty = computed(() => {
+  if (pickIsLogistika.value) return 1
   const typed = pickQty.value
   if (typed === null || typed <= 0) return null
   return pickIsGrams.value && pickUnit.value === 'kg' ? Math.round(typed * 1000 * 1000) / 1000 : typed
@@ -276,6 +281,7 @@ function nameOf(id: string): string {
 
 function qtyText(line: DocLine): string {
   const item = itemOf(line.stock_item_id)
+  if (isLogistika(item?.category_name)) return ''
   return item ? formatStockQty(line.qty, item.base_unit) : String(line.qty)
 }
 
@@ -395,7 +401,7 @@ async function send() {
         </button>
       </div>
 
-      <div class="d-qty">
+      <div v-if="!pickIsLogistika" class="d-qty">
         <UiField v-model="pickQty" label="Količina" kind="decimal" :hint="qtyHint" />
         <UiSeg
           v-if="pickIsGrams"
@@ -506,6 +512,7 @@ async function send() {
       :name="openLine ? nameOf(openLine.stock_item_id) : ''"
       :unit-hint="openLine ? (itemOf(openLine.stock_item_id)?.base_unit ?? '') : ''"
       :qty="openLine?.qty ?? 0"
+      :no-qty="openLine ? isLogistika(itemOf(openLine.stock_item_id)?.category_name) : false"
       :line-cost-fen="openLine?.line_cost_fen ?? 0"
       @close="openKey = null"
       @save="saveLine"
