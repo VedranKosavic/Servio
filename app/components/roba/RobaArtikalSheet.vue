@@ -74,7 +74,7 @@ const name = ref('')
 const kind = ref<CreateStockItemBody['kind']>('pice')
 const baseUnit = ref<CreateStockItemBody['base_unit']>('kom')
 
-const vrsta = computed(() => vrstaOf(kind.value))
+const vrsta = computed(() => vrstaOf(kind.value, baseUnit.value))
 
 function setVrsta(value: ArticleVrsta) {
   const next = kindAndUnitOf(value, kind.value)
@@ -135,6 +135,23 @@ const categoryOptions = computed(() => {
 })
 
 const unitFrozen = computed(() => props.item?.unit_frozen ?? false)
+
+/**
+ * *Logistika* (the owner, 17.09.2026): transport, dostava — a cost with a name
+ * and a price, not something on a shelf. The form asks only those two; the row
+ * is a piece article with no minimum, so *Stanje šanka* never turns it red.
+ */
+const isLogistika = computed(() =>
+  categoryOptions.value.find(option => option.value === categoryId.value)?.label.trim().toLowerCase() === 'logistika')
+
+watch(isLogistika, (logistika) => {
+  if (!logistika) return
+  if (!unitFrozen.value) {
+    kind.value = 'potrosni'
+    baseUnit.value = 'kom'
+  }
+  parQty.value = 0
+})
 
 const canSave = computed(() =>
   name.value.trim().length > 0
@@ -209,16 +226,18 @@ function save() {
       @update:model-value="value => categoryId = String(value ?? '')"
     />
     <UiField
+      v-if="!isLogistika"
       :model-value="vrsta"
       label="Vrsta"
       kind="select"
       :options="[...ARTICLE_VRSTA_OPTIONS]"
       :disabled="unitFrozen"
-      :hint="unitFrozen ? 'Roba već ima promet — vrsta se više ne mijenja.' : 'Kafa i okusi se vode u gramima, sve ostalo po komadu.'"
+      :hint="unitFrozen ? 'Roba već ima promet — vrsta se više ne mijenja.' : 'Kafa, okusi i žar se vode u gramima, sve ostalo po komadu.'"
       @update:model-value="value => setVrsta(value as ArticleVrsta)"
     />
 
     <PostavkeNumField
+      v-if="!isLogistika"
       label="Minimalna zaliha"
       :model-value="parQty"
       kind="decimal"
@@ -229,7 +248,7 @@ function save() {
     />
 
     <PostavkeNumField
-      label="Nabavna cijena"
+      :label="isLogistika ? 'Cijena' : 'Nabavna cijena'"
       :model-value="costFen"
       kind="money"
       suffix="KM"

@@ -43,17 +43,20 @@ export const STOCK_KIND_OPTIONS: ReadonlyArray<{ value: StockKind, label: string
  * Choosing *Po komadu* keeps an older article's own piece kind (žar, hrana,
  * potrošni) rather than flattening it to *piće*.
  */
-export type ArticleVrsta = 'komad' | 'kafa' | 'okus'
+export type ArticleVrsta = 'komad' | 'kafa' | 'okus' | 'zar'
 
 export const ARTICLE_VRSTA_OPTIONS: ReadonlyArray<{ value: ArticleVrsta, label: string }> = [
   { value: 'komad', label: 'Po komadu' },
   { value: 'kafa', label: 'Kafa (grami)' },
   { value: 'okus', label: 'Okus za nargilu (grami)' },
+  // Bought by the kilogram, kept in grams like coffee (the owner, 17.09.2026).
+  { value: 'zar', label: 'Žar (grami)' },
 ]
 
-export function vrstaOf(kind: StockKind): ArticleVrsta {
+export function vrstaOf(kind: StockKind, unit: BaseUnit = 'kom'): ArticleVrsta {
   if (kind === 'kafa') return 'kafa'
   if (kind === 'duhan') return 'okus'
+  if (kind === 'zar' && unit === 'g') return 'zar'
   return 'komad'
 }
 
@@ -62,6 +65,7 @@ export function kindAndUnitOf(
 ): { kind: StockKind, base_unit: BaseUnit } {
   if (vrsta === 'kafa') return { kind: 'kafa', base_unit: 'g' }
   if (vrsta === 'okus') return { kind: 'duhan', base_unit: 'g' }
+  if (vrsta === 'zar') return { kind: 'zar', base_unit: 'g' }
   const pieceKind = currentKind === 'kafa' || currentKind === 'duhan' ? 'pice' : currentKind
   return { kind: pieceKind, base_unit: 'kom' }
 }
