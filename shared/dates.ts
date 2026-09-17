@@ -132,6 +132,16 @@ export function localDate(utcIso: string, tz: string = DEFAULT_TZ): string {
 }
 
 /**
+ * The **calendar** day an instant falls on in Sarajevo, as `YYYY-MM-DD` — no
+ * 06:00 cut. An invoice date is a day on paper, not a night at the bar: the
+ * *Naknadni troškovi* sheet matches it to a shift by the date printed on it.
+ */
+export function calendarDay(utcIso: string, tz: string = DEFAULT_TZ): string {
+  const w = wallAt(Date.parse(utcIso), tz)
+  return `${w.year}-${pad(w.month)}-${pad(w.day)}`
+}
+
+/**
  * The UTC instant a business day begins: `06:00` local on that date.
  *
  * Every period query in the reports is `[cutoffIso(from), cutoffIso(dayAfter(to)))`,

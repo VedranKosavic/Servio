@@ -10,7 +10,7 @@
  * the server's number.
  */
 import { formatKm, formatQty } from '#shared/money'
-import { cutoffIso, nextBusinessDate } from '#shared/dates'
+import { addDays, calendarDay, cutoffIso } from '#shared/dates'
 import { shiftCostText } from '#shared/shiftCosts'
 import type { DeliveryView, ShiftClosing, StockItemAdmin } from '#shared/types'
 
@@ -36,12 +36,13 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const end = new Date(Date.parse(cutoffIso(nextBusinessDate(props.businessDate))) - 1)
+    // A day either side, then filtered by the date printed on the invoice.
     const [list, stock] = await Promise.all([
-      api.getDeliveries({ from: cutoffIso(props.businessDate), to: end.toISOString() }),
+      api.getDeliveries({ from: cutoffIso(addDays(props.businessDate, -1)), to: cutoffIso(addDays(props.businessDate, 2)) }),
       items.value.length ? Promise.resolve(items.value) : api.getStockItems(),
     ])
-    deliveries.value = list.filter(delivery => !delivery.reversed_at)
+    deliveries.value = list.filter(delivery =>
+      !delivery.reversed_at && calendarDay(delivery.delivered_at) === props.businessDate)
     items.value = stock
   } catch (err) {
     error.value = apiErrorText(err)

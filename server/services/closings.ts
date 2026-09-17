@@ -46,7 +46,7 @@ import { schema } from '../database/client'
 import { conflict, forbidden, notFound } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
 import { zaPredati } from '#shared/closing'
-import { businessDate } from '#shared/dates'
+import { calendarDay } from '#shared/dates'
 import type { ClosingExtra } from '#shared/closing'
 import type { ClosingPreview, ShiftClosing, ShiftCostInvoice, ShiftExtraCost, UnpaidReason } from '#shared/types'
 import type { AddShiftExtraCostBody } from '#shared/schemas'
@@ -286,7 +286,9 @@ export function addShiftExtraCost(
       .get()
     if (!delivery) throw notFound('DELIVERY_NOT_FOUND', `delivery ${body.delivery_id} not found`)
     if (delivery.reversedAt) throw conflict('DELIVERY_ALREADY_REVERSED', `delivery ${delivery.id} is reversed`)
-    if (businessDate(delivery.deliveredAt) !== shift.businessDate) {
+    // By the date shown on the invoice, not the 06:00 business day: a date
+    // pulled back by the sync-lag clamp can land in the small hours.
+    if (calendarDay(delivery.deliveredAt) !== shift.businessDate) {
       throw conflict('INVOICE_OTHER_DAY', `delivery ${delivery.id} is not from ${shift.businessDate}`)
     }
     const paid = tx.select({ id: schema.shiftExtraCosts.id }).from(schema.shiftExtraCosts)
@@ -298,7 +300,7 @@ export function addShiftExtraCost(
     if (paid) throw conflict('INVOICE_ALREADY_PAID', `delivery ${delivery.id} is already paid from a shift`)
 
     const kind = 'roba' as const
-    const [y, m, d] = businessDate(delivery.deliveredAt).split('-')
+    const [y, m, d] = calendarDay(delivery.deliveredAt).split('-')
     const label = `Faktura ${d}.${m}.${y}.${delivery.supplierName ? ` · ${delivery.supplierName}` : ''}`.slice(0, 80)
     const amountFen = delivery.totalFen
     const id = newId()

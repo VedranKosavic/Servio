@@ -477,6 +477,23 @@ describe('naknadni troškovi', () => {
     expect(removed.za_predati_fen).toBe(handed - 500)
   })
 
+  it('matches the date printed on the invoice, not the 06:00 business day', () => {
+    const first = night()
+    closeByBar(f.db, f.venueId, sanker(), first, { client_id: randomUUID(), ...ZERO })
+    const shift = f.db.select().from(schema.shifts).where(eq(schema.shifts.id, first)).get()!
+    // 00:27 UTC is 02:27 in Sarajevo: the previous business day, the same date on paper.
+    const early = `${shift.businessDate}T00:27:00.000Z`
+    const delivery = createDelivery(f.db, f.venueId, f.adminActor(), {
+      client_id: randomUUID(),
+      delivered_at: early,
+      lines: [{ stock_item_id: f.stockItemId('Coca-Cola 0,25 l'), packs: 0, loose: 24, line_cost_fen: 600 }],
+    }, early)
+    const closing = addShiftExtraCost(f.db, f.venueId, f.adminActor(), first, {
+      client_id: randomUUID(), delivery_id: delivery.id,
+    })
+    expect(closing.naknadni.map(c => c.delivery_id)).toContain(delivery.id)
+  })
+
   it('refuses an invoice from another day, and a shift the šanker has not closed', () => {
     const first = night()
     closeByBar(f.db, f.venueId, sanker(), first, { client_id: randomUUID(), ...ZERO })
