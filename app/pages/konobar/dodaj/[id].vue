@@ -66,14 +66,11 @@ const zoneLabel = computed(() => {
 useHead({ title: () => `Dodaj · ${tableName.value}` })
 
 /**
- * Where every way out of this screen goes: the floor plan, with this table's
- * sheet open on it.
- *
- * *Bez stola* used to be the exception and go back to a page of its own; since
- * 16.09.2026 it is a sheet like any table's, sitting over the card above the
- * plan instead of over a tile (the owner: the bar works the same as a table).
+ * Where every way out of this screen goes: the floor plan, **with no sheet
+ * open** (the owner, 17.09.2026). A table's sheet opens only when the waiter
+ * taps an occupied table — not by itself after a round is added.
  */
-const backTo = computed(() => `/konobar?sto=${tableId.value ?? 'bez-stola'}`)
+const backTo = computed(() => '/konobar')
 
 // The one poll. Nothing on this screen needs the floor plan, but the catalogue
 // has to follow a price change made in `/admin` mid-evening.
@@ -397,10 +394,8 @@ async function confirm() {
     confirmOpen.value = false
     say(lockToast(tableName.value))
     wakeLock.hold(false)
-    // Back to the plan, with this table's sheet open on it: the round is now a
-    // locked *tura* and the button under it reads *Naplati*. It used to be the
-    // table's own page, which is the page the owner asked the waiter to stop
-    // being sent to.
+    // Back to the plan, and nothing opens on it: the table's sheet is for when
+    // the waiter taps the table (the owner, 17.09.2026).
     leaveTimer = setTimeout(() => navigateTo(backTo.value), 700)
   } catch (err) {
     // Enqueueing barely fails — only storage can refuse. The draft is left
