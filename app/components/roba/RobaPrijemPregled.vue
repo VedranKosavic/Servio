@@ -38,6 +38,14 @@ useAdminChanges({
 defineExpose({ load })
 
 const unitOf = computed(() => new Map(props.items.map(item => [item.id, item.base_unit])))
+const categoryOf = computed(() => new Map(props.items.map(item => [item.id, item.category_name])))
+
+/** Beside the date: which categories the goods came from, "Pića · Nargila". */
+function categories(delivery: DeliveryView): string {
+  const names = new Set<string>()
+  for (const line of delivery.lines) names.add(categoryOf.value.get(line.stock_item_id) || 'Bez kategorije')
+  return [...names].join(' · ')
+}
 
 const total = computed(() => deliveries.value
   .filter(delivery => !delivery.reversed_at)
@@ -59,6 +67,7 @@ const total = computed(() => deliveries.value
       >
         <div class="p-head">
           <span class="p-date num">{{ dateBs(delivery.delivered_at) }}</span>
+          <span class="p-cats">{{ categories(delivery) }}</span>
           <span class="p-who">{{ delivery.entered_by_name }}</span>
           <UiPill v-if="delivery.reversed_at" tone="bad">stornirano</UiPill>
           <strong class="p-total num">{{ formatKm(delivery.total_fen) }}</strong>
@@ -92,6 +101,7 @@ const total = computed(() => deliveries.value
   border-bottom: 1px solid var(--line-soft);
 }
 .p-date { font-weight: 700; color: var(--ink); }
+.p-cats { font-size: var(--text-label); font-weight: 600; color: var(--accent-ink); }
 .p-who { font-size: var(--text-label); color: var(--muted); }
 .p-total { margin-left: auto; color: var(--ink); }
 .p-lines { list-style: none; margin: 0; padding: 0; }
