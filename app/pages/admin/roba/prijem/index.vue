@@ -72,6 +72,9 @@ useAdminChanges({
       @posted="loadCatalogue"
       @catalogue="loadCatalogue"
     />
+
+    <!-- When goods were ordered, what came and what it cost. -->
+    <RobaPrijemPregled :items="items" />
   </div>
 </template>
 
