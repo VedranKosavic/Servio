@@ -181,6 +181,8 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   'POST /api/admin/products': A,
   'PATCH /api/admin/products/:id': A,
   'PUT /api/admin/products/:id/recipe': A,
+  'PUT /api/admin/products/:id/image': A,
+  'DELETE /api/admin/products/:id/image': A,
   'GET /api/admin/categories': A,
   'POST /api/admin/categories': A,
   'PATCH /api/admin/categories/:id': A,
@@ -207,6 +209,8 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   // `kind='delivery'` is admin-only inside the service, like `POST /api/stock/deliveries`.
   'POST /api/uploads': AR,
   'GET /api/uploads/:id': AR,
+  // A menu article's thumbnail: the same picture for everybody at the venue.
+  'GET /api/products/:id/image': AR,
 
   // -- Phase 4: Raspored ---------------------------------------------------
   // One weekly pattern, no dates: the owner edits it, everybody reads it.

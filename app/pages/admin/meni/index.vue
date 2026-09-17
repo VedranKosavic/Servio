@@ -155,6 +155,12 @@ const columns = [
   { key: 'osoblje', label: 'Osoblje', width: '90px' },
 ]
 
+/** A picture was added or removed: the server's answer replaces the row. */
+function replaceProduct(fresh: ProductAdmin) {
+  const index = products.value.findIndex(row => row.id === fresh.id)
+  if (index >= 0) products.value[index] = fresh
+}
+
 async function patch(product: ProductAdmin, body: UpdateProductBody) {
   busyId.value = product.id
   try {
@@ -276,6 +282,7 @@ async function createProduct(body: CreateProductBody) {
             @patch="body => patch(product, body)"
             @zaliha="openZaliha(product)"
             @remove="askRemove(product)"
+            @saved="replaceProduct"
           />
         </UiTable>
       </UiCard>
@@ -317,6 +324,7 @@ async function createProduct(body: CreateProductBody) {
       @patch="body => sheetProduct && patch(sheetProduct, body)"
       @zaliha="sheetProduct && openZaliha(sheetProduct)"
       @remove="sheetProduct && askRemove(sheetProduct)"
+      @saved="replaceProduct"
     />
 
     <PostavkeZalihaSheet

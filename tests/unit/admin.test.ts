@@ -692,7 +692,8 @@ describe('the guard on every admin route', () => {
     const mine = files(ADMIN_DIR).filter(
       path => MINE.some(prefix => path.includes(`/admin/${prefix}`)),
     )
-    expect(mine.length).toBe(20)
+    // 22 since the menu article picture's PUT and DELETE (17.09.2026).
+    expect(mine.length).toBe(22)
 
     for (const path of mine) {
       expect(readFileSync(path, 'utf8'), `${path} has no requireRole`)
@@ -704,5 +705,36 @@ describe('the guard on every admin route', () => {
     expect(() => requireRole(f.actor('Amar'), 'admin')).toThrow(/may not/)
     expect(() => requireRole(f.actor('Emir'), 'admin')).toThrow(/may not/)
     expect(() => requireRole(admin(), 'admin')).not.toThrow()
+  })
+})
+
+describe('the menu article picture (17.09.2026)', () => {
+  const JPEG = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0xFF, 0xD9])
+
+  it('stores a JPEG, versions its URL, replaces it, and removes it', async () => {
+    const { setProductImage, deleteProductImage, readProductImage } = await import('../../server/services/admin')
+    const kafa = f.productId('Kafa')
+
+    const first = setProductImage(f.db, f.venueId, f.adminActor(), kafa, JPEG)
+    expect(first.image_url).toMatch(new RegExp(`^/api/products/${kafa}/image\\?v=`))
+    expect(readProductImage(f.db, f.venueId, kafa)?.bytes.equals(JPEG)).toBe(true)
+
+    // A new picture is a new URL, so a phone's year-long cache never shows the old one.
+    const second = setProductImage(f.db, f.venueId, f.adminActor(), kafa, JPEG)
+    expect(second.image_url).not.toBe(first.image_url)
+
+    const gone = deleteProductImage(f.db, f.venueId, f.adminActor(), kafa)
+    expect(gone.image_url).toBeNull()
+    expect(readProductImage(f.db, f.venueId, kafa)).toBeNull()
+  })
+
+  it('refuses what is not a JPEG, and a picture that was not shrunk', async () => {
+    const { setProductImage } = await import('../../server/services/admin')
+    const kafa = f.productId('Kafa')
+    expect(() => setProductImage(f.db, f.venueId, f.adminActor(), kafa, Buffer.from('not an image')))
+      .toThrow(expect.objectContaining({ code: 'NOT_JPEG' }))
+    const huge = Buffer.concat([JPEG, Buffer.alloc(400_000)])
+    expect(() => setProductImage(f.db, f.venueId, f.adminActor(), kafa, huge))
+      .toThrow(expect.objectContaining({ code: 'IMAGE_TOO_BIG' }))
   })
 })

@@ -48,6 +48,7 @@ import { putStaffNote } from '../../server/services/summaries'
 import { resetPin } from '../../server/services/auth'
 import {
   createCategory, createProduct, createStockItem, createTable, createUser, setRecipe,
+  deleteProductImage, setProductImage,
   deleteCategory, updateCategory, updateProduct, updateSettings, updateStockItem, updateTable, updateUser,
 } from '../../server/services/admin'
 import { schema } from '../helpers/db'
@@ -513,6 +514,16 @@ const CALLS: Record<string, () => void | Promise<void>> = {
     })
   },
 
+  // The tile's thumbnail: every phone reloads the menu to show it.
+  [join('admin', 'products', '[id]', 'image.put.ts')]: () => {
+    setProductImage(f.db, f.venueId, f.adminActor(), f.productId('Kafa'), TINY_JPEG)
+  },
+
+  [join('admin', 'products', '[id]', 'image.delete.ts')]: () => {
+    setProductImage(f.db, f.venueId, f.adminActor(), f.productId('Kafa'), TINY_JPEG)
+    deleteProductImage(f.db, f.venueId, f.adminActor(), f.productId('Kafa'))
+  },
+
   [join('admin', 'categories', 'index.post.ts')]: () => {
     createCategory(f.db, f.venueId, f.adminActor(), { name: 'Kokteli' })
   },
@@ -768,3 +779,6 @@ function invoiceToday() {
     lines: [{ stock_item_id: f.stockItemId('Coca-Cola 0,25 l'), packs: 0, loose: 24, line_cost_fen: 1_000 }],
   }, at)
 }
+
+/** The smallest bytes `isJpeg` accepts: SOI, an APP0 marker, EOI. */
+const TINY_JPEG = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0xFF, 0xD9])

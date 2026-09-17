@@ -217,6 +217,16 @@ export function useAdminApi() {
     addShiftExtraCost: (shiftId: string, body: AddShiftExtraCostBody) =>
       request<ShiftClosing>(`/api/owner/shift/${shiftId}/naknadni-troskovi`, { method: 'POST', body }),
 
+    /** The menu article's thumbnail: a small JPEG, multipart. Answers the product. */
+    setProductImage: (productId: string, image: Blob) => {
+      const form = new FormData()
+      form.append('image', image, 'slika.jpg')
+      return request<ProductAdmin>(`/api/admin/products/${productId}/image`, { method: 'PUT', body: form })
+    },
+
+    deleteProductImage: (productId: string) =>
+      request<ProductAdmin>(`/api/admin/products/${productId}/image`, { method: 'DELETE' }),
+
     deleteShiftExtraCost: (shiftId: string, costId: string) =>
       request<ShiftClosing>(`/api/owner/shift/${shiftId}/naknadni-troskovi/${costId}`, { method: 'DELETE' }),
 

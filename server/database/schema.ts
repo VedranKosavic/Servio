@@ -38,6 +38,7 @@
 import { sql } from 'drizzle-orm'
 import {
   type AnySQLiteColumn,
+  blob,
   index,
   integer,
   primaryKey,
@@ -197,6 +198,12 @@ export const products = sqliteTable('products', {
    * ("Happy Hour kafa do 9:00", the owner 17.09.2026); `null` is all day.
    */
   availableUntil: text('available_until'),
+  /**
+   * Bumped on every new picture (the owner, 17.09.2026); `null` is no picture.
+   * It is the `?v=` on the image URL, so a phone caches a picture for good and
+   * still fetches the next one.
+   */
+  imageVersion: text('image_version'),
   /**
    * What a *phone* is allowed to recognise a product by (PHASE3 §1.10).
    *
@@ -1542,3 +1549,21 @@ export const supplierAliases = sqliteTable('supplier_aliases', {
   createdBy: text('created_by').notNull(),
   createdAt: text('created_at').notNull(),
 }, t => [uniqueIndex('supplier_aliases_alias_uq').on(t.venueId, t.alias)])
+
+/**
+ * A menu article's picture — the small thumbnail on the waiter's tile (the
+ * owner, 17.09.2026). The JPEG lives **in the database**, not on disk: it is a
+ * few tens of kilobytes once the admin's phone has shrunk it, the hourly backup
+ * already copies this file, and a release directory is replaced on every deploy.
+ */
+export const productImages = sqliteTable('product_images', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  /** One picture per article: a new one replaces the row's bytes. */
+  productId: text('product_id').notNull().references(() => products.id),
+  bytes: blob('bytes', { mode: 'buffer' }).notNull(),
+  width: integer('width').notNull().default(0),
+  height: integer('height').notNull().default(0),
+  updatedBy: text('updated_by').notNull().references(() => users.id),
+  updatedAt: text('updated_at').notNull(),
+}, t => [uniqueIndex('product_images_product_uq').on(t.venueId, t.productId)])

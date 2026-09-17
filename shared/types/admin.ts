@@ -80,6 +80,8 @@ export interface Product {
   is_favourite: boolean
   /** `HH:MM`: from this hour the article cannot be ordered; `null` is all day. */
   available_until: string | null
+  /** The tile's thumbnail, versioned so a phone may cache it for good; `null` is none. */
+  image_url: string | null
   sort: number
 }
 
@@ -164,6 +166,7 @@ export interface ProductAdmin {
   staff_drink_allowed: boolean
   is_favourite: boolean
   available_until: string | null
+  image_url: string | null
   sort: number
   active: boolean
   created_at: string

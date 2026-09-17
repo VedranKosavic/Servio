@@ -5,6 +5,7 @@
  * One request instead of six, because a waiter opening the app on café Wi-Fi
  * should wait once.
  */
+import { productImageUrl } from '#shared/menuImage'
 import { and, asc, eq, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
 import type { Bootstrap, Flavour } from '#shared/types'
@@ -148,6 +149,7 @@ export function getBootstrap(db: Queryable, venueId: string, actor: Actor): Boot
       staff_drink_allowed: p.staffDrinkAllowed === 1,
       is_favourite: p.isFavourite === 1,
       available_until: p.availableUntil,
+      image_url: productImageUrl(p.id, p.imageVersion),
       sort: p.sort,
     })),
     flavours,

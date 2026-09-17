@@ -505,6 +505,7 @@ async function confirm() {
             :qty="cart.qtyOfProduct(tableId, product.id)"
             :shisha="product.kind === 'shisha'"
             :unavailable="isOff(product)"
+            :image-url="product.image_url"
             :off-label="isPastAvailableUntil(product.available_until, clockNow) ? `do ${product.available_until}` : undefined"
             @add="onTile(product)"
             @remove="cart.removeOne(tableId, product.id)"

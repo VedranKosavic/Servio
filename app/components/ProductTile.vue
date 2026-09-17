@@ -39,7 +39,9 @@ const props = withDefaults(defineProps<{
   unavailable?: boolean
   /** What the struck tile says instead of *nema* — "do 09:00" for a Happy Hour article. */
   offLabel?: string
-}>(), { shortName: null, shisha: false, unavailable: false, offLabel: undefined })
+  /** The small picture above the name (17.09.2026); `null` draws the tile as before. */
+  imageUrl?: string | null
+}>(), { shortName: null, shisha: false, unavailable: false, offLabel: undefined, imageUrl: null })
 
 const emit = defineEmits<{ add: [], remove: [], long: [] }>()
 
@@ -106,6 +108,7 @@ const label = computed(() => props.shortName ?? props.name)
       @contextmenu.prevent
       @click="onClick"
     >
+      <img v-if="imageUrl" :src="imageUrl" alt="" class="tile-img" loading="lazy" draggable="false">
       <span class="flex w-full items-start justify-between gap-1">
         <span class="tile-name">{{ label }}</span>
         <span v-if="shisha" class="shrink-0 text-accent-text" aria-hidden="true">
@@ -190,6 +193,17 @@ const label = computed(() => props.shortName ?? props.name)
 }
 
 .tile-btn:active { transform: scale(0.97); background: var(--surface-2); }
+
+/* A thumbnail, not a photo card: 40 px keeps three tiles across and the name
+   and price where the waiter's eye already goes. */
+.tile-img {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--surface-2);
+  pointer-events: none;
+}
 
 .tile-name {
   font-size: var(--text-body);

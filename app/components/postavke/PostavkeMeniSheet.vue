@@ -41,6 +41,8 @@ const emit = defineEmits<{
   zaliha: []
   /** Ask to take this product off the menu; the page closes this sheet and confirms. */
   remove: []
+  /** The picture changed; the server's answer, to put in the list. */
+  saved: [product: ProductAdmin]
 }>()
 
 const starDisabled = computed(() =>
@@ -97,6 +99,14 @@ const zalihaLine = computed(() =>
             words
             @update:model-value="value => emit('patch', { staff_drink_allowed: value })"
           />
+        </div>
+
+        <div class="p-set">
+          <span class="p-set-text">
+            <span class="p-set-label">Slika</span>
+            <span class="p-set-hint">Mala sličica na pločici kod konobara.</span>
+          </span>
+          <PostavkeProductImage :product="product" :disabled="pending" @saved="value => emit('saved', value)" />
         </div>
 
         <div class="p-set">

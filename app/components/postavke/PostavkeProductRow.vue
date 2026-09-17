@@ -31,6 +31,8 @@ const emit = defineEmits<{
   zaliha: []
   /** Ask to take this product off the menu; the page confirms first. */
   remove: []
+  /** The picture changed; the server's answer, to put in the list. */
+  saved: [product: ProductAdmin]
 }>()
 
 const zalihaLine = computed(() => zalihaSummary(props.product, props.items))
@@ -44,6 +46,8 @@ const starDisabled = computed(() => props.favouriteFull && !props.product.is_fav
       <div class="p-name">
         <strong>{{ product.name }}</strong>
         <small v-if="product.short_name">{{ product.short_name }}</small>
+        <!-- The waiter's tile thumbnail. -->
+        <PostavkeProductImage :product="product" :disabled="pending" compact @saved="value => emit('saved', value)" />
         <!-- Happy Hour: not orderable after this hour. Empty is all day. -->
         <span class="p-until">
           <small>dostupno do</small>

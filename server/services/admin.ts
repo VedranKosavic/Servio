@@ -25,7 +25,10 @@
  */
 import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
-import { badRequest, conflict, notFound, unprocessable } from '../utils/errors'
+import { badRequest, conflict, notFound, SankError, unprocessable } from '../utils/errors'
+import { errorMessage } from '#shared/errors'
+import { PRODUCT_IMAGE_MAX_BYTES, productImageUrl } from '#shared/menuImage'
+import { isJpeg, jpegSize } from './uploads'
 import { newId, nowIso } from '../utils/ids'
 import { hashSecret } from '../utils/password'
 import { openPin, sealPin } from '../utils/pinReveal'
@@ -319,6 +322,78 @@ export function updateProduct(
 
   announce(db, venueId, 'menu', productId)
   return getProduct(db, venueId, productId)
+}
+
+/**
+ * `PUT /api/admin/products/:id/image` — the tile's thumbnail (17.09.2026).
+ *
+ * The admin's phone has already shrunk it to a small JPEG; the server checks it
+ * really is one and not too big, stores the bytes, and moves `image_version` so
+ * every phone fetches the new picture on its next menu reload.
+ */
+export function setProductImage(
+  db: Db, venueId: string, actor: Actor, productId: string, bytes: Buffer, now = nowIso(),
+): ProductAdmin {
+  requireProduct(db, venueId, productId)
+  if (!isJpeg(bytes)) throw new SankError(415, 'NOT_JPEG', errorMessage('NOT_JPEG'))
+  if (bytes.length > PRODUCT_IMAGE_MAX_BYTES) throw new SankError(413, 'IMAGE_TOO_BIG', errorMessage('IMAGE_TOO_BIG'))
+  const size = jpegSize(bytes)
+
+  db.transaction((tx) => {
+    tx.insert(schema.productImages)
+      .values({ id: newId(), productId, venueId, bytes, width: size.width, height: size.height, updatedBy: actor.userId, updatedAt: now })
+      .onConflictDoUpdate({
+        target: [schema.productImages.venueId, schema.productImages.productId],
+        set: { bytes, width: size.width, height: size.height, updatedBy: actor.userId, updatedAt: now },
+      })
+      .run()
+    tx.update(schema.products).set({ imageVersion: newId().slice(0, 8), updatedAt: now })
+      .where(eq(schema.products.id, productId)).run()
+    log(tx, venueId, {
+      kind: 'product_changed',
+      body: { product_id: productId, what: 'slika' },
+      actorId: actor.userId,
+      ref: { type: 'product', id: productId },
+      at: now,
+    })
+    bump(tx, venueId, 'menu', productId)
+  })
+
+  announce(db, venueId, 'menu', productId)
+  return getProduct(db, venueId, productId)
+}
+
+/** `DELETE /api/admin/products/:id/image` — the tile goes back to name and price. */
+export function deleteProductImage(
+  db: Db, venueId: string, actor: Actor, productId: string, now = nowIso(),
+): ProductAdmin {
+  const row = requireProduct(db, venueId, productId)
+  if (row.imageVersion === null) return getProduct(db, venueId, productId)
+
+  db.transaction((tx) => {
+    tx.delete(schema.productImages).where(eq(schema.productImages.productId, productId)).run()
+    tx.update(schema.products).set({ imageVersion: null, updatedAt: now })
+      .where(eq(schema.products.id, productId)).run()
+    log(tx, venueId, {
+      kind: 'product_changed',
+      body: { product_id: productId, what: 'slika uklonjena' },
+      actorId: actor.userId,
+      ref: { type: 'product', id: productId },
+      at: now,
+    })
+    bump(tx, venueId, 'menu', productId)
+  })
+
+  announce(db, venueId, 'menu', productId)
+  return getProduct(db, venueId, productId)
+}
+
+/** `GET /api/products/:id/image` — the bytes, for anybody signed in at this venue. */
+export function readProductImage(q: Queryable, venueId: string, productId: string) {
+  return q.select({ bytes: schema.productImages.bytes })
+    .from(schema.productImages)
+    .where(and(eq(schema.productImages.venueId, venueId), eq(schema.productImages.productId, productId)))
+    .get() ?? null
 }
 
 /**
@@ -1393,6 +1468,7 @@ function toProduct(
     staff_drink_allowed: isOn(row.staffDrinkAllowed),
     is_favourite: isOn(row.isFavourite),
     available_until: row.availableUntil,
+    image_url: productImageUrl(row.id, row.imageVersion),
     sort: row.sort,
     active: isOn(row.active),
     created_at: row.createdAt,

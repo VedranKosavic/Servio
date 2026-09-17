@@ -160,6 +160,20 @@ export default defineNuxtConfig({
         },
         {
           /**
+           * A menu article's thumbnail (17.09.2026). The same picture for the
+           * whole venue, and its URL carries the picture's version — so a copy
+           * is never stale and the tiles keep their pictures offline.
+           */
+          urlPattern: ({ url }) => /^\/api\/products\/[^/]+\/image$/.test(url.pathname),
+          handler: 'CacheFirst',
+          options: {
+            cacheName: 'sank-menu-images',
+            cacheableResponse: { statuses: [200] },
+            expiration: { maxEntries: 300 },
+          },
+        },
+        {
+          /**
            * **Everything else under /api/ is NetworkOnly, and this is not a
            * preference.** `server/middleware/tenant.ts` sends
            * `Cache-Control: private, no-cache` with `Vary: Cookie` precisely so

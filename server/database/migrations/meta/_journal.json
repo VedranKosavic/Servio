@@ -141,6 +141,13 @@
       "when": 1789650113795,
       "tag": "0019_product_available_until",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1789664066974,
+      "tag": "0020_product_images",
+      "breakpoints": true
     }
   ]
 }
