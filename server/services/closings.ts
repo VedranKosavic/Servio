@@ -48,7 +48,7 @@ import { newId, nowIso } from '../utils/ids'
 import { zaPredati } from '#shared/closing'
 import { businessDate } from '#shared/dates'
 import type { ClosingExtra } from '#shared/closing'
-import type { ClosingPreview, ShiftClosing, ShiftExtraCost, UnpaidReason } from '#shared/types'
+import type { ClosingPreview, ShiftClosing, ShiftCostInvoice, ShiftExtraCost, UnpaidReason } from '#shared/types'
 import type { AddShiftExtraCostBody } from '#shared/schemas'
 import { shiftCostText } from '#shared/shiftCosts'
 import type { Actor, Db, Queryable } from './types'
@@ -207,9 +207,47 @@ export function listShiftExtraCosts(
       label: row.label,
       amount_fen: row.amountFen,
       delivery_id: row.deliveryId,
+      invoice: row.deliveryId ? readInvoice(q, venueId, row.deliveryId, names) : null,
       created_at: row.createdAt,
       created_by_name: names.get(row.createdBy) ?? '—',
     }))
+}
+
+/** The invoice a naknadni trošak pays, line by line, with each article's category. */
+function readInvoice(
+  q: Queryable, venueId: string, deliveryId: string, names: Map<string, string>,
+): ShiftCostInvoice | null {
+  const d = q.select().from(schema.deliveries)
+    .where(and(eq(schema.deliveries.venueId, venueId), eq(schema.deliveries.id, deliveryId)))
+    .get()
+  if (!d) return null
+  const lines = q.select({
+    itemName: schema.stockItems.name,
+    categoryName: schema.categories.name,
+    qty: schema.deliveryLines.qty,
+    baseUnit: schema.stockItems.baseUnit,
+    lineCostFen: schema.deliveryLines.lineCostFen,
+  })
+    .from(schema.deliveryLines)
+    .innerJoin(schema.stockItems, eq(schema.stockItems.id, schema.deliveryLines.stockItemId))
+    .leftJoin(schema.categories, eq(schema.categories.id, schema.stockItems.categoryId))
+    .where(and(eq(schema.deliveryLines.venueId, venueId), eq(schema.deliveryLines.deliveryId, deliveryId)))
+    .all()
+  return {
+    delivered_at: d.deliveredAt,
+    supplier_name: d.supplierName,
+    invoice_no: d.invoiceNo,
+    entered_by_name: names.get(d.enteredBy) ?? '—',
+    total_fen: d.totalFen,
+    reversed_at: d.reversedAt,
+    lines: lines.map(line => ({
+      item_name: line.itemName,
+      category_name: line.categoryName ?? null,
+      qty: line.qty,
+      base_unit: line.baseUnit,
+      line_cost_fen: line.lineCostFen,
+    })),
+  }
 }
 
 /**

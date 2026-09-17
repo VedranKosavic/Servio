@@ -160,6 +160,9 @@ const names = computed<Record<string, string>>(() => {
       <!-- *Kasa* is the šanker's close: Sav prihod, the deductions, Za predati. -->
       <SmjenaClosingCard :closing="data.closing ?? null" />
 
+      <!-- What each invoice paid afterwards bought. -->
+      <SmjenaNaknadneFakture :closing="data.closing ?? null" />
+
       <SmjenaCategoryBar :shift-id="data.shift.id" :categories="data.summary.by_category" />
 
       <SmjenaAfterClose :late="data.late_after_close" />

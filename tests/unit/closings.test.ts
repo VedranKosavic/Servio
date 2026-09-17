@@ -454,6 +454,10 @@ describe('naknadni troškovi', () => {
 
     expect(once.naknadni).toHaveLength(1)
     expect(both.naknadni.map(c => [c.kind, c.delivery_id, c.amount_fen])).toEqual([['roba', a.id, 2_000], ['roba', b.id, 500]])
+    expect(both.naknadni[0]!.invoice).toMatchObject({
+      total_fen: 2_000,
+      lines: [{ item_name: 'Coca-Cola 0,25 l', qty: 24, base_unit: 'kom', line_cost_fen: 2_000 }],
+    })
     expect(both.naknadni[0]!.label).toMatch(/^Faktura \d{2}\.\d{2}\.\d{4}\.$/)
     expect(both.za_predati_at_close_fen).toBe(handed)
     // The invoice now says which shift paid it, so the sheet does not offer it again.

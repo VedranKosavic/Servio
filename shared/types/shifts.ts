@@ -570,6 +570,23 @@ export interface ShiftClosing {
 }
 
 /** One *Naknadni trošak* on a closed shift, as *Kasa* lists it. */
+/** A paid invoice's own lines: what was bought and what each cost. */
+export interface ShiftCostInvoice {
+  delivered_at: string
+  supplier_name: string
+  invoice_no: string | null
+  entered_by_name: string
+  total_fen: number
+  reversed_at: string | null
+  lines: {
+    item_name: string
+    category_name: string | null
+    qty: number
+    base_unit: 'kom' | 'g' | 'ml'
+    line_cost_fen: number
+  }[]
+}
+
 export interface ShiftExtraCost {
   id: string
   kind: ShiftCostKind
@@ -578,6 +595,8 @@ export interface ShiftExtraCost {
   amount_fen: number
   /** The *Prijem robe* invoice this pays, when it pays one. */
   delivery_id: string | null
+  /** That invoice, as *Smjena* prints it under *Kasa*; `null` for a cost with no invoice. */
+  invoice: ShiftCostInvoice | null
   created_at: string
   created_by_name: string
 }
