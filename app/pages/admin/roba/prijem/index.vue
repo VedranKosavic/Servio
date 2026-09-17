@@ -44,6 +44,14 @@ async function loadCatalogue() {
 
 onMounted(() => { void loadCatalogue() })
 
+/** *Pregled narudžbi* below, redrawn the moment *Proknjiži* answers — not on the next poll. */
+const pregled = ref<{ load: () => Promise<void> } | null>(null)
+
+function onPosted() {
+  void loadCatalogue()
+  void pregled.value?.load()
+}
+
 /**
  * A booked delivery moves the shelf, and the catalogue's costs with it. The
  * screen has nothing of its own to refetch — the document clears itself and the
@@ -69,12 +77,12 @@ useAdminChanges({
     <RobaPrijemDoc
       :items="items"
       :categories="categories"
-      @posted="loadCatalogue"
+      @posted="onPosted"
       @catalogue="loadCatalogue"
     />
 
     <!-- When goods were ordered, what came and what it cost. -->
-    <RobaPrijemPregled :items="items" />
+    <RobaPrijemPregled ref="pregled" :items="items" />
   </div>
 </template>
 
