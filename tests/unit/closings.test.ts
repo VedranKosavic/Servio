@@ -26,7 +26,7 @@ import {
   addShiftExtraCost, closeByBar, closingPreview, deleteShiftExtraCost,
 } from '../../server/services/closings'
 import { markUnpaid } from '../../server/services/tabs'
-import { createDelivery } from '../../server/services/stock'
+import { createDelivery, getDelivery } from '../../server/services/stock'
 import { forceClose } from '../../server/services/shifts'
 import { getMyShift, latestSummary, summarizeShift } from '../../server/services/summaries'
 import { ensureOpenShift } from '../../server/services/contracts'
@@ -456,6 +456,8 @@ describe('naknadni troškovi', () => {
     expect(both.naknadni.map(c => [c.kind, c.delivery_id, c.amount_fen])).toEqual([['roba', a.id, 2_000], ['roba', b.id, 500]])
     expect(both.naknadni[0]!.label).toMatch(/^Faktura \d{2}\.\d{2}\.\d{4}\.$/)
     expect(both.za_predati_at_close_fen).toBe(handed)
+    // The invoice now says which shift paid it, so the sheet does not offer it again.
+    expect(getDelivery(f.db, f.venueId, a.id).paid_from_shift_id).toBe(first)
     expect(both.za_predati_fen).toBe(handed - 2_500)
 
     const row = f.db.select().from(schema.shiftClosings).where(eq(schema.shiftClosings.shiftId, first)).get()!

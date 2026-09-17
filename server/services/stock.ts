@@ -883,6 +883,14 @@ export function getDelivery(q: Queryable, venueId: string, deliveryId: string): 
     ))
     .all()
 
+  const paid = q.select({ shiftId: schema.shiftExtraCosts.shiftId })
+    .from(schema.shiftExtraCosts)
+    .where(and(
+      eq(schema.shiftExtraCosts.venueId, venueId),
+      eq(schema.shiftExtraCosts.deliveryId, deliveryId),
+    ))
+    .get()
+
   return {
     id: header.d.id,
     client_id: header.d.clientId,
@@ -909,6 +917,7 @@ export function getDelivery(q: Queryable, venueId: string, deliveryId: string): 
       unit_cost_mfen: l.unitCostMfen,
       note: l.note,
     })),
+    paid_from_shift_id: paid?.shiftId ?? null,
     already_applied: false,
   }
 }

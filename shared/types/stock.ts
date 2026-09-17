@@ -146,6 +146,8 @@ export interface DeliveryView {
   source: string
   scan_id: string | null
   lines: DeliveryLineView[]
+  /** The shift this invoice was paid from as a *naknadni trošak*, if any. */
+  paid_from_shift_id: string | null
   /** The same `client_id` was posted before; this is the stored answer (§2). */
   already_applied: boolean
 }

@@ -425,6 +425,7 @@ describe('GET /api/stock and POST /api/stock/deliveries', () => {
     expect(delivery.status).toBe('posted')
     expect(delivery.entered_by_name).toBe('Haris')
     expect(delivery.already_applied).toBe(false)
+    expect(delivery.paid_from_shift_id).toBeNull()
     expect(delivery.lines).toHaveLength(2)
     // 2 gajbe × 24 = 48 boca, and 4 800 fen over 48 is 100 000 mfen a bottle.
     expect(delivery.lines[0]).toMatchObject({

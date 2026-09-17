@@ -11,6 +11,7 @@
  */
 import { formatKm, formatQty } from '#shared/money'
 import { cutoffIso, nextBusinessDate } from '#shared/dates'
+import { shiftCostText } from '#shared/shiftCosts'
 import type { DeliveryView, ShiftClosing, StockItemAdmin } from '#shared/types'
 
 const props = defineProps<{
@@ -60,10 +61,14 @@ function categories(delivery: DeliveryView): string {
   return [...names].join(' · ')
 }
 
-/** The cost on this shift that pays this invoice, if any. */
-function paidCost(deliveryId: string) {
-  return props.closing.naknadni.find(cost => cost.delivery_id === deliveryId) ?? null
-}
+/**
+ * The invoices still to pay: one already paid — from this shift or any other —
+ * is not offered again. This shift's own are listed above with *Ukloni*.
+ */
+const available = computed(() => {
+  const paidHere = new Set(props.closing.naknadni.map(cost => cost.delivery_id))
+  return deliveries.value.filter(delivery => !delivery.paid_from_shift_id && !paidHere.has(delivery.id))
+})
 
 async function pay(delivery: DeliveryView) {
   if (busy.value) return
@@ -81,12 +86,14 @@ async function pay(delivery: DeliveryView) {
   }
 }
 
-async function remove(costId: string, deliveryId: string) {
+async function remove(costId: string) {
   if (busy.value) return
-  busy.value = deliveryId
+  busy.value = costId
   error.value = ''
   try {
     emit('saved', await api.deleteShiftExtraCost(props.shiftId, costId))
+    // The invoice is free again: read the day's list so it is offered back.
+    await load()
   } catch (err) {
     error.value = apiErrorText(err)
   } finally {
@@ -102,16 +109,23 @@ async function remove(costId: string, deliveryId: string) {
     </p>
 
     <p v-if="error" class="n-error">{{ error }}</p>
+
+    <!-- Already paid from this shift: shown once, here, never offered again. -->
+    <ul v-if="closing.naknadni.length" class="n-paid-list">
+      <li v-for="cost in closing.naknadni" :key="cost.id" class="n-paid-row">
+        <span class="n-paid">✓ {{ shiftCostText(cost) }}</span>
+        <span class="num">{{ formatKm(cost.amount_fen) }}</span>
+        <UiButton small variant="ghost" :pending="busy === cost.id" :disabled="busy !== null" @click="remove(cost.id)">
+          Ukloni
+        </UiButton>
+      </li>
+    </ul>
+
     <p v-if="loading && deliveries.length === 0" class="n-note">Učitavam fakture…</p>
-    <p v-else-if="deliveries.length === 0" class="n-empty">Za ovaj dan nema faktura u prijemu robe.</p>
+    <p v-else-if="available.length === 0" class="n-empty">Nema neplaćenih faktura za ovaj dan.</p>
 
     <ul v-else class="n-list">
-      <li
-        v-for="delivery in deliveries"
-        :key="delivery.id"
-        class="n-doc"
-        :class="{ paid: paidCost(delivery.id) }"
-      >
+      <li v-for="delivery in available" :key="delivery.id" class="n-doc">
         <div class="n-head">
           <span class="n-date num">{{ dateBs(delivery.delivered_at) }}</span>
           <span class="n-cats">{{ categories(delivery) }}</span>
@@ -124,17 +138,8 @@ async function remove(costId: string, deliveryId: string) {
           </li>
         </ul>
         <div class="n-act">
-          <template v-if="paidCost(delivery.id)">
-            <span class="n-paid">✓ Plaćeno iz ove smjene</span>
-            <UiButton
-              small variant="ghost" :disabled="busy !== null"
-              @click="remove(paidCost(delivery.id)!.id, delivery.id)"
-            >
-              Ukloni
-            </UiButton>
-          </template>
           <UiButton
-            v-else small variant="primary" :pending="busy === delivery.id" :disabled="busy !== null"
+            small variant="primary" :pending="busy === delivery.id" :disabled="busy !== null"
             @click="pay(delivery)"
           >
             Plati iz smjene
@@ -162,7 +167,11 @@ async function remove(costId: string, deliveryId: string) {
 .n-error { margin: 0; color: var(--danger); font-size: var(--text-label); }
 .n-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .n-doc { border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; }
-.n-doc.paid { border-color: var(--accent-line); }
+.n-paid-list { list-style: none; margin: 0; padding: 0; }
+.n-paid-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 0; border-bottom: 1px solid var(--line-soft); font-size: var(--text-label);
+}
 .n-head {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   padding: 10px 14px; background: var(--surface-2); border-bottom: 1px solid var(--line-soft);
@@ -180,6 +189,6 @@ async function remove(costId: string, deliveryId: string) {
   display: flex; align-items: center; justify-content: flex-end; gap: 10px;
   padding: 8px 14px; border-top: 1px solid var(--line-soft);
 }
-.n-paid { margin-right: auto; font-size: var(--text-label); font-weight: 600; color: var(--accent-ink); }
+.n-paid { margin-right: auto; min-width: 0; font-size: var(--text-label); font-weight: 600; color: var(--accent-ink); }
 .n-sum { margin: 0; color: var(--ink-2); font-size: var(--text-label); }
 </style>
