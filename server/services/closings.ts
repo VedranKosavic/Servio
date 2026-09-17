@@ -43,11 +43,13 @@
  */
 import { and, eq } from 'drizzle-orm'
 import { schema } from '../database/client'
-import { conflict, forbidden } from '../utils/errors'
+import { conflict, forbidden, notFound } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
 import { zaPredati } from '#shared/closing'
 import type { ClosingExtra } from '#shared/closing'
-import type { ClosingPreview, ShiftClosing, UnpaidReason } from '#shared/types'
+import type { ClosingPreview, ShiftClosing, ShiftExtraCost, UnpaidReason } from '#shared/types'
+import type { AddShiftExtraCostBody } from '#shared/schemas'
+import { shiftCostText } from '#shared/shiftCosts'
 import type { Actor, Db, Queryable } from './types'
 import { bump, getSettings, log } from './contracts'
 import { shiftCategories } from './cash'
@@ -149,6 +151,8 @@ function serverNumbers(
 
 function toView(q: Queryable, venueId: string, row: ClosingRow): ShiftClosing {
   const shift = requireShift(q, venueId, row.shiftId)
+  const naknadni = listShiftExtraCosts(q, venueId, row.shiftId)
+  const naknadniFen = naknadni.reduce((sum, cost) => sum + cost.amount_fen, 0)
   return {
     id: row.id,
     shift_id: row.shiftId,
@@ -170,9 +174,139 @@ function toView(q: Queryable, venueId: string, row: ClosingRow): ShiftClosing {
     merkator_fen: row.merkatorFen,
     extras: readExtras(row.extrasJson),
     extra_fen: row.extraFen,
-    za_predati_fen: row.zaPredatiFen,
+    // The šanker's number stays on the row; what is left of the shift is it
+    // less what was paid out of it afterwards.
+    za_predati_fen: row.zaPredatiFen - naknadniFen,
+    za_predati_at_close_fen: row.zaPredatiFen,
+    naknadni,
+    naknadni_fen: naknadniFen,
     note: row.note,
   }
+}
+
+// ===========================================================================
+// Naknadni troškovi (17.09.2026)
+// ===========================================================================
+
+/** A closed shift's *naknadni troškovi*, oldest first. */
+export function listShiftExtraCosts(
+  q: Queryable, venueId: string, shiftId: string,
+): ShiftExtraCost[] {
+  const names = userNames(q, venueId)
+  return q.select().from(schema.shiftExtraCosts)
+    .where(and(
+      eq(schema.shiftExtraCosts.venueId, venueId),
+      eq(schema.shiftExtraCosts.shiftId, shiftId),
+    ))
+    .orderBy(schema.shiftExtraCosts.createdAt, schema.shiftExtraCosts.id)
+    .all()
+    .map(row => ({
+      id: row.id,
+      kind: row.kind,
+      label: row.label,
+      amount_fen: row.amountFen,
+      created_at: row.createdAt,
+      created_by_name: names.get(row.createdBy) ?? '—',
+    }))
+}
+
+/**
+ * `POST /api/owner/shift/:id/naknadni-troskovi` — something paid out of this
+ * shift's takings after the šanker closed it.
+ *
+ * Only a shift that **has** a closing: before the close the šanker types his
+ * payouts himself, and a cost added to an open night would have no *Za predati*
+ * to come off. A retried tap (same `client_id`) is the stored cost. Answers the
+ * closing again, with the cost on it and *Za predati* lowered.
+ */
+export function addShiftExtraCost(
+  db: Db, venueId: string, actor: Actor, shiftId: string, body: AddShiftExtraCostBody,
+  now = nowIso(),
+): ShiftClosing {
+  db.transaction((tx) => {
+    const replay = tx.select().from(schema.shiftExtraCosts)
+      .where(and(
+        eq(schema.shiftExtraCosts.venueId, venueId),
+        eq(schema.shiftExtraCosts.clientId, body.client_id),
+      ))
+      .get()
+    if (replay) {
+      if (replay.shiftId !== shiftId) throw conflict('EXTRA_COST_CLIENT_REUSED', 'that client_id belongs to another shift')
+      return
+    }
+
+    const shift = requireShift(tx, venueId, shiftId)
+    if (!getClosingRow(tx, venueId, shiftId)) {
+      throw conflict('SHIFT_NOT_CLOSED', `shift ${shiftId} has no closing yet`)
+    }
+
+    const label = body.kind === 'ostalo' ? body.label?.trim() ?? null : null
+    const id = newId()
+    tx.insert(schema.shiftExtraCosts).values({
+      id, venueId, shiftId, clientId: body.client_id, kind: body.kind, label,
+      amountFen: body.amount_fen, createdBy: actor.userId, createdAt: now,
+    }).run()
+
+    log(tx, venueId, {
+      kind: 'settings_changed',
+      body: {
+        key: `shift_extra_cost.${shiftId}.${id}.amount_fen`,
+        label: `Naknadni trošak · ${shiftCostText({ kind: body.kind, label })} · smjena ${shift.businessDate}`,
+        before: 0,
+        after: body.amount_fen,
+      },
+      actorId: actor.userId,
+      ref: { type: 'shift', id: shiftId },
+      shiftId,
+      at: now,
+    })
+    bump(tx, venueId, 'shift', shiftId)
+  })
+  return getClosing(db, venueId, shiftId)!
+}
+
+/** `DELETE /api/owner/shift/:id/naknadni-troskovi/:costId` — a mistyped cost, gone. */
+export function deleteShiftExtraCost(
+  db: Db, venueId: string, actor: Actor, shiftId: string, costId: string, now = nowIso(),
+): ShiftClosing {
+  db.transaction((tx) => {
+    const row = tx.select().from(schema.shiftExtraCosts)
+      .where(and(
+        eq(schema.shiftExtraCosts.venueId, venueId),
+        eq(schema.shiftExtraCosts.shiftId, shiftId),
+        eq(schema.shiftExtraCosts.id, costId),
+      ))
+      .get()
+    if (!row) throw notFound('EXTRA_COST_NOT_FOUND', `extra cost ${costId} not found on shift ${shiftId}`)
+    const shift = requireShift(tx, venueId, shiftId)
+
+    tx.delete(schema.shiftExtraCosts).where(eq(schema.shiftExtraCosts.id, costId)).run()
+
+    log(tx, venueId, {
+      kind: 'settings_changed',
+      body: {
+        key: `shift_extra_cost.${shiftId}.${costId}.amount_fen`,
+        label: `Naknadni trošak uklonjen · ${shiftCostText({ kind: row.kind, label: row.label })} · smjena ${shift.businessDate}`,
+        before: row.amountFen,
+        after: 0,
+      },
+      actorId: actor.userId,
+      ref: { type: 'shift', id: shiftId },
+      shiftId,
+      at: now,
+    })
+    bump(tx, venueId, 'shift', shiftId)
+  })
+  return getClosing(db, venueId, shiftId)!
+}
+
+function getClosingRow(q: Queryable, venueId: string, shiftId: string): ClosingRow | undefined {
+  return q.select().from(schema.shiftClosings)
+    .where(and(
+      eq(schema.shiftClosings.venueId, venueId),
+      eq(schema.shiftClosings.shiftId, shiftId),
+    ))
+    .get()
 }
 
 /** The stored closing of a shift, or `null`. Used by the owner's *Smjena* too. */

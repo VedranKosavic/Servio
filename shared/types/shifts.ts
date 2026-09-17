@@ -23,6 +23,7 @@
  * who settled) + `outstanding_fen` (everybody who has not) === venue expected.
  */
 import type { ClosingExtra } from '../closing'
+import type { ShiftCostKind } from '../shiftCosts'
 import type { Role } from '../types'
 import type { StaleDevice } from './auth'
 
@@ -554,9 +555,29 @@ export interface ShiftClosing {
   extras: ClosingExtra[]
   /** Their sum — what the subtraction below actually used. */
   extra_fen: number
-  /** `prihod − dnevnica − the marked categories − the typed ones`. May be negative. */
+  /**
+   * What is left of the shift: the šanker's *Za predati* **less** the
+   * *Naknadni troškovi* an admin added afterwards. May be negative.
+   */
   za_predati_fen: number
+  /** The šanker's own *Za predati* at the close, before any *naknadni trošak*. */
+  za_predati_at_close_fen: number
+  /** *Naknadni troškovi*: paid out of this shift's takings after it closed. */
+  naknadni: ShiftExtraCost[]
+  /** Their sum. */
+  naknadni_fen: number
   note: string | null
+}
+
+/** One *Naknadni trošak* on a closed shift, as *Kasa* lists it. */
+export interface ShiftExtraCost {
+  id: string
+  kind: ShiftCostKind
+  /** The owner's own name for *Ostalo*; `null` otherwise. */
+  label: string | null
+  amount_fen: number
+  created_at: string
+  created_by_name: string
 }
 
 /** `GET /api/shifts/:id/zakljucenje` — what the šanker sees before he types. */

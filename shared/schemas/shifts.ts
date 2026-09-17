@@ -191,3 +191,17 @@ export type PickupBody = z.infer<typeof pickupBody>
 export type OpeningFloatBody = z.infer<typeof openingFloatBody>
 export type DecideCashMovementBody = z.infer<typeof decideCashMovementBody>
 export type StaffNoteBody = z.infer<typeof staffNoteBody>
+
+/**
+ * `POST /api/owner/shift/:id/naknadni-troskovi` — one cost paid out of a closed
+ * shift afterwards. *Ostalo* needs a name; a named kind takes none.
+ */
+export const addShiftExtraCostBody = z.object({
+  client_id: uuid,
+  kind: z.enum(['roba', 'okusi', 'zar', 'kafa', 'merkator', 'dnevnica', 'struja', 'voda', 'kirija', 'ostalo']),
+  label: z.string().trim().min(1).max(60).optional(),
+  amount_fen: moneyFen.min(1),
+}).strict().refine(body => body.kind !== 'ostalo' || !!body.label, {
+  message: 'Ostalo needs a label', path: ['label'],
+})
+export type AddShiftExtraCostBody = z.infer<typeof addShiftExtraCostBody>

@@ -187,6 +187,27 @@ describe('neplaćeno and the till payouts', () => {
   })
 })
 
+describe('naknadni troškovi of the month\'s shifts', () => {
+  it('land in their own line, and goods paid afterwards are not counted twice', async () => {
+    const { addShiftExtraCost } = await import('../../server/services/closings')
+    const shiftId = night(1, 'prva', [{ product: 'Red Bull' }])
+    const add = (kind: 'dnevnica' | 'struja' | 'roba' | 'ostalo', fen: number) =>
+      addShiftExtraCost(f.db, f.venueId, f.adminActor(), shiftId, {
+        client_id: randomUUID(), kind, amount_fen: fen, ...(kind === 'ostalo' ? { label: 'x' } : {}),
+      })
+    add('dnevnica', 9_000)
+    add('struja', 1_500)
+    add('ostalo', 500)
+    add('roba', 4_000)
+
+    const a = monthAnalytics(f.db, f.venueId, month)
+    expect(a.costs.dnevnice).toBe(9_000 + 9_000)
+    expect(a.costs.naknadni).toBe(2_000)
+    expect(a.costs.roba).toBe(0)
+    expect(a.total_cost_fen).toBe(18_000 + 2_000)
+  })
+})
+
 describe('goods from Prijem robe', () => {
   it('cuts posted deliveries into roba, okusi and žar by stock kind', () => {
     createDelivery(f.db, f.venueId, f.adminActor(), {

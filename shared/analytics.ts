@@ -30,7 +30,7 @@
 /** Every cost line, in the order the page lists them. */
 export const MONTH_COST_KEYS = [
   'roba', 'okusi', 'zar', 'kafa', 'merkator', 'dodatna', 'dnevnice', 'struja', 'voda', 'kirija',
-  'dodatni',
+  'dodatni', 'naknadni',
 ] as const
 export type MonthCostKey = (typeof MONTH_COST_KEYS)[number]
 
@@ -50,6 +50,7 @@ export const MONTH_COST_LABELS: Record<MonthCostKey, string> = {
   voda: 'Voda',
   kirija: 'Kirija',
   dodatni: 'Dodatni troškovi',
+  naknadni: 'Naknadni troškovi smjena',
 }
 
 /** Where a line's number comes from — the small print under it. */
@@ -65,6 +66,29 @@ export const MONTH_COST_SOURCES: Record<MonthCostKey, string> = {
   voda: 'Unosi se ručno',
   kirija: 'Fiksno, prenosi se svaki mjesec',
   dodatni: 'Dodaje admin, ovdje',
+  naknadni: 'Struja, voda, kirija i ostalo plaćeno naknadno iz smjena',
+}
+
+/**
+ * Where a *Naknadni trošak* of a shift lands on the month (17.09.2026).
+ *
+ * Into the line it already has a name on — a day wage into *Dnevnice*, coffee
+ * and Merkator into theirs — and the bills and *Ostalo* into *Naknadni troškovi
+ * smjena*, kept apart from the monthly *Struja / Voda / Kirija* the owner types,
+ * so one bill entered in both places shows twice instead of silently merging.
+ *
+ * **Goods paid afterwards are `null`: not counted again.** The month's goods are
+ * *Prijem robe*, whoever paid for them and when — the same rule that keeps the
+ * šanker's *Plaćanje robe* out of *Analitika* — so a crate is never a cost twice.
+ */
+export function monthKeyOfShiftCost(kind: string): MonthCostKey | null {
+  switch (kind) {
+    case 'roba': case 'okusi': case 'zar': return null
+    case 'dnevnica': return 'dnevnice'
+    case 'kafa': return 'kafa'
+    case 'merkator': return 'merkator'
+    default: return 'naknadni'
+  }
 }
 
 /**

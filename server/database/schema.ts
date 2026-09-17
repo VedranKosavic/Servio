@@ -1347,6 +1347,33 @@ export const monthExtraCosts = sqliteTable('month_extra_costs', {
   index('month_extra_costs_month_idx').on(t.venueId, t.month),
 ])
 
+/**
+ * *Naknadni troškovi* — what was paid out of one closed shift's takings **after**
+ * the šanker closed it (the owner, 17.09.2026), entered by an admin on *Smjena*.
+ *
+ * They come off that shift's *Za predati* and no other: the closing row keeps
+ * the šanker's own number (`shift_closings` is what he handed over), and every
+ * read subtracts these on top. `client_id` so a retried tap is one cost; a
+ * mistyped one is deleted, and both leave a *Dnevnik* line.
+ */
+export const shiftExtraCosts = sqliteTable('shift_extra_costs', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  shiftId: text('shift_id').notNull().references(() => shifts.id),
+  clientId: text('client_id').notNull(),
+  kind: text('kind', {
+    enum: ['roba', 'okusi', 'zar', 'kafa', 'merkator', 'dnevnica', 'struja', 'voda', 'kirija', 'ostalo'],
+  }).notNull(),
+  /** The owner's own words, for *Ostalo*; `null` for a named kind. */
+  label: text('label'),
+  amountFen: integer('amount_fen').notNull(),
+  createdBy: text('created_by').notNull().references(() => users.id),
+  createdAt: text('created_at').notNull(),
+}, t => [
+  uniqueIndex('shift_extra_costs_client_uq').on(t.venueId, t.clientId),
+  index('shift_extra_costs_shift_idx').on(t.venueId, t.shiftId),
+])
+
 export const shiftTemplates = sqliteTable('shift_templates', {
   id: text('id').primaryKey(),
   venueId: text('venue_id').notNull().references(() => venues.id),

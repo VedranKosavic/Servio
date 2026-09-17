@@ -229,6 +229,8 @@ export interface MonthAnalytics {
     kirija: number
     /** Σ of `extra_costs`. */
     dodatni: number
+    /** *Naknadni troškovi* of the month's shifts that have no line of their own. */
+    naknadni: number
   }
   /** *Dodatni troškovi*, each as the owner named it, oldest first. */
   extra_costs: AnalyticsExtraCost[]

@@ -22,7 +22,9 @@ import { randomUUID } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
 import { closeTab, refuses } from '../helpers/shifts'
-import { closeByBar, closingPreview } from '../../server/services/closings'
+import {
+  addShiftExtraCost, closeByBar, closingPreview, deleteShiftExtraCost,
+} from '../../server/services/closings'
 import { markUnpaid } from '../../server/services/tabs'
 import { forceClose } from '../../server/services/shifts'
 import { getMyShift, latestSummary, summarizeShift } from '../../server/services/summaries'
@@ -419,5 +421,49 @@ describe('append-only', () => {
     const closing = closeByBar(f.db, f.venueId, sanker(), shiftId, { client_id: randomUUID(), ...ZERO })
     f.expectRefused(`UPDATE shift_closings SET za_predati_fen = 0 WHERE id = '${closing.id}'`, 'append-only')
     f.expectRefused(`DELETE FROM shift_closings WHERE id = '${closing.id}'`, 'append-only')
+  })
+})
+
+describe('naknadni troškovi', () => {
+  /**
+   * The owner's call of 17.09.2026: a cost paid out of a closed shift afterwards
+   * comes off **that** shift's Za predati and no other, the šanker's own number
+   * stays on the closing, and a mistyped one can be taken off again.
+   */
+  it('lowers this shift\'s Za predati, keeps the šanker\'s number, and can be removed', () => {
+    const first = night()
+    const closing = closeByBar(f.db, f.venueId, sanker(), first, { client_id: randomUUID(), ...ZERO })
+    const handed = closing.za_predati_fen
+
+    const clientId = randomUUID()
+    const body = { client_id: clientId, kind: 'struja' as const, amount_fen: 2_000 }
+    addShiftExtraCost(f.db, f.venueId, f.adminActor(), first, body)
+    // A retried tap is the same cost.
+    const withStruja = addShiftExtraCost(f.db, f.venueId, f.adminActor(), first, body)
+    const withBoth = addShiftExtraCost(f.db, f.venueId, f.adminActor(), first, {
+      client_id: randomUUID(), kind: 'ostalo', label: 'popravka', amount_fen: 500,
+    })
+
+    expect(withStruja.naknadni).toHaveLength(1)
+    expect(withBoth.naknadni.map(c => [c.kind, c.label, c.amount_fen]))
+      .toEqual([['struja', null, 2_000], ['ostalo', 'popravka', 500]])
+    expect(withBoth.naknadni_fen).toBe(2_500)
+    expect(withBoth.za_predati_at_close_fen).toBe(handed)
+    expect(withBoth.za_predati_fen).toBe(handed - 2_500)
+
+    // The stored closing row is the šanker's and did not move.
+    const row = f.db.select().from(schema.shiftClosings).where(eq(schema.shiftClosings.shiftId, first)).get()!
+    expect(row.zaPredatiFen).toBe(handed)
+
+    const removed = deleteShiftExtraCost(f.db, f.venueId, f.adminActor(), first, withBoth.naknadni[0]!.id)
+    expect(removed.naknadni_fen).toBe(500)
+    expect(removed.za_predati_fen).toBe(handed - 500)
+  })
+
+  it('refuses a shift the šanker has not closed', () => {
+    const open = f.openShift({ members: ['Amar'] })
+    refuses(() => addShiftExtraCost(f.db, f.venueId, f.adminActor(), open, {
+      client_id: randomUUID(), kind: 'voda', amount_fen: 100,
+    }), 'SHIFT_NOT_CLOSED', 409)
   })
 })

@@ -154,6 +154,8 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   'GET /api/owner/shift/:id': A,
   'GET /api/owner/shift/:id/summary': A,
   'GET /api/owner/shift/:id/lines': A,
+  'POST /api/owner/shift/:id/naknadni-troskovi': A,
+  'DELETE /api/owner/shift/:id/naknadni-troskovi/:id': A,
   'GET /api/owner/stock': A,
   'GET /api/owner/stock/:id/movements': A,
   'GET /api/owner/categories': A,

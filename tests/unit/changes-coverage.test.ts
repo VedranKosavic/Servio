@@ -43,6 +43,7 @@ import { clearTab } from '../../server/services/clearTable'
 import {
   addMonthExtraCost, deleteMonthExtraCost, setMonthCost,
 } from '../../server/services/analytics'
+import { addShiftExtraCost, deleteShiftExtraCost } from '../../server/services/closings'
 import { putStaffNote } from '../../server/services/summaries'
 import { resetPin } from '../../server/services/auth'
 import {
@@ -382,6 +383,27 @@ const CALLS: Record<string, () => void | Promise<void>> = {
       client_id: randomUUID(), month: '2026-09', label: 'popravka', amount_fen: 8_000,
     })
     deleteMonthExtraCost(f.db, f.venueId, f.adminActor(), month.extra_costs[0]!.id)
+  },
+
+  [join('owner', 'shift', '[id]', 'naknadni-troskovi', 'index.post.ts')]: () => {
+    const shiftId = f.openShift({ members: ['Amar', 'Emir'] })
+    closeByBar(f.db, f.venueId, f.actor('Emir', { mode: 'sanker' }), shiftId, {
+      client_id: randomUUID(), roba_fen: 0, okusi_fen: 0, zar_fen: 0, kafa_fen: 0, merkator_fen: 0, extras: [],
+    })
+    addShiftExtraCost(f.db, f.venueId, f.adminActor(), shiftId, {
+      client_id: randomUUID(), kind: 'struja', amount_fen: 1_000,
+    })
+  },
+
+  [join('owner', 'shift', '[id]', 'naknadni-troskovi', '[cost].delete.ts')]: () => {
+    const shiftId = f.openShift({ members: ['Amar', 'Emir'] })
+    closeByBar(f.db, f.venueId, f.actor('Emir', { mode: 'sanker' }), shiftId, {
+      client_id: randomUUID(), roba_fen: 0, okusi_fen: 0, zar_fen: 0, kafa_fen: 0, merkator_fen: 0, extras: [],
+    })
+    const closing = addShiftExtraCost(f.db, f.venueId, f.adminActor(), shiftId, {
+      client_id: randomUUID(), kind: 'struja', amount_fen: 1_000,
+    })
+    deleteShiftExtraCost(f.db, f.venueId, f.adminActor(), shiftId, closing.naknadni[0]!.id)
   },
 
   // *Zaključi smjenu*: the šanker closes the whole night. A shift is a thing

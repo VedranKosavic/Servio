@@ -18,6 +18,7 @@
  */
 import { shiftCrew, shiftSlotName } from '~/components/smjena/smjeneDays'
 import type { OwnerShift, ShiftTemplateView } from '#shared/types'
+import { formatKm } from '#shared/money'
 
 definePageMeta({ middleware: 'admin', layout: 'admin' })
 
@@ -31,6 +32,17 @@ useAdminChanges({
 })
 
 const shiftId = computed(() => String(route.params.id))
+
+/** *Naknadni troškovi* sheet. */
+const naknadniOpen = ref(false)
+
+/** Under *Predano*: what the šanker handed over, when costs came off it since. */
+const predanoSub = computed(() => {
+  const closing = data.value?.closing
+  if (!closing) return 'smjena nije zaključena'
+  if (closing.naknadni_fen > 0) return `šanker predao ${formatKm(closing.za_predati_at_close_fen)}`
+  return 'za predati'
+})
 
 const data = ref<OwnerShift | null>(null)
 /** Prva / Druga smjena windows, read once: a template does not move mid-page. */
@@ -115,8 +127,21 @@ const names = computed<Record<string, string>>(() => {
           :value="data.closing ? signedAmount(data.closing.za_predati_fen) : '—'"
           :unit="data.closing ? 'KM' : undefined"
           :tone="data.closing && data.closing.za_predati_fen < 0 ? 'bad' : 'plain'"
-          :sub="data.closing ? 'za predati' : 'smjena nije zaključena'"
+          :sub="predanoSub"
         />
+        <!-- *Naknadni troškovi*: paid out of this shift afterwards. Only a closed
+             shift has a Za predati for them to come off. -->
+        <button
+          v-if="data.closing"
+          type="button"
+          class="a-naknadni"
+          @click="naknadniOpen = true"
+        >
+          <span class="a-naknadni-label">Naknadni troškovi</span>
+          <span class="a-naknadni-value num">
+            {{ data.closing.naknadni_fen > 0 ? formatKm(data.closing.naknadni_fen) : 'Dodaj' }}
+          </span>
+        </button>
       </div>
 
       <!-- *Kasa* is the šanker's close: Sav prihod, the deductions, Za predati. -->
@@ -125,6 +150,15 @@ const names = computed<Record<string, string>>(() => {
       <SmjenaCategoryBar :shift-id="data.shift.id" :categories="data.summary.by_category" />
 
       <SmjenaAfterClose :late="data.late_after_close" />
+
+      <SmjenaNaknadniSheet
+        v-if="data.closing"
+        :open="naknadniOpen"
+        :shift-id="data.shift.id"
+        :closing="data.closing"
+        @close="naknadniOpen = false"
+        @saved="closing => { if (data) data.closing = closing }"
+      />
     </template>
 
     <!-- A skeleton, not a spinner over stale numbers. -->
@@ -145,6 +179,32 @@ const names = computed<Record<string, string>>(() => {
 }
 
 .a-error { margin: 0; color: var(--danger); }
+
+/* Drawn as a tile, so it sits beside *Predano* as its third. */
+.a-naknadni {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 92px;
+  padding: 14px 16px;
+  border: 1px dashed var(--accent-line);
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.a-naknadni:hover { border-style: solid; }
+.a-naknadni-label {
+  font-size: var(--text-caption);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.a-naknadni-value { font-size: 1.25rem; font-weight: 700; }
 
 .a-skeleton {
   display: grid;

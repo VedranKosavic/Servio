@@ -592,6 +592,25 @@ export function leaveShift(
 // ===========================================================================
 
 /** `GET /api/owner/shifts?from&to` — one row per night, business dates inclusive. */
+/** Σ *naknadni troškovi* per shift, for a list of shifts — one read, not one per row. */
+export function shiftExtraCostTotals(
+  q: Queryable, venueId: string, shiftIds: string[],
+): Map<string, number> {
+  if (shiftIds.length === 0) return new Map()
+  const rows = q.select({
+    shiftId: schema.shiftExtraCosts.shiftId,
+    fen: sql<number>`coalesce(sum(${schema.shiftExtraCosts.amountFen}), 0)`,
+  })
+    .from(schema.shiftExtraCosts)
+    .where(and(
+      eq(schema.shiftExtraCosts.venueId, venueId),
+      inArray(schema.shiftExtraCosts.shiftId, shiftIds),
+    ))
+    .groupBy(schema.shiftExtraCosts.shiftId)
+    .all()
+  return new Map(rows.map(r => [r.shiftId, r.fen]))
+}
+
 export function listOwnerShifts(
   q: Queryable, venueId: string, from: string, to: string,
 ): OwnerShiftRow[] {
@@ -619,6 +638,8 @@ export function listOwnerShifts(
           .map(r => [r.shiftId, r.fen] as const),
   )
 
+  const extraCosts = shiftExtraCostTotals(q, venueId, shifts.map(s => s.id))
+
   return shifts.map((shift) => {
     const summary = latestSummaryNumbers(q, venueId, shift.id)
     return {
@@ -629,7 +650,11 @@ export function listOwnerShifts(
       closed_at: shift.closedAt,
       promet_fen: summary.promet,
       diff_fen: summary.diff,
-      za_predati_fen: closings.get(shift.id) ?? null,
+      // Less what was paid out of it afterwards (*Naknadni troškovi*), so the
+      // list says what *Smjena* says.
+      za_predati_fen: closings.has(shift.id)
+        ? closings.get(shift.id)! - (extraCosts.get(shift.id) ?? 0)
+        : null,
     }
   })
 }

@@ -120,6 +120,13 @@
       "when": 1789557325947,
       "tag": "0016_coffee_dose",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1789644799795,
+      "tag": "0017_shift_extra_costs",
+      "breakpoints": true
     }
   ]
 }

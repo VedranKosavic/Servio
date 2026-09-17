@@ -31,7 +31,7 @@ import { newId, nowIso } from '../utils/ids'
 import { notFound } from '../utils/errors'
 import {
   addMonths, costKeyOfStockKind, daysInMonth, type ManualCostKind, MONTH_COST_LABELS,
-  monthLabelBs, monthOf, totalCostFen, totalUnpaidFen, UNPAID_KEYS, type UnpaidKey,
+  monthKeyOfShiftCost, monthLabelBs, monthOf, totalCostFen, totalUnpaidFen, UNPAID_KEYS, type UnpaidKey,
 } from '#shared/analytics'
 import { slotOf } from '#shared/shiftSlots'
 import type {
@@ -154,6 +154,23 @@ export function monthAnalytics(
     voda: manual.voda.amount_fen,
     kirija: manual.kirija.amount_fen,
     dodatni: extraCosts.reduce((sum, row) => sum + row.amount_fen, 0),
+    naknadni: 0,
+  }
+
+  // *Naknadni troškovi* of the month's closed shifts, each into its own line
+  // (`monthKeyOfShiftCost`), goods left to *Prijem robe*.
+  if (inMonth.length > 0) {
+    const shiftCosts = q.select({ kind: schema.shiftExtraCosts.kind, fen: schema.shiftExtraCosts.amountFen })
+      .from(schema.shiftExtraCosts)
+      .where(and(
+        eq(schema.shiftExtraCosts.venueId, venueId),
+        inArray(schema.shiftExtraCosts.shiftId, inMonth.map(s => s.id)),
+      ))
+      .all()
+    for (const cost of shiftCosts) {
+      const key = monthKeyOfShiftCost(cost.kind)
+      if (key) costs[key] += cost.fen
+    }
   }
   const totalCost = totalCostFen(costs)
 

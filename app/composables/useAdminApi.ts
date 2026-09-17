@@ -60,6 +60,7 @@ import type {
   CategoryAdmin,
   Settings,
   SettingsPatch,
+  ShiftClosing,
   ShiftSummary,
   StockItemAdmin,
   StockResponse,
@@ -74,6 +75,7 @@ import type {
 // that sends it — one definition, two uses.
 import type {
   AddMonthExtraCostBody,
+  AddShiftExtraCostBody,
   AdminLoginBody,
   PutMonthCostBody,
   CreateCategoryBody,
@@ -210,6 +212,13 @@ export function useAdminApi() {
 
     /** The whole *Smjena* page: summary, per-waiter strip, kasa, popisi. */
     getShift: (id: string) => request<OwnerShift>(`/api/owner/shift/${id}`),
+
+    /** *Naknadni troškovi* — a cost paid out of a closed shift afterwards; answers its closing. */
+    addShiftExtraCost: (shiftId: string, body: AddShiftExtraCostBody) =>
+      request<ShiftClosing>(`/api/owner/shift/${shiftId}/naknadni-troskovi`, { method: 'POST', body }),
+
+    deleteShiftExtraCost: (shiftId: string, costId: string) =>
+      request<ShiftClosing>(`/api/owner/shift/${shiftId}/naknadni-troskovi/${costId}`, { method: 'DELETE' }),
 
     /** The written summary as it was sealed at closing — the reconciliation. */
     getShiftSummary: (id: string) => request<ShiftSummary>(`/api/owner/shift/${id}/summary`),

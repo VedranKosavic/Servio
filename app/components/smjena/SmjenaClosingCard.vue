@@ -12,6 +12,7 @@
  */
 import { formatKm } from '#shared/money'
 import { closingLines } from '#shared/closing'
+import { shiftCostText } from '#shared/shiftCosts'
 import type { ShiftClosing } from '#shared/types'
 
 defineProps<{ closing: ShiftClosing | null }>()
@@ -36,6 +37,11 @@ defineProps<{ closing: ShiftClosing | null }>()
         >
           <dt>− {{ line.label }}</dt>
           <dd class="num">{{ formatKm(line.fen) }}</dd>
+        </div>
+        <!-- *Naknadni troškovi*: paid out of this shift after it closed. -->
+        <div v-for="cost in closing.naknadni" :key="cost.id" class="c-row c-late">
+          <dt>− Naknadno · {{ shiftCostText(cost) }}</dt>
+          <dd class="num">{{ formatKm(cost.amount_fen) }}</dd>
         </div>
         <div class="c-row c-total">
           <dt>Za predati</dt>
@@ -62,6 +68,8 @@ defineProps<{ closing: ShiftClosing | null }>()
 .c-row { display: flex; justify-content: space-between; gap: 12px; }
 .c-row dt { color: var(--ink-2); }
 .c-row dd { margin: 0; }
+
+.c-late dt { color: var(--accent-ink); }
 
 .c-total {
   margin-top: 4px;
