@@ -8,17 +8,9 @@
  * button is invalid HTML, so the tile is a button and the minus is a sibling
  * placed over its corner.
  *
- * **The long press** (Phase 3) opens the note chips — *bez šećera*, *s
- * mlijekom* — or, on the *Ostalo* tile, the free text that becomes the line's
- * note. It is implemented on pointer events rather than `touchstart`, so it
- * works with a mouse in a browser and with a finger on a phone from one code
- * path, and it is cancelled the moment the finger moves 10 px, because a press
- * that turns into a scroll is a scroll.
- *
- * PLAN §10 invariant 7 requires a button twin for every gesture, and this one
- * has it off-tile: the same sheet opens from the ⋯ on each line of *Pregled ·
- * Zaključi*. That is deliberate — a third control on a 100 px tile would cost
- * more taps than the gesture saves.
+ * **There is no long press** (the owner, 17.09.2026: the note on a long press
+ * is not needed). A tap is +1 and nothing else; *Na račun kuće* and a line's
+ * note are still on the ⋯ of each draft line on the table's screen.
  */
 import { formatKm } from '#shared/money'
 
@@ -43,49 +35,10 @@ const props = withDefaults(defineProps<{
   imageUrl?: string | null
 }>(), { shortName: null, shisha: false, unavailable: false, offLabel: undefined, imageUrl: null })
 
-const emit = defineEmits<{ add: [], remove: [], long: [] }>()
-
-/** Long enough not to fire on a firm tap, short enough not to feel broken. */
-const LONG_PRESS_MS = 450
-const MOVE_TOLERANCE_PX = 10
-
-let timer: ReturnType<typeof setTimeout> | null = null
-let start: { x: number, y: number } | null = null
-/** Set when the press fired, so the click it is followed by does not add one. */
-const fired = ref(false)
-
-function clear() {
-  if (timer) clearTimeout(timer)
-  timer = null
-  start = null
-}
-
-function onPointerDown(event: PointerEvent) {
-  fired.value = false
-  if (props.unavailable) return
-  start = { x: event.clientX, y: event.clientY }
-  timer = setTimeout(() => {
-    fired.value = true
-    // A press that opens a sheet should feel like something happened. Only
-    // where the browser has it — iOS Safari does not, and the sheet itself is
-    // the feedback there.
-    if (import.meta.client && 'vibrate' in navigator) navigator.vibrate(12)
-    emit('long')
-  }, LONG_PRESS_MS)
-}
-
-function onPointerMove(event: PointerEvent) {
-  if (!start) return
-  const moved = Math.abs(event.clientX - start.x) + Math.abs(event.clientY - start.y)
-  if (moved > MOVE_TOLERANCE_PX) clear()
-}
+const emit = defineEmits<{ add: [], remove: [] }>()
 
 function onClick() {
   if (props.unavailable) return
-  if (fired.value) {
-    fired.value = false
-    return
-  }
   emit('add')
 }
 
@@ -100,11 +53,6 @@ const label = computed(() => props.shortName ?? props.name)
       :class="{ 'has-qty': qty > 0, 'tile-off': unavailable }"
       :aria-disabled="unavailable ? 'true' : undefined"
       :aria-label="unavailable ? `${name} — ${offLabel ? `dostupno samo ${offLabel}` : 'nema na stanju'}` : undefined"
-      @pointerdown="onPointerDown"
-      @pointermove="onPointerMove"
-      @pointerup="clear"
-      @pointercancel="clear"
-      @pointerleave="clear"
       @contextmenu.prevent
       @click="onClick"
     >

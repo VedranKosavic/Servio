@@ -225,7 +225,7 @@ function saveNote(note: string | null) {
   if (!open) return
 
   if (open.lineId === null) {
-    // A long press on a tile: this is a new line, with its note already on it.
+    // The *Ostalo* tile: a new line, with its note already on it.
     cart.add(tableId.value, open.product.id, undefined, note ?? undefined)
     remember(open.product.id)
     return
@@ -509,7 +509,6 @@ async function confirm() {
             :off-label="isPastAvailableUntil(product.available_until, clockNow) ? `do ${product.available_until}` : undefined"
             @add="onTile(product)"
             @remove="cart.removeOne(tableId, product.id)"
-            @long="noteFor = { product, lineId: null }"
           />
         </div>
         <p v-else class="py-10 text-center text-text-2">
@@ -520,9 +519,6 @@ async function confirm() {
           Ništa ne odgovara traženom.
         </p>
 
-        <p class="text-center text-caption tracking-normal text-muted">
-          Dodir = +1 · dugi dodir = napomena
-        </p>
       </div>
 
       <!--
@@ -571,7 +567,7 @@ async function confirm() {
       @confirm="addShisha"
     />
 
-    <!-- The long press: note chips, free text -->
+    <!-- Note chips and free text: a line's ⋯ in the review, and the *Ostalo* tile -->
     <OrderNoteSheet
       v-if="noteFor"
       :title="noteFor.product.name"
