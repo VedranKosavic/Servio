@@ -77,6 +77,16 @@ const title = computed(() => data.value
   ? shiftSlotName(data.value.shift.opened_at, templates.value ?? [])
   : 'Smjena')
 
+/** Beside *Naknadni troškovi*: whose takings pay it — "Plati iz prve smjene". */
+const payFrom = computed(() => {
+  const genitive: Record<string, string> = {
+    'Prva smjena': 'prve smjene',
+    'Druga smjena': 'druge smjene',
+    'Vanredna smjena': 'vanredne smjene',
+  }
+  return `Plati iz ${genitive[title.value] ?? 'ove smjene'}`
+})
+
 /** Konobari who locked rounds, and the šanker who closed it. */
 const crew = computed(() => data.value
   ? shiftCrew(data.value.by_user, data.value.closing)
@@ -137,7 +147,10 @@ const names = computed<Record<string, string>>(() => {
           class="a-naknadni"
           @click="naknadniOpen = true"
         >
-          <span class="a-naknadni-label">Naknadni troškovi</span>
+          <span class="a-naknadni-head">
+            <span class="a-naknadni-label">Naknadni troškovi</span>
+            <span class="a-naknadni-from">{{ payFrom }}</span>
+          </span>
           <span class="a-naknadni-value num">
             {{ data.closing.naknadni_fen > 0 ? formatKm(data.closing.naknadni_fen) : 'Dodaj' }}
           </span>
@@ -204,6 +217,8 @@ const names = computed<Record<string, string>>(() => {
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+.a-naknadni-head { display: flex; flex-direction: column; gap: 2px; }
+.a-naknadni-from { font-size: var(--text-label); color: var(--ink-2); }
 .a-naknadni-value { font-size: 1.25rem; font-weight: 700; }
 
 .a-skeleton {
