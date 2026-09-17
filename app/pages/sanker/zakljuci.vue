@@ -47,16 +47,10 @@ const loadError = ref<string | null>(null)
 const clientId = ref(crypto.randomUUID())
 
 const LABELS: Record<TypedKey, string> = {
-  roba_fen: 'Plaćanje robe',
-  okusi_fen: 'Plaćanje okusa za nargilu',
-  zar_fen: 'Plaćanje žara',
-  kafa_fen: 'Plaćanje kafe',
   merkator_fen: 'Merkator',
 }
 
-const raw = reactive<Record<TypedKey, string>>({
-  roba_fen: '', okusi_fen: '', zar_fen: '', kafa_fen: '', merkator_fen: '',
-})
+const raw = reactive<Record<TypedKey, string>>({ merkator_fen: '' })
 
 /**
  * *Dodatna plaćanja* — the payouts with no fixed field.
@@ -145,6 +139,7 @@ const result = computed(() => {
     prihod_fen: p.prihod_fen, dnevnica_fen: p.dnevnica_fen, otpis_fen: p.otpis_fen,
     rashod_fen: p.rashod_fen, policija_fen: p.policija_fen, osoblje_fen: p.osoblje_fen,
     extra_fen: extraFen.value,
+    roba_fen: 0, okusi_fen: 0, zar_fen: 0, kafa_fen: 0,
     ...amounts.value,
   })
 })

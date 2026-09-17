@@ -165,8 +165,6 @@ describe('neplaćeno and the till payouts', () => {
     closeByBar(f.db, f.venueId, sanker(), shiftId, {
       client_id: randomUUID(),
       ...NOTHING_PAID,
-      roba_fen: 1_000, // goods paid from the till: NOT a cost here — Prijem robe is
-      kafa_fen: 400,
       merkator_fen: 250,
       extras: [{ label: 'config', amount_fen: 1_500 }],
     })
@@ -176,13 +174,12 @@ describe('neplaćeno and the till payouts', () => {
     expect(a.unpaid_fen).toBe(650)
     expect(a.unpaid_fen).toBe(totalUnpaidFen(a.unpaid))
 
-    expect(a.costs.kafa).toBe(400)
+    expect(a.costs.kafa).toBe(0)
     expect(a.costs.merkator).toBe(250)
     expect(a.costs.dodatna).toBe(1_500)
-    // The crates paid out of the till are counted once, from the delivery.
     expect(a.costs.roba).toBe(0)
 
-    expect(a.total_cost_fen).toBe(9_000 + 400 + 250 + 1_500)
+    expect(a.total_cost_fen).toBe(9_000 + 250 + 1_500)
     expect(a.neto_fen).toBe(2_150 - 650 - a.total_cost_fen)
   })
 })

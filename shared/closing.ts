@@ -36,15 +36,15 @@ export interface ClosingAmounts {
 }
 
 /**
- * The four amounts the šanker types, in the order the screen asks for them.
+ * The amounts the šanker types. Since 17.09.2026 that is *Merkator* alone:
+ * *Plaćanje robe / okusa / žara / kafe* left on the owner's call — staff pay for
+ * none of them now. The columns stay, so an older closing still reads right.
  *
  * *Rashod* left this list on 16.09.2026: it is marked on the table it was drunk
  * at, so the server counts it like *Otpis* and typing it again would subtract
  * it twice.
  */
-export const TYPED_KEYS = [
-  'roba_fen', 'okusi_fen', 'zar_fen', 'kafa_fen', 'merkator_fen',
-] as const
+export const TYPED_KEYS = ['merkator_fen'] as const
 export type TypedKey = (typeof TYPED_KEYS)[number]
 
 /** Every subtracted line, in order, with its Bosnian label. */
@@ -60,6 +60,9 @@ export const CLOSING_LINES: { key: Exclude<keyof ClosingAmounts, 'prihod_fen'>, 
   { key: 'kafa_fen', label: 'Plaćanje kafe' },
   { key: 'merkator_fen', label: 'Merkator' },
 ]
+
+/** The payouts nobody types any more (17.09.2026). */
+const RETIRED_KEYS: readonly string[] = ['roba_fen', 'okusi_fen', 'zar_fen', 'kafa_fen']
 
 /** One *Dodatno plaćanje*: what it was called, and what it cost. */
 export interface ClosingExtra {
@@ -79,7 +82,10 @@ export function closingLines(
   amounts: ClosingAmounts, extras: ClosingExtra[] = [],
 ): { label: string, fen: number }[] {
   return [
-    ...CLOSING_LINES.map(line => ({ label: line.label, fen: amounts[line.key] })),
+    ...CLOSING_LINES
+      // The retired payouts show only on an old closing that had them.
+      .filter(line => !RETIRED_KEYS.includes(line.key) || amounts[line.key] !== 0)
+      .map(line => ({ label: line.label, fen: amounts[line.key] })),
     ...extras.map(extra => ({ label: extra.label, fen: extra.fen })),
   ]
 }

@@ -93,10 +93,15 @@ export const closingExtraBody = z.object({
 
 export const closeByBarBody = z.object({
   client_id: uuid,
-  roba_fen: moneyFen.default(0),
-  okusi_fen: moneyFen.default(0),
-  zar_fen: moneyFen.default(0),
-  kafa_fen: moneyFen.default(0),
+  /**
+   * Gone from the screen on the owner's call (17.09.2026): staff pay for no
+   * goods, flavours, žar or coffee any more. Still accepted as 0 so a phone on
+   * the previous build can close; anything else is refused.
+   */
+  roba_fen: z.literal(0).default(0),
+  okusi_fen: z.literal(0).default(0),
+  zar_fen: z.literal(0).default(0),
+  kafa_fen: z.literal(0).default(0),
   merkator_fen: moneyFen.default(0),
   /** Their **sum** is never sent: the server adds them up itself. */
   extras: z.array(closingExtraBody).max(20).default([]),

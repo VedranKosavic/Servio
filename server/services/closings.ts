@@ -5,8 +5,8 @@
  * the drawer, and the only end of a shift a worker has is this one, on the bar.
  *
  *     Sav prihod − Dnevnica − Otpis − Rashod − Policija − Osoblje
- *       − Plaćanje robe − Plaćanje okusa za nargilu − Plaćanje žara
- *       − Plaćanje kafe − Merkator − Dodatna plaćanja = Za predati
+ *       − Merkator − Dodatna plaćanja = Za predati
+ *   (Plaćanje robe / okusa / žara / kafe retired 17.09.2026; stored as 0.)
  *
  * **The server owns the first six.** *Sav prihod* is the shift's promet, read
  * out of `summarizeShift` — the same call that writes `shift_summaries`, so the
@@ -422,10 +422,11 @@ export function closeByBar(
     const extras = cleanExtras(body.extras)
     const amounts = {
       ...numbers,
-      roba_fen: body.roba_fen,
-      okusi_fen: body.okusi_fen,
-      zar_fen: body.zar_fen,
-      kafa_fen: body.kafa_fen,
+      // Retired payouts (17.09.2026): staff pay for none of these now.
+      roba_fen: 0,
+      okusi_fen: 0,
+      zar_fen: 0,
+      kafa_fen: 0,
       merkator_fen: body.merkator_fen,
       extra_fen: extras.reduce((sum, extra) => sum + extra.fen, 0),
     }
