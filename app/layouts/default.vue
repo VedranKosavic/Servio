@@ -12,7 +12,12 @@
  * than in a header because it has to be true on every dark screen for the whole
  * borrowed session (PHASE3 §3, WP4), and `/konobar` and `/sanker` do not share
  * a header.
+ *
+ * It is also where the screen is kept on, for as long as any staff screen is
+ * open (the owner, 17.09.2026) — see `useWakeLock`.
  */
+const wakeLock = useWakeLock()
+onMounted(() => wakeLock.hold(true))
 </script>
 
 <template>

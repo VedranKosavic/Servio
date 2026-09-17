@@ -25,7 +25,7 @@ export interface WaiterMenuItem {
    */
   toBartender?: string
   /** A row that does something instead of navigating. */
-  action?: 'logout' | 'wakelock'
+  action?: 'logout'
   /** Which roles see this row at all. */
   roles: ('radnik' | 'admin')[]
   /**
@@ -49,9 +49,8 @@ export const WAITER_MENU: WaiterMenuItem[] = [
   { id: 'close-shift', label: 'Zaključi smjenu', to: '/sanker/zakljuci', roles: ['radnik'], modes: ['sanker'], ready: true },
   // WP4
   { id: 'rules', label: 'Pravila', to: '/konobar/pravila', roles: ['radnik'], ready: true },
-  // WP0 — this package.
-  { id: 'install', label: 'Instalacija', to: '/konobar/instalacija', roles: ['radnik'], ready: true },
-  { id: 'wakelock', label: 'Drži ekran upaljen', action: 'wakelock', roles: ['radnik'], ready: true },
+  // *Instalacija* and *Drži ekran upaljen* were removed on the owner's call
+  // (17.09.2026): the screen is always kept on (`layouts/default.vue`).
   // Phase 4. *Razgovor* was removed on the owner's call (15.09.2026).
   { id: 'roster', label: 'Raspored', to: '/konobar/raspored', toBartender: '/sanker/raspored', roles: ['radnik'], ready: true },
   // *Brzi popis*, *Otpis* and *Prebaci ekran* were removed on the owner's call

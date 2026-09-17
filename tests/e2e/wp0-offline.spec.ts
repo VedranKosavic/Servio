@@ -420,12 +420,9 @@ test.describe('WP0 — the offline outbox', () => {
     // `loginAsAmar` in `beforeAll` already asserted the worker takes control.
     const page = await freshPage()
 
-    // The install guide is reachable and says the sentence that matters.
-    await page.goto('/konobar/instalacija', { waitUntil: 'networkidle' })
-    await expect(page.getByText(/Dodaj na početni ekran/)).toBeVisible()
-    await expect(page.getByText(/Safari i aplikacija s početnog ekrana ne dijele prijavu/)).toBeVisible()
-
-    // No horizontal scroll at 390 px, on the longest screen in the package.
+    // No horizontal scroll at 390 px. (*Instalacija*, the page this used to
+    // open, was removed on the owner's call, 17.09.2026.)
+    await page.goto('/konobar/pravila', { waitUntil: 'networkidle' })
     const overflow = await page.evaluate(() =>
       document.documentElement.scrollWidth - document.documentElement.clientWidth)
     expect(overflow).toBeLessThanOrEqual(0)

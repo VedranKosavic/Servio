@@ -18,7 +18,6 @@ useSheetDismiss(() => emit('close'))
 
 const me = useMe()
 const { blocked, blockedText } = useSync()
-const wakeLock = useWakeLock()
 
 const role = computed(() => me.user.value?.role ?? 'radnik')
 const items = computed(() => WAITER_MENU.filter(item =>
@@ -34,10 +33,6 @@ async function onLogout() {
 }
 
 function onItem(item: (typeof WAITER_MENU)[number]) {
-  if (item.action === 'wakelock') {
-    wakeLock.toggle()
-    return
-  }
   if (item.action === 'logout') {
     void onLogout()
     return
@@ -56,16 +51,11 @@ function labelFor(item: (typeof WAITER_MENU)[number]): string {
 }
 
 function disabledFor(item: (typeof WAITER_MENU)[number]): boolean {
-  if (item.action === 'wakelock') return !wakeLock.supported.value
   if (item.action === 'logout') return blocked.value
   return !item.ready
 }
 
 function noteFor(item: (typeof WAITER_MENU)[number]): string | null {
-  if (item.action === 'wakelock') {
-    if (!wakeLock.supported.value) return 'ovaj telefon ne podržava'
-    return wakeLock.enabled.value ? 'uključeno' : 'isključeno'
-  }
   if (item.action === 'logout') return blocked.value ? blockedText.value : null
   return item.ready ? null : (item.soon ?? null)
 }
@@ -117,16 +107,6 @@ function noteFor(item: (typeof WAITER_MENU)[number]): string | null {
         <span class="grow">{{ labelFor(item) }}</span>
         <span v-if="noteFor(item)" class="shrink-0 text-label text-text-2">
           {{ noteFor(item) }}
-        </span>
-        <span
-          v-if="item.action === 'wakelock' && wakeLock.supported.value"
-          class="h-6 w-11 shrink-0 rounded-full border border-line p-0.5"
-          :class="wakeLock.enabled.value ? 'bg-accent' : 'bg-surface-2'"
-        >
-          <span
-            class="block h-5 w-5 rounded-full bg-text transition-transform"
-            :class="wakeLock.enabled.value ? 'translate-x-5' : ''"
-          />
         </span>
       </button>
     </div>

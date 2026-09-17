@@ -36,7 +36,6 @@ const me = useMe()
 const cart = useCartStore()
 const { outbox, enqueue } = useOutbox()
 const { lockToast } = useSync()
-const wakeLock = useWakeLock()
 
 /**
  * `bez-stola` in the URL is the guests standing at the bar — a tab on no table
@@ -173,10 +172,6 @@ const draftTotal = computed(() => lines.value.reduce(
   0,
 ))
 
-// Keep the screen awake only while there is a round on it, and only on this
-// screen and the aroma sheet (PLAN §10). An empty picker dims like any page.
-watch(count, n => wakeLock.hold(n > 0), { immediate: true })
-onBeforeUnmount(() => wakeLock.hold(false))
 
 const shishaProduct = ref<Product | null>(null)
 /** The product whose long press is open, and the line being re-noted, if any. */
@@ -393,7 +388,6 @@ async function confirm() {
     cart.clear(tableId.value)
     confirmOpen.value = false
     say(lockToast(tableName.value))
-    wakeLock.hold(false)
     // Back to the plan, and nothing opens on it: the table's sheet is for when
     // the waiter taps the table (the owner, 17.09.2026).
     leaveTimer = setTimeout(() => navigateTo(backTo.value), 700)
