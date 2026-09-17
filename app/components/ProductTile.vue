@@ -117,7 +117,8 @@ const label = computed(() => props.shortName ?? props.name)
           </svg>
         </span>
       </span>
-      <span class="num tile-price">{{ formatKm(priceFen) }}</span>
+      <!-- An unavailable tile says why ("nema", "do 09:00") where the price was. -->
+      <span v-if="!unavailable" class="num tile-price">{{ formatKm(priceFen) }}</span>
       <span v-if="unavailable" class="tile-none">{{ offLabel ?? 'nema' }}</span>
     </button>
 
@@ -176,11 +177,14 @@ const label = computed(() => props.shortName ?? props.name)
 .tile-btn {
   display: flex;
   width: 100%;
-  min-height: 100px;
+  /* Every tile the same square, whatever its name (the owner, 17.09.2026):
+     with a picture behind it, a tile two lines taller read as a bigger picture. */
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
-  padding: 12px;
+  gap: 6px;
+  padding: 10px;
   text-align: left;
   user-select: none;
   border-radius: var(--radius-card);
@@ -196,11 +200,8 @@ const label = computed(() => props.shortName ?? props.name)
 
 /* The picture fills the tile behind the name and price, faded so the two facts
    the waiter reads stay legible (the owner, 17.09.2026). The tile keeps its size. */
-.tile-btn:has(.tile-img) {
-  position: relative;
-  overflow: hidden;
-  isolation: isolate;
-}
+.tile-btn { position: relative; }
+.tile-btn:has(.tile-img) { isolation: isolate; }
 .tile-img {
   position: absolute;
   inset: 0;
@@ -213,10 +214,19 @@ const label = computed(() => props.shortName ?? props.name)
 }
 
 .tile-name {
-  font-size: var(--text-body);
+  /* 15 px, not the body's 16: "Cappuccino" fits a 108 px square on one line. */
+  font-size: 15px;
   line-height: 1.2;
   font-weight: 600;
   color: var(--ink);
+  /* Three lines at most, so a long name cannot push the price out of the square. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  /* A word is split with a hyphen (Bosnian rules), never cut mid-letter. */
+  hyphens: auto;
+  overflow-wrap: normal;
 }
 
 .tile-price {
