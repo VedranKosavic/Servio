@@ -78,6 +78,8 @@ export interface Product {
   /** May a waiter take this as one of his staff drinks (F7)? */
   staff_drink_allowed: boolean
   is_favourite: boolean
+  /** `HH:MM`: from this hour the article cannot be ordered; `null` is all day. */
+  available_until: string | null
   sort: number
 }
 
@@ -161,6 +163,7 @@ export interface ProductAdmin {
   coal_pcs: number | null
   staff_drink_allowed: boolean
   is_favourite: boolean
+  available_until: string | null
   sort: number
   active: boolean
   created_at: string

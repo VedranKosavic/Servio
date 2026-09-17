@@ -175,7 +175,7 @@ describe('GET /api/bootstrap', () => {
     }
     for (const product of boot.products) {
       expect(Object.keys(product).sort()).toEqual([
-        'category_id', 'coal_pcs', 'id', 'is_favourite', 'kind', 'name', 'price_fen',
+        'available_until', 'category_id', 'coal_pcs', 'id', 'is_favourite', 'kind', 'name', 'price_fen',
         'search_aliases', 'shisha_grams', 'short_name', 'sort', 'staff_drink_allowed',
         'system_key',
       ])

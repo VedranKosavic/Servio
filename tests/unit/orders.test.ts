@@ -690,3 +690,20 @@ describe('createOrder — bez stola', () => {
     expect(f.db.select().from(schema.orders).all()).toHaveLength(1)
   })
 })
+
+describe('createOrder — Dostupno do (Happy Hour)', () => {
+  /**
+   * The owner's call of 17.09.2026: "Happy Hour kafa do 9:00" cannot be put on
+   * a table after 9:00. The lock refuses it by the moment it was tapped.
+   */
+  it('refuses an article past its hour, and writes nothing', () => {
+    // 06:00 is always past: from 06:00 the hour has come, before it the day has not begun.
+    f.db.update(schema.products).set({ availableUntil: '06:00' })
+      .where(eq(schema.products.id, f.productId('Kafa'))).run()
+    const before = countRows()
+    refuses(() => createOrder(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(), table_id: f.tableId('Sto 7'), lines: [line('Kafa')],
+    }), 'PRODUCT_TIME_OVER', 409)
+    expect(countRows()).toEqual(before)
+  })
+})

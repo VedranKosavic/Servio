@@ -61,6 +61,8 @@ export const createProductBody = z.object({
   coal_pcs: z.int().min(0).max(50).nullish(),
   staff_drink_allowed: z.boolean().optional(),
   is_favourite: z.boolean().optional(),
+  /** `HH:MM`: not orderable from this hour (Happy Hour). `null` is all day. */
+  available_until: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullish(),
   sort: z.int().min(0).max(9999).optional(),
   active: z.boolean().optional(),
 }).strict()

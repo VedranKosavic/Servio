@@ -20,6 +20,7 @@
  * waiter can read them out, and the body carries product ids and quantities.
  */
 import { formatKm } from '#shared/money'
+import { isPastAvailableUntil } from '#shared/dates'
 import type { Product } from '#shared/types'
 import { matchesQuery, stavke } from '~/components/order/OrderText'
 import type { CompReason } from '~/composables/useAdjustments'
@@ -84,6 +85,21 @@ const backTo = computed(() => `/konobar?sto=${tableId.value ?? 'bez-stola'}`)
  * guess.
  */
 const unavailableProducts = ref<Set<string> | null>(null)
+
+/**
+ * *Happy Hour* (the owner, 17.09.2026): an article with `available_until` is
+ * struck through from that hour. The clock ticks here, not on the server's
+ * poll, so the tile goes off at 09:00 and not up to 15 s later; the lock
+ * refuses it too (409 `PRODUCT_TIME_OVER`).
+ */
+const clockNow = ref(new Date().toISOString())
+const clockTimer = import.meta.client ? setInterval(() => { clockNow.value = new Date().toISOString() }, 20_000) : null
+onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
+
+function isOff(product: Product): boolean {
+  return (unavailableProducts.value?.has(product.id) ?? false)
+    || isPastAvailableUntil(product.available_until, clockNow.value)
+}
 const unavailableAromas = ref<Set<string> | null>(null)
 
 useChanges({
@@ -178,7 +194,7 @@ function chipsFor(product: Product): string[] {
 function onTile(product: Product) {
   // Struck through: the shelf has none. A tile that still took a tap would put
   // a round on the bill the bar cannot pour.
-  if (unavailableProducts.value?.has(product.id)) return
+  if (isOff(product)) return
   // A nargila cannot be added blind: the aromas decide what leaves the shelf.
   if (product.kind === 'shisha') {
     shishaProduct.value = product
@@ -488,7 +504,8 @@ async function confirm() {
             :price-fen="product.price_fen"
             :qty="cart.qtyOfProduct(tableId, product.id)"
             :shisha="product.kind === 'shisha'"
-            :unavailable="unavailableProducts?.has(product.id) ?? false"
+            :unavailable="isOff(product)"
+            :off-label="isPastAvailableUntil(product.available_until, clockNow) ? `do ${product.available_until}` : undefined"
             @add="onTile(product)"
             @remove="cart.removeOne(tableId, product.id)"
             @long="noteFor = { product, lineId: null }"

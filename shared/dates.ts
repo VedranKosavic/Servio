@@ -300,3 +300,20 @@ export function plannedHours(startTime: string, endTime: string): number {
   const span = end <= start ? end + 24 * 60 - start : end - start
   return Math.round((span / 60) * 100) / 100
 }
+
+/**
+ * Is an article with `available_until` ("09:00") past its hour at `utcIso`?
+ *
+ * The window is the business day's start (06:00) up to that hour: a Happy Hour
+ * coffee "do 9:00" is orderable 06:00–08:59 and not at 23:00 nor at 02:00 of
+ * the same night. `null` is all day.
+ */
+export function isPastAvailableUntil(
+  availableUntil: string | null | undefined, utcIso: string, tz: string = DEFAULT_TZ,
+): boolean {
+  if (!availableUntil) return false
+  const [h, m] = availableUntil.split(':').map(Number)
+  const w = wallAt(Date.parse(utcIso), tz)
+  const minute = w.hour * 60 + w.minute
+  return minute >= h! * 60 + m! || minute < DEFAULT_DAY_START_HOUR * 60
+}

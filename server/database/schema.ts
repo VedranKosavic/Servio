@@ -193,6 +193,11 @@ export const products = sqliteTable('products', {
   staffDrinkAllowed: integer('staff_drink_allowed').notNull().default(0),
   isFavourite: integer('is_favourite').notNull().default(0),
   /**
+   * `HH:MM` Sarajevo time after which the article cannot be ordered any more
+   * ("Happy Hour kafa do 9:00", the owner 17.09.2026); `null` is all day.
+   */
+  availableUntil: text('available_until'),
+  /**
    * What a *phone* is allowed to recognise a product by (PHASE3 §1.10).
    *
    * `'zar'` is *Dodatni žar* and `'ostalo'` is the fixed-price catch-all; both

@@ -18,6 +18,7 @@ export const MONEY_ERRORS = {
   TABLE_OCCUPIED: 'Na tom stolu je već otvoren račun.',
   USER_NOT_FOUND: 'Ta osoba ne postoji.',
   PRODUCT_NOT_FOUND: 'Taj artikal ne postoji.',
+  PRODUCT_TIME_OVER: 'Taj artikal se više ne može naručiti u ovo doba (npr. Happy Hour je završio). Ukloni ga iz narudžbe.',
   FLAVOUR_NOT_FOUND: 'Ta aroma ne postoji.',
   FLAVOURS_REQUIRED: 'Nargila treba 1–3 arome.',
   FLAVOURS_NOT_ALLOWED: 'Taj artikal nema arome.',

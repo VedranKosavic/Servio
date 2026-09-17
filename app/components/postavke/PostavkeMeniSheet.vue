@@ -101,6 +101,23 @@ const zalihaLine = computed(() =>
 
         <div class="p-set">
           <span class="p-set-text">
+            <span class="p-set-label">Dostupno do</span>
+            <span class="p-set-hint">
+              {{ product.available_until
+                ? `Poslije ${product.available_until} konobar ga ne može dodati na sto.`
+                : 'Cijeli dan. Upiši sat za npr. Happy Hour.' }}
+            </span>
+          </span>
+          <PostavkeDostupnoDo
+            :model-value="product.available_until"
+            :label="`Dostupno do, ${product.name}`"
+            :disabled="pending"
+            @update:model-value="value => emit('patch', { available_until: value })"
+          />
+        </div>
+
+        <div class="p-set">
+          <span class="p-set-text">
             <span class="p-set-label">Stanje šanka</span>
             <span class="p-set-hint">{{ zalihaLine }}</span>
           </span>

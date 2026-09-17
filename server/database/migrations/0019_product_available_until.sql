@@ -1,0 +1,1 @@
+ALTER TABLE `products` ADD `available_until` text;

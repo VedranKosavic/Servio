@@ -37,7 +37,9 @@ const props = withDefaults(defineProps<{
    * press still opens nothing either.
    */
   unavailable?: boolean
-}>(), { shortName: null, shisha: false, unavailable: false })
+  /** What the struck tile says instead of *nema* — "do 09:00" for a Happy Hour article. */
+  offLabel?: string
+}>(), { shortName: null, shisha: false, unavailable: false, offLabel: undefined })
 
 const emit = defineEmits<{ add: [], remove: [], long: [] }>()
 
@@ -95,7 +97,7 @@ const label = computed(() => props.shortName ?? props.name)
       class="tile-btn"
       :class="{ 'has-qty': qty > 0, 'tile-off': unavailable }"
       :aria-disabled="unavailable ? 'true' : undefined"
-      :aria-label="unavailable ? `${name} — nema na stanju` : undefined"
+      :aria-label="unavailable ? `${name} — ${offLabel ? `dostupno samo ${offLabel}` : 'nema na stanju'}` : undefined"
       @pointerdown="onPointerDown"
       @pointermove="onPointerMove"
       @pointerup="clear"
@@ -113,7 +115,7 @@ const label = computed(() => props.shortName ?? props.name)
         </span>
       </span>
       <span class="num tile-price">{{ formatKm(priceFen) }}</span>
-      <span v-if="unavailable" class="tile-none">nema</span>
+      <span v-if="unavailable" class="tile-none">{{ offLabel ?? 'nema' }}</span>
     </button>
 
     <span v-if="qty > 0" class="num tile-qty">{{ qty }}</span>

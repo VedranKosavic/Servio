@@ -147,6 +147,7 @@ export function getBootstrap(db: Queryable, venueId: string, actor: Actor): Boot
       coal_pcs: p.coalPcs,
       staff_drink_allowed: p.staffDrinkAllowed === 1,
       is_favourite: p.isFavourite === 1,
+      available_until: p.availableUntil,
       sort: p.sort,
     })),
     flavours,

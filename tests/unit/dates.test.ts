@@ -114,3 +114,16 @@ describe('clampEventAt — a client timestamp is a claim, not a fact', () => {
     expect(syncLagS('2026-09-09T21:00:00.000Z', now)).toBe(0)
   })
 })
+
+describe('isPastAvailableUntil', () => {
+  it('is open from the 06:00 day start up to the hour, and shut outside it', async () => {
+    const { isPastAvailableUntil } = await import('#shared/dates')
+    // Sarajevo is UTC+2 in September.
+    expect(isPastAvailableUntil('09:00', '2026-09-17T05:30:00Z')).toBe(false) // 07:30
+    expect(isPastAvailableUntil('09:00', '2026-09-17T06:59:00Z')).toBe(false) // 08:59
+    expect(isPastAvailableUntil('09:00', '2026-09-17T07:00:00Z')).toBe(true) //  09:00
+    expect(isPastAvailableUntil('09:00', '2026-09-17T21:00:00Z')).toBe(true) //  23:00
+    expect(isPastAvailableUntil('09:00', '2026-09-17T00:30:00Z')).toBe(true) //  02:30
+    expect(isPastAvailableUntil(null, '2026-09-17T21:00:00Z')).toBe(false)
+  })
+})

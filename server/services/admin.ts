@@ -128,6 +128,7 @@ const PRODUCT_LABELS: Record<string, string> = {
   coal_pcs: 'žara po luli',
   staff_drink_allowed: 'piće za osoblje',
   is_favourite: 'omiljeno',
+  available_until: 'dostupno do',
   sort: 'sortiranje',
   active: 'aktivan',
 }
@@ -145,6 +146,7 @@ const PRODUCT_COLUMNS: Record<string, string> = {
   coal_pcs: 'coalPcs',
   staff_drink_allowed: 'staffDrinkAllowed',
   is_favourite: 'isFavourite',
+  available_until: 'availableUntil',
   sort: 'sort',
   active: 'active',
 }
@@ -204,6 +206,7 @@ export function createProduct(
       coalPcs: body.coal_pcs ?? null,
       staffDrinkAllowed: flag(body.staff_drink_allowed, 0),
       isFavourite: flag(body.is_favourite, 0),
+      availableUntil: body.available_until ?? null,
       sort: body.sort ?? 0,
       active: flag(body.active, 1),
       createdAt: now,
@@ -275,6 +278,7 @@ export function updateProduct(
         ? { staffDrinkAllowed: flag(patch.staff_drink_allowed, 0) }
         : {}),
       ...(patch.is_favourite !== undefined ? { isFavourite: flag(patch.is_favourite, 0) } : {}),
+      ...(patch.available_until !== undefined ? { availableUntil: patch.available_until ?? null } : {}),
       ...(patch.sort !== undefined ? { sort: patch.sort } : {}),
       ...(patch.active !== undefined ? { active: flag(patch.active, 1) } : {}),
       updatedAt: now,
@@ -1388,6 +1392,7 @@ function toProduct(
     coal_pcs: row.coalPcs,
     staff_drink_allowed: isOn(row.staffDrinkAllowed),
     is_favourite: isOn(row.isFavourite),
+    available_until: row.availableUntil,
     sort: row.sort,
     active: isOn(row.active),
     created_at: row.createdAt,

@@ -44,6 +44,16 @@ const starDisabled = computed(() => props.favouriteFull && !props.product.is_fav
       <div class="p-name">
         <strong>{{ product.name }}</strong>
         <small v-if="product.short_name">{{ product.short_name }}</small>
+        <!-- Happy Hour: not orderable after this hour. Empty is all day. -->
+        <span class="p-until">
+          <small>dostupno do</small>
+          <PostavkeDostupnoDo
+            :model-value="product.available_until"
+            :label="`Dostupno do, ${product.name}`"
+            :disabled="pending"
+            @update:model-value="value => emit('patch', { available_until: value })"
+          />
+        </span>
       </div>
     </td>
 
@@ -160,4 +170,6 @@ const starDisabled = computed(() => props.favouriteFull && !props.product.is_fav
 .p-star.on { color: var(--accent); }
 .p-star:disabled { cursor: default; opacity: 0.4; }
 .p-star:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.p-until { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; }
+.p-until small { color: var(--muted); }
 </style>

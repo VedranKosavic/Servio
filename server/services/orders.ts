@@ -27,7 +27,7 @@ import { and, count, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { badRequest, conflict, forbidden, notFound } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
-import { clampEventAt, syncLagS } from '#shared/dates'
+import { clampEventAt, isPastAvailableUntil, syncLagS } from '#shared/dates'
 import type { Settings } from '#shared/settings'
 import {
   bump, ensureOpenShift, getSettings, hasLiveSettlement, insertMovement, log,
@@ -532,6 +532,11 @@ function insertLine(
     ))
     .get()
   if (!product) throw notFound('PRODUCT_NOT_FOUND', `product ${line.product_id} not found`)
+  // Happy Hour: judged at the moment the waiter tapped it (the clamped phone
+  // time), so a round queued offline at 08:58 still goes through at 09:03.
+  if (isPastAvailableUntil(product.availableUntil, clientAt)) {
+    throw conflict('PRODUCT_TIME_OVER', `product ${product.id} is available until ${product.availableUntil}`)
+  }
 
   const flavours = requireFlavours(tx, venueId, product, line.flavour_ids ?? [])
 
