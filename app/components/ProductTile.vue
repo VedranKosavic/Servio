@@ -39,7 +39,7 @@ const props = withDefaults(defineProps<{
   unavailable?: boolean
   /** What the struck tile says instead of *nema* — "do 09:00" for a Happy Hour article. */
   offLabel?: string
-  /** The small picture above the name (17.09.2026); `null` draws the tile as before. */
+  /** The picture behind the tile, faded (17.09.2026); `null` draws the tile as before. */
   imageUrl?: string | null
 }>(), { shortName: null, shisha: false, unavailable: false, offLabel: undefined, imageUrl: null })
 
@@ -194,14 +194,21 @@ const label = computed(() => props.shortName ?? props.name)
 
 .tile-btn:active { transform: scale(0.97); background: var(--surface-2); }
 
-/* A thumbnail, not a photo card: 40 px keeps three tiles across and the name
-   and price where the waiter's eye already goes. */
+/* The picture fills the tile behind the name and price, faded so the two facts
+   the waiter reads stay legible (the owner, 17.09.2026). The tile keeps its size. */
+.tile-btn:has(.tile-img) {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
 .tile-img {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  background: var(--surface-2);
+  opacity: 0.3;
   pointer-events: none;
 }
 
