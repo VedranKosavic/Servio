@@ -922,7 +922,7 @@ export function getDelivery(q: Queryable, venueId: string, deliveryId: string): 
   }
 }
 
-/** `GET /api/stock/deliveries?from&to` — newest first. */
+/** `GET /api/stock/deliveries?from&to` — the most recently booked first. */
 export function listDeliveries(
   q: Queryable, venueId: string, range: { from?: string, to?: string } = {},
 ): DeliveryView[] {
@@ -933,7 +933,9 @@ export function listDeliveries(
       range.from ? gte(schema.deliveries.deliveredAt, range.from) : sql`1 = 1`,
       range.to ? lte(schema.deliveries.deliveredAt, range.to) : sql`1 = 1`,
     ))
-    .orderBy(desc(schema.deliveries.deliveredAt), desc(schema.deliveries.id))
+    // The last one booked first (the owner, 17.09.2026) — not by invoice date,
+    // which is a noon stamp shared by every document of the day.
+    .orderBy(desc(schema.deliveries.createdAt), desc(schema.deliveries.id))
     .limit(200)
     .all()
 
