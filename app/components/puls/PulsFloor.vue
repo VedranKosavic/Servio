@@ -108,6 +108,16 @@ const count = computed(() => {
 
 <template>
   <UiCard title="Stolovi" :count="count">
+    <!-- This plan is for watching the room; it is arranged on Stolovi. The way
+         there sits on the plan itself, because this is where the owner looks
+         for it — "I can't move tables at all" was asked on this screen. -->
+    <template #actions>
+      <NuxtLink to="/admin/kontrola/stolovi" class="a-edit">
+        Uredi raspored
+        <UiIcon name="chevron-right" :size="16" />
+      </NuxtLink>
+    </template>
+
     <template v-if="zones.length">
       <UiSeg
         v-if="zones.length > 1"
@@ -191,4 +201,22 @@ const count = computed(() => {
 .a-key-dot.wait { background: var(--accent-soft); border: 1px solid var(--accent-line); box-shadow: 0 0 0 2px var(--warn); }
 
 .a-empty { margin: 0; color: var(--muted); font-size: var(--text-label); }
+
+.a-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 34px;
+  padding: 0 8px 0 12px;
+  border-radius: var(--radius-field);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: var(--text-label);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.a-edit:hover { background: color-mix(in oklab, var(--accent) 22%, var(--accent-soft)); }
+.a-edit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 </style>
