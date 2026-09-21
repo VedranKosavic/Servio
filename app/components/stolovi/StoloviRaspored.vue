@@ -271,8 +271,8 @@ function tableLabel(id: string): string {
     </template>
 
     <p class="r-hint">
-      Povuci sto ili šank gdje stoji u sali. Ništa se ne mijenja na telefonima dok ne klikneš
-      <strong>Sačuvaj raspored</strong>.
+      Povuci sto ili šank gdje stoji u sali — na telefonu ga prvo dodirni, pa povuci.
+      Ništa se ne mijenja na telefonima konobara dok ne klikneš <strong>Sačuvaj raspored</strong>.
     </p>
 
     <div class="r-body">
@@ -317,7 +317,8 @@ function tableLabel(id: string): string {
           </template>
 
           <span v-else class="r-tools-hint">
-            Dodirni sto da mu promijeniš oblik, ili šank da ga okreneš i produžiš.
+            Dodirni sto da ga odabereš i promijeniš mu oblik, ili šank da ga okreneš i
+            produžiš. Samo odabrani se pomjera prstom; sve ostalo pomjera stranicu.
             Na laptopu strelice pomjeraju odabrano za jedan korak.
           </span>
         </div>
@@ -351,6 +352,29 @@ function tableLabel(id: string): string {
         </div>
       </aside>
     </div>
+
+    <!--
+      On a phone, Sačuvaj is pinned over the tab bar for as long as there is
+      anything to save. The owner, arranging a packed room on a phone: "When im
+      done with editing, I cant scroll down to save changes" — the buttons in
+      the aside sit a room's height below the tables, and the one control that
+      makes the work count must never be out of reach. On a laptop the aside is
+      already sticky beside the room, so the bar is not drawn there.
+    -->
+    <div v-if="needsSave || saving || done" class="r-bar" role="region" aria-label="Spremanje rasporeda">
+      <span class="r-bar-status" :class="{ warn: clashes.size || dirty, good: done }">{{ status }}</span>
+      <UiButton small variant="ghost" :disabled="!dirty || saving" @click="undo">Poništi</UiButton>
+      <UiButton
+        small
+        variant="primary"
+        :pending="saving"
+        :disabled="!needsSave || clashes.size > 0"
+        @click="save"
+      >
+        Sačuvaj
+      </UiButton>
+    </div>
+    <div v-if="needsSave || saving || done" class="r-bar-room" aria-hidden="true" />
   </UiCard>
 </template>
 
@@ -449,5 +473,44 @@ function tableLabel(id: string): string {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* ---- the phone's save bar ---------------------------------------------- */
+
+.r-bar,
+.r-bar-room { display: none; }
+
+@media (max-width: 1023px) {
+  .r-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    /* Directly over the admin tab bar (60 px and the home indicator). */
+    bottom: calc(60px + env(safe-area-inset-bottom));
+    z-index: 21;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+    box-shadow: var(--shadow-pop);
+  }
+
+  .r-bar-status {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--text-micro);
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .r-bar-status.warn { color: var(--warn); }
+  .r-bar-status.good { color: var(--good); }
+
+  /* The bar's own height, so it never covers the end of the page. */
+  .r-bar-room { display: block; height: 64px; }
 }
 </style>
