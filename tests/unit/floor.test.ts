@@ -13,8 +13,8 @@ import { saveFloor } from '../../server/services/admin'
 import { getBootstrap } from '../../server/services/bootstrap'
 import { menuVersion } from '../../server/services/changes'
 import {
-  CHAIR_OUT, EDGE, ROOM_W, TABLE, TABLE_WIDE, autoLayout, clampTable, floorLayoutBody,
-  isArranged, layoutFromPlans, overlapping, parseFloor, roomPlan,
+  CHAIR_OUT, EDGE, ROOM_W_DEFAULT, ROOM_W_MAX, TABLE, TABLE_WIDE, autoLayout, clampTable,
+  floorLayoutBody, isArranged, layoutFromPlans, narrowest, overlapping, parseFloor, roomPlan,
 } from '#shared/floor'
 import type { FloorLayout } from '#shared/floor'
 import type { VenueTable } from '#shared/types'
@@ -68,7 +68,7 @@ describe('the automatic layout — a room nobody has arranged', () => {
     const plan = roomPlan(room, { tables: {} }, 'unutra')
     for (const t of plan.tables) {
       expect(t.x - CHAIR_OUT, t.id).toBeGreaterThanOrEqual(0)
-      expect(t.x + t.w + CHAIR_OUT, t.id).toBeLessThanOrEqual(ROOM_W)
+      expect(t.x + t.w + CHAIR_OUT, t.id).toBeLessThanOrEqual(ROOM_W_DEFAULT)
     }
     expect(overlapping(plan).size).toBe(0)
   })
@@ -147,13 +147,16 @@ describe('the editor’s rules', () => {
 
   it('keeps a dropped table off the walls, in whole units', () => {
     expect(clampTable(-20, -5, TABLE)).toEqual({ x: EDGE, y: EDGE })
-    expect(clampTable(99, 40.6, TABLE)).toEqual({ x: ROOM_W - TABLE - EDGE, y: 41 })
+    expect(clampTable(999, 40.6, TABLE)).toEqual({ x: ROOM_W_DEFAULT - TABLE - EDGE, y: 41 })
+    // …and the right-hand wall is wherever this room's is.
+    expect(clampTable(999, 10, TABLE, 140).x).toBe(140 - TABLE - EDGE)
   })
 
   it('saves every table the plans draw — the auto-placed ones too', () => {
     const plans = (['unutra', 'basta'] as const).map(z => roomPlan(room, { tables: {} }, z))
     const body = layoutFromPlans(plans, null)
     expect(Object.keys(body.tables).sort()).toEqual(['a', 'b', 'c', 'g', 'v1', 'v2'])
+    expect(body.widths).toEqual({ unutra: ROOM_W_DEFAULT, basta: ROOM_W_DEFAULT })
     expect(body.bar).toMatchObject({ zone: 'unutra', rot: 180 })
     // And saving that draws the very same room.
     const again = roomPlan(room, body, 'unutra')
@@ -166,6 +169,40 @@ describe('the editor’s rules', () => {
     expect(floorLayoutBody.safeParse({ tables: { a: { x: 1, y: 2, shape: 'star' } }, bar: null }).success).toBe(false)
     expect(floorLayoutBody.safeParse({ tables: {}, bar: { zone: 'unutra', x: 1, y: 1, len: 30, rot: 45 } }).success).toBe(false)
     expect(floorLayoutBody.safeParse({ tables: {} }).success).toBe(false)
+    expect(floorLayoutBody.safeParse({ tables: {}, bar: null, widths: { unutra: ROOM_W_MAX + 5 } }).success).toBe(false)
+    expect(floorLayoutBody.safeParse({ tables: {}, bar: null, widths: { terasa: 120 } }).success).toBe(false)
+  })
+})
+
+describe('the room’s width — "can we make our caffe wider"', () => {
+  it('is wider than the first room until the owner says otherwise', () => {
+    expect(roomPlan(room, { tables: {} }, 'unutra').width).toBe(ROOM_W_DEFAULT)
+    expect(ROOM_W_DEFAULT).toBeGreaterThan(100)
+  })
+
+  it('keeps each zone’s own width, and every saved table where it was', () => {
+    const layout: FloorLayout = {
+      tables: { a: { x: 70, y: 10 }, g: { x: 20, y: 20 } },
+      bar: null,
+      widths: { unutra: 140, basta: 110 },
+    }
+    expect(parseFloor(JSON.stringify(layout))).toEqual(layout)
+    const inside = roomPlan(room, layout, 'unutra')
+    expect(inside.width).toBe(140)
+    expect(inside.tables.find(t => t.id === 'a')).toMatchObject({ x: 70, y: 10 })
+    expect(roomPlan(room, layout, 'basta').width).toBe(110)
+  })
+
+  it('spreads a room nobody arranged across whatever width it has', () => {
+    const narrow = autoLayout(room.filter(t => t.zone === 'unutra'), 100).spots
+    const wide = autoLayout(room.filter(t => t.zone === 'unutra'), 140).spots
+    expect(wide.get('c')!.x).toBeGreaterThan(narrow.get('c')!.x)
+  })
+
+  it('will not narrow past a table standing near the right-hand wall', () => {
+    const plan = roomPlan(room, { tables: { a: { x: 110, y: 10 } }, bar: null, widths: { unutra: 140 } }, 'unutra')
+    expect(narrowest(plan)).toBeGreaterThanOrEqual(110 + TABLE + EDGE)
+    expect(narrowest(roomPlan(room, { tables: { a: { x: 10, y: 10 } }, bar: null }, 'unutra'))).toBe(100)
   })
 })
 

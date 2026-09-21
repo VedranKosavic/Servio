@@ -33,7 +33,7 @@
  *                not.
  *
  * **Its size is the room's.** The tile fills the spot `FloorRoom` gives it —
- * about 55 px on a phone — and its type is set in `cqw` of that room, so a
+ * about 55 px on a phone — and its type is a multiple of the room's unit `--u`, so a
  * table the owner made wide is still one tile with its number in the middle.
  */
 withDefaults(defineProps<{
@@ -152,16 +152,16 @@ function onClick() {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.4cqw;
+  gap: calc(var(--u) * 0.4);
   width: 100%;
   height: 100%;
   padding: 0;
-  border-radius: 3.2cqw;
+  border-radius: calc(var(--u) * 3.2);
   border: 1.5px solid var(--line);
   background: var(--surface-2);
   color: var(--muted);
   /* A table top standing on the floor, not a patch painted on it. */
-  box-shadow: 0 1.2cqw 2.4cqw -1.2cqw var(--scrim);
+  box-shadow: 0 calc(var(--u) * 1.2) calc(var(--u) * 2.4) calc(var(--u) * -1.2) var(--scrim);
   cursor: pointer;
   transition:
     transform var(--dur-tap) var(--ease-standard),
@@ -172,11 +172,20 @@ function onClick() {
   transform: scale(0.95);
 }
 
+/* The target is the table *and its chairs*: in a wide room the top alone can
+   be under 44 px on a small phone, and a thumb aimed at a table lands on a
+   chair as often as not. */
+.table-tile::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--u) * -2.6);
+}
+
 .table-tile.round { border-radius: 50%; }
 
 .tile-no {
   font-family: var(--font-display);
-  font-size: clamp(15px, 5.6cqw, 24px);
+  font-size: clamp(15px, calc(var(--u) * 5.6), 24px);
   line-height: 1;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -186,7 +195,7 @@ function onClick() {
    full width of the tile and a real type step instead of 10 px in a corner. */
 .tile-sub {
   max-width: 92%;
-  font-size: clamp(10px, 3.5cqw, 15px);
+  font-size: clamp(10px, calc(var(--u) * 3.5), 15px);
   line-height: 1.1;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -238,7 +247,7 @@ function onClick() {
  */
 .table-tile.paid { opacity: 0.62; }
 
-.tile-tick { width: clamp(16px, 5.6cqw, 24px); height: clamp(16px, 5.6cqw, 24px); }
+.tile-tick { width: clamp(16px, calc(var(--u) * 5.6), 24px); height: clamp(16px, calc(var(--u) * 5.6), 24px); }
 
 /* Offered and not taken: copper, but not filled — it is not yours yet. */
 .table-tile.offered {

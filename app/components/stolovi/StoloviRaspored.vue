@@ -23,8 +23,8 @@
  * waiter taps cannot have one tile under another.
  */
 import {
-  BAR_MAX, BAR_MIN, barBox, clampBar, clampTable, isArranged, layoutFromPlans,
-  overlapping, roomPlan, tableSize,
+  BAR_MIN, ROOM_W_MAX, ROOM_W_STEP, STOOL_OUT, barBox, clampBar, clampTable, isArranged,
+  layoutFromPlans, narrowest, overlapping, roomPlan, tableSize, zoneWidth,
 } from '#shared/floor'
 import type { BarRotation, FloorLayout, TableShape } from '#shared/floor'
 import type { TableAdmin, Zone } from '#shared/types'
@@ -55,7 +55,7 @@ const saved = computed<FloorLayout | undefined>(() => bootstrap.value?.floor)
 function materialise(layout: FloorLayout): FloorLayout {
   const plans = (['unutra', 'basta'] as const).map(z => roomPlan(active.value, layout, z))
   const body = layoutFromPlans(plans, layout.bar ?? null)
-  return { tables: body.tables, bar: body.bar }
+  return { tables: body.tables, bar: body.bar, widths: body.widths }
 }
 
 const baseline = computed(() => (saved.value ? materialise(saved.value) : null))
@@ -149,26 +149,33 @@ function setShape(shape: string) {
   const id = selectedTable.value?.id
   const spot = id ? work.value?.tables[id] : undefined
   if (!id || !spot || !work.value) return
-  const at = clampTable(spot.x, spot.y, tableSize(shape as TableShape).w)
+  const at = clampTable(spot.x, spot.y, tableSize(shape as TableShape).w, zoneWidth(work.value, zone.value))
   work.value.tables[id] = shape === 'square'
     ? { x: at.x, y: at.y }
     : { x: at.x, y: at.y, shape: shape as TableShape }
 }
 
+/** The longest bar that fits between the walls of the room it stands in. */
+const barMax = computed(() => {
+  const bar = work.value?.bar
+  if (!bar || !work.value) return BAR_MIN
+  return zoneWidth(work.value, bar.zone) - 2 * Math.ceil(STOOL_OUT + 0.6)
+})
+
 /** The bar turns about its own middle, so it stays where the owner is looking. */
 function rotateBar() {
   const bar = work.value?.bar
   if (!bar || !work.value) return
+  const width = zoneWidth(work.value, bar.zone)
   const before = barBox(bar)
   const rot = (((bar.rot + 90) % 360) as BarRotation)
-  // `BAR_MAX` is what fits across the room between the walls, so a bar turned
-  // either way stays inside it.
-  const len = Math.min(bar.len, BAR_MAX)
+  const len = Math.min(bar.len, barMax.value)
   const after = barBox({ ...bar, rot, len })
   const at = clampBar(
     before.x + (before.w - after.w) / 2,
     before.y + (before.h - after.h) / 2,
     after.w,
+    width,
   )
   work.value.bar = { ...bar, rot, len, ...at }
 }
@@ -176,9 +183,23 @@ function rotateBar() {
 function resizeBar(delta: number) {
   const bar = work.value?.bar
   if (!bar || !work.value) return
-  const len = Math.min(Math.max(bar.len + delta, BAR_MIN), BAR_MAX)
+  const len = Math.min(Math.max(bar.len + delta, BAR_MIN), barMax.value)
   const box = barBox({ ...bar, len })
-  work.value.bar = { ...bar, len, ...clampBar(bar.x, bar.y, box.w) }
+  work.value.bar = { ...bar, len, ...clampBar(bar.x, bar.y, box.w, zoneWidth(work.value, bar.zone)) }
+}
+
+// ---------------------------------------------------------------------------
+// The room's width — the owner's "can we make our caffe wider"
+// ---------------------------------------------------------------------------
+
+const width = computed(() => (work.value ? zoneWidth(work.value, zone.value) : 0))
+/** *Uža* stops where a table or the bar would stand in the wall. */
+const minWidth = computed(() => (plan.value ? narrowest(plan.value) : width.value))
+
+function setWidth(delta: number) {
+  if (!work.value) return
+  const next = Math.min(ROOM_W_MAX, Math.max(minWidth.value, width.value + delta))
+  work.value.widths = { ...work.value.widths, [zone.value]: next }
 }
 
 function undo() {
@@ -291,13 +312,25 @@ function tableLabel(id: string): string {
             <div class="r-tools-row">
               <UiButton small variant="soft" @click="rotateBar">Okreni</UiButton>
               <UiButton small variant="soft" :disabled="work.bar.len <= BAR_MIN" @click="resizeBar(-4)">Kraći</UiButton>
-              <UiButton small variant="soft" :disabled="work.bar.len >= BAR_MAX" @click="resizeBar(4)">Duži</UiButton>
+              <UiButton small variant="soft" :disabled="work.bar.len >= barMax" @click="resizeBar(4)">Duži</UiButton>
             </div>
           </template>
 
           <span v-else class="r-tools-hint">
             Dodirni sto da mu promijeniš oblik, ili šank da ga okreneš i produžiš.
             Na laptopu strelice pomjeraju odabrano za jedan korak.
+          </span>
+        </div>
+
+        <!-- The room itself: more floor to the right, the tables where they are. -->
+        <div class="r-tools">
+          <span class="r-tools-name">Širina sale · {{ zone === 'basta' ? 'Bašta' : 'Unutra' }}</span>
+          <div class="r-tools-row">
+            <UiButton small variant="soft" :disabled="width <= minWidth" @click="setWidth(-ROOM_W_STEP)">Uža</UiButton>
+            <UiButton small variant="soft" :disabled="width >= ROOM_W_MAX" @click="setWidth(ROOM_W_STEP)">Šira</UiButton>
+          </div>
+          <span class="r-tools-hint">
+            Šira sala daje više mjesta, a stolovi su na telefonu manji.
           </span>
         </div>
 
@@ -332,14 +365,14 @@ function tableLabel(id: string): string {
 
 .r-room {
   width: 100%;
-  max-width: 440px;
+  max-width: 580px;
   margin-inline: auto;
 }
 
 /* A laptop keeps *Sačuvaj* beside the room rather than a room's height below it. */
 @media (min-width: 1024px) {
   .r-body {
-    grid-template-columns: minmax(0, 440px) minmax(240px, 1fr);
+    grid-template-columns: minmax(0, 580px) minmax(240px, 1fr);
     align-items: start;
     gap: 24px;
   }
@@ -360,12 +393,12 @@ function tableLabel(id: string): string {
   justify-content: center;
   width: 100%;
   height: 100%;
-  border-radius: 3.2cqw;
+  border-radius: calc(var(--u) * 3.2);
   background: var(--surface);
   border: 1px solid var(--line);
   box-shadow: var(--shadow-raise);
   font-family: var(--font-display);
-  font-size: clamp(15px, 5.6cqw, 24px);
+  font-size: clamp(15px, calc(var(--u) * 5.6), 24px);
   font-weight: 700;
   color: var(--ink);
 }

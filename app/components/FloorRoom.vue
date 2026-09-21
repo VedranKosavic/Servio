@@ -11,9 +11,10 @@
  * it is rather than by reading every number.
  *
  * **Where things stand** comes from `roomPlan()` (`shared/floor.ts`), in room
- * units — the room is 100 wide, and a unit is `1cqw` of this component. The
- * same arrangement is therefore the same picture at every width, and nothing
- * here measures anything to draw it.
+ * units: the room is `plan.width` units wide and always fills this component,
+ * so a unit is `100cqw / plan.width` — `--u`, which every size in here and in
+ * the tiles is a multiple of. The same arrangement is therefore the same
+ * picture at every width, and nothing here measures anything to draw it.
  *
  * **What it does not draw is the table top.** Each table is a slot, filled by
  * the screen using the room: the waiter's tile (dark, the shift colours, the
@@ -27,7 +28,7 @@
  * one. The room only reports where things were dropped — keeping the working
  * copy, and saving it, is the editor's job.
  */
-import { BAR_DEPTH, CHAIR_DEPTH, CHAIR_GAP, ROOM_W, STOOL_OUT, clampBar, clampTable } from '#shared/floor'
+import { BAR_DEPTH, CHAIR_DEPTH, CHAIR_GAP, STOOL_OUT, clampBar, clampTable } from '#shared/floor'
 import type { PlacedBar, PlacedTable, RoomPlan } from '#shared/floor'
 
 /** What sits at a table, for the colour of its chairs. */
@@ -56,9 +57,9 @@ const emit = defineEmits<{
 
 const room = ref<HTMLElement | null>(null)
 
-/** Room units → CSS. One unit is a hundredth of the room's width. */
+/** Room units → CSS: the room is `plan.width` units across this component. */
 function u(n: number): string {
-  return `${n}cqw`
+  return `${(n * 100) / props.plan.width}cqw`
 }
 
 function box(item: { x: number, y: number, w: number, h: number }) {
@@ -123,11 +124,12 @@ interface Drag {
 let drag: Drag | null = null
 
 function unitPx(): number {
-  return (room.value?.getBoundingClientRect().width ?? ROOM_W) / ROOM_W
+  return (room.value?.getBoundingClientRect().width ?? props.plan.width) / props.plan.width
 }
 
 function place(id: string, x: number, y: number, w: number) {
-  const at = id === 'bar' ? clampBar(x, y, w) : clampTable(x, y, w)
+  const width = props.plan.width
+  const at = id === 'bar' ? clampBar(x, y, w, width) : clampTable(x, y, w, width)
   emit('move', id, at.x, Math.min(at.y, 360))
 }
 
@@ -191,7 +193,7 @@ function onRoomDown(event: PointerEvent) {
       ref="room"
       class="fr-room"
       :class="[plan.zone, { editable }]"
-      :style="{ height: u(height) }"
+      :style="{ height: u(height), '--u': u(1) }"
       @pointerdown="onRoomDown"
     >
       <!-- The VIP box and anything like it: under the tables, a patch of
@@ -274,7 +276,8 @@ function onRoomDown(event: PointerEvent) {
 </template>
 
 <style scoped>
-/* The unit: everything inside is sized in `cqw` of this box. */
+/* The container `--u` is measured against: everything inside is a multiple of
+   it (see `u()`). */
 .fr {
   container-type: inline-size;
   width: 100%;
@@ -306,18 +309,18 @@ function onRoomDown(event: PointerEvent) {
   background-image:
     repeating-linear-gradient(
       90deg,
-      transparent 0 calc(8.4cqw - 1px),
-      color-mix(in oklab, var(--line-soft) 70%, transparent) calc(8.4cqw - 1px) 8.4cqw
+      transparent 0 calc(calc(var(--u) * 8.4) - 1px),
+      color-mix(in oklab, var(--line-soft) 70%, transparent) calc(calc(var(--u) * 8.4) - 1px) calc(var(--u) * 8.4)
     ),
     repeating-linear-gradient(
       90deg,
-      color-mix(in oklab, var(--accent) 3%, transparent) 0 4.2cqw,
-      transparent 4.2cqw 8.4cqw
+      color-mix(in oklab, var(--accent) 3%, transparent) 0 calc(var(--u) * 4.2),
+      transparent calc(var(--u) * 4.2) calc(var(--u) * 8.4)
     );
   box-shadow:
     inset 0 0 0 4px var(--surface-3),
     inset 0 0 0 5px var(--line),
-    inset 0 0 3cqw 1cqw var(--scrim);
+    inset 0 0 calc(var(--u) * 3) calc(var(--u) * 1) var(--scrim);
 }
 
 /**
@@ -329,7 +332,7 @@ function onRoomDown(event: PointerEvent) {
   background-image:
     linear-gradient(color-mix(in oklab, var(--line-soft) 65%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in oklab, var(--line-soft) 65%, transparent) 1px, transparent 1px);
-  background-size: 12.5cqw 12.5cqw;
+  background-size: calc(var(--u) * 12.5) calc(var(--u) * 12.5);
   background-position: -1px -1px;
 }
 
@@ -354,11 +357,11 @@ function onRoomDown(event: PointerEvent) {
 
 .fr-grp-name {
   position: absolute;
-  top: 0.9cqw;
+  top: calc(var(--u) * 0.9);
   left: 0;
   right: 0;
   text-align: center;
-  font-size: clamp(9px, 2.6cqw, 12px);
+  font-size: clamp(9px, calc(var(--u) * 2.6), 12px);
   line-height: 1;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -376,7 +379,7 @@ function onRoomDown(event: PointerEvent) {
 .fr-bar {
   position: absolute;
   z-index: 1;
-  border-radius: 1.8cqw;
+  border-radius: calc(var(--u) * 1.8);
   background:
     linear-gradient(
       color-mix(in oklab, var(--accent) 30%, var(--surface-3)),
@@ -384,15 +387,15 @@ function onRoomDown(event: PointerEvent) {
     );
   border: 1px solid var(--accent-line);
   color: var(--ink, var(--text));
-  box-shadow: 0 1.4cqw 3cqw -1.4cqw var(--scrim);
+  box-shadow: 0 calc(var(--u) * 1.4) calc(var(--u) * 3) calc(var(--u) * -1.4) var(--scrim);
 }
 
 /* The guests' edge. An inset shadow and not a border, so the stools — which
    are placed from the counter's box — sit the same distance off every side. */
-.fr-bar.rot-0 { box-shadow: inset 0 -1cqw 0 var(--accent), 0 1.4cqw 3cqw -1.4cqw var(--scrim); }
-.fr-bar.rot-180 { box-shadow: inset 0 1cqw 0 var(--accent), 0 1.4cqw 3cqw -1.4cqw var(--scrim); }
-.fr-bar.rot-90 { box-shadow: inset 1cqw 0 0 var(--accent), 0 1.4cqw 3cqw -1.4cqw var(--scrim); }
-.fr-bar.rot-270 { box-shadow: inset -1cqw 0 0 var(--accent), 0 1.4cqw 3cqw -1.4cqw var(--scrim); }
+.fr-bar.rot-0 { box-shadow: inset 0 calc(var(--u) * -1) 0 var(--accent), 0 calc(var(--u) * 1.4) calc(var(--u) * 3) calc(var(--u) * -1.4) var(--scrim); }
+.fr-bar.rot-180 { box-shadow: inset 0 calc(var(--u) * 1) 0 var(--accent), 0 calc(var(--u) * 1.4) calc(var(--u) * 3) calc(var(--u) * -1.4) var(--scrim); }
+.fr-bar.rot-90 { box-shadow: inset calc(var(--u) * 1) 0 0 var(--accent), 0 calc(var(--u) * 1.4) calc(var(--u) * 3) calc(var(--u) * -1.4) var(--scrim); }
+.fr-bar.rot-270 { box-shadow: inset calc(var(--u) * -1) 0 0 var(--accent), 0 calc(var(--u) * 1.4) calc(var(--u) * 3) calc(var(--u) * -1.4) var(--scrim); }
 
 .fr-bar-top {
   position: absolute;
@@ -400,8 +403,8 @@ function onRoomDown(event: PointerEvent) {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1.2cqw;
-  font-size: clamp(10px, 3cqw, 14px);
+  gap: calc(var(--u) * 1.2);
+  font-size: clamp(10px, calc(var(--u) * 3), 14px);
   line-height: 1;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -411,8 +414,8 @@ function onRoomDown(event: PointerEvent) {
 .fr-bar-top.vertical { writing-mode: vertical-rl; }
 
 .fr-bar-ico {
-  width: clamp(11px, 3.2cqw, 16px);
-  height: clamp(11px, 3.2cqw, 16px);
+  width: clamp(11px, calc(var(--u) * 3.2), 16px);
+  height: clamp(11px, calc(var(--u) * 3.2), 16px);
   flex-shrink: 0;
   opacity: 0.8;
 }
@@ -444,7 +447,7 @@ function onRoomDown(event: PointerEvent) {
 
 .fr-chair {
   position: absolute;
-  border-radius: 1cqw;
+  border-radius: calc(var(--u) * 1);
   background: var(--surface);
   border: 1px solid var(--line);
   transition: background var(--dur-fast, 120ms) ease;
@@ -490,7 +493,7 @@ function onRoomDown(event: PointerEvent) {
 .editable .fr-bar:focus-visible { outline: none; }
 
 /* Rings, drawn as outlines so they follow each shape's own corners. */
-.fr-table .fr-top { border-radius: 3.2cqw; }
+.fr-table .fr-top { border-radius: calc(var(--u) * 3.2); }
 .fr-table.round .fr-top { border-radius: 50%; }
 
 .fr-table.loose .fr-top { outline: 2px dashed var(--warn); outline-offset: 3px; }

@@ -821,6 +821,7 @@ export function saveFloor(
   const layout: FloorLayout = {
     tables: Object.fromEntries(Object.entries(body.tables).filter(([id]) => known.has(id))),
     bar: body.bar,
+    ...(body.widths ? { widths: body.widths } : {}),
   }
 
   const row = db.select({ json: schema.venues.floorJson }).from(schema.venues)

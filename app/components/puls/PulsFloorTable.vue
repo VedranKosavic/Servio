@@ -87,18 +87,18 @@ const label = computed(() => {
 
 <style scoped>
 /* The waiter's tile: it fills the spot `FloorRoom` gives it, and its type is
-   set in `cqw` of the room so it scales with the plan. */
+   a multiple of the room's unit `--u` so it scales with the plan. */
 .a-tbl {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.4cqw;
+  gap: calc(var(--u) * 0.4);
   width: 100%;
   height: 100%;
   padding: 0;
-  border-radius: 3.2cqw;
+  border-radius: calc(var(--u) * 3.2);
   /* No edge on the base — each state brings its own, or none. The old rule put
      a 1.5 px `--line-soft` border on every tile, which on the well's own ground
      was two beiges a shade apart: the free tiles read as smudges and their
@@ -124,7 +124,7 @@ button.a-tbl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
 
 .a-tbl-no {
   font-family: var(--font-display);
-  font-size: clamp(15px, 5.6cqw, 24px);
+  font-size: clamp(15px, calc(var(--u) * 5.6), 24px);
   line-height: 1;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -134,7 +134,7 @@ button.a-tbl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
    gets the full width of the tile and a real type step. */
 .a-tbl-amt {
   max-width: 92%;
-  font-size: clamp(10px, 3.5cqw, 15px);
+  font-size: clamp(10px, calc(var(--u) * 3.5), 15px);
   line-height: 1.1;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -198,7 +198,7 @@ button.a-tbl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
   color: var(--accent-ink);
 }
 
-.a-tbl-tick { width: clamp(16px, 5.4cqw, 22px); height: clamp(16px, 5.4cqw, 22px); color: var(--accent-ink); }
+.a-tbl-tick { width: clamp(16px, calc(var(--u) * 5.4), 22px); height: clamp(16px, calc(var(--u) * 5.4), 22px); color: var(--accent-ink); }
 
 .a-tbl.busy .a-tbl-no { color: var(--ink); }
 .a-tbl.busy .a-tbl-amt { color: var(--accent-ink); }

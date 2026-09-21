@@ -170,7 +170,7 @@ const count = computed(() => {
    on a phone, and never so wide on a laptop that a table is a poster. */
 .a-room {
   width: 100%;
-  max-width: 480px;
+  max-width: 580px;
   margin-inline: auto;
 }
 

@@ -9,11 +9,15 @@
  * it shouldn't change again."* So the arrangement is data now, dragged into
  * place on *Stolovi* and stored as it was dropped.
  *
- * **The coordinate system.** A zone is a room `ROOM_W` = 100 units wide, and a
- * unit is a hundredth of whatever width the plan is drawn at. The same layout is
- * therefore the same picture on a 375 px phone and a 1440 px laptop — the owner
- * arranges it once, on either, and every screen agrees. The height is whatever
- * the content needs.
+ * **The coordinate system.** A zone is a room some number of units wide —
+ * `ROOM_W_DEFAULT` until the owner makes it narrower or wider on *Stolovi*
+ * (*"can we make our caffe wider, its too narrow"*) — and the room is always
+ * drawn at the full width of the screen, so a unit is that width divided by the
+ * room's. The same layout is therefore the same picture on a 375 px phone and a
+ * 1440 px laptop: the owner arranges it once, on either, and every screen
+ * agrees. A wider room is more floor for the same tables, which is why they get
+ * smaller on screen as it grows, and why it stops at `ROOM_W_MAX`. The height is
+ * whatever the content needs.
  *
  * **Before the first save** nothing is stored and the old stacking rule still
  * places every table (`autoLayout`), so the plan never goes blank. The first
@@ -27,10 +31,19 @@ import { z } from 'zod'
 import type { VenueTable, Zone } from './types'
 
 // ---------------------------------------------------------------------------
-// Geometry, in room units (the room is 100 wide)
+// Geometry, in room units
 // ---------------------------------------------------------------------------
 
-export const ROOM_W = 100
+/**
+ * How wide a room is, in units. 100 was the first room, and it was too narrow
+ * for the owner's tables; the default is a quarter wider. The cap is the phone:
+ * at 140 a table on a 375 px screen is still ~37 px, and its chairs make the
+ * tap target (`FloorTable`) about 50.
+ */
+export const ROOM_W_DEFAULT = 125
+export const ROOM_W_MIN = 100
+export const ROOM_W_MAX = 140
+export const ROOM_W_STEP = 5
 
 /** A square or round table top. */
 export const TABLE = 16
@@ -47,7 +60,8 @@ export const EDGE = 3
 export const BAR_DEPTH = 10
 export const STOOL_OUT = 4.4
 export const BAR_MIN = 16
-export const BAR_MAX = 90
+/** The longest bar the widest room fits between its walls. */
+export const BAR_MAX = ROOM_W_MAX - 2 * (4.4 + 0.6)
 export const BAR_DEFAULT = 40
 /**
  * The margin and spacing the automatic layout uses: tables in a run stand
@@ -97,6 +111,8 @@ export interface FloorBar {
 export interface FloorLayout {
   tables: Record<string, FloorSpot>
   bar?: FloorBar | null
+  /** Each zone's width in units; a zone not named is `ROOM_W_DEFAULT`. */
+  widths?: Partial<Record<Zone, number>>
 }
 
 const coord = z.int().min(0).max(400)
@@ -115,10 +131,18 @@ export const floorBarSchema = z.object({
   rot: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]),
 }).strict()
 
+const roomWidth = z.int().min(ROOM_W_MIN).max(ROOM_W_MAX)
+
+const widthsSchema = z.object({
+  unutra: roomWidth.optional(),
+  basta: roomWidth.optional(),
+}).strict()
+
 /** `PUT /api/admin/floor` — the whole arrangement, every time. */
 export const floorLayoutBody = z.object({
   tables: z.record(z.string().min(1).max(64), floorSpotSchema),
   bar: floorBarSchema.nullable(),
+  widths: widthsSchema.optional(),
 }).strict()
 
 export type FloorLayoutBody = z.infer<typeof floorLayoutBody>
@@ -126,6 +150,7 @@ export type FloorLayoutBody = z.infer<typeof floorLayoutBody>
 const storedLayout = z.object({
   tables: z.record(z.string(), floorSpotSchema),
   bar: floorBarSchema.nullable().optional(),
+  widths: widthsSchema.optional(),
 })
 
 /**
@@ -140,6 +165,11 @@ export function parseFloor(json: string | null | undefined): FloorLayout {
   } catch {
     return { tables: {} }
   }
+}
+
+/** A zone's width in units. */
+export function zoneWidth(layout: FloorLayout, zone: Zone): number {
+  return layout.widths?.[zone] ?? ROOM_W_DEFAULT
 }
 
 /** Has the owner ever pressed *Sačuvaj*? */
@@ -182,6 +212,8 @@ export interface RoomGroup {
 
 export interface RoomPlan {
   zone: Zone
+  /** Units from the left wall to the right one. */
+  width: number
   tables: PlacedTable[]
   groups: RoomGroup[]
   bar: PlacedBar | null
@@ -212,7 +244,7 @@ export function barBox(bar: Pick<FloorBar, 'x' | 'y' | 'len' | 'rot'>): PlacedBa
  * anybody arranged it, so the first open of the editor starts from the room the
  * staff already know.
  */
-export function autoLayout(zoneTables: readonly VenueTable[]): {
+export function autoLayout(zoneTables: readonly VenueTable[], roomW = ROOM_W_DEFAULT): {
   spots: Map<string, { x: number, y: number }>
   bottom: number
 } {
@@ -243,11 +275,11 @@ export function autoLayout(zoneTables: readonly VenueTable[]): {
   })
 
   const used = columns.reduce((sum, c) => sum + c.w, 0)
-  const room = ROOM_W - 2 * PAD
+  const room = roomW - 2 * PAD
   const between = columns.length > 1 ? (room - used) / (columns.length - 1) : 0
   const tallest = Math.max(...columns.map(c => c.h))
 
-  let left = columns.length > 1 ? PAD : (ROOM_W - columns[0]!.w) / 2
+  let left = columns.length > 1 ? PAD : (roomW - columns[0]!.w) / 2
   let bottom = 0
   for (const column of columns) {
     let top = PAD + (tallest - column.h) / 2
@@ -287,7 +319,8 @@ export function defaultBar(zone: Zone, autoBottom: number): FloorBar {
  */
 export function roomPlan(tables: readonly VenueTable[], layout: FloorLayout, zone: Zone): RoomPlan {
   const inZone = tables.filter(t => t.zone === zone)
-  const auto = autoLayout(inZone)
+  const width = zoneWidth(layout, zone)
+  const auto = autoLayout(inZone, width)
   const arranged = Object.keys(layout.tables).length > 0
 
   const placed: PlacedTable[] = []
@@ -321,7 +354,7 @@ export function roomPlan(tables: readonly VenueTable[], layout: FloorLayout, zon
     let y = contentBottom(placed, [], bar) + GAP
     for (const table of loose) {
       const { w, h } = tableSize('square')
-      if (x + w > ROOM_W - EDGE) {
+      if (x + w > width - EDGE) {
         x = EDGE + 2
         y += TABLE + GAP
       }
@@ -333,6 +366,7 @@ export function roomPlan(tables: readonly VenueTable[], layout: FloorLayout, zon
   const groups = groupBoxes(placed)
   return {
     zone,
+    width,
     tables: placed,
     groups,
     bar,
@@ -369,17 +403,17 @@ function contentBottom(
 // ---------------------------------------------------------------------------
 
 /** The spot a dragged table may be dropped on: whole units, clear of the walls. */
-export function clampTable(x: number, y: number, w: number): { x: number, y: number } {
+export function clampTable(x: number, y: number, w: number, roomW = ROOM_W_DEFAULT): { x: number, y: number } {
   return {
-    x: Math.round(Math.min(Math.max(x, EDGE), ROOM_W - w - EDGE)),
+    x: Math.round(Math.min(Math.max(x, EDGE), roomW - w - EDGE)),
     y: Math.round(Math.max(y, EDGE)),
   }
 }
 
-export function clampBar(x: number, y: number, w: number): { x: number, y: number } {
+export function clampBar(x: number, y: number, w: number, roomW = ROOM_W_DEFAULT): { x: number, y: number } {
   const edge = STOOL_OUT + 0.6
   return {
-    x: Math.round(Math.min(Math.max(x, edge), ROOM_W - w - edge)),
+    x: Math.round(Math.min(Math.max(x, edge), roomW - w - edge)),
     y: Math.round(Math.max(y, edge)),
   }
 }
@@ -415,8 +449,10 @@ export function overlapping(plan: RoomPlan): Set<string> {
  */
 export function layoutFromPlans(plans: readonly RoomPlan[], fallbackBar: FloorBar | null): FloorLayoutBody {
   const tables: Record<string, FloorSpot> = {}
+  const widths: Partial<Record<Zone, number>> = {}
   let bar: FloorBar | null = fallbackBar
   for (const plan of plans) {
+    widths[plan.zone] = plan.width
     for (const t of plan.tables) {
       tables[t.id] = t.shape === 'square'
         ? { x: Math.round(t.x), y: Math.round(t.y) }
@@ -426,5 +462,19 @@ export function layoutFromPlans(plans: readonly RoomPlan[], fallbackBar: FloorBa
       bar = { zone: plan.zone, x: Math.round(plan.bar.x), y: Math.round(plan.bar.y), len: plan.bar.len, rot: plan.bar.rot }
     }
   }
-  return { tables, bar }
+  return { tables, bar, widths }
+}
+
+/**
+ * The narrowest this room can be made without a table or the bar standing in
+ * the right-hand wall — *Uža* stops here instead of moving anything the owner
+ * put down.
+ */
+export function narrowest(plan: RoomPlan): number {
+  const reach = Math.max(
+    0,
+    ...plan.tables.map(t => t.x + t.w + EDGE),
+    plan.bar ? plan.bar.x + plan.bar.w + STOOL_OUT + 0.6 : 0,
+  )
+  return Math.min(ROOM_W_MAX, Math.max(ROOM_W_MIN, Math.ceil(reach / ROOM_W_STEP) * ROOM_W_STEP))
 }
