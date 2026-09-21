@@ -225,7 +225,13 @@ async function save() {
   saving.value = true
   error.value = null
   try {
-    const next = await api.saveFloor({ tables: work.value.tables, bar: work.value.bar ?? null })
+    const next = await api.saveFloor({
+      tables: work.value.tables,
+      bar: work.value.bar ?? null,
+      // Each zone's width — *Uža / Šira* — which the first version of this
+      // call left out, so a widened room came back at the default.
+      ...(work.value.widths ? { widths: work.value.widths } : {}),
+    })
     // Show what was stored straight away; the bootstrap refetch below is what
     // every other screen on this laptop reads.
     adopt(materialise(next))

@@ -228,6 +228,15 @@ describe('Sačuvaj raspored — on the server', () => {
     expect(menuVersion(f.db, f.venueId)).toBeGreaterThan(before)
   })
 
+  it('keeps each zone’s width, and gives it back in the bootstrap', () => {
+    saveFloor(f.db, f.venueId, f.adminActor(), {
+      tables: { [f.tableId('Sto 1')]: { x: 10, y: 10 } },
+      bar: null,
+      widths: { unutra: 140, basta: 110 },
+    })
+    expect(getBootstrap(f.db, f.venueId, f.adminActor()).floor.widths).toEqual({ unutra: 140, basta: 110 })
+  })
+
   it('drops a spot for a table this venue does not have', () => {
     const saved = saveFloor(f.db, f.venueId, f.adminActor(), {
       tables: { [f.tableId('Sto 1')]: { x: 10, y: 10 }, 'not-a-table': { x: 50, y: 50 } },
