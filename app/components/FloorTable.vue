@@ -172,9 +172,9 @@ function onClick() {
   transform: scale(0.95);
 }
 
-/* The target is the table *and its chairs*: in a wide room the top alone can
-   be under 44 px on a small phone, and a thumb aimed at a table lands on a
-   chair as often as not. */
+/* The target reaches a little past the top — where its chairs stand in the
+   editor: in a wide room the top alone can be under 44 px on a small phone,
+   and a thumb aimed at a table lands beside it as often as on it. */
 .table-tile::before {
   content: '';
   position: absolute;

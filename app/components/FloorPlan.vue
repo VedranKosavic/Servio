@@ -5,8 +5,8 @@
  * **Since the room was arranged (`shared/floor.ts`)** the stacks below are only
  * where a table stands until the owner drags it somewhere on *Stolovi* and
  * saves: from then on every table is exactly where he put it, the bar included,
- * and `FloorRoom` draws the floor, the walls, the chairs and the counter around
- * the tiles this file still decides the colour of. What follows describes the
+ * and `FloorRoom` draws the floor, the walls and the counter around the tiles
+ * this file still decides the colour of. What follows describes the
  * rule `autoLayout()` keeps for a room nobody has arranged yet.
  *
  * Each table carries a `col` and a `row`, which are its place on the zone's
@@ -49,7 +49,6 @@ import { formatAmount } from '#shared/money'
 import { roomPlan } from '#shared/floor'
 import type { FloorLayout } from '#shared/floor'
 import type { TableState, VenueTable, Zone } from '#shared/types'
-import type { ChairTone } from './FloorRoom.vue'
 
 const props = withDefaults(defineProps<{
   tables: VenueTable[]
@@ -80,8 +79,6 @@ defineEmits<{ select: [tableId: string], long: [tableId: string] }>()
 
 interface Cell {
   id: string
-  /** Who sits at it, for the colour of its chairs. */
-  tone: ChairTone
   label: string
   sub: string | null
   variant: 'free' | 'shift-a' | 'shift-b' | 'offered'
@@ -104,7 +101,7 @@ function toCell(table: VenueTable): Cell {
   const state = stateById.value.get(table.id)
   const label = shortLabel(table.name)
   const draft = props.draftTables.includes(table.id)
-  const base = { id: table.id, label, paid: false, attention: false, late: false, draft, tone: 'free' as ChairTone }
+  const base = { id: table.id, label, paid: false, attention: false, late: false, draft }
 
   if (!state?.tab_id) {
     // A table with nothing on the server but a draft on this phone is not free:
@@ -124,7 +121,7 @@ function toCell(table: VenueTable): Cell {
 
   // Offered to me and not taken yet: not mine, but one tap from it.
   if (state.offered_to && state.offered_to === props.myUserId) {
-    return { ...common, sub: 'nudi', variant: 'offered', tone: 'offered' }
+    return { ...common, sub: 'nudi', variant: 'offered' }
   }
 
   /**
@@ -133,16 +130,15 @@ function toCell(table: VenueTable): Cell {
    * his initials — which is where that badge already was.
    */
   const variant = shiftVariant(state.shift_seq)
-  const tone: ChairTone = variant === 'shift-b' ? 'b' : 'a'
   const mine = state.assigned_to === props.myUserId
 
   if (mine) {
     // The amount without " KM": the currency on every tile is noise, and the
     // tile now has the width to set the number itself at a readable size.
-    return { ...common, sub: formatAmount(state.remaining_fen), variant, tone }
+    return { ...common, sub: formatAmount(state.remaining_fen), variant }
   }
 
-  return { ...common, sub: state.assigned_to_initials, variant, tone }
+  return { ...common, sub: state.assigned_to_initials, variant }
 }
 
 /**
@@ -166,15 +162,11 @@ const plan = computed(() => roomPlan(props.tables, props.floor, props.zone))
 const cells = computed(() => new Map(props.tables
   .filter(t => t.zone === props.zone)
   .map(t => [t.id, toCell(t)])))
-
-function toneOf(id: string): ChairTone {
-  return cells.value.get(id)?.tone ?? 'free'
-}
 </script>
 
 <template>
   <div class="flex flex-1 flex-col gap-3">
-    <FloorRoom class="mx-auto max-w-[560px]" :plan="plan" :tone="toneOf">
+    <FloorRoom class="mx-auto max-w-[560px]" :plan="plan">
       <template #table="{ table }">
         <FloorTable
           v-if="cells.get(table.id)"

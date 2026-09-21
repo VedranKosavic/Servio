@@ -30,13 +30,12 @@
  * reads first never depends on which half he is looking at.
  *
  * **The room is the waiter's room.** Where things stand is the owner's own
- * arrangement from *Stolovi*, and `FloorRoom` draws it — floor, walls, bar,
- * chairs — for both screens, in token names that each theme resolves to its own
+ * arrangement from *Stolovi*, and `FloorRoom` draws it — floor, walls, bar —
+ * for both screens, in token names that each theme resolves to its own
  * material (DESIGN §2). What stays separate is the tile: this one is light, has
  * one colour for every occupied table, and opens the owner's sheet.
  */
 import type { PulsFloorCell, PulsFloorZone } from '~/utils/puls'
-import type { ChairTone } from '~/components/FloorRoom.vue'
 
 const props = defineProps<{
   zones: PulsFloorZone[]
@@ -55,11 +54,6 @@ const cells = computed(() => props.zones.flatMap(zone => zone.cells))
 
 /** A tile's content by table id, for the room's slots. */
 const byId = computed(() => new Map(cells.value.map(cell => [cell.table_id, cell])))
-
-/** One colour of chair for every table with guests at it, as the tiles have. */
-function toneOf(id: string): ChairTone {
-  return byId.value.get(id)?.tab_id ? 'busy' : 'free'
-}
 
 /** Which half of the room is on screen. The first zone until he says otherwise. */
 const shown = ref<string>('')
@@ -129,7 +123,7 @@ const count = computed(() => {
       <div v-for="zone in visibleZones" :key="zone.zone" class="a-zone">
         <div v-if="zones.length === 1" class="a-zone-label">{{ zone.label }}</div>
 
-        <FloorRoom class="a-room" :plan="zone.plan" :tone="toneOf">
+        <FloorRoom class="a-room" :plan="zone.plan">
           <template #table="{ table }">
             <PulsFloorTable
               v-if="byId.get(table.id)"

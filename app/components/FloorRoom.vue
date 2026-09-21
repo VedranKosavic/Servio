@@ -18,32 +18,34 @@
  *
  * **What it does not draw is the table top.** Each table is a slot, filled by
  * the screen using the room: the waiter's tile (dark, the shift colours, the
- * long press for žar), *Puls*'s (light), or the editor's plain number. The room
- * draws the chairs, because the chairs are the room's — a table's `tone` only
- * decides whether they are the colour of the guests sitting in them.
+ * long press for žar), *Puls*'s (light), or the editor's plain number.
  *
- * **Editable**, on *Stolovi*: a table or the bar is dragged with a finger or a
- * mouse (pointer capture, so a drag that leaves the room still ends), snapped
- * to whole units and kept clear of the walls; the arrow keys nudge the selected
- * one. The room only reports where things were dropped — keeping the working
- * copy, and saving it, is the editor's job.
+ * **Chairs are the editor's only.** They show how much floor a table really
+ * takes while the owner is arranging it; on the finished plan he asked for
+ * them gone — *"remove the 4 lines on the sides when we finish editing"* — so
+ * the waiter's and *Puls*'s rooms are tables on a floor and nothing else.
+ *
+ * **Editable**, on *Stolovi*: a table or the bar is dragged with a mouse
+ * straight away, and with a finger **once it is selected** — a tap selects, the
+ * next touch drags. A packed room on a phone is mostly tables, and when every
+ * touch picked one up the owner could not scroll the page at all; now a swipe
+ * that starts on anything not selected scrolls (`touch-action: pan-y`), and only
+ * the selected one holds the finger (`none`). Pointer capture keeps a drag that
+ * leaves the room alive; drops snap to whole units clear of the walls, and the
+ * arrow keys nudge the selected one. The room only reports where things were
+ * dropped — keeping the working copy, and saving it, is the editor's job.
  */
 import { BAR_DEPTH, CHAIR_DEPTH, CHAIR_GAP, STOOL_OUT, clampBar, clampTable } from '#shared/floor'
 import type { PlacedBar, PlacedTable, RoomPlan } from '#shared/floor'
 
-/** What sits at a table, for the colour of its chairs. */
-export type ChairTone = 'free' | 'a' | 'b' | 'busy' | 'offered'
-
 const props = withDefaults(defineProps<{
   plan: RoomPlan
-  tone?: (id: string) => ChairTone
   editable?: boolean
   /** A table id, `'bar'`, or nothing. */
   selected?: string | null
   /** Items standing on one another — marked red in the editor. */
   clashes?: Set<string>
 }>(), {
-  tone: () => 'free',
   editable: false,
   selected: null,
   clashes: () => new Set<string>(),
@@ -135,6 +137,9 @@ function place(id: string, x: number, y: number, w: number) {
 
 function onDown(event: PointerEvent, id: string, item: { x: number, y: number, w: number }) {
   if (!props.editable || event.button > 0) return
+  // A finger only picks up what is already selected; anything else is left to
+  // the browser, which scrolls the page, and the tap that follows selects it.
+  if (event.pointerType === 'touch' && props.selected !== id) return
   const target = event.currentTarget as HTMLElement
   target.setPointerCapture(event.pointerId)
   target.focus({ preventScroll: true })
@@ -182,6 +187,11 @@ function onKey(event: KeyboardEvent, id: string, item: { x: number, y: number, w
   place(id, item.x + d[0], item.y + d[1], item.w)
 }
 
+/** A tap selects — the only way a finger selects, and harmless after a mouse drag. */
+function onTap(id: string) {
+  if (props.editable) emit('select', id)
+}
+
 function onRoomDown(event: PointerEvent) {
   if (props.editable && event.target === event.currentTarget) emit('select', null)
 }
@@ -226,6 +236,7 @@ function onRoomDown(event: PointerEvent) {
         @pointerup="onUp"
         @pointercancel="onUp"
         @keydown="onKey($event, 'bar', plan.bar)"
+        @click="onTap('bar')"
       >
         <i
           v-for="stool in stools(plan.bar)"
@@ -247,7 +258,7 @@ function onRoomDown(event: PointerEvent) {
         v-for="table in plan.tables"
         :key="table.id"
         class="fr-table"
-        :class="[`tone-${tone(table.id)}`, table.shape, {
+        :class="[table.shape, {
           selected: editable && selected === table.id,
           clash: editable && clashes.has(table.id),
           loose: editable && table.loose,
@@ -259,14 +270,17 @@ function onRoomDown(event: PointerEvent) {
         @pointerup="onUp"
         @pointercancel="onUp"
         @keydown="onKey($event, table.id, table)"
+        @click="onTap(table.id)"
       >
-        <i
-          v-for="chair in chairs(table)"
-          :key="chair.key"
-          class="fr-chair"
-          :style="{ left: u(chair.left), top: u(chair.top), width: u(chair.w), height: u(chair.h) }"
-          aria-hidden="true"
-        />
+        <template v-if="editable">
+          <i
+            v-for="chair in chairs(table)"
+            :key="chair.key"
+            class="fr-chair"
+            :style="{ left: u(chair.left), top: u(chair.top), width: u(chair.w), height: u(chair.h) }"
+            aria-hidden="true"
+          />
+        </template>
         <div class="fr-top">
           <slot name="table" :table="table" />
         </div>
@@ -455,24 +469,6 @@ function onRoomDown(event: PointerEvent) {
 
 .fr-table.round .fr-chair { border-radius: 50%; }
 
-/* The chairs take the colour of whoever is sitting in them: occupied reads
-   from across the room before any number does. */
-.fr-table.tone-a .fr-chair,
-.fr-table.tone-busy .fr-chair {
-  background: color-mix(in oklab, var(--accent) 55%, var(--bg-2));
-  border-color: transparent;
-}
-
-.fr-table.tone-b .fr-chair {
-  background: color-mix(in oklab, var(--shift-b, var(--accent)) 55%, var(--bg-2));
-  border-color: transparent;
-}
-
-.fr-table.tone-offered .fr-chair {
-  background: var(--accent-soft);
-  border: 1px dashed var(--accent-line);
-}
-
 /* ---- editing ----------------------------------------------------------- */
 
 .fr-room.editable {
@@ -483,8 +479,12 @@ function onRoomDown(event: PointerEvent) {
 .editable .fr-table,
 .editable .fr-bar {
   cursor: grab;
-  touch-action: none;
+  touch-action: pan-y;
 }
+
+/* Only the selected one holds a finger; everything else lets the page scroll. */
+.editable .fr-table.selected,
+.editable .fr-bar.selected { touch-action: none; }
 
 .editable .fr-table:active,
 .editable .fr-bar:active { cursor: grabbing; }
