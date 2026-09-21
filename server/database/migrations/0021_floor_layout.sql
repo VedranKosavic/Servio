@@ -1,0 +1,1 @@
+ALTER TABLE `venues` ADD `floor_json` text DEFAULT '{}' NOT NULL;

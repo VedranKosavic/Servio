@@ -32,7 +32,9 @@
  *                offline). A small amber dot: the money is right, the clock is
  *                not.
  *
- * The tile is 68 px everywhere — a thumb with room to spare.
+ * **Its size is the room's.** The tile fills the spot `FloorRoom` gives it —
+ * about 55 px on a phone — and its type is set in `cqw` of that room, so a
+ * table the owner made wide is still one tile with its number in the middle.
  */
 withDefaults(defineProps<{
   /** The number alone: "Sto 7" is stripped to "7" before it gets here. */
@@ -62,7 +64,9 @@ withDefaults(defineProps<{
   late?: boolean
   /** A round on this table is still on the phone — dashed, "nacrt" or "čeka". */
   draft?: boolean
-}>(), { sub: null, paid: false, attention: false, late: false, draft: false })
+  /** The table top the owner chose on *Stolovi*. */
+  shape?: 'square' | 'round' | 'wide'
+}>(), { sub: null, paid: false, attention: false, late: false, draft: false, shape: 'square' })
 
 const emit = defineEmits<{ select: [], long: [] }>()
 
@@ -117,7 +121,7 @@ function onClick() {
   <button
     type="button"
     class="table-tile"
-    :class="[variant, { draft, attention, paid }]"
+    :class="[variant, shape, { draft, attention, paid }]"
     @pointerdown="onPointerDown"
     @pointermove="onPointerMove"
     @pointerup="clear"
@@ -148,14 +152,16 @@ function onClick() {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  width: 68px;
-  height: 68px;
-  flex-shrink: 0;
-  border-radius: var(--radius-card);
-  border: 1.5px solid var(--line-soft);
-  background: var(--surface);
+  gap: 0.4cqw;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border-radius: 3.2cqw;
+  border: 1.5px solid var(--line);
+  background: var(--surface-2);
   color: var(--muted);
+  /* A table top standing on the floor, not a patch painted on it. */
+  box-shadow: 0 1.2cqw 2.4cqw -1.2cqw var(--scrim);
   cursor: pointer;
   transition:
     transform var(--dur-tap) var(--ease-standard),
@@ -166,9 +172,11 @@ function onClick() {
   transform: scale(0.95);
 }
 
+.table-tile.round { border-radius: 50%; }
+
 .tile-no {
   font-family: var(--font-display);
-  font-size: var(--text-section);
+  font-size: clamp(15px, 5.6cqw, 24px);
   line-height: 1;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -177,8 +185,8 @@ function onClick() {
 /* The amount, and the whole reason the tile is no longer a circle: it gets the
    full width of the tile and a real type step instead of 10 px in a corner. */
 .tile-sub {
-  max-width: 100%;
-  font-size: var(--text-label);
+  max-width: 92%;
+  font-size: clamp(10px, 3.5cqw, 15px);
   line-height: 1.1;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -230,7 +238,7 @@ function onClick() {
  */
 .table-tile.paid { opacity: 0.62; }
 
-.tile-tick { width: 22px; height: 22px; }
+.tile-tick { width: clamp(16px, 5.6cqw, 24px); height: clamp(16px, 5.6cqw, 24px); }
 
 /* Offered and not taken: copper, but not filled — it is not yours yet. */
 .table-tile.offered {

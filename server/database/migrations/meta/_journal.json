@@ -148,6 +148,13 @@
       "when": 1789664066974,
       "tag": "0020_product_images",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1789975690822,
+      "tag": "0021_floor_layout",
+      "breakpoints": true
     }
   ]
 }

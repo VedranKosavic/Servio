@@ -110,6 +110,8 @@ export interface Bootstrap {
   shift: import('./shifts').ShiftBrief | null
   users: User[]
   tables: VenueTable[]
+  /** Where the tables and the bar stand, as the owner arranged them (`shared/floor.ts`). */
+  floor: import('../floor').FloorLayout
   categories: Category[]
   products: Product[]
   flavours: import('./stock').Flavour[]

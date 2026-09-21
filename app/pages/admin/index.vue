@@ -415,7 +415,7 @@ const headerLine = computed(() => {
 // ---------------------------------------------------------------------------
 
 const zones = computed(() => (live.value && bootstrap.value
-  ? floorZones(live.value.tables, bootstrap.value.tables, now.value.getTime())
+  ? floorZones(live.value.tables, bootstrap.value.tables, now.value.getTime(), bootstrap.value.floor)
   : []))
 
 // ---------------------------------------------------------------------------

@@ -20,6 +20,8 @@ import type {
   VenueTable,
   Zone,
 } from '#shared/types'
+import { roomPlan } from '#shared/floor'
+import type { FloorLayout, RoomPlan } from '#shared/floor'
 import { durationBs } from './adminFormat'
 
 // ---------------------------------------------------------------------------
@@ -434,28 +436,14 @@ export interface PulsFloorCell {
   paid: boolean
 }
 
-/** The VIP pair and anything like it: its own dashed box under its column. */
-export interface PulsFloorGroup {
-  name: string
-  cells: PulsFloorCell[]
-}
-
-/** One vertical run of tables along a wall. */
-export interface PulsFloorColumn {
-  col: number
-  cells: PulsFloorCell[]
-  groups: PulsFloorGroup[]
-  /**
-   * A piece of the room that is not a table, drawn at the foot of this run —
-   * today only the bar. See `FIXTURES`.
-   */
-  foot?: string
-}
-
+/** One half of the room, ready to draw. */
 export interface PulsFloorZone {
   zone: Zone
   label: string
-  columns: PulsFloorColumn[]
+  /** Where every table and the bar stand (`shared/floor.ts`). */
+  plan: RoomPlan
+  /** What each tile says, in the catalogue's order. */
+  cells: PulsFloorCell[]
   /** How many of this zone's tables have guests at them. */
   busy: number
   total: number
@@ -472,44 +460,6 @@ function shortLabel(name: string): string {
 }
 
 /**
- * The room from above, drawn exactly the way the waiter's `FloorPlan` draws it.
- *
- * **Two reads, and why.** `GET /api/owner/live` carries a `TableState` per
- * table — who is sitting there, for how long, for how much — but no name, no
- * zone and no coordinates: those belong to the catalogue, which every screen in
- * the app already gets from `GET /api/bootstrap` and which changes about twice
- * a year. So the live read stays small and this joins the two by id.
- *
- * The geometry is the catalogue's and never this file's: one vertical stack per
- * `col`, ordered by `row`, the stacks spread across the width in `col` order,
- * and a table with a `grp` (today only the VIP pair) in its own box under the
- * column it belongs to. Add a table to the database with the right col/row and
- * it appears here. A table the live read has nothing to say about is drawn
- * **free** rather than dropped — a room with a hole in it is not the room.
- */
-/**
- * The room's architecture: what is on the plan and is not a table.
- *
- * The café has one piece of it — **the bar, at the bottom of the left-hand
- * run** — and drawing it is what turns three columns of squares into a picture
- * of a place. Without it the plan has no landmark at all: every tile looks like
- * every other tile and the owner has to remember which end of the grid is the
- * door and which is the counter.
- *
- * It is a constant and not a row in `tables`, because it is not a table: it
- * seats nobody, opens no tab and can never be tapped. The honest place for it
- * eventually is a `fixtures` table alongside `tables`, so a café that moves its
- * bar does not need a deploy — worth doing the day a second venue exists, and
- * not before.
- *
- * Keyed by zone and column, so it moves with the schematic rather than being
- * positioned in CSS.
- */
-const FIXTURES: Partial<Record<Zone, Record<number, string>>> = {
-  unutra: { 1: 'Šank' },
-}
-
-/**
  * Did this entity make the bootstrap stale?
  *
  * The server's `menu_version` is the newest `menu` or `settings` bump, and
@@ -523,8 +473,24 @@ export function catalogueMoved(entity: ChangeEntity): boolean {
   return entity === 'menu' || entity === 'settings'
 }
 
+/**
+ * The room from above, drawn exactly the way the waiter's `FloorPlan` draws it.
+ *
+ * **Two reads, and why.** `GET /api/owner/live` carries a `TableState` per
+ * table — who is sitting there, for how long, for how much — but no name, no
+ * zone and no place: those belong to the catalogue, which every screen in the
+ * app already gets from `GET /api/bootstrap` and which changes about twice a
+ * year. So the live read stays small and this joins the two by id.
+ *
+ * **Where things stand is the owner's** — `bootstrap.floor`, arranged by
+ * dragging on *Stolovi* — and `roomPlan()` in `shared/floor.ts` turns it into
+ * the same picture on this screen, the waiter's and the editor's. The bar is
+ * part of that arrangement now rather than a constant here, so moving it is a
+ * drag and not a deploy. A table the live read has nothing to say about is
+ * drawn **free** rather than dropped — a room with a hole in it is not the room.
+ */
 export function floorZones(
-  states: TableState[], catalogue: VenueTable[], nowMs: number,
+  states: TableState[], catalogue: VenueTable[], nowMs: number, floor: FloorLayout = { tables: {} },
 ): PulsFloorZone[] {
   const state = new Map(states.filter(s => s.table_id).map(s => [s.table_id!, s]))
 
@@ -552,26 +518,12 @@ export function floorZones(
     const tables = catalogue.filter(t => t.zone === zone)
     if (!tables.length) return []
 
-    const cols = [...new Set(tables.map(t => t.col))].sort((a, b) => a - b)
-    const columns = cols.map((col) => {
-      const inColumn = tables.filter(t => t.col === col)
-      const groupNames = [...new Set(inColumn.filter(t => t.grp).map(t => t.grp!))]
-      return {
-        col,
-        cells: inColumn.filter(t => !t.grp).sort((a, b) => a.row - b.row).map(toCell),
-        groups: groupNames.map(name => ({
-          name,
-          cells: inColumn.filter(t => t.grp === name).sort((a, b) => a.row - b.row).map(toCell),
-        })),
-        foot: FIXTURES[zone]?.[col],
-      }
-    })
-
-    const cells = columns.flatMap(c => [...c.cells, ...c.groups.flatMap(g => g.cells)])
+    const cells = tables.map(toCell)
     return [{
       zone,
       label: zoneLabel(zone),
-      columns,
+      plan: roomPlan(catalogue, floor, zone),
+      cells,
       busy: cells.filter(c => c.tab_id).length,
       total: cells.length,
     }]

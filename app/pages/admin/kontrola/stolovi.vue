@@ -149,6 +149,9 @@ async function setActive(table: TableAdmin, active: boolean) {
 
     <p v-if="error" class="s-error" role="alert">{{ error }}</p>
 
+    <!-- Where each table stands: dragged here, saved once, drawn by every plan. -->
+    <StoloviRaspored :tables="tables" />
+
     <template v-for="group in zones" :key="group.zone">
       <!-- ---- the phone ----------------------------------------------- -->
       <section v-if="isPhone" class="s-group">
@@ -222,7 +225,8 @@ async function setActive(table: TableAdmin, active: boolean) {
     </template>
 
     <p class="s-note">
-      Kolona je stub stolova s lijeva na desno, red je mjesto u stubu odozgo.
+      Mjesto stola na planu mijenjaš povlačenjem u Rasporedu sale. Kolona i red
+      određuju samo gdje se novi sto pojavi dok ga ne povučeš i sačuvaš.
       Sto se ne briše: ugašen sto nestaje s plana, a stare ture ostaju. Zauzet
       sto se ne može ugasiti. Izmjena stiže na telefone za najviše 15 sekundi.
     </p>

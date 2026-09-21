@@ -62,6 +62,12 @@ export const venues = sqliteTable('venues', {
    * so a key the owner never touched always reads as the documented default.
    */
   settingsJson: text('settings_json').notNull().default('{}'),
+  /**
+   * Where every table stands and where the bar is, as the owner dragged them on
+   * *Stolovi* (`shared/floor.ts`). `'{}'` until the first *Sačuvaj*, and then
+   * the plans draw exactly this — `col`/`row` only place a table added later.
+   */
+  floorJson: text('floor_json').notNull().default('{}'),
   createdAt: text('created_at').notNull(),
 }, t => [uniqueIndex('venues_slug_uq').on(t.slug)])
 

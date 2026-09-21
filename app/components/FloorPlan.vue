@@ -2,6 +2,13 @@
 /**
  * The room, from above — drawn from the `tables` rows, never hard-coded.
  *
+ * **Since the room was arranged (`shared/floor.ts`)** the stacks below are only
+ * where a table stands until the owner drags it somewhere on *Stolovi* and
+ * saves: from then on every table is exactly where he put it, the bar included,
+ * and `FloorRoom` draws the floor, the walls, the chairs and the counter around
+ * the tiles this file still decides the colour of. What follows describes the
+ * rule `autoLayout()` keeps for a room nobody has arranged yet.
+ *
  * Each table carries a `col` and a `row`, which are its place on the zone's
  * schematic rather than a position in a list, and both zones read them the same
  * way: one vertical stack per `col`, ordered by `row`, the stacks spread across
@@ -39,10 +46,15 @@
  * owed — rather than the full total of a tab already half paid.
  */
 import { formatAmount } from '#shared/money'
+import { roomPlan } from '#shared/floor'
+import type { FloorLayout } from '#shared/floor'
 import type { TableState, VenueTable, Zone } from '#shared/types'
+import type { ChairTone } from './FloorRoom.vue'
 
 const props = withDefaults(defineProps<{
   tables: VenueTable[]
+  /** Where the owner put every table and the bar — `bootstrap.floor`. */
+  floor?: FloorLayout
   zone: Zone
   states: TableState[]
   /** The person holding the phone, from `GET /api/me`. */
@@ -58,6 +70,7 @@ const props = withDefaults(defineProps<{
    */
   currentShiftSeq?: number | null
 }>(), {
+  floor: () => ({ tables: {} }),
   draftTables: () => [],
   draftLabel: undefined,
   currentShiftSeq: null,
@@ -67,6 +80,8 @@ defineEmits<{ select: [tableId: string], long: [tableId: string] }>()
 
 interface Cell {
   id: string
+  /** Who sits at it, for the colour of its chairs. */
+  tone: ChairTone
   label: string
   sub: string | null
   variant: 'free' | 'shift-a' | 'shift-b' | 'offered'
@@ -89,7 +104,7 @@ function toCell(table: VenueTable): Cell {
   const state = stateById.value.get(table.id)
   const label = shortLabel(table.name)
   const draft = props.draftTables.includes(table.id)
-  const base = { id: table.id, label, paid: false, attention: false, late: false, draft }
+  const base = { id: table.id, label, paid: false, attention: false, late: false, draft, tone: 'free' as ChairTone }
 
   if (!state?.tab_id) {
     // A table with nothing on the server but a draft on this phone is not free:
@@ -109,7 +124,7 @@ function toCell(table: VenueTable): Cell {
 
   // Offered to me and not taken yet: not mine, but one tap from it.
   if (state.offered_to && state.offered_to === props.myUserId) {
-    return { ...common, sub: 'nudi', variant: 'offered' }
+    return { ...common, sub: 'nudi', variant: 'offered', tone: 'offered' }
   }
 
   /**
@@ -118,15 +133,16 @@ function toCell(table: VenueTable): Cell {
    * his initials — which is where that badge already was.
    */
   const variant = shiftVariant(state.shift_seq)
+  const tone: ChairTone = variant === 'shift-b' ? 'b' : 'a'
   const mine = state.assigned_to === props.myUserId
 
   if (mine) {
     // The amount without " KM": the currency on every tile is noise, and the
     // tile now has the width to set the number itself at a readable size.
-    return { ...common, sub: formatAmount(state.remaining_fen), variant }
+    return { ...common, sub: formatAmount(state.remaining_fen), variant, tone }
   }
 
-  return { ...common, sub: state.assigned_to_initials, variant }
+  return { ...common, sub: state.assigned_to_initials, variant, tone }
 }
 
 /**
@@ -143,78 +159,42 @@ function shiftVariant(seq: number | null): 'shift-a' | 'shift-b' {
   return n % 2 === 0 ? 'shift-b' : 'shift-a'
 }
 
-const zoneTables = computed(() => props.tables.filter(t => t.zone === props.zone))
+/** This zone, arranged: every table at its spot, the bar if it stands here. */
+const plan = computed(() => roomPlan(props.tables, props.floor, props.zone))
 
-/** The vertical stacks, plus whatever boxed groups hang off each one. */
-const columns = computed(() => {
-  const cols = [...new Set(zoneTables.value.map(t => t.col))].sort((a, b) => a - b)
-  return cols.map((col) => {
-    const inColumn = zoneTables.value.filter(t => t.col === col)
-    const groupNames = [...new Set(inColumn.filter(t => t.grp).map(t => t.grp!))]
-    return {
-      col,
-      cells: inColumn.filter(t => !t.grp).sort((a, b) => a.row - b.row).map(toCell),
-      groups: groupNames.map(name => ({
-        name,
-        cells: inColumn.filter(t => t.grp === name).sort((a, b) => a.row - b.row).map(toCell),
-      })),
-    }
-  })
-})
+/** Each tile's colour and second line, by table id. */
+const cells = computed(() => new Map(props.tables
+  .filter(t => t.zone === props.zone)
+  .map(t => [t.id, toCell(t)])))
+
+function toneOf(id: string): ChairTone {
+  return cells.value.get(id)?.tone ?? 'free'
+}
 </script>
 
 <template>
-  <div class="well flex flex-1 flex-col gap-4 rounded-panel px-3 py-4">
-    <div class="flex flex-1 overflow-x-auto">
-      <!-- Both zones: one stack per column, shorter stacks centred (items-center). -->
-      <div class="flex flex-1 items-center justify-between gap-2">
-        <div
-          v-for="column in columns"
-          :key="column.col"
-          class="flex flex-col items-center gap-3"
-        >
-          <FloorTable
-            v-for="cell in column.cells"
-            :key="cell.id"
-            :label="cell.label"
-            :sub="cell.sub"
-            :variant="cell.variant"
-            :paid="cell.paid"
-            :attention="cell.attention"
-            :late="cell.late"
-            :draft="cell.draft"
-            @select="$emit('select', cell.id)"
-            @long="$emit('long', cell.id)"
-          />
-          <div
-            v-for="group in column.groups"
-            :key="group.name"
-            class="flex flex-col items-center gap-2 rounded-card border border-dashed border-line px-3 pb-3 pt-2"
-          >
-            <span class="eyebrow">{{ group.name }}</span>
-            <div class="flex gap-3">
-              <FloorTable
-                v-for="cell in group.cells"
-                :key="cell.id"
-                :label="cell.label"
-                :sub="cell.sub"
-                :variant="cell.variant"
-                :paid="cell.paid"
-                :attention="cell.attention"
-                :late="cell.late"
-                :draft="cell.draft"
-                @select="$emit('select', cell.id)"
-                @long="$emit('long', cell.id)"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+  <div class="flex flex-1 flex-col gap-3">
+    <FloorRoom class="mx-auto max-w-[560px]" :plan="plan" :tone="toneOf">
+      <template #table="{ table }">
+        <FloorTable
+          v-if="cells.get(table.id)"
+          :label="cells.get(table.id)!.label"
+          :sub="cells.get(table.id)!.sub"
+          :variant="cells.get(table.id)!.variant"
+          :paid="cells.get(table.id)!.paid"
+          :attention="cells.get(table.id)!.attention"
+          :late="cells.get(table.id)!.late"
+          :draft="cells.get(table.id)!.draft"
+          :shape="table.shape"
+          @select="$emit('select', table.id)"
+          @long="$emit('long', table.id)"
+        />
+      </template>
+    </FloorRoom>
 
     <!-- The caption on the plan: colour never carries a meaning on its own, so
          every marker is drawn beside the word it stands for. -->
-    <ul class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 border-t border-line-soft pt-3 text-caption tracking-normal text-muted">
+    <ul class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 px-2 text-caption tracking-normal text-muted">
       <li class="flex items-center gap-1.5"><i class="key key-shift-a" />prva smjena</li>
       <li class="flex items-center gap-1.5"><i class="key key-shift-b" />druga smjena</li>
       <li class="flex items-center gap-1.5"><i class="key key-paid" />naplaćen</li>
@@ -234,8 +214,8 @@ const columns = computed(() => {
   height: 11px;
   flex-shrink: 0;
   border-radius: 4px;
-  border: 1.5px solid var(--line-soft);
-  background: var(--surface);
+  border: 1.5px solid var(--line);
+  background: var(--surface-2);
 }
 
 .key-shift-a { background: var(--accent); border-color: transparent; }

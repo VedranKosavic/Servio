@@ -22,6 +22,7 @@
  * Bosnian sentence with its numbers filled in.
  */
 import { ApiSideError } from '~/composables/useApi'
+import type { FloorLayout, FloorLayoutBody } from '#shared/floor'
 import type {
   CategoriesReport,
   ConfirmCountBody,
@@ -399,6 +400,9 @@ export function useAdminApi() {
       request<TableAdmin>('/api/admin/tables', { method: 'POST', body }),
     updateTable: (id: string, body: UpdateTableBody) =>
       request<TableAdmin>(`/api/admin/tables/${id}`, { method: 'PATCH', body }),
+    /** *Sačuvaj raspored* — where every table and the bar stand. */
+    saveFloor: (body: FloorLayoutBody) =>
+      request<FloorLayout>('/api/admin/floor', { method: 'PUT', body }),
 
     /** The catalogue behind every stock form and every recipe line. */
     getStockItems: () => request<StockItemAdmin[]>('/api/admin/stock-items'),

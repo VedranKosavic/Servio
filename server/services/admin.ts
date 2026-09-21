@@ -28,6 +28,8 @@ import { schema } from '../database/client'
 import { badRequest, conflict, notFound, SankError, unprocessable } from '../utils/errors'
 import { errorMessage } from '#shared/errors'
 import { PRODUCT_IMAGE_MAX_BYTES, productImageUrl } from '#shared/menuImage'
+import { isArranged, parseFloor } from '#shared/floor'
+import type { FloorLayout, FloorLayoutBody } from '#shared/floor'
 import { isJpeg, jpegSize } from './uploads'
 import { newId, nowIso } from '../utils/ids'
 import { hashSecret } from '../utils/password'
@@ -788,6 +790,67 @@ export function updateTable(
 
   announce(db, venueId, 'table', tableId)
   return requireTableView(db, venueId, tableId)
+}
+
+// ===========================================================================
+// The floor plan's arrangement
+// ===========================================================================
+
+/**
+ * `PUT /api/admin/floor` — where every table stands and where the bar is, as
+ * the owner dragged them on *Stolovi*.
+ *
+ * The whole arrangement is written at once, the way it is saved: a room is one
+ * picture, and half of it saved is a picture nobody drew. A spot for an id this
+ * venue has never had is dropped rather than stored, so the blob only ever names
+ * real tables — an inactive one keeps its spot, and comes back to it if it is
+ * switched on again.
+ *
+ * `menu` is bumped because that is what moves `menu_version`, and a phone
+ * refetches the bootstrap — which carries the arrangement — when it moves. One
+ * poll, at most 15 s, and every plan in the café is the saved one.
+ */
+export function saveFloor(
+  db: Db, venueId: string, actor: Actor, body: FloorLayoutBody, now = nowIso(),
+): FloorLayout {
+  const known = new Set(db.select({ id: schema.tables.id }).from(schema.tables)
+    .where(eq(schema.tables.venueId, venueId))
+    .all()
+    .map(row => row.id))
+
+  const layout: FloorLayout = {
+    tables: Object.fromEntries(Object.entries(body.tables).filter(([id]) => known.has(id))),
+    bar: body.bar,
+  }
+
+  const row = db.select({ json: schema.venues.floorJson }).from(schema.venues)
+    .where(eq(schema.venues.id, venueId))
+    .get()
+  const before = parseFloor(row?.json)
+
+  db.transaction((tx) => {
+    tx.update(schema.venues)
+      .set({ floorJson: JSON.stringify(layout) })
+      .where(eq(schema.venues.id, venueId))
+      .run()
+
+    log(tx, venueId, {
+      kind: 'settings_changed',
+      body: {
+        key: 'floor_layout',
+        label: 'Raspored stolova',
+        before: isArranged(before) ? `${Object.keys(before.tables).length} stolova` : 'automatski',
+        after: `${Object.keys(layout.tables).length} stolova`,
+      },
+      actorId: actor.userId,
+      ref: { type: 'venue', id: venueId },
+      at: now,
+    })
+    bump(tx, venueId, 'menu', venueId)
+  })
+
+  announce(db, venueId, 'menu', venueId)
+  return layout
 }
 
 // ===========================================================================

@@ -559,19 +559,34 @@ describe('floorZones', () => {
     expect(zones.map(z => z.zone)).toEqual(['unutra', 'basta'])
     expect(zones[1]!.label).toBe('Bašta')
 
-    const inside = zones[0]!
-    expect(inside.columns.map(c => c.col)).toEqual([1, 2])
-    expect(inside.columns[0]!.cells.map(c => c.name)).toEqual(['Sto 1', 'Sto 2'])
-    // A grouped table is never in the column's own stack, or its coordinates
-    // would collide with the run of tables along the wall.
-    expect(inside.columns[1]!.cells.map(c => c.name)).toEqual(['Sto 3'])
-    expect(inside.columns[1]!.groups).toHaveLength(1)
-    expect(inside.columns[1]!.groups[0]!.name).toBe('vip')
-    expect(inside.columns[1]!.groups[0]!.cells.map(c => c.name)).toEqual(['Sto 4', 'Sto 5'])
+    // Nobody has arranged this room, so the old stacking rule places it: a run
+    // per column, the VIP pair boxed abreast under the second.
+    const at = new Map(zones[0]!.plan.tables.map(t => [t.id, t]))
+    expect(at.get('u1')!.x).toBe(at.get('u2')!.x)
+    expect(at.get('u1')!.y).toBeLessThan(at.get('u2')!.y)
+    expect(at.get('u3')!.x).toBeGreaterThan(at.get('u1')!.x)
+    expect(at.get('v1')!.y).toBe(at.get('v2')!.y)
+    expect(at.get('v1')!.y).toBeGreaterThan(at.get('u3')!.y)
+    expect(zones[0]!.plan.groups.map(g => g.name)).toEqual(['vip'])
+    // The bar stands where it always did, at the foot of Unutra.
+    expect(zones[0]!.plan.bar).not.toBeNull()
+    expect(zones[1]!.plan.bar).toBeNull()
+  })
+
+  it('draws the owner’s arrangement once there is one', () => {
+    const zones = floorZones(states, catalogue, now, {
+      tables: { u1: { x: 60, y: 40 }, u2: { x: 10, y: 10, shape: 'round' } },
+      bar: { zone: 'basta', x: 10, y: 60, len: 30, rot: 0 },
+    })
+    const at = new Map(zones[0]!.plan.tables.map(t => [t.id, t]))
+    expect(at.get('u1')).toMatchObject({ x: 60, y: 40, shape: 'square' })
+    expect(at.get('u2')).toMatchObject({ x: 10, y: 10, shape: 'round' })
+    expect(zones[0]!.plan.bar).toBeNull()
+    expect(zones[1]!.plan.bar).toMatchObject({ x: 10, y: 60, w: 30 })
   })
 
   it('says "7" on the tile and keeps "Sto 7" for the sheet’s title', () => {
-    const cell = floorZones(states, catalogue, now)[0]!.columns[0]!.cells[0]!
+    const cell = floorZones(states, catalogue, now)[0]!.cells.find(c => c.table_id === 'u1')!
     expect(cell.label).toBe('1')
     expect(cell.name).toBe('Sto 1')
   })
@@ -590,7 +605,7 @@ describe('floorZones', () => {
       }),
     ], catalogue, now)
 
-    const cell = zones[0]!.columns[0]!.cells[1]!
+    const cell = zones[0]!.cells.find(c => c.table_id === 'u2')!
     expect(cell.name).toBe('Sto 2')
     expect(cell.tab_id).toBe('tab-1')
     expect(cell.age).toBe('1 h 40')
@@ -615,8 +630,8 @@ describe('floorZones', () => {
     const zones = floorZones([], catalogue, now)
     expect(zones[0]!.total).toBe(5)
     expect(zones[0]!.busy).toBe(0)
-    expect(zones[0]!.columns[0]!.cells[0]!.tab_id).toBeNull()
-    expect(zones[0]!.columns[0]!.cells[0]!.age).toBe('')
+    expect(zones[0]!.cells[0]!.tab_id).toBeNull()
+    expect(zones[0]!.cells[0]!.age).toBe('')
   })
 
   it('names the two zones the way the room does', () => {

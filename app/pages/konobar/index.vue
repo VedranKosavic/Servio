@@ -1129,6 +1129,7 @@ function addToSheet() {
         <FloorPlan
           v-if="boot"
           :tables="boot.tables"
+          :floor="boot.floor"
           :zone="zone"
           :states="shownStates"
           :my-user-id="me.user.value?.id ?? null"

@@ -36,7 +36,11 @@
  */
 import type { PulsFloorCell } from '~/utils/puls'
 
-const props = defineProps<{ cell: PulsFloorCell }>()
+const props = withDefaults(defineProps<{
+  cell: PulsFloorCell
+  /** The table top the owner chose on *Stolovi*. */
+  shape?: 'square' | 'round' | 'wide'
+}>(), { shape: 'square' })
 
 defineEmits<{ open: [] }>()
 
@@ -64,7 +68,7 @@ const label = computed(() => {
   <component
     :is="cell.tab_id ? 'button' : 'div'"
     class="a-tbl"
-    :class="[cell.tab_id ? 'busy' : 'free', { wait: cell.pending_review }]"
+    :class="[cell.tab_id ? 'busy' : 'free', shape, { wait: cell.pending_review }]"
     :type="cell.tab_id ? 'button' : undefined"
     :aria-label="label"
     @click="cell.tab_id && $emit('open')"
@@ -82,20 +86,19 @@ const label = computed(() => {
 </template>
 
 <style scoped>
-/* The waiter's tile, to the pixel: 68 px, `--radius-card`, the number in the
-   display face with the second line under it. */
+/* The waiter's tile: it fills the spot `FloorRoom` gives it, and its type is
+   set in `cqw` of the room so it scales with the plan. */
 .a-tbl {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  width: 68px;
-  height: 68px;
-  flex-shrink: 0;
-  padding: 0 4px;
-  border-radius: var(--radius-card);
+  gap: 0.4cqw;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border-radius: 3.2cqw;
   /* No edge on the base — each state brings its own, or none. The old rule put
      a 1.5 px `--line-soft` border on every tile, which on the well's own ground
      was two beiges a shade apart: the free tiles read as smudges and their
@@ -117,9 +120,11 @@ button.a-tbl.wait:hover { box-shadow: var(--shadow-pop), 0 0 0 2px var(--warn); 
 button.a-tbl:active { transform: scale(0.95); }
 button.a-tbl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+.a-tbl.round { border-radius: 50%; }
+
 .a-tbl-no {
   font-family: var(--font-display);
-  font-size: var(--text-section);
+  font-size: clamp(15px, 5.6cqw, 24px);
   line-height: 1;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -128,8 +133,8 @@ button.a-tbl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
 /* The amount, and the whole reason the tile is a square and not a circle: it
    gets the full width of the tile and a real type step. */
 .a-tbl-amt {
-  max-width: 100%;
-  font-size: var(--text-label);
+  max-width: 92%;
+  font-size: clamp(10px, 3.5cqw, 15px);
   line-height: 1.1;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -160,9 +165,13 @@ button.a-tbl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
  * difference the eye catches across a room. Every occupied table gets the same
  * one, whoever is serving it and however long they have been sitting.
  */
+/* On the room's floor an empty table is a table top — the card white every
+   other object on the dashboard is made of, with its edge — rather than a hole
+   cut in the boards. */
 .a-tbl.free {
-  background: transparent;
+  background: var(--surface);
   border: 1px solid var(--line);
+  box-shadow: var(--shadow-raise);
 }
 
 .a-tbl.free .a-tbl-no { color: var(--muted); }
@@ -189,7 +198,7 @@ button.a-tbl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
   color: var(--accent-ink);
 }
 
-.a-tbl-tick { width: 20px; height: 20px; color: var(--accent-ink); }
+.a-tbl-tick { width: clamp(16px, 5.4cqw, 22px); height: clamp(16px, 5.4cqw, 22px); color: var(--accent-ink); }
 
 .a-tbl.busy .a-tbl-no { color: var(--ink); }
 .a-tbl.busy .a-tbl-amt { color: var(--accent-ink); }
@@ -205,27 +214,5 @@ button.a-tbl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
  */
 .a-tbl.wait {
   box-shadow: var(--shadow-raise), 0 0 0 2px var(--warn);
-}
-
-/**
- * Two steps down, so the whole room fits a narrow phone.
- *
- * *Unutra* is three runs of tables with the **VIP pair boxed abreast** under the
- * last of them, so the widest line of the plan is four tiles side by side plus
- * the box's own edges and two gaps. That pair is the sum that decides the tile:
- * at 68 px the line is 316 px and the room has 309 px to give at 375 px, so the
- * plan would have to be dragged sideways to see the end of — which is not a plan
- * of the room. 62 px brings the line to 292 px and 60 px to 284 px, and both
- * still carry the number with the amount under it.
- *
- * The steps are at 430 px and 375 px rather than one step at 375: a 390 px phone
- * is the common case and 62 px is as large as it can honestly be there.
- */
-@media (max-width: 430px) {
-  .a-tbl { width: 62px; height: 64px; }
-}
-
-@media (max-width: 374px) {
-  .a-tbl { width: 60px; height: 62px; }
 }
 </style>

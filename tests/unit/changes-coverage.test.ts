@@ -50,6 +50,7 @@ import {
   createCategory, createProduct, createStockItem, createTable, createUser, setRecipe,
   deleteProductImage, setProductImage,
   deleteCategory, updateCategory, updateProduct, updateSettings, updateStockItem, updateTable, updateUser,
+  saveFloor,
 } from '../../server/services/admin'
 import { schema } from '../helpers/db'
 import {
@@ -545,6 +546,15 @@ const CALLS: Record<string, () => void | Promise<void>> = {
 
   [join('admin', 'tables', '[id]', 'index.patch.ts')]: () => {
     updateTable(f.db, f.venueId, f.adminActor(), f.tableId('Sto 1'), { sort: 5 })
+  },
+
+  // *Raspored sale* — `bump('menu')`, which is what moves `menu_version` and
+  // sends every phone back for the bootstrap that carries the arrangement.
+  [join('admin', 'floor.put.ts')]: () => {
+    saveFloor(f.db, f.venueId, f.adminActor(), {
+      tables: { [f.tableId('Sto 1')]: { x: 10, y: 10 } },
+      bar: null,
+    })
   },
 
   [join('admin', 'stock-items', 'index.post.ts')]: () => {

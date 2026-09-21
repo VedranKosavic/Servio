@@ -6,6 +6,7 @@
  * should wait once.
  */
 import { productImageUrl } from '#shared/menuImage'
+import { parseFloor } from '#shared/floor'
 import { and, asc, eq, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
 import type { Bootstrap, Flavour } from '#shared/types'
@@ -129,6 +130,7 @@ export function getBootstrap(db: Queryable, venueId: string, actor: Actor): Boot
       grp: t.grp,
       sort: t.sort,
     })),
+    floor: parseFloor(venue.floorJson),
     categories: categories.map(c => ({
       id: c.id,
       name: c.name,
