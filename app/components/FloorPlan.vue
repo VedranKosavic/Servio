@@ -75,7 +75,7 @@ const props = withDefaults(defineProps<{
   currentShiftSeq: null,
 })
 
-defineEmits<{ select: [tableId: string], long: [tableId: string] }>()
+defineEmits<{ select: [tableId: string], long: [tableId: string], bar: [] }>()
 
 interface Cell {
   id: string
@@ -166,7 +166,7 @@ const cells = computed(() => new Map(props.tables
 
 <template>
   <div class="flex flex-1 flex-col gap-3">
-    <FloorRoom class="mx-auto max-w-[560px]" :plan="plan">
+    <FloorRoom class="mx-auto max-w-[560px]" :plan="plan" @bar="$emit('bar')">
       <template #table="{ table }">
         <FloorTable
           v-if="cells.get(table.id)"

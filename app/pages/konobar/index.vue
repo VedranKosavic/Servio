@@ -892,6 +892,39 @@ const openTabsLine = computed(() => {
   return `${n} ${n === 1 ? 'otvoren' : 'otvorenih'}`
 })
 
+// ---------------------------------------------------------------------------
+// Šank — everything that happens at the counter and not at a table
+// ---------------------------------------------------------------------------
+
+/**
+ * The bar on the plan is a thing you tap now (the owner, 22.09.2026): the
+ * shelf, a nargila or a drink to take away, what the staff drank, what was
+ * spilled. Four of the five walk to the same menu the *Bez stola* button opens
+ * — a tab on no table — and two of those four carry why nobody is paying for
+ * it, which `?namjena=` hands to the menu and the lock turns into *Osoblje* or
+ * *Otpis*.
+ */
+const barOpen = ref(false)
+const stanjeOpen = ref(false)
+
+/**
+ * Which tab of the menu a nargila to take away should land on: the category
+ * the shisha products are in, whatever the owner has called it. The bootstrap's
+ * categories carry no kind, so the products say it instead.
+ */
+const nargilaKat = computed(() =>
+  (boot.value?.products ?? []).find(p => p.kind === 'shisha')?.category_id ?? null)
+
+/**
+ * Always a **new** tab, the way *+ Bez stola* is: two takeaways in a row are
+ * two sales, and what the staff drank is never the same tab as a guest's.
+ */
+function fromBar(path: string) {
+  cart.closeTab(null)
+  barOpen.value = false
+  void navigateTo(path)
+}
+
 /** The two halves of the room, as the segmented control reads them. */
 const ZONES = [
   { value: 'unutra', label: 'Unutra' },
@@ -1138,6 +1171,7 @@ function addToSheet() {
           :current-shift-seq="currentShiftSeq"
           @select="openTable"
           @long="openZar"
+          @bar="barOpen = true"
         />
         <p v-else-if="bootPending" class="py-10 text-center text-text-2">
           Učitavanje…
@@ -1177,6 +1211,19 @@ function addToSheet() {
         </button>
       </div>
     </div>
+
+    <!-- The counter's own list, and the shelf it opens. -->
+    <WaiterBarSheet
+      v-if="barOpen"
+      @close="barOpen = false"
+      @stanje="barOpen = false; stanjeOpen = true"
+      @nargila="fromBar(nargilaKat ? `/konobar/dodaj/bez-stola?kat=${nargilaKat}` : '/konobar/dodaj/bez-stola')"
+      @pice="fromBar('/konobar/dodaj/bez-stola')"
+      @osoblje="fromBar('/konobar/dodaj/bez-stola?namjena=osoblje')"
+      @otpis="fromBar('/konobar/dodaj/bez-stola?namjena=otpis')"
+    />
+
+    <WaiterStanjeSheet v-if="stanjeOpen" @close="stanjeOpen = false" />
 
     <OrderZarSheet
       v-if="zarFor"

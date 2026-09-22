@@ -48,6 +48,29 @@ const tableId = computed<string | null>(() => {
   return param === LOOSE ? null : param
 })
 
+/**
+ * `?namjena=osoblje|otpis` — **what this round is for, when nobody is paying
+ * for it** (the owner, 22.09.2026, from the bar's own sheet).
+ *
+ * Both are ordinary rounds: the goods come off the shelf exactly as a sold one
+ * does, which is the point — what the staff drank and what was spilled have to
+ * move the stock or the shelf lies. What differs is that the tab is marked the
+ * moment it is locked, so it closes authorised and lands in the shift's own
+ * subtraction (`AUTHORISED_UNPAID_REASONS`, `shiftCategories`) instead of on
+ * the waiter's money.
+ *
+ * It rides in the URL rather than in the cart: the draft is the waiter's
+ * ordinary draft, and a phone that reloads mid-round must not forget what the
+ * round was for.
+ */
+const NAMJENE = { osoblje: 'Osoblje', otpis: 'Otpis' } as const
+type Namjena = keyof typeof NAMJENE
+const namjena = computed<Namjena | null>(() => {
+  const asked = String(route.query.namjena ?? '')
+  return asked in NAMJENE ? asked as Namjena : null
+})
+const namjenaLabel = computed(() => (namjena.value ? NAMJENE[namjena.value] : ''))
+
 onMounted(() => {
   void me.requireSession()
 })
@@ -56,7 +79,10 @@ const { data: boot, refresh: refreshBoot } = useBootstrapData()
 
 const table = computed(() =>
   (tableId.value === null ? null : boot.value?.tables.find(t => t.id === tableId.value) ?? null))
-const tableName = computed(() => (tableId.value === null ? 'Bez stola' : table.value?.name ?? 'Sto'))
+const tableName = computed(() => {
+  if (namjena.value) return namjenaLabel.value
+  return tableId.value === null ? 'Bez stola' : table.value?.name ?? 'Sto'
+})
 const zoneLabel = computed(() => {
   if (tableId.value === null) return 'Šank'
   return table.value?.zone === 'basta' ? 'Bašta' : 'Unutra'
@@ -384,6 +410,26 @@ async function confirm() {
         })),
       },
     })
+    // Nobody pays for this one: the mark goes into the outbox right behind the
+    // round, keyed by the same tab client id, so the pair travels together and
+    // an offline phone marks a tab the server has never seen.
+    if (namjena.value) {
+      const markId = crypto.randomUUID()
+      await enqueue({
+        kind: 'unpaid',
+        client_id: markId,
+        tab_client_id: tabClientId,
+        label: tableName.value,
+        payload: {
+          client_id: markId,
+          tab_client_id: tabClientId,
+          reason: namjena.value,
+          client_created_at: new Date().toISOString(),
+        },
+      })
+      cart.closeTab(tableId.value)
+    }
+
     quoted.value = { ...quoted.value, [draft.client_id]: totalAtLock }
     cart.clear(tableId.value)
     confirmOpen.value = false
@@ -424,11 +470,21 @@ async function confirm() {
           the question a waiter asks with his thumb already moving, so it wants
           a 56 px target with a chevron on it, not a 12 px caption.
         -->
+        <!-- Nobody is paying for this round, and the screen says so the whole
+             way through: it is the one thing a waiter cannot check afterwards
+             from the menu. -->
+        <p v-if="namjena" class="note" :class="namjena === 'otpis' ? 'note-warn' : 'note-good'">
+          <strong>{{ namjenaLabel }}</strong> ·
+          {{ namjena === 'otpis'
+            ? 'proliveno ili razbijeno — skida sa stanja, ne naplaćuje se'
+            : 'za osoblje — skida sa stanja, ne naplaćuje se' }}
+        </p>
+
         <NuxtLink
           :to="backTo"
           class="card-2 flex min-h-14 items-center gap-3 px-4 py-2"
         >
-          <span class="grow truncate text-body font-semibold">{{ tableName }} · {{ zoneLabel }}</span>
+          <span class="grow truncate text-body font-semibold">{{ tableName }}<template v-if="!namjena"> · {{ zoneLabel }}</template></span>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 text-muted" aria-hidden="true">
             <path d="M9 6l6 6-6 6" />
           </svg>

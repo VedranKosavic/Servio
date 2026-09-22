@@ -20,6 +20,11 @@
  * the screen using the room: the waiter's tile (dark, the shift colours, the
  * long press for žar), *Puls*'s (light), or the editor's plain number.
  *
+ * **The bar is a thing you tap** on a finished plan: everything that happens at
+ * the counter rather than at a table — the shelf, a nargila or a drink to take
+ * away, what the staff drank, what was spilled — is behind it, because that is
+ * where a waiter looks for it (the owner, 22.09.2026).
+ *
  * **Chairs are the editor's only.** They show how much floor a table really
  * takes while the owner is arranging it; on the finished plan he asked for
  * them gone — *"remove the 4 lines on the sides when we finish editing"* — so
@@ -55,6 +60,8 @@ const emit = defineEmits<{
   /** A table (by id) or the bar (`'bar'`) was dragged to x, y. */
   move: [id: string, x: number, y: number]
   select: [id: string | null]
+  /** The counter was tapped on a plan nobody is editing — the waiter's bar sheet. */
+  bar: []
 }>()
 
 const room = ref<HTMLElement | null>(null)
@@ -227,16 +234,17 @@ function onRoomDown(event: PointerEvent) {
           clash: editable && clashes.has('bar'),
         }]"
         :style="box(plan.bar)"
-        :tabindex="editable ? 0 : undefined"
-        :role="editable ? 'button' : undefined"
-        :aria-label="editable ? 'Šank' : undefined"
-        :aria-hidden="editable ? undefined : 'true'"
+        tabindex="0"
+        role="button"
+        aria-label="Šank"
         @pointerdown="onDown($event, 'bar', plan.bar)"
         @pointermove="onMove"
         @pointerup="onUp"
         @pointercancel="onUp"
         @keydown="onKey($event, 'bar', plan.bar)"
-        @click="onTap('bar')"
+        @keydown.enter="!editable && emit('bar')"
+        @keydown.space.prevent="!editable && emit('bar')"
+        @click="editable ? onTap('bar') : emit('bar')"
       >
         <i
           v-for="stool in stools(plan.bar)"
@@ -393,6 +401,7 @@ function onRoomDown(event: PointerEvent) {
 .fr-bar {
   position: absolute;
   z-index: 1;
+  cursor: pointer;
   border-radius: calc(var(--u) * 1.8);
   background:
     linear-gradient(
@@ -410,6 +419,10 @@ function onRoomDown(event: PointerEvent) {
 .fr-bar.rot-180 { box-shadow: inset 0 calc(var(--u) * 1) 0 var(--accent), 0 calc(var(--u) * 1.4) calc(var(--u) * 3) calc(var(--u) * -1.4) var(--scrim); }
 .fr-bar.rot-90 { box-shadow: inset calc(var(--u) * 1) 0 0 var(--accent), 0 calc(var(--u) * 1.4) calc(var(--u) * 3) calc(var(--u) * -1.4) var(--scrim); }
 .fr-bar.rot-270 { box-shadow: inset calc(var(--u) * -1) 0 0 var(--accent), 0 calc(var(--u) * 1.4) calc(var(--u) * 3) calc(var(--u) * -1.4) var(--scrim); }
+
+/* Tapped, the counter answers like the tiles do. */
+.fr-bar:not(.selected):active { transform: scale(0.97); }
+.fr-bar:focus-visible { outline: 2.5px solid var(--accent); outline-offset: 3px; }
 
 .fr-bar-top {
   position: absolute;
