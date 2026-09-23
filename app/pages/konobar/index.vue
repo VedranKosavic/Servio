@@ -932,17 +932,17 @@ const ZONES = [
 ] as const
 
 /**
- * *+ Bez stola* — **always the menu, never the money** (the owner, 16.09.2026).
+ * **There is no *+ Bez stola* button any more** (the owner, 23.09.2026): the
+ * counter is a thing you tap, and everything that used to start with that
+ * button starts in its sheet instead — *Piće za ponijeti*, *Nargila za
+ * ponijeti*, *Osoblje*, *Otpis*, each of them `fromBar()` above, each of them
+ * still a tab on no table.
  *
- * The button is how a new party at the bar gets its first round, so it opens
- * the menu every time and forgets whatever bar tab this phone was last adding
- * to: two people standing at the bar are two parties, not one tab that grows
- * all night. Charging one of them is the card's job, one card per tab.
+ * What stays is **the card**: a loose tab that owes money is drawn above the
+ * plan and is the only way to charge one, so it outlives the button that used
+ * to open it. Same for the sheet behind it — *Premjesti · Rashod · Otpis ·
+ * Osoblje* on a tab that has already been rung up.
  */
-function openLoose() {
-  cart.closeTab(null)
-  navigateTo('/konobar/dodaj/bez-stola')
-}
 
 /**
  * *+ Dodaj* from the sheet: another round on **this** tab.
@@ -984,11 +984,7 @@ function addToSheet() {
 
       <WaiterOutboxBanner />
 
-      <!-- `pb-20`, the height of the `.action-bar` below: the bar is sticky and
-           its gradient paints over whatever the column ends with, which clipped
-           the last line of the hint. The column has to end above the bar, not
-           under it. -->
-      <div class="flex flex-1 flex-col gap-4 pb-20 pt-4">
+      <div class="flex flex-1 flex-col gap-4 pb-4 pt-4">
         <!-- A queued body the server refused. It blocks its own table only. -->
         <WaiterFailedCard />
 
@@ -1192,24 +1188,6 @@ function addToSheet() {
         </p>
       </div>
 
-      <!--
-        The guests standing at the bar get a tab like anybody else.
-
-        It is anchored in the system's `.action-bar` rather than floated over
-        the room: a button floating free covered a different table at every
-        scroll position, and the plan is the one screen where a covered tile is
-        a table nobody serves. The bar is right-aligned because tapping a table
-        is what this screen is *for* — this is the second action, not the first.
-      -->
-      <div class="action-bar justify-end">
-        <button
-          type="button"
-          class="btn btn-primary btn-lg shadow-pop"
-          @click="openLoose"
-        >
-          + Bez stola
-        </button>
-      </div>
     </div>
 
     <!-- The counter's own list, and the shelf it opens. -->
