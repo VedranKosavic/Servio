@@ -28,8 +28,8 @@ import { nowIso } from '../utils/ids'
 import { businessDate } from '#shared/dates'
 import type { HeartbeatBody } from '#shared/schemas'
 import type { HeartbeatResult } from '#shared/types'
-import type { Db } from './types'
-import { getSettings, currentShift } from './contracts'
+import type { Actor, Db } from './types'
+import { getSettings, actorShift, currentShift } from './contracts'
 import { maxSeq } from './changes'
 import { hasEntryFor, log } from './log'
 
@@ -38,6 +38,7 @@ const MAX_SKEW_S = 3600
 
 export function heartbeat(
   db: Db, venueId: string, deviceId: string, body: HeartbeatBody, at = nowIso(),
+  actor?: Actor,
 ): HeartbeatResult {
   const result = db.transaction((tx) => {
     const device = tx.select().from(schema.devices)
@@ -84,7 +85,10 @@ export function heartbeat(
       }
     }
 
-    const shift = currentShift(tx, venueId)
+    // His own shift, not the building's: during a handover the strip must say
+    // whether *his* night is closing, not the other crew's. A heartbeat with no
+    // actor behind it (a device check with no session) gets the newest.
+    const shift = actor ? actorShift(tx, venueId, actor) : currentShift(tx, venueId)
 
     return {
       entry,

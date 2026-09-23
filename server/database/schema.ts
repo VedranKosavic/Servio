@@ -382,6 +382,21 @@ export const sessions = sqliteTable('sessions', {
    * the chooser. An admin session never has one.
    */
   mode: text('mode', { enum: ['konobar', 'sanker'] }),
+  /**
+   * Which shift this session is working — *Prva smjena* or *Druga smjena*, as
+   * the worker picked it on the step after `mode` (23.09.2026).
+   *
+   * It is the answer to "whose round is this?" and it lives here, beside the
+   * screen, for the same two reasons: the choice is made once a night after the
+   * PIN, and a reload at 02:00 has to land the worker back on his own shift
+   * rather than on whichever one the café happens to have open. Two shifts can
+   * be open at once — the second crew starts before the first has closed — so
+   * **the venue no longer has "the" open shift** and a service that needs one
+   * reads it off the actor instead.
+   *
+   * NULL for an admin session, and for a worker who has not picked yet.
+   */
+  shiftId: text('shift_id').references((): AnySQLiteColumn => shifts.id),
   createdAt: text('created_at').notNull(),
   lastSeenAt: text('last_seen_at'),
   expiresAt: text('expires_at').notNull(),
@@ -429,6 +444,25 @@ export const shifts = sqliteTable('shifts', {
   businessDate: text('business_date').notNull(),
   openedAt: text('opened_at').notNull(),
   openedBy: text('opened_by').notNull(),
+  /**
+   * Which of the café's two shifts this is — the `shift_templates` row the
+   * worker picked when he signed in (*Prva smjena* 07–15, *Druga smjena*
+   * 15–23).
+   *
+   * Before 23.09.2026 nothing named a shift: a shift was opened by the first
+   * round of the night, and *Smjene* had to **guess** which slot it belonged to
+   * by comparing `opened_at` against the template windows. That guess is wrong
+   * exactly when it matters — a second crew starting at 14:50 opens inside the
+   * first shift's window and was drawn as *Vanredna smjena* — and the café has
+   * no extraordinary shifts at all. Now the worker says which one he is on and
+   * the row remembers it.
+   *
+   * Nullable because of the house rule on added REFERENCES columns (§2), and
+   * left NULL on every shift that already existed rather than backfilled from a
+   * guess: *Smjene* still matches those the old way, so no night loses its
+   * card. Every new shift carries one — `openShift` refuses without it.
+   */
+  templateId: text('template_id').references((): AnySQLiteColumn => shiftTemplates.id),
   autoOpened: integer('auto_opened').notNull().default(0),
   /** Who is responsible for the stock this shift (counts, deliveries). */
   stockCustodianId: text('stock_custodian_id'),
@@ -447,11 +481,23 @@ export const shifts = sqliteTable('shifts', {
   reviewedAt: text('reviewed_at'),
   createdAt: text('created_at').notNull(),
 }, t => [
-  // One open shift per venue, enforced by the database rather than by a
-  // race-prone SELECT-then-INSERT. `closing` counts as open: the shift is still
-  // taking money while the settlements come in.
+  /**
+   * One open shift **per slot per day**, enforced by the database rather than
+   * by a race-prone SELECT-then-INSERT. `closing` counts as open: the shift is
+   * still taking money while the settlements come in.
+   *
+   * It used to be one open shift per venue, full stop. That is what made the
+   * handover impossible: the second crew walks in at 14:50, the first has
+   * guests sitting and cannot close, and everything the newcomers sold landed
+   * on the leaving crew's pazar. Now *Prva* and *Druga* can both be open —
+   * which is the real fifteen minutes — but never two *Prve* on one day.
+   *
+   * A legacy row with no `template_id` escapes it, because SQLite treats NULLs
+   * in a unique index as distinct. That is the correct behaviour here: those
+   * rows are history, and every shift born since carries its slot.
+   */
   uniqueIndex('shifts_one_open_uq')
-    .on(t.venueId)
+    .on(t.venueId, t.businessDate, t.templateId)
     .where(sql`status IN ('open','closing')`),
   index('shifts_venue_date_idx').on(t.venueId, t.businessDate, t.openedAt),
 ])

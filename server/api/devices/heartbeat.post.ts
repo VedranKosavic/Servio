@@ -26,6 +26,6 @@ export default defineEventHandler(async (event) => {
   return guard(() => {
     const { venueId, actor } = event.context
     if (!actor.deviceId) throw unauthorized('NO_DEVICE', 'no enrolled device on this request')
-    return heartbeat(useDb(), venueId, actor.deviceId, body)
+    return heartbeat(useDb(), venueId, actor.deviceId, body, undefined, actor)
   })
 })

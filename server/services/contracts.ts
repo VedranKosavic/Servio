@@ -26,7 +26,7 @@
  * `NOT_IMPLEMENTED`: a package written against it compiles and typechecks today
  * and starts working the day its owner lands the implementation.
  */
-import { and, eq, inArray, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { newId, nowIso } from '../utils/ids'
 import { businessDate } from '#shared/dates'
@@ -56,14 +56,71 @@ export function getSettings(q: Queryable, venueId: string): Settings {
   return mergeSettings(row?.json)
 }
 
-/** The shift that is taking money right now, if any. */
-export function currentShift(q: Queryable, venueId: string): ShiftRow | null {
+/**
+ * Every shift the café has open right now, newest first.
+ *
+ * Since 23.09.2026 there can be **two**: *Prva* and *Druga* overlap for the
+ * quarter of an hour a handover takes, because the evening crew starts serving
+ * before the morning crew's last guests have paid. `shifts_one_open_uq` keeps
+ * it to one per slot per day, so this is never a long list.
+ */
+export function openShifts(q: Queryable, venueId: string): ShiftRow[] {
   return q.select().from(schema.shifts)
     .where(and(
       eq(schema.shifts.venueId, venueId),
       inArray(schema.shifts.status, ['open', 'closing']),
     ))
-    .get() ?? null
+    // `id` is only a tiebreak, and it is there so that two reads of the same
+    // database can never disagree about which shift is "the" open one — a bug
+    // that would show as a strip flickering between two crews rather than as
+    // anything that throws.
+    .orderBy(desc(schema.shifts.openedAt), desc(schema.shifts.id))
+    .all()
+}
+
+/**
+ * The shift that is taking money right now — **the newest one**, when the
+ * caller genuinely means "whatever the café has open" rather than "this
+ * person's".
+ *
+ * Anything that writes money or stock wants `actorShift` instead: with two
+ * crews on the floor, "the open shift" is a question about the building and
+ * not about the round in somebody's hand. This stays for the reads where the
+ * building *is* the question (the heartbeat, a delivery booked by an admin who
+ * is on no shift) and as `actorShift`'s fallback.
+ */
+export function currentShift(q: Queryable, venueId: string): ShiftRow | null {
+  return openShifts(q, venueId)[0] ?? null
+}
+
+/**
+ * **This person's shift** — the one he picked when he signed in.
+ *
+ * The pick lives on the session (`sessions.shift_id`) and rides on the `Actor`,
+ * so a round is stamped with the crew that rang it and not with whichever shift
+ * happened to be open at that minute. That is the owner's own rule
+ * (23.09.2026): *"stol je dodijeljen radniku čija je smjena, a ne onoj u čijem
+ * je vremenskom periodu"*.
+ *
+ * Falls back to the venue's open shift when the session has no pick — an admin
+ * serving a table, and every session that signed in before the picker existed.
+ * A shift the worker picked that has since been closed is not his any more, so
+ * it falls back too: he will be asked to pick again.
+ */
+export function actorShift(
+  q: Queryable, venueId: string, actor: Actor,
+): ShiftRow | null {
+  if (actor.shiftId) {
+    const picked = q.select().from(schema.shifts)
+      .where(and(
+        eq(schema.shifts.venueId, venueId),
+        eq(schema.shifts.id, actor.shiftId),
+        inArray(schema.shifts.status, ['open', 'closing']),
+      ))
+      .get()
+    if (picked) return picked
+  }
+  return currentShift(q, venueId)
 }
 
 /**
@@ -81,8 +138,16 @@ export function joinShift(
 }
 
 /**
- * The currently open shift, opening one if there is none — the "first lock of
- * the evening opens the night" rule. Also how an opening count opens a shift.
+ * **This person's** open shift, opening one if there is none — the "first lock
+ * of the evening opens the night" rule. Also how an opening count opens a
+ * shift.
+ *
+ * Since the picker (23.09.2026) the usual way a shift is born is a worker
+ * signing in and saying which one he is on, and this function then simply finds
+ * it. The creating half stays for two cases that have no pick behind them: an
+ * admin who serves a table, and a phone whose session predates the picker. A
+ * shift created here carries no `template_id` — nobody said which slot it is —
+ * and *Smjene* falls back to matching it by opening time, exactly as before.
  *
  * A plain select-or-insert with no retry: better-sqlite3 is synchronous and
  * there is one Node process, so two first locks cannot both see "no open
@@ -111,7 +176,7 @@ export function ensureOpenShift(
 ): { shift: ShiftRow, created: boolean } {
   const settings = getSettings(tx, venueId)
 
-  const open = currentShift(tx, venueId)
+  const open = actorShift(tx, venueId, actor)
   if (open) {
     joinShift(tx, venueId, open.id, actor.userId, actor.role, at)
     return { shift: open, created: false }

@@ -26,7 +26,7 @@ import type { Actor, Db, Queryable, Tx } from './types'
 import type {
   CloseResult, MissingSettlement, OwnerShiftRow, Shift, ShiftBrief, ShiftStatus,
 } from '#shared/types'
-import { bump, getSettings, joinShift, log, verifyPinMetered } from './contracts'
+import { actorShift, bump, currentShift, getSettings, joinShift, log, verifyPinMetered } from './contracts'
 import { expectedCash, withinTolerance } from './cash'
 import { writeSummaryVersion } from './summaries'
 
@@ -37,7 +37,7 @@ type ShiftRow = typeof schema.shifts.$inferSelect
  * lock must not import a whole service file to open a shift. They are re-exported
  * here so `docs/BACKEND.md` §6.5's export list is true of this file too.
  */
-export { currentShift, ensureOpenShift, joinShift, nextShiftSeq } from './contracts'
+export { actorShift, currentShift, ensureOpenShift, joinShift, nextShiftSeq, openShifts } from './contracts'
 
 // ===========================================================================
 // Small shared reads
@@ -122,22 +122,38 @@ export function shiftView(q: Queryable, venueId: string, shiftId: string): Shift
  * every envelope carrying it has the user in the tag.
  */
 export function shiftBrief(q: Queryable, venueId: string, actor: Actor): ShiftBrief | null {
-  return shiftBriefFor(q, venueId, actor.userId)
+  return briefOn(q, venueId, actorShift(q, venueId, actor), actor.userId)
 }
 
 /**
  * The same brief for a person rather than a session — `GET /api/me/shift` has a
  * user id and no need to build an `Actor` around it.
+ *
+ * With no session to read the pick off, the shift is the open one **this person
+ * is on**, found through `shift_members`. That is the same answer the session
+ * would have given, one step further round: a worker joins the shift he picked,
+ * and nobody is on two open shifts at once.
  */
 export function shiftBriefFor(
   q: Queryable, venueId: string, userId: string,
 ): ShiftBrief | null {
-  const shift = q.select().from(schema.shifts)
+  const mine = q.select({ shift: schema.shifts })
+    .from(schema.shiftMembers)
+    .innerJoin(schema.shifts, eq(schema.shifts.id, schema.shiftMembers.shiftId))
     .where(and(
-      eq(schema.shifts.venueId, venueId),
+      eq(schema.shiftMembers.venueId, venueId),
+      eq(schema.shiftMembers.userId, userId),
       inArray(schema.shifts.status, ['open', 'closing']),
     ))
-    .get()
+    .orderBy(desc(schema.shifts.openedAt))
+    .get()?.shift
+  return briefOn(q, venueId, mine ?? currentShift(q, venueId), userId)
+}
+
+/** The brief itself, once somebody has decided **which** shift it is about. */
+function briefOn(
+  q: Queryable, venueId: string, shift: ShiftRow | null, userId: string,
+): ShiftBrief | null {
   if (!shift) return null
 
   const settled = q.select({ id: schema.waiterSettlements.id })

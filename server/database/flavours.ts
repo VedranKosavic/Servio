@@ -120,6 +120,7 @@ export function syncFlavours(db: Db, venueId: string, actorId: string): FlavourS
     deviceBoundUserId: null,
     borrowed: false,
     mode: null,
+    shiftId: null,
   }
 
   const added: string[] = []

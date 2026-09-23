@@ -155,6 +155,13 @@
       "when": 1789975690822,
       "tag": "0021_floor_layout",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1790177889911,
+      "tag": "0022_shift_slots",
+      "breakpoints": true
     }
   ]
 }

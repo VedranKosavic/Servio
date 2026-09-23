@@ -320,13 +320,16 @@ describe('line_adjustments — one transition, and the amount does not move with
   })
 })
 
-describe('shifts — one open, and never reopened', () => {
-  it('refuses a second open shift', () => {
-    f.openShift()
+describe('shifts — one open per slot, and never reopened', () => {
+  it('refuses a second open shift on the same slot', () => {
+    const shiftId = f.openShift({ template: 'Prva smjena' })
+    const prva = f.db.select().from(schema.shifts)
+      .where(eq(schema.shifts.id, shiftId)).get()!
     f.expectRefused(
-      `INSERT INTO shifts (id, venue_id, business_date, opened_at, opened_by, auto_opened, `
-      + `status, created_at) VALUES (${q(randomUUID())}, ${q(f.venueId)}, '2026-09-09', `
-      + `${q(f.clock.now())}, ${q(f.userId('Amar'))}, 0, 'open', ${q(f.clock.now())})`,
+      `INSERT INTO shifts (id, venue_id, business_date, opened_at, opened_by, template_id, `
+      + `auto_opened, status, created_at) VALUES (${q(randomUUID())}, ${q(f.venueId)}, `
+      + `${q(prva.businessDate)}, ${q(f.clock.now())}, ${q(f.userId('Amar'))}, `
+      + `${q(prva.templateId!)}, 0, 'open', ${q(f.clock.now())})`,
       /UNIQUE constraint failed/,
     )
   })

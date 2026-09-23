@@ -143,7 +143,7 @@ export function getChanges(
 
   if (entities.has('table')) result.tables_state = getTablesState(db, venueId, actor)
   if (entities.has('prep')) result.prep = { seq: top, ...getPrep(db, venueId) }
-  if (entities.has('stock')) result.stock = getStock(db, venueId)
+  if (entities.has('stock')) result.stock = getStock(db, venueId, actor)
   // What the waiter's menu strikes through. A sale moves `stock`, a new article
   // or a changed link moves `menu`, a new dose moves `settings`.
   if (entities.has('stock') || entities.has('menu') || entities.has('settings')) {

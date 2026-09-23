@@ -67,12 +67,20 @@ export interface Fixture {
   onHand: (name: string) => number
 
   /** An `Actor` for `name`, built directly — what almost every test wants. */
-  actor: (name: string, opts?: { device?: string | null, bound?: boolean, mode?: 'konobar' | 'sanker' | null }) => Actor
+  actor: (name: string, opts?: {
+    device?: string | null, bound?: boolean, mode?: 'konobar' | 'sanker' | null,
+    /** The shift this session picked — what makes a round the crew's own. */
+    shift?: string | null,
+  }) => Actor
   /** Haris, the admin. */
   adminActor: () => Actor
 
   /** Open a shift and put `members` on it. Returns the shift id. */
-  openShift: (opts?: { members?: string[], at?: string, businessDate?: string }) => string
+  openShift: (opts?: {
+    members?: string[], at?: string, businessDate?: string,
+    /** A `shift_templates` name — *Prva smjena*, *Druga smjena*. */
+    template?: string,
+  }) => string
   /** Write a locked round straight into the ledger. */
   lock: (name: string, table: string, lines: LockLine[], opts?: { at?: string }) => LockResult
   /** Write a payment row. Negative amounts need `approvedBy` (a trigger says so). */
@@ -153,7 +161,10 @@ export function makeFixture(): Fixture {
     advance: (seconds: number) => { clockMs += seconds * 1000 },
   }
 
-  const actor = (name: string, opts: { device?: string | null, bound?: boolean, mode?: 'konobar' | 'sanker' | null } = {}): Actor => ({
+  const actor = (name: string, opts: {
+    device?: string | null, bound?: boolean, mode?: 'konobar' | 'sanker' | null,
+    shift?: string | null,
+  } = {}): Actor => ({
     venueId,
     userId: userId(name),
     role: roleOf(name),
@@ -166,11 +177,16 @@ export function makeFixture(): Fixture {
     // honest state of a session that has not chosen, and a test that needs the
     // šanker's close says so.
     mode: opts.mode ?? null,
+    // Likewise the shift: none until a test says which one this person is on.
+    shiftId: opts.shift ?? null,
   })
 
-  function openShift(opts: { members?: string[], at?: string, businessDate?: string } = {}): string {
+  function openShift(opts: {
+    members?: string[], at?: string, businessDate?: string, template?: string,
+  } = {}): string {
     const at = opts.at ?? clock.now()
     const shiftId = id()
+    const templateId = opts.template === undefined ? null : templateIdOf(opts.template)
     db.insert(schema.shifts).values({
       id: shiftId,
       venueId,
@@ -182,6 +198,7 @@ export function makeFixture(): Fixture {
       businessDate: opts.businessDate ?? businessDate(at),
       openedAt: at,
       openedBy: userId(opts.members?.[0] ?? 'Amar'),
+      templateId,
       autoOpened: 0,
       status: 'open',
       createdAt: at,
@@ -192,6 +209,15 @@ export function makeFixture(): Fixture {
       }).onConflictDoNothing().run()
     }
     return shiftId
+  }
+
+  /** A shift template by the owner's own name for it. */
+  function templateIdOf(name: string): string {
+    const row = db.select({ id: schema.shiftTemplates.id }).from(schema.shiftTemplates)
+      .where(and(eq(schema.shiftTemplates.venueId, venueId), eq(schema.shiftTemplates.name, name)))
+      .get()
+    if (!row) throw new Error(`no shift template named ${name}`)
+    return row.id
   }
 
   /** The shift that is open now, opening one if a helper needs it. */

@@ -33,7 +33,7 @@ import type {
 } from '#shared/types'
 import type { Actor, Role } from '#shared/types'
 import type { Db, Queryable, Tx } from './types'
-import { bump, currentShift, getSettings, log, verifyPinMetered } from './contracts'
+import { actorShift, bump, currentShift, getSettings, log, verifyPinMetered } from './contracts'
 import { listStockItems } from './admin'
 import { requireFlavours, resolveStock } from './orders'
 import { applyScan } from './scan'
@@ -435,8 +435,15 @@ function lastMovements(q: Queryable, venueId: string): Map<string, StockLastMove
  * `settled + pending === on_hand`, by construction rather than by agreement:
  * `settled` is computed by subtraction, so the two halves cannot drift apart
  * even if a future movement type forgets to stamp a shift.
+ *
+ * **Which shift the split is taken at is the reader's own** (23.09.2026). The
+ * shelf is one shelf and both crews sell off it — the owner's word — but
+ * *Potrošeno u smjeni* is a question about your own night, and during the
+ * fifteen minutes both shifts are open there are two right answers. `actor` is
+ * optional because one caller genuinely has nobody to ask for (an admin tool),
+ * and it then falls back to the newest open shift as before.
  */
-export function getStock(q: Queryable, venueId: string): StockItem[] {
+export function getStock(q: Queryable, venueId: string, actor?: Actor): StockItem[] {
   const items = q.select()
     .from(schema.stockItems)
     .where(and(eq(schema.stockItems.venueId, venueId), eq(schema.stockItems.active, 1)))
@@ -445,7 +452,7 @@ export function getStock(q: Queryable, venueId: string): StockItem[] {
 
   const onHandMap = onHandByItem(q, venueId)
   const lastMap = lastMovements(q, venueId)
-  const shift = currentShift(q, venueId)
+  const shift = actor ? actorShift(q, venueId, actor) : currentShift(q, venueId)
   const pendingMap = shift ? shiftDeltaByItem(q, venueId, shift.id) : null
   const consumedMap = shift ? shiftConsumedByItem(q, venueId, shift.id) : null
   // The shared categories (16.09.2026): the bar reads its shelf by the same
@@ -1097,12 +1104,9 @@ export function logWaste(
       body.client_created_at, now, settings.max_sync_lag_h, skewS,
     )
 
-    const shift = tx.select({ id: schema.shifts.id }).from(schema.shifts)
-      .where(and(
-        eq(schema.shifts.venueId, venueId),
-        inArray(schema.shifts.status, ['open', 'closing']),
-      ))
-      .get()
+    // His own shift: the cap is per person per shift, and with two crews on
+    // the floor the other crew's night is not the one to count against.
+    const shift = actorShift(tx, venueId, actor)
 
     // How many this person has already logged this shift — the cap is per
     // person per shift, so it resets with the night and never accumulates.
@@ -1520,14 +1524,14 @@ export function correctStock(
     bump(tx, venueId, 'stock')
   })
 
-  const item = getStock(db, venueId).find(i => i.id === body.stock_item_id)
+  const item = getStock(db, venueId, actor).find(i => i.id === body.stock_item_id)
   if (item) return item
   // An inactive item is still correctable; `getStock` only lists the active ones.
   const row = requireItem(db, venueId, body.stock_item_id)
   const hand = onHand(db, venueId, row.id)
   const cost = unitCost(row)
   // The same split `getStock` reports, for the one row it would not have listed.
-  const shift = currentShift(db, venueId)
+  const shift = actorShift(db, venueId, actor)
   const pending = shift ? shiftDeltaByItem(db, venueId, shift.id).get(row.id) ?? 0 : 0
   return {
     id: row.id,

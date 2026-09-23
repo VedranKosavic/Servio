@@ -18,6 +18,6 @@ export default defineEventHandler(event => guard(() => {
 
   return withEtag(event, changeTag(db, venueId, actor), () => ({
     seq: maxSeq(db, venueId),
-    items: getStock(db, venueId),
+    items: getStock(db, venueId, event.context.actor),
   }))
 }))

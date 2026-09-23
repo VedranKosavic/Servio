@@ -11,7 +11,7 @@
  * that writes a note every night has stopped reading them.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
 import { closeTab, refuses } from '../helpers/shifts'
 
@@ -87,16 +87,32 @@ describe('opening the night', () => {
     expect(shift.shift.autoOpened).toBe(1)
   })
 
-  it('is opened once, and the database is what says so', () => {
-    const shiftId = f.openShift({ members: ['Amar'] })
+  it('opens one shift per slot per day, and the database is what says so', () => {
+    const shiftId = f.openShift({ members: ['Amar'], template: 'Prva smjena' })
     expect(shiftId).toBeTruthy()
+    const prva = f.db.select().from(schema.shifts)
+      .where(eq(schema.shifts.id, shiftId)).get()!
     f.expectRefused(
-      `INSERT INTO shifts (id, venue_id, business_date, opened_at, opened_by, auto_opened,
-         status, created_at)
-       VALUES ('x', '${f.venueId}', '2026-09-08', '2026-09-08T20:00:00Z',
-               '${f.userId('Amar')}', 0, 'open', '2026-09-08T20:00:00Z')`,
+      `INSERT INTO shifts (id, venue_id, business_date, opened_at, opened_by, template_id,
+         auto_opened, status, created_at)
+       VALUES ('x', '${f.venueId}', '${prva.businessDate}', '2026-09-08T20:00:00Z',
+               '${f.userId('Amar')}', '${prva.templateId}', 0, 'open', '2026-09-08T20:00:00Z')`,
       /UNIQUE constraint failed/,
     )
+  })
+
+  /**
+   * The fifteen minutes the whole of 23.09.2026 is about: the evening crew
+   * starts serving before the morning crew's last guests have paid. Two open
+   * shifts is the *point*, and only a second *Prva* is a mistake.
+   */
+  it('lets the other slot be open at the same time', () => {
+    f.openShift({ members: ['Amar'], template: 'Prva smjena' })
+    const druga = f.openShift({ members: ['Emir'], template: 'Druga smjena' })
+    const open = f.db.select().from(schema.shifts)
+      .where(inArray(schema.shifts.status, ['open', 'closing'])).all()
+    expect(open).toHaveLength(2)
+    expect(open.map(s => s.id)).toContain(druga)
   })
 
   it('refuses a second explicit open', () => {
@@ -151,6 +167,68 @@ describe('the brief every waiter screen reads', () => {
 
   it('is null when the café is shut', () => {
     expect(shiftBrief(f.db, f.venueId, f.actor('Amar'))).toBeNull()
+  })
+})
+
+/**
+ * The handover (23.09.2026). Two shifts are open for the quarter of an hour the
+ * crews overlap, so "the open shift" stops being a question about the café and
+ * becomes one about the person holding the phone.
+ */
+describe('whose shift a round belongs to', () => {
+  it('is the one the session picked, not the newest one open', () => {
+    const prva = f.openShift({ members: ['Amar'], template: 'Prva smjena' })
+    const druga = f.openShift({ members: ['Lejla'], template: 'Druga smjena' })
+
+    expect(contracts.actorShift(f.db, f.venueId, f.actor('Amar', { shift: prva }))!.id)
+      .toBe(prva)
+    expect(contracts.actorShift(f.db, f.venueId, f.actor('Lejla', { shift: druga }))!.id)
+      .toBe(druga)
+  })
+
+  it('falls back to the newest open shift when the session never picked', () => {
+    f.openShift({ members: ['Amar'], at: '2026-09-09T05:00:00.000Z', template: 'Prva smjena' })
+    const druga = f.openShift({
+      members: ['Lejla'], at: '2026-09-09T12:50:00.000Z', template: 'Druga smjena',
+    })
+
+    // An admin serving a table, and every phone whose session predates the
+    // picker: nobody said which crew, so the café's answer is the newest.
+    expect(contracts.actorShift(f.db, f.venueId, f.actor('Amar'))!.id).toBe(druga)
+  })
+
+  it('falls back once the picked shift has closed', () => {
+    const prva = f.openShift({ members: ['Amar'], template: 'Prva smjena' })
+    const druga = f.openShift({ members: ['Lejla'], template: 'Druga smjena' })
+    f.db.update(schema.shifts).set({ status: 'closed' })
+      .where(eq(schema.shifts.id, prva)).run()
+
+    // He is still carrying a session that says *Prva*, but *Prva* is history:
+    // his next round cannot land on a closed night.
+    expect(contracts.actorShift(f.db, f.venueId, f.actor('Amar', { shift: prva }))!.id)
+      .toBe(druga)
+  })
+
+  it('locks a round onto the crew that rang it', () => {
+    const prva = f.openShift({ members: ['Amar'], template: 'Prva smjena' })
+    f.openShift({ members: ['Lejla'], template: 'Druga smjena' })
+
+    const { shift } = f.db.transaction(tx => ensureOpenShift(
+      tx, f.venueId, f.actor('Amar', { shift: prva }), f.clock.now(),
+    ))
+    expect(shift.id).toBe(prva)
+  })
+
+  it('gives each crew its own strip, on one floor', () => {
+    const prva = f.openShift({ members: ['Amar'], template: 'Prva smjena' })
+    const druga = f.openShift({ members: ['Lejla'], template: 'Druga smjena' })
+    startClosing(f.db, f.venueId, f.actor('Amar', { shift: prva }), prva)
+
+    // *Prva* is counting its money; *Druga* is working. One café, two answers,
+    // and neither phone may be told the other's.
+    expect(shiftBrief(f.db, f.venueId, f.actor('Amar', { shift: prva }))!.closing).toBe(true)
+    expect(shiftBrief(f.db, f.venueId, f.actor('Lejla', { shift: druga }))!.closing).toBe(false)
+    expect(shiftBrief(f.db, f.venueId, f.actor('Lejla', { shift: druga }))!.id).toBe(druga)
   })
 })
 

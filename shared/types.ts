@@ -74,6 +74,21 @@ export interface Actor {
    * reads it for: only a `sanker` session closes the shift.
    */
   mode: ScreenMode | null
+  /**
+   * The shift this session is working (`sessions.shift_id`) — *Prva* or
+   * *Druga*, picked on the step after the screen.
+   *
+   * Since 23.09.2026 **the café can have two shifts open at once**: the evening
+   * crew starts before the morning crew has closed, which is the fifteen
+   * minutes every handover actually takes. So "which shift is open?" is no
+   * longer a question about the venue, and a service that needs a shift reads
+   * it from here.
+   *
+   * `null` for an admin, for a worker who has not picked yet, and for every
+   * session that signed in before the picker existed — those still fall back to
+   * the venue's open shift, so nothing breaks mid-deploy.
+   */
+  shiftId: string | null
 }
 
 /** What a `changes` row can be about — the sync feed's vocabulary (§4.1). */

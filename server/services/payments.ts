@@ -23,7 +23,7 @@ import { newId, nowIso } from '../utils/ids'
 import { clampEventAt } from '#shared/dates'
 import type { CreatePaymentBody, PaymentMethod, PaymentResult } from '#shared/types'
 import type { Actor, Db, Queryable, Tx } from './types'
-import { bump, currentShift, getSettings, hasLiveSettlement, joinShift, log } from './contracts'
+import { actorShift, bump, currentShift, getSettings, hasLiveSettlement, joinShift, log } from './contracts'
 import { maxSeq } from './changes'
 import { emitChange } from '../utils/bus'
 import { tabMoney } from './tabs'
@@ -34,13 +34,24 @@ type AdjustmentRow = typeof schema.lineAdjustments.$inferSelect
 /**
  * Which shift a payment belongs to.
  *
- * The tab's own shift while that shift is still taking money — a tab opened at
- * 23:00 and paid at 00:30 is one night's takings, not two. Once it has closed,
- * the money lands on whatever shift is open now, because that is the drawer it
- * physically went into.
+ * **The tab's own**, while that shift is still taking money — a tab opened at
+ * 23:00 and paid at 00:30 is one night's takings, not two. It is also the
+ * owner's rule for the handover (23.09.2026): *"novac od stola uvijek ide
+ * konobaru koji je uslužio stol"* — the orange tables are the first shift's and
+ * the blue ones the second's, whoever happens to carry the note to the wallet.
+ * The tile's colour and the pazar therefore answer the same way, which is the
+ * whole point of colouring them.
+ *
+ * Once the tab's shift has closed the money lands on **the payer's own** shift,
+ * not on whatever the café has open: with two crews on the floor "open now" is
+ * two shifts, and the honest answer is the one whose wallet it went into.
+ *
+ * `actor` is nullable for the one caller that has no session behind it — a
+ * reversal, which is a decision written against a tab rather than a note taken
+ * from a guest — and that one falls back to the newest open shift.
  */
 export function resolvePaymentShift(
-  tx: Tx, venueId: string, tab: TabRow, _clientAtAdj: string,
+  tx: Tx, venueId: string, actor: Actor | null, tab: TabRow, _clientAtAdj: string,
 ): string {
   if (tab.shiftId) {
     const shift = tx.select({ status: schema.shifts.status }).from(schema.shifts)
@@ -49,7 +60,7 @@ export function resolvePaymentShift(
     if (shift && (shift.status === 'open' || shift.status === 'closing')) return tab.shiftId
   }
 
-  const open = currentShift(tx, venueId)
+  const open = actor ? actorShift(tx, venueId, actor) : currentShift(tx, venueId)
   if (open) return open.id
   if (tab.shiftId) return tab.shiftId
   throw conflict('SHIFT_CLOSED', 'no shift is open and the tab has none')
@@ -129,7 +140,7 @@ export function createPayment(
 
     const at = nowIso()
     const clientAt = clampEventAt(body.client_created_at, at, settings.max_sync_lag_h)
-    const shiftId = resolvePaymentShift(tx, venueId, tab, clientAt)
+    const shiftId = resolvePaymentShift(tx, venueId, actor, tab, clientAt)
     joinShift(tx, venueId, shiftId, actor.userId, actor.role, at)
     const postSettle = hasLiveSettlement(tx, venueId, shiftId, actor.userId)
 
@@ -280,7 +291,7 @@ export function insertReversal(
     id,
     venueId,
     tabId: adj.tabId,
-    shiftId: resolvePaymentShift(tx, venueId, tab, at),
+    shiftId: resolvePaymentShift(tx, venueId, null, tab, at),
     // Derived, not minted: a decision carries no client id of its own, and the
     // adjustment can only be decided once.
     clientId: `${adj.id}:reversal`,

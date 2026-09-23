@@ -29,7 +29,7 @@ import type {
 import type { Actor } from '#shared/types'
 import type { Db, Queryable, Tx } from './types'
 import {
-  assertNoPendingOutbox, bump, currentShift, ensureOpenShift, insertMovement, joinShift, log,
+  actorShift, assertNoPendingOutbox, bump, ensureOpenShift, insertMovement, joinShift, log,
   setCustodian,
 } from './contracts'
 import { theoreticalAt, unitCost, valueFen } from './stock'
@@ -186,7 +186,9 @@ function resolveShift(
     return shift.id
   }
 
-  const open = currentShift(tx, venueId)
+  // His own shift: a popis is counted against the night the person is working,
+  // and during a handover the café has two of them open.
+  const open = actorShift(tx, venueId, actor)
   if (phase === 'close') {
     if (!open) throw conflict('NO_OPEN_SHIFT', 'there is no open shift to count against')
     joinShift(tx, venueId, open.id, actor.userId, actor.role, at)
