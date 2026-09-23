@@ -9,7 +9,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { makeFixture, type Fixture } from '../helpers/db'
-import { saveFloor } from '../../server/services/admin'
+import { addFloorTable, saveFloor } from '../../server/services/admin'
 import { getBootstrap } from '../../server/services/bootstrap'
 import { menuVersion } from '../../server/services/changes'
 import {
@@ -235,6 +235,35 @@ describe('Sačuvaj raspored — on the server', () => {
       widths: { unutra: 140, basta: 110 },
     })
     expect(getBootstrap(f.db, f.venueId, f.adminActor()).floor.widths).toEqual({ unutra: 140, basta: 110 })
+  })
+
+  it('adds a table where the waiter dropped it, without disturbing the rest', () => {
+    const sto1 = f.tableId('Sto 1')
+    saveFloor(f.db, f.venueId, f.adminActor(), { tables: { [sto1]: { x: 10, y: 10 } }, bar: null })
+    const before = menuVersion(f.db, f.venueId)
+
+    const added = addFloorTable(f.db, f.venueId, f.adminActor(), { zone: 'basta', x: 40, y: 60 })
+
+    const floor = getBootstrap(f.db, f.venueId, f.adminActor()).floor
+    expect(floor.tables[added.id]).toEqual({ x: 40, y: 60 })
+    // The arrangement it was merged into is untouched.
+    expect(floor.tables[sto1]).toEqual({ x: 10, y: 10 })
+    expect(added).toMatchObject({ zone: 'basta', active: true })
+    expect(added.name).toMatch(/^Sto \d+$/)
+    expect(menuVersion(f.db, f.venueId)).toBeGreaterThan(before)
+
+    // It is a table like any other from here on: the plan draws it at its spot.
+    const tables = getBootstrap(f.db, f.venueId, f.adminActor()).tables
+    expect(roomPlan(tables, floor, 'basta').tables.find(t => t.id === added.id))
+      .toMatchObject({ x: 40, y: 60, loose: false })
+  })
+
+  it('refuses a name the room already uses, and keeps the walls', () => {
+    expect(() => addFloorTable(f.db, f.venueId, f.adminActor(), { zone: 'unutra', x: 5, y: 5, name: 'Sto 1' }))
+      .toThrow(/TABLE_NAME_TAKEN|already/)
+    const far = addFloorTable(f.db, f.venueId, f.adminActor(), { zone: 'unutra', x: 390, y: 5 })
+    const spot = getBootstrap(f.db, f.venueId, f.adminActor()).floor.tables[far.id]!
+    expect(spot.x).toBeLessThanOrEqual(ROOM_W_DEFAULT - TABLE - EDGE)
   })
 
   it('drops a spot for a table this venue does not have', () => {

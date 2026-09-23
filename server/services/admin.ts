@@ -28,8 +28,8 @@ import { schema } from '../database/client'
 import { badRequest, conflict, notFound, SankError, unprocessable } from '../utils/errors'
 import { errorMessage } from '#shared/errors'
 import { PRODUCT_IMAGE_MAX_BYTES, productImageUrl } from '#shared/menuImage'
-import { isArranged, parseFloor } from '#shared/floor'
-import type { FloorLayout, FloorLayoutBody } from '#shared/floor'
+import { TABLE, clampTable, isArranged, parseFloor, zoneWidth } from '#shared/floor'
+import type { AddTableBody, FloorLayout, FloorLayoutBody } from '#shared/floor'
 import { isJpeg, jpegSize } from './uploads'
 import { newId, nowIso } from '../utils/ids'
 import { hashSecret } from '../utils/password'
@@ -852,6 +852,83 @@ export function saveFloor(
 
   announce(db, venueId, 'menu', venueId)
   return layout
+}
+
+/**
+ * `POST /api/tables` — **a waiter brings a table out and says where it stands**
+ * (the owner, 23.09.2026).
+ *
+ * The one thing on the floor plan a worker may create. It is not an admin
+ * errand: an extra table in the garden at ten at night is a thing that has
+ * already happened, and the plan has to show it before the guests sit down.
+ * What a worker still cannot do is rename it, move it afterwards or switch it
+ * off — those stay on *Stolovi*, where the arrangement is the owner's.
+ *
+ * The spot is **merged** into the stored arrangement rather than written over
+ * it: this call knows one table and must not touch the twenty-six the owner
+ * dragged. `col`/`row` are filled in for the fallback layout alone; the saved
+ * spot is what every plan actually draws.
+ */
+export function addFloorTable(
+  db: Db, venueId: string, actor: Actor, body: AddTableBody, now = nowIso(),
+): TableAdmin {
+  const rows = db.select().from(schema.tables).where(eq(schema.tables.venueId, venueId)).all()
+
+  // "Sto 28" — one past the highest number the café has ever used, so a table
+  // switched off last month never has its name handed to a new one.
+  const highest = rows.reduce((max, row) => {
+    const n = Number(/^sto\s+(\d+)$/i.exec(row.name.trim())?.[1])
+    return Number.isFinite(n) && n > max ? n : max
+  }, 0)
+  const name = body.name?.trim() || `Sto ${highest + 1}`
+  if (rows.some(row => row.active === 1 && row.name.trim().toLowerCase() === name.toLowerCase())) {
+    throw conflict('TABLE_NAME_TAKEN', `a table named ${name} is already on the plan`)
+  }
+
+  const venue = db.select({ json: schema.venues.floorJson }).from(schema.venues)
+    .where(eq(schema.venues.id, venueId))
+    .get()
+  const layout = parseFloor(venue?.json)
+  const at = clampTable(body.x, body.y, TABLE, zoneWidth(layout, body.zone))
+
+  const inZone = rows.filter(row => row.zone === body.zone)
+  const id = newId()
+
+  db.transaction((tx) => {
+    tx.insert(schema.tables).values({
+      id,
+      venueId,
+      name,
+      zone: body.zone,
+      // The fallback grid only — the spot below is what is drawn. Kept inside
+      // the same 1..12 the admin form allows.
+      col: Math.min(12, Math.max(1, ...inZone.map(row => row.col))),
+      row: Math.min(12, inZone.length + 1),
+      grp: null,
+      sort: rows.reduce((max, row) => Math.max(max, row.sort), 0) + 1,
+      active: 1,
+    }).run()
+
+    tx.update(schema.venues)
+      .set({ floorJson: JSON.stringify({ ...layout, tables: { ...layout.tables, [id]: at } }) })
+      .where(eq(schema.venues.id, venueId))
+      .run()
+
+    log(tx, venueId, {
+      kind: 'table_changed',
+      body: { table_id: id, what: 'dodan sa telefona' },
+      actorId: actor.userId,
+      ref: { type: 'table', id },
+      at: now,
+    })
+    // Both, for the same reason `createTable` bumps both: occupancy rides on
+    // `table`, the name and the spot on `menu`.
+    bump(tx, venueId, 'table', id)
+    bump(tx, venueId, 'menu', id)
+  })
+
+  announce(db, venueId, 'table', id)
+  return requireTableView(db, venueId, id)
 }
 
 // ===========================================================================

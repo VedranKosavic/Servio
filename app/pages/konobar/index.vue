@@ -925,6 +925,40 @@ function fromBar(path: string) {
   void navigateTo(path)
 }
 
+// ---------------------------------------------------------------------------
+// + Sto — a table brought out mid-shift
+// ---------------------------------------------------------------------------
+
+/**
+ * The owner: *"in the shift, waiter can add table and pick where he can add
+ * table"*. A table carried into the garden at ten at night is a thing that has
+ * already happened; waiting for somebody's laptop is not an option, so the
+ * waiter taps *+ Sto*, taps the floor where it stands, and it is on every
+ * phone's plan at the next poll.
+ *
+ * He places it and nothing more: the name is the next free *Sto N*, and
+ * renaming, moving and switching it off stay on *Stolovi*, where the room's
+ * arrangement belongs to the owner.
+ */
+const placing = ref(false)
+const addingTable = ref(false)
+
+async function placeTable(x: number, y: number) {
+  if (addingTable.value) return
+  addingTable.value = true
+  try {
+    const table = await api.addTable({ zone: zone.value, x, y })
+    placing.value = false
+    await refreshBoot()
+    say(`${table.name} dodan`)
+  } catch (err) {
+    say(apiErrorText(err, 'Sto nije dodan.'))
+    void me.handleAuthError(err)
+  } finally {
+    addingTable.value = false
+  }
+}
+
 /** The two halves of the room, as the segmented control reads them. */
 const ZONES = [
   { value: 'unutra', label: 'Unutra' },
@@ -1147,13 +1181,30 @@ function addToSheet() {
           </button>
         </div>
 
-        <UiSeg
-          block
-          label="Zona"
-          :options="ZONES"
-          :model-value="zone"
-          @update:model-value="zone = $event as Zone"
-        />
+        <div class="flex items-center gap-2">
+          <UiSeg
+            block
+            class="grow"
+            label="Zona"
+            :options="ZONES"
+            :model-value="zone"
+            @update:model-value="zone = $event as Zone"
+          />
+          <button
+            type="button"
+            class="btn btn-secondary shrink-0 px-3"
+            :class="placing ? 'border-accent-line text-accent-text' : ''"
+            :aria-pressed="placing"
+            @click="placing = !placing"
+          >
+            {{ placing ? 'Otkaži' : '+ Sto' }}
+          </button>
+        </div>
+
+        <!-- Placing: the plan is one big target until he taps, or taps Otkaži. -->
+        <p v-if="placing" class="note" role="status">
+          Dodirni mjesto na planu gdje stoji novi sto.
+        </p>
 
         <FloorPlan
           v-if="boot"
@@ -1165,9 +1216,11 @@ function addToSheet() {
           :draft-tables="draftTables"
           :draft-label="draftLabel"
           :current-shift-seq="currentShiftSeq"
+          :placing="placing"
           @select="openTable"
           @long="openZar"
           @bar="barOpen = true"
+          @spot="placeTable"
         />
         <p v-else-if="bootPending" class="py-10 text-center text-text-2">
           Učitavanje…

@@ -147,6 +147,21 @@ export const floorLayoutBody = z.object({
 
 export type FloorLayoutBody = z.infer<typeof floorLayoutBody>
 
+/**
+ * `POST /api/tables` — a table the waiter brings out mid-shift, and the spot on
+ * the plan he dropped it on. A worker may call this: an extra table in the
+ * garden at ten at night is not an errand for the owner's laptop.
+ */
+export const addTableBody = z.object({
+  zone: z.enum(['unutra', 'basta']),
+  x: coord,
+  y: coord,
+  /** Left out, the server names it after the highest *Sto N* it already has. */
+  name: z.string().trim().min(1).max(20).optional(),
+}).strict()
+
+export type AddTableBody = z.infer<typeof addTableBody>
+
 const storedLayout = z.object({
   tables: z.record(z.string(), floorSpotSchema),
   bar: floorBarSchema.nullable().optional(),

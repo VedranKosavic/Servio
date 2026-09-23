@@ -52,6 +52,8 @@ import type { TableState, VenueTable, Zone } from '#shared/types'
 
 const props = withDefaults(defineProps<{
   tables: VenueTable[]
+  /** *+ Sto*: the next tap on the floor names the spot instead of a table. */
+  placing?: boolean
   /** Where the owner put every table and the bar — `bootstrap.floor`. */
   floor?: FloorLayout
   zone: Zone
@@ -69,13 +71,20 @@ const props = withDefaults(defineProps<{
    */
   currentShiftSeq?: number | null
 }>(), {
+  placing: false,
   floor: () => ({ tables: {} }),
   draftTables: () => [],
   draftLabel: undefined,
   currentShiftSeq: null,
 })
 
-defineEmits<{ select: [tableId: string], long: [tableId: string], bar: [] }>()
+defineEmits<{
+  select: [tableId: string]
+  long: [tableId: string]
+  bar: []
+  /** Where the waiter wants the table he is adding (`+ Sto`). */
+  spot: [x: number, y: number]
+}>()
 
 interface Cell {
   id: string
@@ -166,7 +175,13 @@ const cells = computed(() => new Map(props.tables
 
 <template>
   <div class="flex flex-1 flex-col gap-3">
-    <FloorRoom class="mx-auto max-w-[560px]" :plan="plan" @bar="$emit('bar')">
+    <FloorRoom
+      class="mx-auto max-w-[560px]"
+      :plan="plan"
+      :placing="placing"
+      @bar="$emit('bar')"
+      @spot="(x, y) => $emit('spot', x, y)"
+    >
       <template #table="{ table }">
         <FloorTable
           v-if="cells.get(table.id)"

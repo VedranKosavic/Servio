@@ -50,7 +50,7 @@ import {
   createCategory, createProduct, createStockItem, createTable, createUser, setRecipe,
   deleteProductImage, setProductImage,
   deleteCategory, updateCategory, updateProduct, updateSettings, updateStockItem, updateTable, updateUser,
-  saveFloor,
+  saveFloor, addFloorTable,
 } from '../../server/services/admin'
 import { schema } from '../helpers/db'
 import {
@@ -546,6 +546,12 @@ const CALLS: Record<string, () => void | Promise<void>> = {
 
   [join('admin', 'tables', '[id]', 'index.patch.ts')]: () => {
     updateTable(f.db, f.venueId, f.adminActor(), f.tableId('Sto 1'), { sort: 5 })
+  },
+
+  // *+ Sto* on the waiter's plan: a table brought out mid-shift, at the spot he
+  // tapped. `table` for the occupancy read, `menu` for the name and the spot.
+  [join('tables', 'index.post.ts')]: () => {
+    addFloorTable(f.db, f.venueId, f.adminActor(), { zone: 'basta', x: 30, y: 30 })
   },
 
   // *Raspored sale* — `bump('menu')`, which is what moves `menu_version` and

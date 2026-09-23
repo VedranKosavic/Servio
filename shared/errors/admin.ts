@@ -46,6 +46,7 @@ export const ADMIN_ERRORS = {
   UNIT_FROZEN: 'Jedinica se više ne može mijenjati — roba već ima promet.',
 
   TABLE_HAS_OPEN_TAB: 'Sto ima otvoren račun — zatvori ga pa ga onda ugasi.',
+  TABLE_NAME_TAKEN: 'Sto s tim imenom već stoji na planu.',
 
   /** One line per item in a normativ; two lines for the same item is a typo. */
   RECIPE_DUPLICATE: 'Ista roba je dva puta u normativu.',

@@ -22,6 +22,7 @@
  * screen can write `catch (e) { if (e.code === 'LOCKED') … }` and read
  * `e.data.retry_after_s` without knowing anything about $fetch.
  */
+import type { AddTableBody } from '#shared/floor'
 import type {
   AdjustmentResult,
   ApiError,
@@ -43,6 +44,7 @@ import type {
   MyShift,
   MyShiftRow,
   ShiftClosing,
+  TableAdmin,
   MySession,
   PaymentResult,
   PendingAdjustment,
@@ -397,6 +399,12 @@ export function useApi() {
       request<PrepOrder>(`/api/prep/${orderId}/done`, { method: 'POST', body: {} }),
 
     // -- Roba ---------------------------------------------------------------
+
+    /**
+     * *+ Sto* — a table the waiter brought out, at the spot he dropped it on.
+     * Workers may call this; renaming, moving and switching off stay admin's.
+     */
+    addTable: (body: AddTableBody) => request<TableAdmin>('/api/tables', { method: 'POST', body }),
 
     /** *Stanje šanka* — `{ seq, items }`, every item with its on-hand and last movement. */
     getStock: () => request<StockResponse>('/api/stock', { etag: true }),

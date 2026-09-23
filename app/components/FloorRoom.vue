@@ -40,7 +40,7 @@
  * arrow keys nudge the selected one. The room only reports where things were
  * dropped — keeping the working copy, and saving it, is the editor's job.
  */
-import { BAR_DEPTH, CHAIR_DEPTH, CHAIR_GAP, STOOL_OUT, clampBar, clampTable } from '#shared/floor'
+import { BAR_DEPTH, CHAIR_DEPTH, CHAIR_GAP, STOOL_OUT, TABLE, clampBar, clampTable } from '#shared/floor'
 import type { PlacedBar, PlacedTable, RoomPlan } from '#shared/floor'
 
 const props = withDefaults(defineProps<{
@@ -50,10 +50,16 @@ const props = withDefaults(defineProps<{
   selected?: string | null
   /** Items standing on one another — marked red in the editor. */
   clashes?: Set<string>
+  /**
+   * *+ Sto*: the next tap on the floor is a place, not a table. Nothing on the
+   * plan answers a tap while this is on, so a spot behind a tile is reachable.
+   */
+  placing?: boolean
 }>(), {
   editable: false,
   selected: null,
   clashes: () => new Set<string>(),
+  placing: false,
 })
 
 const emit = defineEmits<{
@@ -62,6 +68,8 @@ const emit = defineEmits<{
   select: [id: string | null]
   /** The counter was tapped on a plan nobody is editing — the waiter's bar sheet. */
   bar: []
+  /** Where a new table goes, in room units, while `placing`. */
+  spot: [x: number, y: number]
 }>()
 
 const room = ref<HTMLElement | null>(null)
@@ -202,6 +210,23 @@ function onTap(id: string) {
 function onRoomDown(event: PointerEvent) {
   if (props.editable && event.target === event.currentTarget) emit('select', null)
 }
+
+/**
+ * The tap that places a table: the finger lands in the middle of the top, and
+ * the spot is clamped off the walls the same way a dragged one is.
+ */
+function onPlace(event: PointerEvent) {
+  if (!props.placing || !room.value) return
+  const rect = room.value.getBoundingClientRect()
+  const unit = rect.width / props.plan.width
+  const at = clampTable(
+    (event.clientX - rect.left) / unit - TABLE / 2,
+    (event.clientY - rect.top) / unit - TABLE / 2,
+    TABLE,
+    props.plan.width,
+  )
+  emit('spot', at.x, at.y)
+}
 </script>
 
 <template>
@@ -209,9 +234,10 @@ function onRoomDown(event: PointerEvent) {
     <div
       ref="room"
       class="fr-room"
-      :class="[plan.zone, { editable }]"
+      :class="[plan.zone, { editable, placing }]"
       :style="{ height: u(height), '--u': u(1) }"
       @pointerdown="onRoomDown"
+      @click="onPlace"
     >
       <!-- The VIP box and anything like it: under the tables, a patch of
            floor with its name on it. -->
@@ -481,6 +507,12 @@ function onRoomDown(event: PointerEvent) {
 }
 
 .fr-table.round .fr-chair { border-radius: 50%; }
+
+/* While a spot is being picked the room is one big target: the tiles and the
+   counter stop answering, so the floor behind them can be tapped. */
+.fr-room.placing { cursor: crosshair; }
+.fr-room.placing .fr-table,
+.fr-room.placing .fr-bar { pointer-events: none; }
 
 /* ---- editing ----------------------------------------------------------- */
 
