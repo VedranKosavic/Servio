@@ -178,7 +178,19 @@ const shown = computed<Product[]>(() => {
   if (query.value.trim() !== '') {
     return products.value.filter(p => matchesQuery(p, query.value))
   }
-  if (activeTab.value === FAVOURITES) return products.value.filter(p => p.is_favourite)
+  /**
+   * *Omiljeno* is the twelve things this bar sells all night (the cap lives on
+   * *Meni*, where the owner ticks them). It is the one tab that **drops** an
+   * article whose hour has passed instead of striking it through: the owner
+   * wants the coffee slot to follow the clock — *"Kafa/kafa akcija depending on
+   * current time"* — so Happy Hour holds the slot until 9:00 and the ordinary
+   * coffee has it afterwards, and a shortlist of twelve never spends one of
+   * them on something nobody can order.
+   */
+  if (activeTab.value === FAVOURITES) {
+    return products.value.filter(p =>
+      p.is_favourite && !isPastAvailableUntil(p.available_until, clockNow.value))
+  }
   if (activeTab.value === RECENT) {
     const byId = new Map(products.value.map(p => [p.id, p]))
     return recentIds.value.map(id => byId.get(id)).filter((p): p is Product => p !== undefined)
