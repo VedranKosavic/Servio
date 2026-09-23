@@ -75,6 +75,11 @@ export interface Fixture {
   /** Haris, the admin. */
   adminActor: () => Actor
 
+  /**
+   * A real `sessions` row for `f.actor(name, { mode })`, which is what makes a
+   * seat on a shift visible to the picker. Returns the session id.
+   */
+  session: (name: string, opts?: { mode?: 'konobar' | 'sanker', shiftId?: string }) => string
   /** Open a shift and put `members` on it. Returns the shift id. */
   openShift: (opts?: {
     members?: string[], at?: string, businessDate?: string,
@@ -209,6 +214,35 @@ export function makeFixture(): Fixture {
       }).onConflictDoNothing().run()
     }
     return shiftId
+  }
+
+  /**
+   * The session `f.actor(name)` claims to have. The fixture's actors carry a
+   * made-up `sessionId` and no row behind it, which was fine while nothing read
+   * one; the shift picker reads sessions to know who holds which screen on
+   * which shift, so a test about seats has to write the row it is about.
+   */
+  function session(
+    name: string, opts: { mode?: 'konobar' | 'sanker', shiftId?: string } = {},
+  ): string {
+    const sessionId = `session-${name}`
+    db.insert(schema.sessions).values({
+      id: sessionId,
+      venueId,
+      userId: userId(name),
+      deviceId: null,
+      tokenHash: `token-${name}`,
+      kind: 'staff',
+      borrowed: 0,
+      mode: opts.mode ?? null,
+      shiftId: opts.shiftId ?? null,
+      createdAt: clock.now(),
+      expiresAt: new Date(Date.parse(clock.now()) + 20 * 3600 * 1000).toISOString(),
+    }).onConflictDoUpdate({
+      target: schema.sessions.id,
+      set: { mode: opts.mode ?? null, shiftId: opts.shiftId ?? null, revokedAt: null },
+    }).run()
+    return sessionId
   }
 
   /** A shift template by the owner's own name for it. */
@@ -475,6 +509,7 @@ export function makeFixture(): Fixture {
     },
     actor,
     adminActor: () => actor('Haris'),
+    session,
     openShift,
     lock,
     pay,

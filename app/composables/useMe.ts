@@ -39,9 +39,11 @@ export type MeStatus = 'unknown' | 'ready' | 'anon' | 'nodevice' | 'offline'
  */
 export const CHOOSER = '/ekran'
 
-export function homeFor(role: Role | undefined, mode?: ScreenMode | null): string {
+export function homeFor(
+  role: Role | undefined, mode?: ScreenMode | null, shiftId?: string | null,
+): string {
   if (!role) return CHOOSER
-  return landingFor(role, mode ?? null) ?? CHOOSER
+  return landingFor(role, mode ?? null, shiftId ?? null) ?? CHOOSER
 }
 
 /** Everything this phone remembers on its own. Wiped when the device is revoked. */
@@ -88,7 +90,9 @@ export function useMe() {
   const mode = computed(() => me.value?.session.mode ?? null)
   const settings = computed(() => me.value?.venue.settings ?? null)
   const isReady = computed(() => status.value === 'ready' && !!me.value)
-  const home = computed(() => homeFor(me.value?.user.role, me.value?.session.mode))
+  const home = computed(() => homeFor(
+    me.value?.user.role, me.value?.session.mode, me.value?.session.shift_id ?? null,
+  ))
 
   /**
    * Somebody PIN'd into a colleague's personal phone (*Drugi konobar*). The

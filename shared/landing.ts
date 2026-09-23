@@ -7,8 +7,14 @@
  * | who | what they get |
  * |---|---|
  * | `admin` | `/admin` — the dashboard. He never appears on, or shares, a staff screen. |
- * | `radnik` with a `mode` | `/konobar` or `/sanker`, whichever he picked. |
- * | `radnik` with no `mode` | `null` — the chooser, *Na čemu si večeras?* |
+ * | `radnik` with a `mode` **and** a shift | `/konobar` or `/sanker`, whichever he picked. |
+ * | `radnik` missing either | `null` — the chooser, which asks for whichever is missing. |
+ *
+ * **Both halves are required** since the handover (23.09.2026). The screen says
+ * where he works and the shift says *whose night his rounds belong to*; with
+ * two shifts open at once the second is no longer derivable from the clock, so
+ * a worker who has not answered it cannot be sent to a floor plan — his first
+ * lock would land on whichever crew the café happened to have open.
  *
  * `null` is deliberately not a path: the chooser is a screen the client owns
  * and the server has no opinion about, and returning a route string from
@@ -23,8 +29,14 @@ import type { Role, ScreenMode } from './types'
 
 export type LandingPath = '/admin' | '/konobar' | '/sanker'
 
-export function landingFor(role: Role, mode: ScreenMode | null | undefined): LandingPath | null {
+export function landingFor(
+  role: Role, mode: ScreenMode | null | undefined, shiftId?: string | null,
+): LandingPath | null {
   if (role === 'admin') return '/admin'
+  // `undefined` rather than `null` is how a caller that has not been taught
+  // about shifts reads: an old client asking for a landing gets the mode's
+  // answer, not a chooser it cannot draw.
+  if (shiftId === null) return null
   if (mode === 'konobar') return '/konobar'
   if (mode === 'sanker') return '/sanker'
   return null

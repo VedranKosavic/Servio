@@ -66,6 +66,8 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   // A radnik picking (or switching) his screen for tonight. `any`, not a role
   // list: an admin may call it too and the service simply keeps his mode null.
   'POST /api/auth/mode': 'any',
+  'GET /api/auth/shifts': 'any',
+  'POST /api/auth/shift': 'any',
   'POST /api/devices/enrol': 'public',
   'POST /api/devices/heartbeat': 'any',
   'GET /api/me': 'any',

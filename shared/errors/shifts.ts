@@ -21,6 +21,12 @@ export const SHIFT_ERRORS = {
   NOT_MY_SHIFT: 'Napomenu pišeš samo na svojoj smjeni.',
   NOT_APPROVER: 'Ovo ne možeš odobriti.',
 
+  // The picker — *Koju smjenu radiš?* (23.09.2026). `TEMPLATE_NOT_FOUND` is
+  // the roster's own sentence and is not repeated here: one code, one place.
+  SHIFT_ROLE_TAKEN: 'Neko je već na toj smjeni na tvom ekranu. Izaberi drugu smjenu.',
+  SHIFT_DONE: 'Ta smjena je danas već zaključena.',
+  SHIFT_TOO_EARLY: 'Prerano je za tu smjenu. Otvara se pred početak.',
+
   MOVEMENT_NOT_FOUND: 'Ta stavka kase ne postoji.',
   NOT_PENDING: 'Ova stavka ne čeka odluku.',
   ALREADY_DECIDED: 'Već je odlučeno.',

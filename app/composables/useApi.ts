@@ -40,6 +40,7 @@ import type {
   LoginUser,
   MarkUnpaidBody,
   MeContext,
+  ShiftChoices,
   ClosingPreview,
   MyShift,
   MyShiftRow,
@@ -66,7 +67,7 @@ import type {
 // against — and it means WP9 changes no file outside `app/`.
 import type {
   DecideAdjustmentBody, DiscardDraftBody, EnrolDeviceBody, HeartbeatBody, PinLoginBody, SetModeBody,
-  SettleBody, StaffNoteBody,
+  SetShiftBody, SettleBody, StaffNoteBody,
 } from '#shared/schemas'
 import type { closeByBarBody } from '#shared/schemas'
 import type { z } from 'zod'
@@ -248,6 +249,17 @@ export function useApi() {
      */
     setMode: (body: SetModeBody) =>
       request<MeContext>('/api/auth/mode', { method: 'POST', body }),
+
+    /**
+     * *Koju smjenu radiš?* — the café's two slots, and what a tap would do.
+     * Read fresh every time the chooser opens: a colleague may have taken the
+     * seat while this phone was showing the screen.
+     */
+    shiftChoices: () => request<ShiftChoices>('/api/auth/shifts'),
+
+    /** The tap. Joins the shift running on that slot, or opens it. */
+    setShift: (body: SetShiftBody) =>
+      request<MeContext>('/api/auth/shift', { method: 'POST', body }),
 
     /** The six-character code the owner reads out across the bar. */
     enrolDevice: (body: EnrolDeviceBody) =>

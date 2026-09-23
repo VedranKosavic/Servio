@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * *Na čemu si večeras?* — the second step, and the only one behind the PIN.
+ * *Na čemu si večeras?* and *Koju smjenu radiš?* — the two steps behind the PIN.
  *
  * Which staff screen a worker is on tonight stopped being a property of his
  * account: it is a `ScreenMode` on his **session** (`shared/landing.ts`), so
@@ -23,8 +23,16 @@
  * The greeting is the point of the name on this screen: the pad asked nobody
  * who he was, so this is the first and only place the session says out loud
  * whose it is — before he starts locking rounds under it.
+ *
+ * **The second step is the shift** (the owner, 23.09.2026). The café runs two a
+ * day and they overlap while the crews change, so the clock can no longer say
+ * whose round a round is: the worker does. The slot he taps is one of the
+ * owner's own two, it is free **per screen** — the first shift is a konobar and
+ * a šanker, so the colleague arriving five minutes later takes the other seat
+ * rather than being pushed into the evening — and once he is on it the session
+ * stays signed in until the šanker closes that shift.
  */
-import type { ScreenMode } from '#shared/types'
+import type { ScreenMode, ShiftChoice } from '#shared/types'
 import { MODE_LABELS } from '#shared/landing'
 
 useHead({ title: 'Ekran' })
@@ -33,8 +41,20 @@ const api = useApi()
 const me = useMe()
 
 const ready = ref(false)
-const busy = ref<ScreenMode | null>(null)
+const busy = ref<string | null>(null)
 const message = ref<string | null>(null)
+
+/**
+ * Which half of the screen is showing.
+ *
+ * Read off the session rather than held as state, so a reload in the middle —
+ * screen answered, shift not — comes back to the shift and never asks the first
+ * question twice.
+ */
+const step = computed<'mode' | 'shift'>(() => (me.me.value?.session.mode ? 'shift' : 'mode'))
+
+const choices = ref<ShiftChoice[]>([])
+const loadingChoices = ref(false)
 
 onMounted(async () => {
   const state = await me.load()
@@ -49,7 +69,24 @@ onMounted(async () => {
     return
   }
   ready.value = true
+  if (step.value === 'shift') await loadChoices()
 })
+
+/**
+ * Read fresh every time this half opens, and again after a refusal: the seat a
+ * phone is looking at is one a colleague at the bar can take while it looks.
+ */
+async function loadChoices() {
+  loadingChoices.value = true
+  try {
+    choices.value = (await api.shiftChoices()).choices
+    message.value = null
+  } catch (err) {
+    message.value = apiErrorText(err)
+  } finally {
+    loadingChoices.value = false
+  }
+}
 
 /** The choices, in the order the café thinks of them. */
 const CHOICES: { mode: ScreenMode, note: string }[] = [
@@ -63,14 +100,57 @@ async function choose(mode: ScreenMode) {
   message.value = null
   try {
     // The route answers the whole `MeContext`, so the session's new mode is on
-    // the store before the navigation reads `home` out of it.
+    // the store before `step` is read again.
     me.me.value = await api.setMode({ mode })
-    await navigateTo(me.home.value)
+    // Still here rather than navigating: `home` is the chooser until the shift
+    // is answered too, and asking the server to send him somewhere he cannot go
+    // yet would be a redirect straight back.
+    await loadChoices()
   } catch (err) {
     message.value = apiErrorText(err)
   } finally {
     busy.value = null
   }
+}
+
+async function chooseShift(choice: ShiftChoice) {
+  if (busy.value || choice.action === null) return
+  busy.value = choice.template_id
+  message.value = null
+  try {
+    me.me.value = await api.setShift({ template_id: choice.template_id })
+    await navigateTo(me.home.value)
+  } catch (err) {
+    message.value = apiErrorText(err)
+    // The refusal is almost always "somebody just took it", so redraw the
+    // seats instead of leaving a card that still looks free.
+    await loadChoices()
+  } finally {
+    busy.value = null
+  }
+}
+
+/** Wrong screen picked: back one step, without signing out. */
+async function backToMode() {
+  if (busy.value) return
+  me.me.value = me.me.value && { ...me.me.value, session: { ...me.me.value.session, mode: null } }
+}
+
+/** What a card that cannot be tapped says, in the café's own words. */
+const BLOCKED_BS: Record<NonNullable<ShiftChoice['blocked']>, string> = {
+  zauzeta: 'Zauzeta',
+  zavrsena: 'Završena',
+  rano: 'Još nije vrijeme',
+}
+
+/** Who is already on a slot — the line under its name. */
+function who(choice: ShiftChoice): string {
+  const on = [
+    choice.konobar ? `konobar ${choice.konobar}` : null,
+    choice.sanker ? `šank ${choice.sanker}` : null,
+  ].filter(Boolean)
+  if (on.length > 0) return on.join(' · ')
+  return choice.shift_id ? 'otvorena, niko nije prijavljen' : 'nije otvorena'
 }
 
 async function signOut() {
@@ -93,12 +173,14 @@ async function signOut() {
           <header class="hello">
             <span class="avatar avatar-lg avatar-accent">{{ me.user.value?.initials }}</span>
             <p class="eyebrow">Zdravo, {{ me.user.value?.name }}</p>
-            <h1 class="page-title hello-title">Na čemu si večeras?</h1>
+            <h1 class="page-title hello-title">
+              {{ step === 'mode' ? 'Na čemu si večeras?' : 'Koju smjenu radiš?' }}
+            </h1>
           </header>
 
           <p v-if="message" class="note note-danger">{{ message }}</p>
 
-          <div class="choices">
+          <div v-if="step === 'mode'" class="choices">
             <button
               v-for="choice in CHOICES"
               :key="choice.mode"
@@ -111,6 +193,40 @@ async function signOut() {
               <span class="choice-note">{{ choice.note }}</span>
             </button>
           </div>
+
+          <!--
+            The café's two slots, always both drawn. A slot he cannot take is
+            greyed with the reason rather than hidden: *Druga smjena* missing
+            from the screen at eight in the morning would read as a fault, and
+            *Zauzeta* with a colleague's name on it is the one sentence that
+            stops two people taking one seat.
+          -->
+          <template v-else>
+            <p v-if="loadingChoices && choices.length === 0" class="choice-note">Učitavanje…</p>
+
+            <div v-else class="choices">
+              <button
+                v-for="choice in choices"
+                :key="choice.template_id"
+                type="button"
+                class="choice"
+                :disabled="busy !== null || choice.action === null"
+                @click="chooseShift(choice)"
+              >
+                <span class="shift-head">
+                  <span class="section-title choice-name">{{ choice.name }}</span>
+                  <span v-if="choice.mine" class="chip chip-accent">tvoja</span>
+                  <span v-else-if="choice.blocked" class="chip">{{ BLOCKED_BS[choice.blocked] }}</span>
+                </span>
+                <span class="choice-note num">{{ choice.start_time }} – {{ choice.end_time }}</span>
+                <span class="choice-note">{{ who(choice) }}</span>
+              </button>
+            </div>
+
+            <button type="button" class="more quiet" :disabled="busy !== null" @click="backToMode">
+              <span>Nisam na tom ekranu — vrati se</span>
+            </button>
+          </template>
 
           <!-- Not a way out of the shift, a way out of the wrong session: the
                pad named nobody, so this is where a person who is looking at
@@ -218,6 +334,17 @@ async function signOut() {
 .choice:disabled { opacity: 0.5; cursor: default; }
 
 .choice-name { color: var(--ink); }
+
+/* The name and its chip on one line, the chip pushed to the far edge so two
+   cards read as a column of names rather than as a ragged list. */
+.shift-head {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+}
+
+.shift-head .chip { margin-left: auto; }
 
 .choice-note {
   font-size: var(--text-label);

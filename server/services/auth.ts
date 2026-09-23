@@ -82,6 +82,7 @@ function toSessionBrief(row: SessionRow): SessionBrief {
     expires_at: row.expiresAt,
     borrowed: row.borrowed === 1,
     mode: row.mode ?? null,
+    shift_id: row.shiftId ?? null,
   }
 }
 
@@ -960,7 +961,10 @@ export function getMe(q: Queryable, venueId: string, actor: Actor): MeContext {
     user: toMeUser(user),
     session: session
       ? toSessionBrief(session)
-      : { id: actor.sessionId, kind: actor.sessionKind, expires_at: '', borrowed: actor.borrowed, mode: null },
+      : {
+          id: actor.sessionId, kind: actor.sessionKind, expires_at: '',
+          borrowed: actor.borrowed, mode: null, shift_id: null,
+        },
     device: device ? toDeviceBrief(device) : null,
     venue: venueBrief(q, venueId),
     seq: currentSeq(q, venueId),

@@ -73,6 +73,50 @@ export interface SessionBrief {
    * admin session is always `null` — the owner's landing is `/admin`.
    */
   mode: ScreenMode | null
+  /**
+   * Which shift this session is working, or `null` for "has not picked yet".
+   *
+   * The café runs two a day and they overlap at the handover, so the screen is
+   * only half the answer to *who is this round for*: a session carries both.
+   * `landingFor` holds a worker on the chooser until this is set.
+   */
+  shift_id: string | null
+}
+
+/**
+ * One row on *Koju smjenu radiš?* — a slot of the café's day, and what this
+ * person may do with it.
+ *
+ * The café has exactly two (the owner, 23.09.2026: *"u kafiću su uvijek prva
+ * ili druga smjena"*), so this list is the `shift_templates` table and never a
+ * history of what happened to be opened.
+ */
+export interface ShiftChoice {
+  template_id: string
+  /** *Prva smjena* — the owner's own name for it. */
+  name: string
+  start_time: string
+  end_time: string
+  /** The running shift on this slot, when there is one. */
+  shift_id: string | null
+  /** What a tap would do, and `null` when it cannot be tapped. */
+  action: 'join' | 'open' | null
+  /**
+   * Why it cannot be tapped — `zauzeta` (somebody is already on it in this
+   * person's role), `zavrsena` (it has been closed today) or `rano` (its hour
+   * has not come round yet).
+   */
+  blocked: 'zauzeta' | 'zavrsena' | 'rano' | null
+  /** He is already on this one: the picker sends him straight back to it. */
+  mine: boolean
+  /** Who is on it, by role — what makes *zauzeta* readable rather than blunt. */
+  konobar: string | null
+  sanker: string | null
+}
+
+/** `GET /api/auth/shifts` — the chooser's whole screen in one read. */
+export interface ShiftChoices {
+  choices: ShiftChoice[]
 }
 
 /**

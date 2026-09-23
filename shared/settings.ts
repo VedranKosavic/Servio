@@ -98,6 +98,16 @@ export const DEFAULT_SETTINGS = {
   upload_user_day_files: 25,
   /** Minutes past `start_time` before *Sati* prints a late arrival. */
   roster_late_grace_min: 30,
+  /**
+   * How long before a shift's own `start_time` a worker may open it.
+   *
+   * The handover has no clock behind it — *"nema pravila, druga smjena zna
+   * početi ranije"* (the owner, 23.09.2026) — so the picker cannot simply wait
+   * for 15:00. An hour is early enough for every real arrival and still narrow
+   * enough that *Druga smjena* is not tappable at eight in the morning, which
+   * is the only mistake this number exists to prevent.
+   */
+  shift_open_early_min: 60,
   /** Phase 5 — read by nothing in Phase 4. A swap needs no owner confirmation in v1. */
   swap_needs_owner: false,
 }
@@ -161,6 +171,7 @@ export const settingsSchema = z.object({
   upload_user_day_bytes: z.int().min(0).max(1_073_741_824),
   upload_user_day_files: z.int().min(0).max(500),
   roster_late_grace_min: z.int().min(0).max(240),
+  shift_open_early_min: z.int().min(0).max(240),
   swap_needs_owner: z.boolean(),
 }).strict().partial()
 
@@ -223,5 +234,6 @@ export const SETTINGS_LABELS: Partial<Record<keyof Settings, string>> = {
   upload_user_day_bytes: 'Slike po osobi — dnevno',
   upload_user_day_files: 'Slika po osobi dnevno',
   roster_late_grace_min: 'Dozvoljeno kašnjenje (min)',
+  shift_open_early_min: 'Smjena se može otvoriti ranije (min)',
   swap_needs_owner: 'Zamjenu potvrđuje vlasnik',
 }

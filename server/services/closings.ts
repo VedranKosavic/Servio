@@ -55,7 +55,7 @@ import type { Actor, Db, Queryable } from './types'
 import { bump, getSettings, log } from './contracts'
 import { shiftCategories } from './cash'
 import {
-  assertNoOpenTabs, autoLeave, openTabsOn, requireShift, userNames,
+  assertNoOpenTabs, autoLeave, endSessionsOn, openTabsOn, requireShift, userNames,
 } from './shifts'
 import { summarizeShift, writeSummaryVersion } from './summaries'
 
@@ -513,6 +513,9 @@ export function closeByBar(
       .run()
 
     autoLeave(tx, venueId, shiftId, at)
+    // The crew is asked for its PIN again; the other shift, which may be an
+    // hour into its own night, is not touched.
+    endSessionsOn(tx, venueId, shiftId, at)
     writeSummaryVersion(tx, venueId, shiftId, 'close', at)
 
     log(tx, venueId, {

@@ -16,7 +16,7 @@
  * close a ritual note, which is the fastest way to teach a café to ignore its
  * own alarms.
  */
-import { and, count, desc, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lte, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { SankError, conflict, forbidden, notFound, unprocessable } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
@@ -24,13 +24,23 @@ import { businessDate, localTime } from '#shared/dates'
 import type { Settings } from '#shared/settings'
 import type { Actor, Db, Queryable, Tx } from './types'
 import type {
-  CloseResult, MissingSettlement, OwnerShiftRow, Shift, ShiftBrief, ShiftStatus,
+  CloseResult, MissingSettlement, OwnerShiftRow, Shift, ShiftBrief, ShiftChoices, ShiftStatus,
 } from '#shared/types'
 import { actorShift, bump, currentShift, getSettings, joinShift, log, verifyPinMetered } from './contracts'
 import { expectedCash, withinTolerance } from './cash'
 import { writeSummaryVersion } from './summaries'
 
 type ShiftRow = typeof schema.shifts.$inferSelect
+
+/**
+ * How long a staff session lives once it is on a shift.
+ *
+ * Twenty hours is not a guess at a shift's length — it is "longer than any
+ * night can be", because what actually ends these sessions is the šanker's
+ * *Zaključi smjenu* (`endSessionsOn`). The number is only the backstop for a
+ * phone that was never signed out of a shift nobody ever closed.
+ */
+const SHIFT_SESSION_S = 20 * 60 * 60
 
 /**
  * The hot-path helpers live in `contracts.ts` — every package calls them and a
@@ -406,6 +416,7 @@ export function closeShift(
       .run()
 
     autoLeave(tx, venueId, shiftId, at)
+    endSessionsOn(tx, venueId, shiftId, at)
     const version = writeSummaryVersion(tx, venueId, shiftId, 'close', at)
     const summary = latestSummaryNumbers(tx, venueId, shiftId)
 
@@ -477,6 +488,7 @@ export function forceClose(
       .run()
 
     autoLeave(tx, venueId, shiftId, at)
+    endSessionsOn(tx, venueId, shiftId, at)
     const version = writeSummaryVersion(tx, venueId, shiftId, 'close', at)
 
     log(tx, venueId, {
@@ -753,3 +765,241 @@ function latestSummaryNumbers(
 }
 
 export type { ShiftRow }
+
+// ===========================================================================
+// *Koju smjenu radiš?* — the picker (the owner, 23.09.2026)
+// ===========================================================================
+
+/**
+ * The minute of the café's own day, 0 at `business_day_start_hour`.
+ *
+ * The same arithmetic `isEarlyClose` does, and for the same reason: 03:00 is
+ * *later* than 23:00 in a café whose day starts at six, and a plain `HH:MM`
+ * comparison would call it earlier.
+ */
+function cafeMinute(hhmm: string, settings: Settings): number {
+  const [h, m] = hhmm.split(':').map(Number)
+  const raw = (h ?? 0) * 60 + (m ?? 0)
+  const start = settings.business_day_start_hour * 60
+  return raw < start ? raw + 24 * 60 - start : raw - start
+}
+
+/** Every session working a shift right now, by `(shift, mode)`. */
+function seatsOn(
+  q: Queryable, venueId: string, shiftIds: string[], now: string,
+): Map<string, { userId: string, name: string }> {
+  if (shiftIds.length === 0) return new Map()
+  const rows = q.select({
+    shiftId: schema.sessions.shiftId,
+    mode: schema.sessions.mode,
+    userId: schema.sessions.userId,
+    name: schema.users.name,
+  })
+    .from(schema.sessions)
+    .innerJoin(schema.users, eq(schema.users.id, schema.sessions.userId))
+    .where(and(
+      eq(schema.sessions.venueId, venueId),
+      inArray(schema.sessions.shiftId, shiftIds),
+      isNull(schema.sessions.revokedAt),
+      gte(schema.sessions.expiresAt, now),
+    ))
+    .all()
+
+  const seats = new Map<string, { userId: string, name: string }>()
+  for (const row of rows) {
+    if (!row.shiftId || !row.mode) continue
+    // First one wins: two phones on one seat is one person with a spare, and
+    // the name on the chip should be the one who took it.
+    const key = `${row.shiftId}:${row.mode}`
+    if (!seats.has(key)) seats.set(key, { userId: row.userId, name: row.name })
+  }
+  return seats
+}
+
+/**
+ * `GET /api/auth/shifts` — the chooser's whole screen.
+ *
+ * **It lists the café's slots, not its shifts.** There are exactly two, they
+ * are the owner's own `shift_templates` rows, and a day that ran only the
+ * evening still draws both — *"u kafiću su uvijek prva ili druga smjena"*. A
+ * tap either joins the one that is running or opens it.
+ *
+ * A slot is **taken** when somebody else already holds this person's *screen*
+ * on it: the first shift is a konobar and a šanker, so Tarik arriving at 07:05
+ * takes the šank seat of the shift Nidal opened rather than being pushed into
+ * the evening. The seat is a live session, which is the only thing that knows
+ * both the shift and the screen.
+ */
+export function shiftChoices(
+  q: Queryable, venueId: string, actor: Actor, now = nowIso(),
+): ShiftChoices {
+  const settings = getSettings(q, venueId)
+  const today = businessDate(now, settings.timezone, settings.business_day_start_hour)
+  const nowMinute = cafeMinute(localTime(now, settings.timezone), settings)
+
+  const templates = q.select().from(schema.shiftTemplates)
+    .where(and(
+      eq(schema.shiftTemplates.venueId, venueId),
+      eq(schema.shiftTemplates.active, 1),
+    ))
+    .orderBy(asc(schema.shiftTemplates.sort), asc(schema.shiftTemplates.name))
+    .all()
+
+  const todaysShifts = q.select().from(schema.shifts)
+    .where(and(
+      eq(schema.shifts.venueId, venueId),
+      eq(schema.shifts.businessDate, today),
+      isNotNull(schema.shifts.templateId),
+    ))
+    .all()
+
+  const live = todaysShifts.filter(s => s.status === 'open' || s.status === 'closing')
+  const seats = seatsOn(q, venueId, live.map(s => s.id), now)
+
+  const myOpenShifts = new Set(q.select({ shiftId: schema.shiftMembers.shiftId })
+    .from(schema.shiftMembers)
+    .where(and(
+      eq(schema.shiftMembers.venueId, venueId),
+      eq(schema.shiftMembers.userId, actor.userId),
+      isNull(schema.shiftMembers.leftAt),
+    ))
+    .all()
+    .map(r => r.shiftId))
+
+  return {
+    choices: templates.map((template) => {
+      const running = live.find(s => s.templateId === template.id) ?? null
+      const konobar = running ? seats.get(`${running.id}:konobar`) ?? null : null
+      const sanker = running ? seats.get(`${running.id}:sanker`) ?? null : null
+      const mine = running ? myOpenShifts.has(running.id) : false
+
+      const common = {
+        template_id: template.id,
+        name: template.name,
+        start_time: template.startTime,
+        end_time: template.endTime,
+        shift_id: running?.id ?? null,
+        mine,
+        konobar: konobar?.name ?? null,
+        sanker: sanker?.name ?? null,
+      }
+
+      if (running) {
+        // His own seat, or the one his screen needs. An admin holds no seat:
+        // he has no `mode`, so nothing can be taken from under him.
+        const seat = actor.mode === 'sanker' ? sanker : actor.mode === 'konobar' ? konobar : null
+        const taken = seat !== null && seat.userId !== actor.userId
+        return { ...common, action: taken ? null : 'join' as const, blocked: taken ? 'zauzeta' as const : null }
+      }
+
+      // Closed today already: the crew went home and the night is a record.
+      if (todaysShifts.some(s => s.templateId === template.id)) {
+        return { ...common, action: null, blocked: 'zavrsena' as const }
+      }
+
+      const opensAt = cafeMinute(template.startTime, settings) - settings.shift_open_early_min
+      if (nowMinute < opensAt) {
+        return { ...common, action: null, blocked: 'rano' as const }
+      }
+      return { ...common, action: 'open' as const, blocked: null }
+    }),
+  }
+}
+
+/**
+ * `POST /api/auth/shift` — the tap.
+ *
+ * One transaction: the slot is re-read here rather than trusted from the
+ * screen, because two phones can be looking at the same free seat. The session
+ * is what carries the answer afterwards, so a reload lands the worker back on
+ * his own crew instead of on the chooser.
+ *
+ * It answers the shift's id and not the whole `MeContext` on purpose: building
+ * that means reading the session back through `auth.ts`, and `contracts.ts`
+ * already re-exports two functions **from** this file. The route does it
+ * instead, where both halves are already in scope and nothing points in a
+ * circle.
+ */
+export function pickShift(
+  db: Db, venueId: string, actor: Actor, templateId: string, now = nowIso(),
+): { shift_id: string } {
+  return db.transaction((tx) => {
+    const choice = shiftChoices(tx, venueId, actor, now).choices
+      .find(c => c.template_id === templateId)
+    if (!choice) throw notFound('TEMPLATE_NOT_FOUND', `no active shift template ${templateId}`)
+
+    if (choice.action === null) {
+      if (choice.blocked === 'zavrsena') throw conflict('SHIFT_DONE', 'that shift is closed for today')
+      if (choice.blocked === 'rano') throw conflict('SHIFT_TOO_EARLY', 'that shift has not started yet')
+      throw conflict('SHIFT_ROLE_TAKEN', 'somebody already holds that seat')
+    }
+
+    let shiftId = choice.shift_id
+    if (choice.action === 'open') {
+      const settings = getSettings(tx, venueId)
+      shiftId = newId()
+      tx.insert(schema.shifts).values({
+        id: shiftId,
+        venueId,
+        businessDate: businessDate(now, settings.timezone, settings.business_day_start_hour),
+        openedAt: now,
+        openedBy: actor.userId,
+        templateId,
+        // Not auto: somebody walked in and said which shift he is on. That is
+        // the opposite of a shift born out of the first lock of the evening.
+        autoOpened: 0,
+        status: 'open',
+        createdAt: now,
+      }).run()
+
+      log(tx, venueId, {
+        kind: 'shift_opened',
+        body: { shift_id: shiftId, user_id: actor.userId, at: now, auto: false },
+        actorId: actor.userId,
+        deviceId: actor.deviceId,
+        ref: { type: 'shift', id: shiftId },
+        shiftId,
+      })
+    }
+
+    joinShift(tx, venueId, shiftId!, actor.userId, actor.role, now)
+
+    tx.update(schema.sessions)
+      .set({
+        shiftId,
+        // The session now lasts as long as the shift does: the owner's rule is
+        // that a worker signs in once and is asked again only when the šanker
+        // closes the night, which revokes these rows outright.
+        expiresAt: new Date(Date.parse(now) + SHIFT_SESSION_S * 1000).toISOString(),
+        lastSeenAt: now,
+      })
+      .where(and(
+        eq(schema.sessions.id, actor.sessionId),
+        eq(schema.sessions.venueId, venueId),
+        isNull(schema.sessions.revokedAt),
+      ))
+      .run()
+
+    bump(tx, venueId, 'shift', shiftId!)
+    return { shift_id: shiftId! }
+  })
+}
+
+/**
+ * Everybody on this shift is signed out when it closes.
+ *
+ * *"Kad je smjena završena, kad šanker zaključi smjenu, traži opet prijavu"* —
+ * and only that crew: the other shift may be an hour into its own night, and
+ * signing those phones out mid-service would be the handover breaking the
+ * thing it exists to fix.
+ */
+export function endSessionsOn(tx: Tx, venueId: string, shiftId: string, at: string): void {
+  tx.update(schema.sessions)
+    .set({ revokedAt: at })
+    .where(and(
+      eq(schema.sessions.venueId, venueId),
+      eq(schema.sessions.shiftId, shiftId),
+      isNull(schema.sessions.revokedAt),
+    ))
+    .run()
+}

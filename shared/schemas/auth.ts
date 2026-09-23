@@ -65,6 +65,18 @@ export const setModeBody = z.object({
 }).strict()
 
 /**
+ * `POST /api/auth/shift` — *Koju smjenu radiš?*, the step after the screen.
+ *
+ * It names a **slot**, not a shift row: the worker taps *Druga smjena* and the
+ * server either puts him on the one already running or opens it. Naming a row
+ * would mean the phone had to know whether one exists, which is exactly the
+ * race the handover is made of.
+ */
+export const setShiftBody = z.object({
+  template_id: uuid,
+}).strict()
+
+/**
  * `POST /api/devices/enrol`. The code is uppercased before it is looked up:
  * somebody typing it on a phone keyboard will send lower case half the time,
  * and `enrol_codes_code_uq` stores the alphabet's own upper case.
@@ -108,6 +120,7 @@ export const deviceActionBody = z.object({}).strict()
 export type AdminLoginBody = z.infer<typeof adminLoginBody>
 export type PinLoginBody = z.infer<typeof pinLoginBody>
 export type SetModeBody = z.infer<typeof setModeBody>
+export type SetShiftBody = z.infer<typeof setShiftBody>
 export type EnrolDeviceBody = z.infer<typeof enrolDeviceBody>
 export type CreateEnrolCodeBody = z.infer<typeof createEnrolCodeBody>
 export type UpdateDeviceBody = z.infer<typeof updateDeviceBody>
