@@ -336,7 +336,6 @@ watch(detail, (value) => {
 // -- Naplata ----------------------------------------------------------------
 
 const payOpen = ref(false)
-const payMode = ref<'main' | 'unpaid'>('main')
 
 /**
  * Taking the money. The queueing itself is `useTabPay`, shared with the floor
@@ -377,16 +376,8 @@ async function markCategory(reason: UnpaidReason) {
   leaveTimer = setTimeout(() => navigateTo('/konobar'), 1600)
 }
 
-async function markUnpaid(reason: UnpaidReason) {
-  if (!await unpaidTab(reason)) return
-  payOpen.value = false
-  say(`Označeno: nije plaćeno · ${tableName.value}`)
-  leaveTimer = setTimeout(() => navigateTo('/konobar'), 2500)
-}
-
-function openPay(mode: 'main' | 'unpaid' = 'main') {
+function openPay() {
   payError.value = null
-  payMode.value = mode
   payOpen.value = true
   menuOpen.value = false
 }
@@ -934,7 +925,7 @@ function lateWasNotPaid(row: TableState) {
             v-else-if="hasTab"
             type="button"
             class="btn btn-primary btn-lg grow"
-            @click="openPay('main')"
+            @click="openPay()"
           >
             Naplati ·<span class="num">{{ formatKm(localRemainingFen) }}</span>
           </button>
@@ -951,10 +942,6 @@ function lateWasNotPaid(row: TableState) {
           <p class="section-title pb-1">
             {{ tableName }}
           </p>
-
-          <button type="button" class="btn btn-secondary btn-lg justify-start" :disabled="!hasTab" @click="openPay('unpaid')">
-            Nije plaćeno
-          </button>
 
           <!--
             The two categories that belong at the bar rather than at a table,
@@ -1031,12 +1018,10 @@ function lateWasNotPaid(row: TableState) {
       :table-name="tableName"
       :remaining-fen="localRemainingFen"
       :total-fen="localTotalFen"
-      :initial-mode="payMode"
       :busy="paying"
       :error="payError"
       @close="payOpen = false"
       @pay="pay"
-      @unpaid="markUnpaid"
     />
 
     <OrderMoveSheet

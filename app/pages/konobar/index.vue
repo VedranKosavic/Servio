@@ -690,7 +690,6 @@ const payOpen = ref(false)
  */
 const payAndClear = ref(true)
 const clearing = ref(false)
-const payMode = ref<'main' | 'unpaid'>('main')
 
 // -- Premjesti, Predaj kolegi ------------------------------------------------
 // What is left of the three that were behind *Detalji stola*. *Pokaži gostu*
@@ -1346,12 +1345,10 @@ function addToSheet() {
       :table-name="sheetFor.name"
       :remaining-fen="sheetMoney.remainingFen.value"
       :total-fen="sheetMoney.totalFen.value"
-      :initial-mode="payMode"
       :busy="paying"
       :error="payError"
-      @close="payOpen = false; payMode = 'main'"
+      @close="payOpen = false"
       @pay="onPay"
-      @unpaid="onUnpaid"
     />
 
     <WaiterAvatarSheet v-if="menuOpen" @close="menuOpen = false" />

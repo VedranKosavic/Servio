@@ -12,10 +12,16 @@
  * with the exact amount the only amount, the change is always nothing, and the
  * server was never told a price here anyway (it priced the round at lock).
  *
- * *Nije plaćeno* is still **reachable, but not from here**: the table's own ⋯
- * menu opens this sheet with `initial-mode="unpaid"`, which is the screen a
- * waiter needs when guests walk out. Losing it entirely would mean a night that
- * cannot say where the money went.
+ * ***Nije plaćeno* is gone entirely** (the owner, 23.09.2026). A guest who
+ * walks out is the waiter's own affair: he taps *Naplati* and the round is in
+ * the night's total like any other, with the money coming out of his pocket
+ * rather than the guest's. That is the café's rule, and it means the tab can
+ * never sit owing with nobody answerable for it.
+ *
+ * The four marks that *are* still there — policija, rashod, osoblje, otpis —
+ * are a different thing and live elsewhere (the table sheet and the Šank
+ * sheet): goods that left the shelf without money **by arrangement**, counted
+ * as sold and taken off the shift rather than off the waiter.
  */
 import { formatKm } from '#shared/money'
 import type { PaymentMethod } from '#shared/types'
@@ -26,25 +32,16 @@ const props = withDefaults(defineProps<{
   remainingFen: number
   /** What the guests were charged in total, for the line above it. */
   totalFen: number
-  /**
-   * Which half the sheet opens on. ⋯ → *Nije plaćeno* comes straight here, so
-   * a guest who walked out costs the same two taps as one who paid.
-   */
-  initialMode?: 'main' | 'unpaid'
   busy?: boolean
   error?: string | null
-}>(), { initialMode: 'main', busy: false, error: null })
+}>(), { busy: false, error: null })
 
 const emit = defineEmits<{
   close: []
   pay: [payment: { method: PaymentMethod, amount_fen: number, received_fen?: number }]
-  unpaid: [reason: 'walked_out' | 'dispute' | 'other']
 }>()
 
 useSheetDismiss(() => emit('close'))
-
-type Mode = 'main' | 'unpaid'
-const mode = ref<Mode>(props.initialMode)
 
 /**
  * **One tap is one payment.** `busy` alone is not enough: queueing is fast
@@ -60,12 +57,6 @@ function payExact() {
   sent.value = true
   emit('pay', { method: 'cash', amount_fen: props.remainingFen })
 }
-
-const UNPAID_REASONS = [
-  { id: 'walked_out', label: 'Otišli bez plaćanja' },
-  { id: 'dispute', label: 'Spor oko računa' },
-  { id: 'other', label: 'Drugo' },
-] as const
 </script>
 
 <template>
@@ -98,40 +89,17 @@ const UNPAID_REASONS = [
         </p>
 
         <!-- One tap takes the money, one closes the sheet. -->
-        <template v-if="mode === 'main'">
-          <button
-            type="button"
-            class="btn btn-primary btn-lg"
-            :disabled="busy || sent"
-            @click="payExact"
-          >
-            {{ busy || sent ? 'Naplaćujem…' : 'Naplati' }}
-          </button>
-          <button type="button" class="btn btn-ghost" :disabled="busy" @click="emit('close')">
-            Otkaži
-          </button>
-        </template>
-
-        <!-- Nije plaćeno: why. Opened from the table's ⋯ menu, never from
-             the buttons above. -->
-        <template v-else>
-          <p class="note">
-            Sto ostaje na tebi dok vlasnik ne odluči. Reci šta se desilo.
-          </p>
-          <button
-            v-for="reason in UNPAID_REASONS"
-            :key="reason.id"
-            type="button"
-            class="btn btn-secondary btn-lg justify-start"
-            :disabled="busy"
-            @click="emit('unpaid', reason.id)"
-          >
-            {{ reason.label }}
-          </button>
-          <button type="button" class="btn btn-ghost" :disabled="busy" @click="mode = 'main'">
-            Nazad
-          </button>
-        </template>
+        <button
+          type="button"
+          class="btn btn-primary btn-lg"
+          :disabled="busy || sent"
+          @click="payExact"
+        >
+          {{ busy || sent ? 'Naplaćujem…' : 'Naplati' }}
+        </button>
+        <button type="button" class="btn btn-ghost" :disabled="busy" @click="emit('close')">
+          Otkaži
+        </button>
       </div>
     </div>
   </div>

@@ -151,6 +151,13 @@ export const createPaymentBody = z.object({
  * a loss nobody authorised: the tab stays on the waiter's line until the owner
  * says *otpis* or *naplatiti*, which is what `pending_review` is for.
  *
+ * **No screen offers those three any more** (the owner, 23.09.2026): a guest
+ * who walks out is the waiter's, and he charges the table himself, so the round
+ * is in the night's total and the money is out of his pocket. They stay in this
+ * enum on purpose and are not a dead branch — a phone that queued one before
+ * the update must still be able to send it, and every row already written has
+ * to keep reading back on *Smjena*, in the Dnevnik and in `expectedCash`.
+ *
  * **Consumed, and authorised in advance.** `policija`, `rashod` (an admin
  * drinking), `osoblje` (a worker's own allowance) and `otpis` (spilled,
  * dropped, or rung up by mistake) were never going to be paid for and everybody
