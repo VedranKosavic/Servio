@@ -184,15 +184,18 @@ const cells = computed(() => new Map(props.tables
       </template>
     </FloorRoom>
 
-    <!-- The caption on the plan: colour never carries a meaning on its own, so
-         every marker is drawn beside the word it stands for. -->
-    <ul class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 px-2 text-caption tracking-normal text-muted">
+    <!--
+      The caption is **the two colours and nothing else** (the owner,
+      23.09.2026). It keyed six things; four of them a waiter reads off the
+      tile without a word — an empty table is empty, a dashed one is his own
+      unsent round, a ring is the one waiting, a checkmark is paid — and the
+      owner's verdict on the rest of the list was that it is not even right.
+      What no tile can say by itself is *whose shift* a colour belongs to, so
+      that is what stays.
+    -->
+    <ul class="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 px-2 text-caption tracking-normal text-muted">
       <li class="flex items-center gap-1.5"><i class="key key-shift-a" />prva smjena</li>
       <li class="flex items-center gap-1.5"><i class="key key-shift-b" />druga smjena</li>
-      <li class="flex items-center gap-1.5"><i class="key key-paid" />naplaćen</li>
-      <li class="flex items-center gap-1.5"><i class="key key-free" />slobodan</li>
-      <li class="flex items-center gap-1.5"><i class="key key-draft" />nacrt</li>
-      <li class="flex items-center gap-1.5"><i class="key key-wait" />čeka</li>
     </ul>
   </div>
 </template>
@@ -212,8 +215,4 @@ const cells = computed(() => new Map(props.tables
 
 .key-shift-a { background: var(--accent); border-color: transparent; }
 .key-shift-b { background: var(--shift-b); border-color: transparent; }
-/* Settled: the same dimming the tile itself takes. */
-.key-paid { background: var(--accent); border-color: transparent; opacity: 0.62; }
-.key-draft { background: transparent; border-color: var(--accent-line); border-style: dashed; }
-.key-wait { background: transparent; border-color: var(--warn); }
 </style>
