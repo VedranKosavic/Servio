@@ -54,6 +54,35 @@ describe('what the chooser offers', () => {
   })
 })
 
+/**
+ * The update landing mid-shift. A shift already running names no slot, because
+ * nobody was ever asked — and ignoring it would open a second one beside it and
+ * leave the first as a ghost nobody closes.
+ */
+describe('a shift that was already running', () => {
+  it('is adopted by the slot its opening time falls in', () => {
+    // Opened at 07:40 by the old "first lock of the evening" rule.
+    const legacy = f.openShift({ members: ['Amar'], at: MORNING })
+    expect(f.db.select().from(schema.shifts).where(eq(schema.shifts.id, legacy)).get()!.templateId)
+      .toBeNull()
+
+    const choice = slot('Prva smjena', MORNING)
+    expect(choice).toMatchObject({ action: 'join', shift_id: legacy })
+  })
+
+  it('is stamped with the slot the first worker names', () => {
+    const legacy = f.openShift({ members: ['Amar'], at: MORNING })
+    f.session('Amar', { mode: 'konobar' })
+    const choice = slot('Prva smjena', MORNING)
+    pickShift(f.db, f.venueId, f.actor('Amar', { mode: 'konobar' }), choice.template_id, MORNING)
+
+    // The guess is made once and then written down; *Smjene* never has to make
+    // it again for this night.
+    expect(f.db.select().from(schema.shifts).where(eq(schema.shifts.id, legacy)).get()!.templateId)
+      .toBe(choice.template_id)
+  })
+})
+
 describe('a seat is per screen', () => {
   it('lets the šanker join the shift the konobar opened', () => {
     f.session('Amar', { mode: 'konobar' })

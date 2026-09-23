@@ -21,6 +21,7 @@ import { schema } from '../database/client'
 import { SankError, conflict, forbidden, notFound, unprocessable } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
 import { businessDate, localTime } from '#shared/dates'
+import { toMinutes, windowCovers } from '#shared/shiftSlots'
 import type { Settings } from '#shared/settings'
 import type { Actor, Db, Queryable, Tx } from './types'
 import type {
@@ -849,9 +850,24 @@ export function shiftChoices(
     .where(and(
       eq(schema.shifts.venueId, venueId),
       eq(schema.shifts.businessDate, today),
-      isNotNull(schema.shifts.templateId),
     ))
     .all()
+
+  /**
+   * Which slot a shift belongs to, **adopting** one that names none.
+   *
+   * A shift already running when this update lands carries no `template_id` —
+   * nobody was ever asked. Ignoring it would open a second shift beside it and
+   * leave the first as a ghost nobody closes, so it is matched the old way
+   * instead: by the window its opening time falls in, exactly as *Smjene* has
+   * always drawn it. `pickShift` then writes the slot onto it, and the guess
+   * becomes a fact the first time somebody signs in.
+   */
+  const slotOf = (shift: ShiftRow): string | null => {
+    if (shift.templateId) return shift.templateId
+    const minute = toMinutes(localTime(shift.openedAt, settings.timezone))
+    return templates.find(t => windowCovers(t.startTime, t.endTime, minute))?.id ?? null
+  }
 
   const live = todaysShifts.filter(s => s.status === 'open' || s.status === 'closing')
   const seats = seatsOn(q, venueId, live.map(s => s.id), now)
@@ -868,7 +884,7 @@ export function shiftChoices(
 
   return {
     choices: templates.map((template) => {
-      const running = live.find(s => s.templateId === template.id) ?? null
+      const running = live.find(s => slotOf(s) === template.id) ?? null
       const konobar = running ? seats.get(`${running.id}:konobar`) ?? null : null
       const sanker = running ? seats.get(`${running.id}:sanker`) ?? null : null
       const mine = running ? myOpenShifts.has(running.id) : false
@@ -893,7 +909,7 @@ export function shiftChoices(
       }
 
       // Closed today already: the crew went home and the night is a record.
-      if (todaysShifts.some(s => s.templateId === template.id)) {
+      if (todaysShifts.some(s => slotOf(s) === template.id)) {
         return { ...common, action: null, blocked: 'zavrsena' as const }
       }
 
@@ -960,6 +976,20 @@ export function pickShift(
         ref: { type: 'shift', id: shiftId },
         shiftId,
       })
+    }
+
+    // An adopted shift — one that was already running when the picker arrived —
+    // is stamped with the slot the worker just named, so the guess above is
+    // made exactly once and *Smjene* stops having to make it at all.
+    if (choice.action === 'join') {
+      tx.update(schema.shifts)
+        .set({ templateId })
+        .where(and(
+          eq(schema.shifts.venueId, venueId),
+          eq(schema.shifts.id, shiftId!),
+          isNull(schema.shifts.templateId),
+        ))
+        .run()
     }
 
     joinShift(tx, venueId, shiftId!, actor.userId, actor.role, now)
