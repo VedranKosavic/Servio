@@ -306,6 +306,19 @@ export interface PrepOrder {
   order_id: string
   table_name: string
   waiter_name: string
+  /**
+   * The crew whose round this is.
+   *
+   * For the quarter of an hour the shifts overlap the bar has two bartenders
+   * and one queue, and this is what lets each of them filter it down to his own
+   * waiter's tickets. It is never a wall: *Sve* is one tap away, because a
+   * ticket nobody can see is a drink nobody makes.
+   *
+   * Nullable because the column is: `orders.shift_id` was added to an existing
+   * table, so it is a trigger and not the schema that makes it mandatory. A
+   * ticket without one is shown to everybody.
+   */
+  shift_id: string | null
   created_at: string
   prepared_at: string | null
   prepared_by_name: string | null

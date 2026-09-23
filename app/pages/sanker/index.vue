@@ -10,6 +10,13 @@
  * The screen is two blocks and a rule between them: what is waiting, and what is
  * done. The waiting block is titled with its own count, so "how far behind am I"
  * is answered by the heading rather than by counting cards.
+ *
+ * **Moje / Sve** appears only while the café has two crews on the floor — the
+ * quarter of an hour a handover takes, when the bar has two bartenders and one
+ * queue. It is a filter and never a wall: *Sve* is one tap away, because the
+ * ticket a colleague walked away from is still a drink somebody has to make.
+ * Outside that quarter of an hour there is nothing to filter, so the control is
+ * not drawn at all.
  */
 import { useTimestamp } from '@vueuse/core'
 
@@ -30,13 +37,38 @@ onMounted(() => {
 
 const menuOpen = ref(false)
 
+/** This bartender's own crew, or `null` on a session that never picked one. */
+const myShift = computed(() => me.me.value?.session.shift_id ?? null)
+const scope = ref<'moje' | 'sve'>('moje')
+
+const mine = (order: { shift_id: string | null }) =>
+  order.shift_id === null || order.shift_id === myShift.value
+
+/**
+ * Only worth drawing when it would actually change the list — that is, when a
+ * ticket from the other crew is in the queue. On every ordinary night the
+ * answer is no and the toolbar stays empty.
+ */
+const showScope = computed(() =>
+  myShift.value !== null && [...open.value, ...done.value].some(order => !mine(order)))
+
+const shownOpen = computed(() =>
+  showScope.value && scope.value === 'moje' ? open.value.filter(mine) : open.value)
+const shownDone = computed(() =>
+  showScope.value && scope.value === 'moje' ? done.value.filter(mine) : done.value)
+
+const SCOPES = [
+  { value: 'moje', label: 'Moje' },
+  { value: 'sve', label: 'Sve' },
+] as const
+
 // One clock for the whole screen: "prije 5 s" keeps counting between polls.
 const now = useTimestamp({ interval: 2000 })
 
 /** The header's second line: the queue's own size, in words that count. */
 const subtitle = computed(() => {
   if (!loaded.value) return undefined
-  const n = open.value.length
+  const n = shownOpen.value.length
   if (n === 0) return 'Nema tura u redu'
   if (n === 1) return '1 tura u redu'
   return n < 5 ? `${n} ture u redu` : `${n} tura u redu`
@@ -57,9 +89,18 @@ const subtitle = computed(() => {
       <WaiterFailedCard />
       <WaiterUpdatePrompt />
 
-      <div v-if="open.length" class="flex flex-col gap-4">
+      <!-- Two crews on the floor: whose tickets am I looking at. -->
+      <UiSeg
+        v-if="showScope"
+        v-model="scope"
+        :options="SCOPES"
+        label="Čije ture"
+        block
+      />
+
+      <div v-if="shownOpen.length" class="flex flex-col gap-4">
         <TicketCard
-          v-for="(order, index) in open"
+          v-for="(order, index) in shownOpen"
           :key="order.order_id"
           :order="order"
           :now="now"
@@ -70,11 +111,15 @@ const subtitle = computed(() => {
       </div>
 
       <p v-else-if="loaded" class="empty">
-        Nema narudžbi.
-        <span>Tiket stiže sam čim konobar zaključa turu.</span>
+        {{ showScope && scope === 'moje' ? 'Nema tvojih narudžbi.' : 'Nema narudžbi.' }}
+        <span>
+          {{ showScope && scope === 'moje'
+            ? 'Druga smjena ima svoje — pogledaj ih pod Sve.'
+            : 'Tiket stiže sam čim konobar zaključa turu.' }}
+        </span>
       </p>
 
-      <TicketDoneList :orders="done" :now="now" />
+      <TicketDoneList :orders="shownDone" :now="now" />
 
       <p class="foot">
         Šanker ne vidi stolove ni iznose — samo šta se pravi i za koji sto ide.

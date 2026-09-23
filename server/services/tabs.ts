@@ -210,15 +210,27 @@ export function getTablesState(
    * Which shift of its own business day a tab belongs to — 1 for the morning,
    * 2 for the evening — which is the **colour of its tile**.
    *
-   * Ranked by when the shift was opened rather than read off a template,
-   * because that is the question the plan is answering: *is this table the
-   * shift before mine, or mine?* A café that opens only the evening shift on a
-   * quiet Monday gets 1 for it, which is right — it is that day's first.
+   * **The slot the worker named, where there is one** (23.09.2026): `sort` on
+   * the `shift_templates` row, so *Prva smjena* is 1 and *Druga* is 2 whatever
+   * hour either of them actually started at. The ranking below it is the old
+   * answer, kept for nights worked before the picker — and it is the one the
+   * handover broke, because a second crew that opens at 14:50 while the first
+   * is still running is the *second* shift no matter what the clock says.
+   *
+   * Both agree on the quiet Monday the old comment worried about: a café that
+   * opens only the evening gets 2 now rather than 1, which is more truthful —
+   * the tile is blue because it *is* the second shift, not because it is that
+   * day's first.
    */
   const shiftSeq = new Map<string, number>()
   {
-    const shifts = q.select({ id: schema.shifts.id, date: schema.shifts.businessDate })
+    const shifts = q.select({
+      id: schema.shifts.id,
+      date: schema.shifts.businessDate,
+      sort: schema.shiftTemplates.sort,
+    })
       .from(schema.shifts)
+      .leftJoin(schema.shiftTemplates, eq(schema.shiftTemplates.id, schema.shifts.templateId))
       .where(eq(schema.shifts.venueId, venueId))
       .orderBy(asc(schema.shifts.openedAt))
       .all()
@@ -226,7 +238,7 @@ export function getTablesState(
     for (const shift of shifts) {
       const n = (perDay.get(shift.date) ?? 0) + 1
       perDay.set(shift.date, n)
-      shiftSeq.set(shift.id, n)
+      shiftSeq.set(shift.id, shift.sort ?? n)
     }
   }
 

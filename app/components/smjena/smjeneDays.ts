@@ -94,10 +94,22 @@ function covers(template: ShiftTemplateView, minute: number): boolean {
   return windowCovers(template.start_time, template.end_time, minute)
 }
 
-/** The template whose window a shift opened in, or `null` if none does. */
+/**
+ * Which slot a shift belongs to, or `null` if nothing explains it.
+ *
+ * **The shift's own answer first** (23.09.2026). Since the picker a shift
+ * carries the slot the worker named when he signed in, and that is a fact; the
+ * window match below is the guess it replaced, kept for every night worked
+ * before. The guess is wrong exactly where the handover lives — a crew starting
+ * at 14:50 opens inside *Prva smjena*'s window — which is why the café kept
+ * seeing a *Vanredna smjena* it does not have.
+ */
 export function matchTemplate(
   shift: OwnerShiftRow, templates: ShiftTemplateView[],
 ): ShiftTemplateView | null {
+  if (shift.template_id) {
+    return templates.find(template => template.id === shift.template_id) ?? null
+  }
   const minute = openingMinute(shift)
   return templates.find(template => covers(template, minute)) ?? null
 }
@@ -105,15 +117,21 @@ export function matchTemplate(
 /**
  * *Prva smjena*, *Druga smjena* — what one shift is called on its own page.
  *
- * The same rule *Smjene* uses to put a shift in a slot, from the opening time
- * alone and against active templates only; outside every window it is
+ * The same rule *Smjene* uses to put a shift in a slot: the shift's own
+ * `template_id` where it has one, and otherwise the window its opening time
+ * falls in, against active templates only. Outside every window it is
  * `EXTRA_SLOT_NAME`, and with no templates at all it is plain *Smjena*.
  */
-export function shiftSlotName(openedAt: string, templates: ShiftTemplateView[]): string {
+export function shiftSlotName(
+  shift: { opened_at: string, template_id: string | null }, templates: ShiftTemplateView[],
+): string {
   const active = templates.filter(template => template.active)
   if (active.length === 0) return PLAIN_SLOT_NAME
-  const minute = openedAt && !Number.isNaN(Date.parse(openedAt))
-    ? toMinutes(localTime(openedAt))
+  if (shift.template_id) {
+    return active.find(template => template.id === shift.template_id)?.name ?? EXTRA_SLOT_NAME
+  }
+  const minute = shift.opened_at && !Number.isNaN(Date.parse(shift.opened_at))
+    ? toMinutes(localTime(shift.opened_at))
     : Number.NaN
   return active.find(template => covers(template, minute))?.name ?? EXTRA_SLOT_NAME
 }

@@ -74,7 +74,7 @@ onMounted(load)
 
 /** *Prva smjena* / *Druga smjena*, from the opening time against the templates. */
 const title = computed(() => data.value
-  ? shiftSlotName(data.value.shift.opened_at, templates.value ?? [])
+  ? shiftSlotName(data.value.shift, templates.value ?? [])
   : 'Smjena')
 
 /** Beside *Naknadni troškovi*: whose takings pay it — "Plati iz prve smjene". */

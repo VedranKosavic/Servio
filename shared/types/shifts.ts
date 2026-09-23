@@ -46,6 +46,16 @@ export interface Shift {
   opened_at: string
   opened_by: string
   opened_by_name: string
+  /**
+   * Which of the café's two slots this shift is — the `shift_templates` row the
+   * worker named when he signed in.
+   *
+   * `null` on every night worked before the picker existed, and those are still
+   * matched by their opening time. Nothing else may guess: a shift opened at
+   * 14:50 falls inside *Prva smjena*'s window and was drawn as *Vanredna
+   * smjena* for exactly that reason.
+   */
+  template_id: string | null
   auto_opened: boolean
   stock_custodian_id: string | null
   closing_started_at: string | null
@@ -474,6 +484,16 @@ export interface OwnerShiftRow {
   business_date: string
   status: ShiftStatus
   opened_at: string
+  /**
+   * Which of the café's two slots this shift is — the `shift_templates` row the
+   * worker named when he signed in.
+   *
+   * `null` on every night worked before the picker existed, and those are still
+   * matched by their opening time. Nothing else may guess: a shift opened at
+   * 14:50 falls inside *Prva smjena*'s window and was drawn as *Vanredna
+   * smjena* for exactly that reason.
+   */
+  template_id: string | null
   closed_at: string | null
   promet_fen: number
   diff_fen: number | null

@@ -62,6 +62,7 @@ function shift(patch: Partial<Shift> = {}): Shift {
     opened_at: '2026-09-11T16:03:00Z',
     opened_by: 'u-emir',
     opened_by_name: 'Emir',
+    template_id: null,
     auto_opened: true,
     stock_custodian_id: null,
     closing_started_at: null,
@@ -690,16 +691,31 @@ describe('the shift page header: which shift, and who worked it', () => {
     { id: 't2', name: 'Druga smjena', start_time: '15:00', end_time: '23:00', sort: 2, active: true },
   ]
 
+  /** A night worked before the picker: it names no slot, so the clock answers. */
+  const guessed = (opened_at: string) => ({ opened_at, template_id: null })
+
   it('names the slot from the café clock, not UTC', () => {
     // 13:17 UTC in September is 15:17 in Sarajevo — the Druga window.
-    expect(shiftSlotName('2026-09-15T13:17:00Z', templates)).toBe('Druga smjena')
-    expect(shiftSlotName('2026-09-15T06:30:00Z', templates)).toBe('Prva smjena')
+    expect(shiftSlotName(guessed('2026-09-15T13:17:00Z'), templates)).toBe('Druga smjena')
+    expect(shiftSlotName(guessed('2026-09-15T06:30:00Z'), templates)).toBe('Prva smjena')
+  })
+
+  /**
+   * The handover, and the reason the shift carries its slot at all: a crew
+   * starting at 14:50 opens **inside** *Prva smjena*'s window, and the clock
+   * would call the evening the morning.
+   */
+  it('takes the shift at its word over the clock', () => {
+    const early = { opened_at: '2026-09-15T12:50:00Z', template_id: 't2' }
+    expect(shiftSlotName(early, templates)).toBe('Druga smjena')
   })
 
   it('is Vanredna outside every window, and plain Smjena with no templates', () => {
-    expect(shiftSlotName('2026-09-15T22:30:00Z', templates)).toBe('Vanredna smjena')
-    expect(shiftSlotName('2026-09-15T13:17:00Z', [])).toBe('Smjena')
-    expect(shiftSlotName('2026-09-15T13:17:00Z', templates.map(t => ({ ...t, active: false })))).toBe('Smjena')
+    expect(shiftSlotName(guessed('2026-09-15T22:30:00Z'), templates)).toBe('Vanredna smjena')
+    expect(shiftSlotName(guessed('2026-09-15T13:17:00Z'), [])).toBe('Smjena')
+    expect(shiftSlotName(
+      guessed('2026-09-15T13:17:00Z'), templates.map(t => ({ ...t, active: false })),
+    )).toBe('Smjena')
   })
 
   it('reads the šanker from the closing and the konobari from the rounds', () => {

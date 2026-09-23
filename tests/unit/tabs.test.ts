@@ -604,6 +604,24 @@ describe('naplati, and očisti sto', () => {
     expect(tileFor('Sto 7').shift_seq).toBe(1)
     expect(tileFor('Sto 8').shift_seq).toBeNull()
   })
+
+  /**
+   * The colour is the **slot**, not the order the day was opened in
+   * (23.09.2026). A café that works only the evening — a quiet Monday, or a
+   * morning crew that never opened a shift — used to paint those tables in the
+   * first shift's orange, because they were that day's first. They are the
+   * second shift's tables and they are blue.
+   */
+  it('takes the colour from the slot the crew named', () => {
+    const druga = f.openShift({ members: ['Amar'], template: 'Druga smjena' })
+    f.lock('Amar', 'Sto 9', [{ product: 'Kafa' }])
+    // Whatever shift the fixture's lock reached for, this table is the evening
+    // crew's — which is the only thing the colour is about.
+    f.db.update(schema.tabs).set({ shiftId: druga })
+      .where(eq(schema.tabs.venueId, f.venueId)).run()
+
+    expect(tileFor('Sto 9').shift_seq).toBe(2)
+  })
 })
 
 // ===========================================================================

@@ -92,6 +92,7 @@ function loadOrders(db: Queryable, venueId: string, opts: LoadOptions): PrepOrde
 
   const rows = db.select({
     id: schema.orders.id,
+    shiftId: schema.orders.shiftId,
     createdAt: schema.orders.createdAt,
     preparedAt: schema.orders.preparedAt,
     preparedBy: schema.orders.preparedBy,
@@ -153,6 +154,7 @@ function loadOrders(db: Queryable, venueId: string, opts: LoadOptions): PrepOrde
     order_id: row.id,
     table_name: row.tableName,
     waiter_name: row.waiterName,
+    shift_id: row.shiftId,
     created_at: row.createdAt,
     prepared_at: row.preparedAt,
     prepared_by_name: row.preparedBy ? preparedByName.get(row.preparedBy) ?? null : null,
