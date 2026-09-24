@@ -81,6 +81,7 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   'GET /api/tables/state': AR,
   /** *+ Sto*: a worker may bring a table out and place it; renaming and moving stay admin's. */
   'POST /api/tables': AR,
+  'DELETE /api/tables/:id': AR,
   'GET /api/tabs/:id': AR,
   'POST /api/payments': AR,
   'POST /api/tabs/unpaid': AR,

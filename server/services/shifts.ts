@@ -787,7 +787,23 @@ function cafeMinute(hhmm: string, settings: Settings): number {
   return raw < start ? raw + 24 * 60 - start : raw - start
 }
 
-/** Every session working a shift right now, by `(shift, mode)`. */
+/**
+ * Who holds which seat on the running shifts, by `(shift, mode)`.
+ *
+ * **A seat outlives the phone it was taken on** (the owner, 24.09.2026). A
+ * logout is not a leave (`logout`): on a shared phone Nidal signs out so that
+ * Tarik can sign in, and he is still the konobar of *Prva smjena* — Tarik's
+ * picker has to say so, and a second konobar's has to say *Zauzeta*. So a seat
+ * is held by
+ *
+ * - every **live** session on the shift: the person at that screen right now;
+ * - every crew member (`shift_members`, not left) with no live session on it,
+ *   on the screen of the session he **ended last** there — signed out of, or
+ *   run out. Nidal who moved to the bar at noon holds the bar, and the floor is
+ *   free for whoever replaces him.
+ *
+ * It frees when he leaves the shift, or when the šanker closes it.
+ */
 function seatsOn(
   q: Queryable, venueId: string, shiftIds: string[], now: string,
 ): Map<string, { userId: string, name: string }> {
@@ -797,25 +813,55 @@ function seatsOn(
     mode: schema.sessions.mode,
     userId: schema.sessions.userId,
     name: schema.users.name,
+    expiresAt: schema.sessions.expiresAt,
+    revokedAt: schema.sessions.revokedAt,
+    member: schema.shiftMembers.id,
   })
     .from(schema.sessions)
     .innerJoin(schema.users, eq(schema.users.id, schema.sessions.userId))
+    // A left join: a live session holds its seat whatever the crew list says,
+    // and only a signed-out one needs the membership to still be there.
+    .leftJoin(schema.shiftMembers, and(
+      eq(schema.shiftMembers.venueId, schema.sessions.venueId),
+      eq(schema.shiftMembers.shiftId, schema.sessions.shiftId),
+      eq(schema.shiftMembers.userId, schema.sessions.userId),
+      isNull(schema.shiftMembers.leftAt),
+    ))
     .where(and(
       eq(schema.sessions.venueId, venueId),
       inArray(schema.sessions.shiftId, shiftIds),
-      isNull(schema.sessions.revokedAt),
-      gte(schema.sessions.expiresAt, now),
+      isNotNull(schema.sessions.mode),
     ))
+    .orderBy(asc(schema.sessions.createdAt), asc(schema.sessions.id))
     .all()
 
+  type Row = typeof rows[number]
+  const isLive = (row: Row) => row.revokedAt === null && row.expiresAt >= now
+  const endedAt = (row: Row) => row.revokedAt ?? row.expiresAt
+
   const seats = new Map<string, { userId: string, name: string }>()
-  for (const row of rows) {
-    if (!row.shiftId || !row.mode) continue
+  const take = (row: Row) => {
     // First one wins: two phones on one seat is one person with a spare, and
     // the name on the chip should be the one who took it.
     const key = `${row.shiftId}:${row.mode}`
     if (!seats.has(key)) seats.set(key, { userId: row.userId, name: row.name })
   }
+
+  const live = rows.filter(isLive)
+  live.forEach(take)
+
+  // The crew who signed out, each on the screen he left last. Taken after the
+  // live ones, so the person standing at a screen is always its name.
+  const signedIn = new Set(live.map(row => `${row.shiftId}:${row.userId}`))
+  const lastOf = new Map<string, Row>()
+  for (const row of rows) {
+    if (isLive(row) || row.member === null) continue
+    const person = `${row.shiftId}:${row.userId}`
+    if (signedIn.has(person)) continue
+    const before = lastOf.get(person)
+    if (!before || endedAt(row) >= endedAt(before)) lastOf.set(person, row)
+  }
+  lastOf.forEach(take)
   return seats
 }
 
@@ -830,8 +876,9 @@ function seatsOn(
  * A slot is **taken** when somebody else already holds this person's *screen*
  * on it: the first shift is a konobar and a šanker, so Tarik arriving at 07:05
  * takes the šank seat of the shift Nidal opened rather than being pushed into
- * the evening. The seat is a live session, which is the only thing that knows
- * both the shift and the screen.
+ * the evening. The session is the only thing that knows both the shift and the
+ * screen, so a seat is read off sessions — and it stays taken after Nidal
+ * signs out on a shared phone, because he is still on the crew (`seatsOn`).
  */
 export function shiftChoices(
   q: Queryable, venueId: string, actor: Actor, now = nowIso(),

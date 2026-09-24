@@ -145,7 +145,6 @@ export function makeFixture(): Fixture {
   }
 
   const users = db.select().from(schema.users).all()
-  const tables = db.select().from(schema.tables).all()
   const products = db.select().from(schema.products).all()
   const stockItems = db.select().from(schema.stockItems).all()
 
@@ -155,7 +154,9 @@ export function makeFixture(): Fixture {
     if (!value) throw new Error(`fixture: nobody named "${name}" is seeded`)
     return value
   }
-  const tableId = (name: string) => byName(tables, name)
+  // Read live rather than from the list taken at seed time: *+ Sto* adds tables
+  // mid-test, and a round has to be lockable on the one a waiter just brought out.
+  const tableId = (name: string) => byName(db.select().from(schema.tables).all(), name)
   const productId = (name: string) => byName(products, name)
   const stockItemId = (name: string) => byName(stockItems, name)
   const roleOf = (name: string): Role => users.find(u => u.name === name)!.role

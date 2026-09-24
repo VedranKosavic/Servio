@@ -109,7 +109,12 @@ export interface ShiftChoice {
   blocked: 'zauzeta' | 'zavrsena' | 'rano' | null
   /** He is already on this one: the picker sends him straight back to it. */
   mine: boolean
-  /** Who is on it, by role — what makes *zauzeta* readable rather than blunt. */
+  /**
+   * Who is on it, by role — what makes *zauzeta* readable rather than blunt,
+   * and what tells the šanker at 07:05 who his konobar is. A worker who signed
+   * out on a shared phone is still named: a logout is not a leave, so the seat
+   * is his until he leaves the shift or it is closed.
+   */
   konobar: string | null
   sanker: string | null
 }

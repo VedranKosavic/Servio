@@ -42,6 +42,11 @@ export interface VenueTable {
   /** 'vip' for the VIP box; null for an ordinary table. */
   grp: string | null
   sort: number
+  /**
+   * Brought out with *+ Sto* mid-shift rather than drawn by the owner — the
+   * only tables a waiter may take away again.
+   */
+  added_on_phone: boolean
 }
 
 export interface Category {
@@ -198,6 +203,11 @@ export interface TableAdmin {
   active: boolean
   /** Guests are sitting there right now — deactivating it is 409. */
   has_open_tab: boolean
+  /**
+   * Brought out with *+ Sto* mid-shift rather than drawn by the owner — the
+   * only tables a waiter may take away again.
+   */
+  added_on_phone: boolean
 }
 
 export interface StockItemAdmin {

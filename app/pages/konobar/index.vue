@@ -936,8 +936,13 @@ function fromBar(path: string) {
  * phone's plan at the next poll.
  *
  * He places it and nothing more: the name is the next free *Sto N*, and
- * renaming, moving and switching it off stay on *Stolovi*, where the room's
- * arrangement belongs to the owner.
+ * renaming and moving it stay on *Stolovi*, where the room's arrangement
+ * belongs to the owner.
+ *
+ * **And he can take it away again** (the owner, 24.09.2026) — but only a table
+ * that came in this way: *"just on the tables that are added, not all"*. While
+ * the plan is in this mode those tables carry a small red cross, and nothing else on
+ * the plan does.
  */
 const placing = ref(false)
 const addingTable = ref(false)
@@ -957,6 +962,29 @@ async function placeTable(x: number, y: number) {
     addingTable.value = false
   }
 }
+
+async function removeTable(tableId: string) {
+  if (addingTable.value) return
+  const name = boot.value?.tables.find(t => t.id === tableId)?.name ?? 'sto'
+  // One question, because this is the only tap on the plan that makes a table
+  // disappear from every phone at once.
+  if (!window.confirm(`Ukloniti ${name}?`)) return
+  addingTable.value = true
+  try {
+    await api.removeTable(tableId)
+    await refreshBoot()
+    say(`${name} uklonjen`)
+  } catch (err) {
+    say(apiErrorText(err, 'Sto nije uklonjen.'))
+    void me.handleAuthError(err)
+  } finally {
+    addingTable.value = false
+  }
+}
+
+/** Whether the zone on screen has any table the crew brought out itself. */
+const zoneHasAdded = computed(() => (boot.value?.tables ?? [])
+  .some(t => t.zone === zone.value && t.added_on_phone))
 
 /** The two halves of the room, as the segmented control reads them. */
 const ZONES = [
@@ -1203,6 +1231,7 @@ function addToSheet() {
         <!-- Placing: the plan is one big target until he taps, or taps Otkaži. -->
         <p v-if="placing" class="note" role="status">
           Dodirni mjesto na planu gdje stoji novi sto.
+          <template v-if="zoneHasAdded">Crveni krstić na dodanom stolu ga uklanja.</template>
         </p>
 
         <FloorPlan
@@ -1220,6 +1249,7 @@ function addToSheet() {
           @long="openZar"
           @bar="barOpen = true"
           @spot="placeTable"
+          @remove="removeTable"
         />
         <p v-else-if="bootPending" class="py-10 text-center text-text-2">
           Učitavanje…

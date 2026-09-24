@@ -418,6 +418,14 @@ export function useApi() {
      */
     addTable: (body: AddTableBody) => request<TableAdmin>('/api/tables', { method: 'POST', body }),
 
+    /**
+     * *Ukloni sto* — only a table brought out with *+ Sto*. The server deletes
+     * one that never held a guest and switches off one that did.
+     */
+    removeTable: (tableId: string) =>
+      request<{ table_id: string, removed: 'deleted' | 'deactivated' }>(
+        `/api/tables/${tableId}`, { method: 'DELETE' }),
+
     /** *Stanje šanka* — `{ seq, items }`, every item with its on-hand and last movement. */
     getStock: () => request<StockResponse>('/api/stock', { etag: true }),
 

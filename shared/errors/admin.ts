@@ -47,6 +47,7 @@ export const ADMIN_ERRORS = {
 
   TABLE_HAS_OPEN_TAB: 'Sto ima otvoren račun — zatvori ga pa ga onda ugasi.',
   TABLE_NAME_TAKEN: 'Sto s tim imenom već stoji na planu.',
+  TABLE_NOT_REMOVABLE: 'Ovaj sto je dio rasporeda. Ukloniti ga može vlasnik u Stolovima.',
 
   /** One line per item in a normativ; two lines for the same item is a typo. */
   RECIPE_DUPLICATE: 'Ista roba je dva puta u normativu.',

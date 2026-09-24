@@ -129,6 +129,7 @@ export function getBootstrap(db: Queryable, venueId: string, actor: Actor): Boot
       row: t.row,
       grp: t.grp,
       sort: t.sort,
+      added_on_phone: t.addedOnPhone === 1,
     })),
     floor: parseFloor(venue.floorJson),
     categories: categories.map(c => ({

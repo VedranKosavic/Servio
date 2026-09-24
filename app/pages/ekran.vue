@@ -30,7 +30,9 @@
  * owner's own two, it is free **per screen** — the first shift is a konobar and
  * a šanker, so the colleague arriving five minutes later takes the other seat
  * rather than being pushed into the evening — and once he is on it the session
- * stays signed in until the šanker closes that shift.
+ * stays signed in until the šanker closes that shift. The seat outlives the
+ * session: a worker who signs out on a shared phone is still named on his
+ * slot, and still holds it, until he leaves the shift or it is closed.
  */
 import type { ScreenMode, ShiftChoice } from '#shared/types'
 import { MODE_LABELS } from '#shared/landing'
@@ -143,13 +145,23 @@ const BLOCKED_BS: Record<NonNullable<ShiftChoice['blocked']>, string> = {
   rano: 'Još nije vrijeme',
 }
 
-/** Who is already on a slot — the line under its name. */
-function who(choice: ShiftChoice): string {
-  const on = [
-    choice.konobar ? `konobar ${choice.konobar}` : null,
-    choice.sanker ? `šank ${choice.sanker}` : null,
-  ].filter(Boolean)
-  if (on.length > 0) return on.join(' · ')
+/**
+ * Who is already on a slot — the line under its name.
+ *
+ * The name is the point of it: it is what tells Tarik at 07:05 that Nidal is
+ * already the konobar of *Prva*, even when Nidal signed out on this very phone
+ * a minute ago so Tarik could sign in. So the name is drawn in ink and the
+ * seat's word beside it stays quiet.
+ */
+function crew(choice: ShiftChoice): { seat: string, name: string }[] {
+  const on: { seat: string, name: string }[] = []
+  if (choice.konobar) on.push({ seat: 'konobar', name: choice.konobar })
+  if (choice.sanker) on.push({ seat: 'šank', name: choice.sanker })
+  return on
+}
+
+/** The line under a slot with nobody on it. */
+function nobody(choice: ShiftChoice): string {
   return choice.shift_id ? 'otvorena, niko nije prijavljen' : 'nije otvorena'
 }
 
@@ -219,7 +231,13 @@ async function signOut() {
                   <span v-else-if="choice.blocked" class="chip">{{ BLOCKED_BS[choice.blocked] }}</span>
                 </span>
                 <span class="choice-note num">{{ choice.start_time }} – {{ choice.end_time }}</span>
-                <span class="choice-note">{{ who(choice) }}</span>
+                <span v-if="crew(choice).length > 0" class="choice-note">
+                  <template v-for="(on, i) in crew(choice)" :key="on.seat">
+                    <span v-if="i > 0" aria-hidden="true"> · </span>
+                    {{ on.seat }} <strong class="crew-name">{{ on.name }}</strong>
+                  </template>
+                </span>
+                <span v-else class="choice-note">{{ nobody(choice) }}</span>
               </button>
             </div>
 
@@ -349,6 +367,13 @@ async function signOut() {
 .choice-note {
   font-size: var(--text-label);
   color: var(--muted);
+}
+
+/* The colleague already on a seat — the one word on the card worth reading
+   before tapping it. */
+.crew-name {
+  color: var(--ink);
+  font-weight: 600;
 }
 
 /* ---- the foot ---------------------------------------------------------- */

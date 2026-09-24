@@ -162,6 +162,20 @@
       "when": 1790177889911,
       "tag": "0022_shift_slots",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1790246395785,
+      "tag": "0023_phone_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1790246396785,
+      "tag": "0024_phone_tables_backfill",
+      "breakpoints": true
     }
   ]
 }

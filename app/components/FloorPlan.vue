@@ -84,7 +84,19 @@ defineEmits<{
   bar: []
   /** Where the waiter wants the table he is adding (`+ Sto`). */
   spot: [x: number, y: number]
+  /** *Ukloni sto* — only ever a table brought out with *+ Sto*. */
+  remove: [tableId: string]
 }>()
+
+/**
+ * The tables a waiter may take away again: the ones the crew brought out with
+ * *+ Sto*, and only while the plan is in that same mode — the owner's room is
+ * never one tap from losing a table, and the fast path (tap a table, get the
+ * menu) is never slowed by a button on it.
+ */
+const removable = computed(() => new Map(props.placing
+  ? props.tables.filter(t => t.added_on_phone).map(t => [t.id, t.name] as const)
+  : []))
 
 interface Cell {
   id: string
@@ -196,6 +208,20 @@ const cells = computed(() => new Map(props.tables
           @select="$emit('select', table.id)"
           @long="$emit('long', table.id)"
         />
+        <!-- A plain button riding on the tile. The tile itself ignores taps
+             while placing, so this one opts back in; `.stop` keeps the tap from
+             also landing on the floor and placing a table under it. -->
+        <button
+          v-if="removable.has(table.id)"
+          type="button"
+          class="fp-remove"
+          :aria-label="`Ukloni ${removable.get(table.id)}`"
+          @click.stop="$emit('remove', table.id)"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
       </template>
     </FloorRoom>
 
@@ -229,5 +255,30 @@ const cells = computed(() => new Map(props.tables
 }
 
 .key-shift-a { background: var(--accent); border-color: transparent; }
+
+/* *Ukloni sto*: a small danger disc on the tile's corner, big enough for a
+   thumb. It sits half outside the tile so it never covers the number. */
+.fp-remove {
+  position: absolute;
+  /* Half off the tile, but not so far that a table against the wall has its
+     badge cut off by the room's own edge. */
+  top: -9px;
+  right: -9px;
+  z-index: 3;
+  display: flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+  background: var(--danger);
+  color: var(--bg);
+  pointer-events: auto;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.35);
+}
+
+.fp-remove svg { width: 14px; height: 14px; }
+.fp-remove:active { transform: scale(0.92); }
 .key-shift-b { background: var(--shift-b); border-color: transparent; }
 </style>

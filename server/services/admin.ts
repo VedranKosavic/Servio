@@ -25,7 +25,7 @@
  */
 import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
-import { badRequest, conflict, notFound, SankError, unprocessable } from '../utils/errors'
+import { badRequest, conflict, forbidden, notFound, SankError, unprocessable } from '../utils/errors'
 import { errorMessage } from '#shared/errors'
 import { PRODUCT_IMAGE_MAX_BYTES, productImageUrl } from '#shared/menuImage'
 import { TABLE, clampTable, isArranged, parseFloor, zoneWidth } from '#shared/floor'
@@ -702,6 +702,7 @@ export function listTables(q: Queryable, venueId: string): TableAdmin[] {
     sort: row.sort,
     active: isOn(row.active),
     has_open_tab: busy.has(row.id),
+    added_on_phone: isOn(row.addedOnPhone),
   }))
 }
 
@@ -907,6 +908,9 @@ export function addFloorTable(
       grp: null,
       sort: rows.reduce((max, row) => Math.max(max, row.sort), 0) + 1,
       active: 1,
+      // The crew's, not the room's — which is what lets a waiter take it away
+      // again (`removeFloorTable`).
+      addedOnPhone: 1,
     }).run()
 
     tx.update(schema.venues)
@@ -929,6 +933,81 @@ export function addFloorTable(
 
   announce(db, venueId, 'table', id)
   return requireTableView(db, venueId, id)
+}
+
+/**
+ * `DELETE /api/tables/:id` — a table brought out with *+ Sto*, taken away again.
+ *
+ * **Only those** (the owner, 24.09.2026: *"just on the tables that are added,
+ * not all"*). The room the owner drew is his, and changing it stays on
+ * *Stolovi*; a table the crew carried into the garden mid-shift is the crew's
+ * to carry back. A drawn table is 403 `TABLE_NOT_REMOVABLE`, whatever the
+ * phone thought it was tapping.
+ *
+ * Refused while anybody is still at it, and a paid tab that has not been
+ * cleared counts: the guests are sitting there, and a table taken out from
+ * under a paid bill would turn it into a stranded card nobody asked for.
+ *
+ * **Deleted if it never held a guest, switched off if it did.** A table added
+ * by mistake and removed a minute later leaves nothing worth keeping — it was
+ * never in a single bill — and switching it off instead would leave a dead
+ * *Sto 29* in the owner's list for ever. One that served a round is in the
+ * ledger (`tabs.table_id` points at it), so it stays as a row and only leaves
+ * the plan. Either way its spot leaves `floor_json`.
+ */
+export function removeFloorTable(
+  db: Db, venueId: string, actor: Actor, tableId: string, now = nowIso(),
+): { table_id: string, removed: 'deleted' | 'deactivated' } {
+  const result = db.transaction((tx) => {
+    const table = requireTable(tx, venueId, tableId)
+    if (table.addedOnPhone !== 1) {
+      throw forbidden('TABLE_NOT_REMOVABLE', 'only a table added on a phone can be removed there')
+    }
+
+    const tabs = tx.select({ status: schema.tabs.status, clearedAt: schema.tabs.clearedAt })
+      .from(schema.tabs)
+      .where(and(eq(schema.tabs.venueId, venueId), eq(schema.tabs.tableId, tableId)))
+      .all()
+    if (tabs.some(tab => tab.status === 'open' || (tab.status === 'paid' && !tab.clearedAt))) {
+      throw conflict('TABLE_HAS_OPEN_TAB', 'somebody is still at this table')
+    }
+
+    const venue = tx.select({ json: schema.venues.floorJson }).from(schema.venues)
+      .where(eq(schema.venues.id, venueId))
+      .get()
+    const layout = parseFloor(venue?.json)
+    const { [tableId]: _gone, ...rest } = layout.tables
+    tx.update(schema.venues)
+      .set({ floorJson: JSON.stringify({ ...layout, tables: rest }) })
+      .where(eq(schema.venues.id, venueId))
+      .run()
+
+    const removed = tabs.length === 0 ? 'deleted' as const : 'deactivated' as const
+    if (removed === 'deleted') {
+      tx.delete(schema.tables)
+        .where(and(eq(schema.tables.venueId, venueId), eq(schema.tables.id, tableId)))
+        .run()
+    } else {
+      tx.update(schema.tables).set({ active: 0 })
+        .where(and(eq(schema.tables.venueId, venueId), eq(schema.tables.id, tableId)))
+        .run()
+    }
+
+    log(tx, venueId, {
+      kind: 'table_changed',
+      body: { table_id: tableId, what: 'uklonjen sa telefona', name: table.name },
+      actorId: actor.userId,
+      ref: { type: 'table', id: tableId },
+      at: now,
+    })
+    bump(tx, venueId, 'table', tableId)
+    bump(tx, venueId, 'menu', tableId)
+
+    return { table_id: tableId, removed }
+  })
+
+  announce(db, venueId, 'table', tableId)
+  return result
 }
 
 // ===========================================================================

@@ -151,6 +151,16 @@ export const tables = sqliteTable('tables', {
   grp: text('grp'),
   sort: integer('sort').notNull().default(0),
   active: integer('active').notNull().default(1),
+  /**
+   * 1 for a table a waiter brought out with *+ Sto* in the middle of a shift,
+   * 0 for the room the owner drew.
+   *
+   * It is the one thing that decides whether a waiter may take a table away
+   * again (the owner, 24.09.2026: *"just on the tables that are added, not
+   * all"*). The room is the owner's; a table carried into the garden at ten at
+   * night, and carried back in at midnight, is the crew's.
+   */
+  addedOnPhone: integer('added_on_phone').notNull().default(0),
 }, t => [index('tables_venue_zone_idx').on(t.venueId, t.zone, t.sort)])
 
 export const categories = sqliteTable('categories', {

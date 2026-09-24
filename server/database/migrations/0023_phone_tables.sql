@@ -1,0 +1,1 @@
+ALTER TABLE `tables` ADD `added_on_phone` integer DEFAULT 0 NOT NULL;

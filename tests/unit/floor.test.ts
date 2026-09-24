@@ -8,8 +8,10 @@
  * under another.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { makeFixture, type Fixture } from '../helpers/db'
-import { addFloorTable, saveFloor } from '../../server/services/admin'
+import { eq } from 'drizzle-orm'
+import { makeFixture, schema, type Fixture } from '../helpers/db'
+import { closeTab } from '../helpers/shifts'
+import { addFloorTable, removeFloorTable, saveFloor } from '../../server/services/admin'
 import { getBootstrap } from '../../server/services/bootstrap'
 import { menuVersion } from '../../server/services/changes'
 import {
@@ -20,7 +22,10 @@ import type { FloorLayout } from '#shared/floor'
 import type { VenueTable } from '#shared/types'
 
 function table(patch: Partial<VenueTable> & { id: string }): VenueTable {
-  return { name: `Sto ${patch.id}`, zone: 'unutra', col: 1, row: 1, grp: null, sort: 1, ...patch }
+  return {
+    name: `Sto ${patch.id}`, zone: 'unutra', col: 1, row: 1, grp: null, sort: 1,
+    added_on_phone: false, ...patch,
+  }
 }
 
 const room: VenueTable[] = [
@@ -275,3 +280,71 @@ describe('Sačuvaj raspored — on the server', () => {
     expect(saved.bar).toBeNull()
   })
 })
+
+/**
+ * *Ukloni sto* (the owner, 24.09.2026): *"on tables that are added lets add
+ * option to remove table — so just on the tables that are added, not all"*.
+ */
+describe('Ukloni sto — only a table the crew brought out', () => {
+  let f: Fixture
+  beforeEach(() => { f = makeFixture() })
+  afterEach(() => f.close())
+
+  const layout = () => parseFloor(f.db.select({ json: schema.venues.floorJson })
+    .from(schema.venues).where(eq(schema.venues.id, f.venueId)).get()!.json)
+  const row = (id: string) => f.db.select().from(schema.tables)
+    .where(eq(schema.tables.id, id)).get()
+
+  it('marks a table added on a phone, and nothing else', () => {
+    const added = addFloorTable(f.db, f.venueId, f.actor('Amar'), { zone: 'basta', x: 40, y: 60 })
+    expect(added.added_on_phone).toBe(true)
+    expect(row(f.tableId('Sto 1'))!.addedOnPhone).toBe(0)
+  })
+
+  it('deletes one that never held a guest, spot and all', () => {
+    const added = addFloorTable(f.db, f.venueId, f.actor('Amar'), { zone: 'basta', x: 40, y: 60 })
+    expect(layout().tables[added.id]).toBeDefined()
+
+    const result = removeFloorTable(f.db, f.venueId, f.actor('Amar'), added.id)
+
+    // Added by mistake and taken back a minute later: nothing worth keeping,
+    // and a dead *Sto 29* in the owner's list for ever would be the cost.
+    expect(result.removed).toBe('deleted')
+    expect(row(added.id)).toBeUndefined()
+    expect(layout().tables[added.id]).toBeUndefined()
+  })
+
+  it('switches off one that served a round, because the ledger points at it', () => {
+    const added = addFloorTable(f.db, f.venueId, f.actor('Amar'), { zone: 'basta', x: 40, y: 60 })
+    const { tabId } = f.lock('Amar', added.name, [{ product: 'Kafa' }])
+    // Paid and wiped down: the guests are gone, but the bill is in the ledger.
+    closeTab(f, tabId, 'Amar')
+    f.db.update(schema.tabs).set({ clearedAt: f.clock.now() })
+      .where(eq(schema.tabs.id, tabId)).run()
+
+    const result = removeFloorTable(f.db, f.venueId, f.actor('Amar'), added.id)
+    expect(result.removed).toBe('deactivated')
+    expect(row(added.id)!.active).toBe(0)
+    expect(layout().tables[added.id]).toBeUndefined()
+  })
+
+  it('refuses a table from the owner\'s room', () => {
+    expect(() => removeFloorTable(f.db, f.venueId, f.actor('Amar'), f.tableId('Sto 1')))
+      .toThrow(/only a table added on a phone/)
+    expect(row(f.tableId('Sto 1'))!.active).toBe(1)
+  })
+
+  it('refuses while guests are still at it, paid or not', () => {
+    const added = addFloorTable(f.db, f.venueId, f.actor('Amar'), { zone: 'basta', x: 40, y: 60 })
+    const { tabId } = f.lock('Amar', added.name, [{ product: 'Kafa' }])
+    expect(() => removeFloorTable(f.db, f.venueId, f.actor('Amar'), added.id))
+      .toThrow(/still at this table/)
+
+    // Paid and still sitting there — *naplati ali gosti ostaju*. Taking the
+    // table out from under them would strand a paid bill on no table.
+    closeTab(f, tabId, 'Amar')
+    expect(() => removeFloorTable(f.db, f.venueId, f.actor('Amar'), added.id))
+      .toThrow(/still at this table/)
+  })
+})
+

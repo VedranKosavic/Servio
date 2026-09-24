@@ -17,7 +17,7 @@ vi.mock('../../server/services/contracts', async (importOriginal) => {
   return { ...actual, log: vi.fn(() => 'log-entry'), bump: vi.fn(() => 1), queueAlert: vi.fn() }
 })
 
-const { pickShift, shiftChoices, endSessionsOn } = await import('../../server/services/shifts')
+const { pickShift, shiftChoices, endSessionsOn, leaveShift } = await import('../../server/services/shifts')
 
 let f: Fixture
 /** 07:40 Sarajevo — the morning crew is in, the evening one is hours away. */
