@@ -12,7 +12,7 @@
  * acknowledgement a bartender could hand himself a shortfall on a colleague's
  * line, and the close would reconcile perfectly.
  */
-import { and, desc, eq, inArray, isNotNull, lt, or, sql } from 'drizzle-orm'
+import { and, eq, inArray, isNotNull, or, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { conflict, forbidden, notFound } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
@@ -37,32 +37,28 @@ type CashMovementRow = typeof schema.cashMovements.$inferSelect
 // ===========================================================================
 
 /**
- * What was in the drawer when the night started.
+ * What was in the drawer when the night started — **zero, unless an admin said
+ * otherwise**.
  *
- * The override if an admin typed one; otherwise the previous closed shift's
- * counted cash minus whatever the owner took out of it — the money physically
- * stayed in the till overnight. `null` means nobody has ever told the app, and
- * the venue expectation then uses 0 while saying so, rather than pretending the
- * drawer started empty.
+ * It used to be derived: the previous closed shift's counted cash minus what
+ * the owner took out of it, on the reasoning that the money physically stayed
+ * in the till overnight. That was never true of this café (the owner,
+ * 23.09.2026). The crew empties the wallet at the handover, counts it, hands
+ * over what the app worked out, and what stays behind is a fixed change float
+ * nobody enters anywhere — *"faktički je 0 jer ga nigdje ne računamo"*. Deriving
+ * it meant every shift expected the whole of last night's takings to still be
+ * in a wallet that had been emptied, twice a day once the shifts split.
+ *
+ * So the chain is gone and with it the *Nije unesen početni polog* flag: there
+ * is nothing to enter, and a flag that can never be cleared is noise. What is
+ * left is the override, which the owner can still type on any night he wants
+ * the drawer counted properly.
  */
-export function openingFloat(q: Queryable, venueId: string, shift: ShiftRow): OpeningFloat {
+export function openingFloat(shift: ShiftRow): OpeningFloat {
   if (shift.openingFloatOverrideFen !== null) {
     return { fen: shift.openingFloatOverrideFen, source: 'override' }
   }
-
-  const previous = q.select().from(schema.shifts)
-    .where(and(
-      eq(schema.shifts.venueId, venueId),
-      inArray(schema.shifts.status, ['closed', 'reviewed']),
-      isNotNull(schema.shifts.cashCountedFen),
-      lt(schema.shifts.openedAt, shift.openedAt),
-    ))
-    .orderBy(desc(schema.shifts.openedAt))
-    .get()
-  if (!previous || previous.cashCountedFen === null) return { fen: null, source: 'unknown' }
-
-  const pickedUp = sumMovements(q, venueId, previous.id, 'owner_pickup', 'approved')
-  return { fen: previous.cashCountedFen - pickedUp, source: 'derived' }
+  return { fen: 0, source: 'none' }
 }
 
 function sumMovements(
@@ -197,9 +193,9 @@ export function expectedCash(
   q: Queryable, venueId: string, shiftId: string, userId?: string, _now?: string,
 ): ExpectedCash {
   const shift = requireShift(q, venueId, shiftId)
-  const float = openingFloat(q, venueId, shift)
+  const float = openingFloat(shift)
 
-  const drawerExpected = (float.fen ?? 0)
+  const drawerExpected = float.fen
     + sumMovements(q, venueId, shiftId, 'float_in', 'approved')
     - sumMovements(q, venueId, shiftId, 'payout', 'approved')
     - sumMovements(q, venueId, shiftId, 'float_out', 'approved')
@@ -340,7 +336,6 @@ export function expectedCash(
   return {
     venue_expected_fen: venueExpected,
     drawer_expected_fen: drawerExpected,
-    opening_float_known: float.source !== 'unknown',
     waiters: userId ? waiters.filter(w => w.user_id === userId) : waiters,
   }
 }
@@ -488,7 +483,7 @@ export function setOpeningFloat(
 
   return db.transaction((tx) => {
     const shift = requireOpenShift(tx, venueId, shiftId)
-    const before = openingFloat(tx, venueId, shift).fen ?? 0
+    const before = openingFloat(shift).fen
 
     tx.update(schema.shifts)
       .set({ openingFloatOverrideFen: body.fen })

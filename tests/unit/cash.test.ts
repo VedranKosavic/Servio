@@ -142,11 +142,9 @@ describe('expectedCash — the reconciliation', () => {
     expect(names).toEqual(['Amar', 'Lejla'])
   })
 
-  it('says when nobody has told it what the drawer started with', () => {
+  it('starts the drawer at zero, because the café does not count the float', () => {
     const shiftId = f.openShift({ members: ['Amar'] })
-    const ec = expectedCash(f.db, f.venueId, shiftId)
-    expect(ec.opening_float_known).toBe(false)
-    expect(ec.drawer_expected_fen).toBe(0)
+    expect(expectedCash(f.db, f.venueId, shiftId).drawer_expected_fen).toBe(0)
   })
 
   it('narrows to one waiter without moving the venue total', () => {
@@ -281,19 +279,18 @@ describe('deciding a payout', () => {
 })
 
 describe('the opening float', () => {
-  it('is the previous close minus what the owner took out of it', () => {
+  /**
+   * **The invariant that moved** (the owner, 23.09.2026). This used to assert
+   * the chain: a shift's float is the previous close's counted cash minus what
+   * the owner took out of it, because the money stayed in the till overnight.
+   * That was never true here — the crew empties the wallet at the handover and
+   * hands over what the app worked out, leaving only a fixed change float
+   * nobody enters anywhere. Carrying yesterday's takings forward meant every
+   * shift expected them to still be in an emptied wallet, and twice a day once
+   * the shifts split. So the chain is gone and zero is the answer.
+   */
+  it('does not carry last night forward, however the night ended', () => {
     const first = f.openShift({ members: ['Amar'], at: f.clock.now() })
-    f.db.insert(schema.cashMovements).values({
-      id: crypto.randomUUID(),
-      venueId: f.venueId,
-      shiftId: first,
-      type: 'owner_pickup',
-      amountFen: 30_000,
-      userId: f.userId('Haris'),
-      createdBy: f.userId('Haris'),
-      status: 'approved',
-      createdAt: f.clock.now(),
-    }).run()
     f.db.update(schema.shifts)
       .set({
         status: 'closed', closedAt: f.clock.now(), closedBy: f.userId('Haris'),
@@ -307,8 +304,8 @@ describe('the opening float', () => {
     const shift = f.db.select().from(schema.shifts)
       .where(eq(schema.shifts.id, second)).get()!
 
-    expect(openingFloat(f.db, f.venueId, shift)).toEqual({ fen: 20_000, source: 'derived' })
-    expect(expectedCash(f.db, f.venueId, second).drawer_expected_fen).toBe(20_000)
+    expect(openingFloat(shift)).toEqual({ fen: 0, source: 'none' })
+    expect(expectedCash(f.db, f.venueId, second).drawer_expected_fen).toBe(0)
   })
 
   it('is whatever the admin says it is, and says what it replaced', () => {
@@ -316,7 +313,7 @@ describe('the opening float', () => {
     setOpeningFloat(f.db, f.venueId, f.adminActor(), shiftId, { fen: 12_345 })
     const shift = f.db.select().from(schema.shifts)
       .where(eq(schema.shifts.id, shiftId)).get()!
-    expect(openingFloat(f.db, f.venueId, shift)).toEqual({ fen: 12_345, source: 'override' })
+    expect(openingFloat(shift)).toEqual({ fen: 12_345, source: 'override' })
     expect(expectReconciled(shiftId)).toBe(12_345)
   })
 

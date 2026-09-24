@@ -118,13 +118,20 @@ export interface CashMovement {
 }
 
 /**
- * Where the opening float came from. `derived` is the previous close's counted
- * cash minus what the owner took out of it; `unknown` means nobody has told the
- * app yet, and the venue expectation uses 0 while saying so.
+ * Where the opening float came from.
+ *
+ * **The café does not count it** (the owner, 23.09.2026): *"ne treba ga
+ * ubrajati, to se radi fizički i zna se da je 40 — faktički je 0 jer ga nigdje
+ * ne računamo."* The float stays in the wallet across the handover, nobody
+ * enters it, and every number the app compares against is the night's takings
+ * alone. So `none` is the ordinary answer and it means zero, not "unknown".
+ *
+ * `override` is the admin typing one in — kept for the venue that does count
+ * its drawer, and for the night this one decides to.
  */
 export interface OpeningFloat {
-  fen: number | null
-  source: 'override' | 'derived' | 'unknown'
+  fen: number
+  source: 'override' | 'none'
 }
 
 /**
@@ -155,7 +162,6 @@ export interface ExpectedCashWaiter {
 export interface ExpectedCash {
   venue_expected_fen: number
   drawer_expected_fen: number
-  opening_float_known: boolean
   waiters: ExpectedCashWaiter[]
 }
 

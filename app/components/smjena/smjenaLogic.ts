@@ -235,13 +235,13 @@ const STATUS_WORDS: Record<CashMovement['status'], string> = {
  * početni polog → float in/out → isplate → povrati → uzeo iz kase → očekivano →
  * prebrojano → razlika.
  *
- * **What is not here and why.** *Ostalo u kasi sinoć* is the previous close's
- * counted cash minus what the owner took out of it. No read on `/admin` carries it
- * and the drawer's own expectation is folded into `summary.expected_cash_fen`
- * together with the waiters who have settled, so it cannot be recovered
- * arithmetically either. Rather than print a number this page cannot stand
- * behind, the *početni polog* row says where the figure came from — entered by
- * hand, or derived by the server from last night — and offers the correction.
+ * **The *početni polog* row is a zero with a sentence** since 23.09.2026. The
+ * café does not count the float: the crew empties the wallet at the handover
+ * and what stays behind is a fixed change float nobody enters anywhere. The
+ * server used to derive the figure from last night's count, which meant every
+ * shift expected the whole of yesterday's takings to still be in a wallet that
+ * had been emptied. The row stays on the card — the correction is still offered,
+ * and a *Kasa* that silently skipped its first line would read as a bug.
  */
 export function cashRows(
   shift: Shift, summary: ShiftSummary, movements: CashMovement[],
@@ -256,9 +256,9 @@ export function cashRows(
     key: 'opening',
     label: 'Početni polog',
     sub: shift.opening_float_override_fen === null
-      ? 'izveden iz sinoćnjeg brojanja'
+      ? 'ne računa se — ostaje u novčaniku'
       : 'unesen ručno',
-    fen: shift.opening_float_override_fen,
+    fen: shift.opening_float_override_fen ?? 0,
   })
 
   const floatIn = sum('float_in')

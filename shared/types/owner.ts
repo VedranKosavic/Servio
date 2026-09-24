@@ -26,7 +26,7 @@ import type { LineRow, ShiftBrief } from './shifts'
 export type FlagKind =
   | 'clock_skew' | 'early_close' | 'stale_device' | 'uncovered_payment'
   | 'no_opening_count' | 'cross_waiter_lock' | 'late_after_close'
-  | 'opening_float_unknown' | 'no_item_cost'
+  | 'no_item_cost'
 
 /**
  * Information, not a decision. Recomputed on every read of *Puls* and gone the

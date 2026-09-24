@@ -291,9 +291,11 @@ describe('the cash box', () => {
     expect(rows.find(r => r.key === 'payout:cm-no')?.fen).toBe(0)
   })
 
-  it('says where the opening float came from rather than inventing a number', () => {
+  it('says the float is not counted, and shows it when somebody counts it', () => {
+    // The row stays on the card at zero with the reason, rather than vanishing:
+    // a *Kasa* that silently skipped its first line would read as a bug.
     expect(cashRows(shift(), summary(), []).find(r => r.key === 'opening'))
-      .toMatchObject({ fen: null, sub: 'izveden iz sinoćnjeg brojanja' })
+      .toMatchObject({ fen: 0, sub: 'ne računa se — ostaje u novčaniku' })
 
     expect(cashRows(shift({ opening_float_override_fen: 20000 }), summary(), [])
       .find(r => r.key === 'opening'))

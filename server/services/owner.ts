@@ -143,7 +143,7 @@ export function getLive(
     rostered: plannedOn(q, venueId, today),
     unsent: unsentDevices(devices),
     pending: pendingBadges(q, venueId),
-    flags: flags(q, venueId, settings, focus, ec, devices, tablesState.tables, now),
+    flags: flags(q, venueId, settings, focus, devices, tablesState.tables, now),
     last_lines: lastLines(q, venueId, focus?.id ?? null),
     tables: tablesState.tables,
     log_max_at: logMaxAt(q, venueId),
@@ -330,7 +330,6 @@ function lastLines(q: Queryable, venueId: string, shiftId: string | null): LineR
 function flags(
   q: Queryable, venueId: string, settings: Settings,
   focus: { id: string, status: string, openedAt: string } | null,
-  ec: { opening_float_known: boolean } | null,
   devices: ReturnType<typeof listDevices>,
   tables: TableState[],
   now: string,
@@ -340,13 +339,9 @@ function flags(
     ? focus.openedAt
     : new Date(Date.parse(now) - 24 * 3600 * 1000).toISOString()
 
-  if (focus && ec && !ec.opening_float_known) {
-    out.push({
-      kind: 'opening_float_unknown',
-      title_bs: 'Nije unesen početni polog',
-      ref_type: 'shift', ref_id: focus.id, at: focus.openedAt,
-    })
-  }
+  // *Nije unesen početni polog* used to stand here. The café does not count the
+  // float at all (the owner, 23.09.2026), so nobody could ever clear it — and a
+  // flag that cannot be cleared trains people to ignore the whole list.
 
   if (focus && !hasSubmittedCount(q, venueId, focus.id, 'open')) {
     out.push({
