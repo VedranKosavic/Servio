@@ -126,6 +126,117 @@ describe('a seat is per screen', () => {
   })
 })
 
+/**
+ * A logout is not a leave (the owner, 24.09.2026). On a shared phone Nidal
+ * signed out so that Tarik could sign in, and Tarik's picker said *otvorena,
+ * niko nije prijavljen* about a shift whose konobar had left the screen four
+ * seconds earlier and was still serving its tables.
+ */
+describe('a seat outlives the phone it was taken on', () => {
+  /** 07:50 and 08:10 Sarajevo — after the morning crew is in. */
+  const AFTER = '2026-09-09T05:50:00.000Z'
+  const LATER = '2026-09-09T06:10:00.000Z'
+
+  /** *Odjavi se*: the row stays, revoked — exactly what `logout` writes. */
+  const signOut = (sessionId: string, at: string) => {
+    f.db.update(schema.sessions).set({ revokedAt: at })
+      .where(eq(schema.sessions.id, sessionId)).run()
+  }
+
+  /**
+   * A second sign-in: a new row beside the old one, which stays as it was.
+   * `f.session` cannot do it — it reuses one id per name and would un-revoke
+   * the first sign-in instead.
+   */
+  const signInAgain = (who: string, mode: 'konobar' | 'sanker') => {
+    const sessionId = `session-${who}-again`
+    f.db.insert(schema.sessions).values({
+      id: sessionId,
+      venueId: f.venueId,
+      userId: f.userId(who),
+      deviceId: null,
+      tokenHash: `token-${who}-again`,
+      kind: 'staff',
+      borrowed: 0,
+      mode,
+      shiftId: null,
+      createdAt: f.clock.now(),
+      expiresAt: new Date(Date.parse(f.clock.now()) + 20 * 3600 * 1000).toISOString(),
+    }).run()
+    return { ...f.actor(who, { mode }), sessionId }
+  }
+
+  /** Amar opens *Prva* on the floor at 07:40 and signs out at 07:50. */
+  const amarOpensAndSignsOut = () => {
+    const session = f.session('Amar', { mode: 'konobar' })
+    const templateId = slot('Prva smjena', MORNING).template_id
+    const { shift_id } = pickShift(
+      f.db, f.venueId, f.actor('Amar', { mode: 'konobar' }), templateId, MORNING,
+    )
+    signOut(session, AFTER)
+    return { templateId, shiftId: shift_id }
+  }
+
+  it('keeps his name on the slot for the šanker who signs in after him', () => {
+    amarOpensAndSignsOut()
+
+    const his = slot('Prva smjena', AFTER, 'Emir', 'sanker')
+    expect(his).toMatchObject({ action: 'join', blocked: null, konobar: 'Amar', sanker: null })
+  })
+
+  it('still refuses a second konobar', () => {
+    const { templateId } = amarOpensAndSignsOut()
+
+    expect(slot('Prva smjena', AFTER, 'Lejla', 'konobar'))
+      .toMatchObject({ action: null, blocked: 'zauzeta', konobar: 'Amar' })
+    expect(() => pickShift(
+      f.db, f.venueId, f.actor('Lejla', { mode: 'konobar' }), templateId, AFTER,
+    )).toThrow(/seat/)
+  })
+
+  it('gives it back to him when he signs in again', () => {
+    const { templateId, shiftId } = amarOpensAndSignsOut()
+
+    const again = signInAgain('Amar', 'konobar')
+    const choice = shiftChoices(f.db, f.venueId, again, LATER).choices
+      .find(c => c.template_id === templateId)!
+    expect(choice).toMatchObject({ action: 'join', mine: true, shift_id: shiftId, konobar: 'Amar' })
+    expect(pickShift(f.db, f.venueId, again, templateId, LATER)).toEqual({ shift_id: shiftId })
+  })
+
+  it('frees it when he leaves the shift', () => {
+    const { shiftId } = amarOpensAndSignsOut()
+    leaveShift(f.db, f.venueId, f.actor('Amar'), shiftId)
+
+    expect(slot('Prva smjena', LATER, 'Lejla', 'konobar'))
+      .toMatchObject({ action: 'join', blocked: null, konobar: null })
+  })
+
+  it('follows him to the bar when he comes back as šanker', () => {
+    const { templateId } = amarOpensAndSignsOut()
+
+    // Back at 07:50 on the šank this time, and out again at 08:10: the seat he
+    // holds is the screen he left last, and the floor is free for Lejla.
+    const again = signInAgain('Amar', 'sanker')
+    pickShift(f.db, f.venueId, again, templateId, AFTER)
+    signOut(again.sessionId, LATER)
+
+    expect(slot('Prva smjena', LATER, 'Lejla', 'konobar'))
+      .toMatchObject({ action: 'join', konobar: null, sanker: 'Amar' })
+    expect(slot('Prva smjena', LATER, 'Emir', 'sanker'))
+      .toMatchObject({ action: null, blocked: 'zauzeta', sanker: 'Amar' })
+  })
+
+  it('names whoever is at the screen when two people hold one seat', () => {
+    // Only a night that straddles this change can look like this: before it,
+    // Lejla could take the floor the moment Amar signed out.
+    const { shiftId } = amarOpensAndSignsOut()
+    f.session('Lejla', { mode: 'konobar', shiftId })
+
+    expect(slot('Prva smjena', LATER, 'Emir', 'sanker')).toMatchObject({ konobar: 'Lejla' })
+  })
+})
+
 describe('taking a shift', () => {
   it('opens it on the slot the worker named, not on the clock', () => {
     f.session('Amar', { mode: 'konobar' })
