@@ -20,10 +20,11 @@ import { and, desc, eq, gt } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { badRequest, conflict, notFound, unprocessable } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
-import { clampEventAt } from '#shared/dates'
 import type { CreatePaymentBody, PaymentMethod, PaymentResult } from '#shared/types'
 import type { Actor, Db, Queryable, Tx } from './types'
-import { actorShift, bump, currentShift, getSettings, hasLiveSettlement, joinShift, log } from './contracts'
+import {
+  actorShift, bump, currentShift, eventTime, getSettings, hasLiveSettlement, joinShift, log,
+} from './contracts'
 import { maxSeq } from './changes'
 import { emitChange } from '../utils/bus'
 import { tabMoney } from './tabs'
@@ -139,7 +140,8 @@ export function createPayment(
     }
 
     const at = nowIso()
-    const clientAt = clampEventAt(body.client_created_at, at, settings.max_sync_lag_h)
+    // World time, skew and all — it becomes the tab's `closed_at` below.
+    const clientAt = eventTime(tx, actor.deviceId, body.client_created_at, at, settings.max_sync_lag_h)
     const shiftId = resolvePaymentShift(tx, venueId, actor, tab, clientAt)
     joinShift(tx, venueId, shiftId, actor.userId, actor.role, at)
     const postSettle = hasLiveSettlement(tx, venueId, shiftId, actor.userId)
@@ -182,7 +184,11 @@ export function createPayment(
         // clearing the review flag is the whole of the change.
         patch.pendingReview = 0
       } else {
-        patch.closedAt = at
+        // When the guests paid, not when the phone got signal: the late rule
+        // in `orders.ts` compares the next round on this table with this
+        // stamp, and an arrival time here filed the next guests as "late"
+        // (docs/OFFLINE.md §4.1).
+        patch.closedAt = clientAt
         patch.closedBy = actor.userId
       }
       /**
@@ -195,7 +201,7 @@ export function createPayment(
        * cleared would simply pile up there with no way to shift it.
        */
       if (tab.tableId === null) {
-        patch.clearedAt = at
+        patch.clearedAt = clientAt
         patch.clearedBy = actor.userId
       }
     }

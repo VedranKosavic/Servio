@@ -217,9 +217,11 @@ describe('0003 on a database that already holds a night', () => {
       expect(sqlite.prepare('PRAGMA foreign_key_check').all()).toEqual([])
       expect(sqlite.prepare('PRAGMA integrity_check').get()).toEqual({ integrity_check: 'ok' })
 
+      // Every migration runs here, so this is today's set: 0026 dropped the old
+      // one-open-tab-per-table twin and added the key of a queued clear.
       expect(names(sqlite, 'index', 'tabs')).toEqual([
-        'tabs_assigned_idx', 'tabs_client_uq', 'tabs_one_live_per_table_uq',
-        'tabs_one_open_per_table_uq',
+        'tabs_assigned_idx', 'tabs_cleared_client_uq', 'tabs_client_uq',
+        'tabs_one_live_per_table_uq',
         'tabs_shift_idx', 'tabs_unpaid_client_uq', 'tabs_venue_status_idx',
       ])
 
@@ -248,7 +250,7 @@ describe('0003 on a database that already holds a night', () => {
       const now = new Date().toISOString()
       insert.run(randomUUID(), venue, randomUUID(), 'open', user, now, user)
       // Two NULLs are *different* values to a unique index in SQLite, which is
-      // exactly why `tabs_one_open_per_table_uq` needed no change: the bar can
+      // exactly why the one-tab-per-table index needed no change: the bar can
       // hold a dozen table-less tabs while Sto 1 still holds exactly one.
       insert.run(randomUUID(), venue, randomUUID(), 'open', user, now, user)
 

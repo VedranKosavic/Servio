@@ -192,8 +192,9 @@ async function request<T>(url: string, options?: {
 }
 
 /**
- * The five routes the offline outbox may post to, and the only place their URLs
- * are written (WP0, PHASE3 §2.2). Money and stock; nothing else is queueable.
+ * The six routes the offline outbox may post to, and the only place their URLs
+ * are written (WP0, PHASE3 §2.2). Money and stock, and since 25.09.2026 giving a
+ * table back (docs/OFFLINE.md §4.4); nothing else is queueable.
  */
 const OUTBOX_URLS = {
   order: '/api/orders',
@@ -201,6 +202,8 @@ const OUTBOX_URLS = {
   unpaid: '/api/tabs/unpaid',
   adjust: '/api/adjustments',
   waste: '/api/stock/waste',
+  // *Očisti sto* by the phone's ids — the queueable twin of `/api/tabs/:id/clear`.
+  clear: '/api/tabs/clear',
 } as const
 
 export type OutboxRoute = keyof typeof OUTBOX_URLS
@@ -216,7 +219,10 @@ export function useApi() {
      * name list); 401 `DEVICE_REVOKED` means the owner threw this phone out and
      * the app has to go back to the enrol screen.
      */
-    getMe: () => request<MeContext>('/api/me'),
+    // Four seconds, like the poll: a café router that accepts a request and
+    // never answers must not hold a screen on *Učitavanje…* — past this the
+    // phone uses what it last knew (`useMe`, `stores/room.ts`).
+    getMe: () => request<MeContext>('/api/me', { timeoutMs: 4000 }),
 
     /**
      * The venue's live staff — name, initials, role, PIN length. Behind a
@@ -297,7 +303,7 @@ export function useApi() {
     /**
      * The outbox's one door (§2.2). The body has already been validated by the
      * screen that queued it and is posted back unchanged, however late — which
-     * is why this takes an opaque `unknown` rather than a union of five bodies:
+     * is why this takes an opaque `unknown` rather than a union of six bodies:
      * the entry on disk may have been written by yesterday's build.
      */
     sendQueued: <T>(kind: OutboxRoute, body: unknown) =>
@@ -319,7 +325,7 @@ export function useApi() {
       request<CreateOrderResult>('/api/orders', { method: 'POST', body }),
 
     /** Everything *Pokaži narudžbu* and *Naplati* need. */
-    getTab: (tabId: string) => request<TabDetail>(`/api/tabs/${tabId}`),
+    getTab: (tabId: string) => request<TabDetail>(`/api/tabs/${tabId}`, { timeoutMs: 4000 }),
 
     /**
      * *Naplati*. `client_id` is minted once per attempt and reused on every

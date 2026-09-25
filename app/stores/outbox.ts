@@ -34,8 +34,12 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval'
 
-/** What a queued entry does when it reaches the server. */
-export type OutboxKind = 'order' | 'pay' | 'unpaid' | 'adjust' | 'waste'
+/**
+ * What a queued entry does when it reaches the server. `clear` is *Očisti sto*
+ * (25.09.2026): giving a table back is part of the evening, so it waits for a
+ * signal the way the money does (docs/OFFLINE.md §4.4).
+ */
+export type OutboxKind = 'order' | 'pay' | 'unpaid' | 'adjust' | 'waste' | 'clear'
 
 export interface OutboxEntry {
   /** The row's idempotency key — the same uuid the body carries. */
@@ -46,11 +50,22 @@ export interface OutboxEntry {
    * payment from going out behind it, and must stop nothing on Sto 12.
    */
   tab_client_id?: string
+  /**
+   * The table this entry is about — `null` for the bar, absent for a storno or
+   * a waste line, which are about no table. Two jobs: the projection
+   * (`utils/projection.ts`) places it on the plan, and a failure holds back
+   * every later entry for **the same table**, not only the same tab — a new
+   * party's round must not go out in front of the last party's refused
+   * payment, or it lands on their bill.
+   */
+  table_id?: string | null
   /** The exact body, already valid; it is posted unchanged, however late. */
   payload: unknown
   /** When it happened in the *world* — the phone's clock, not the server's. */
   client_created_at: string
   attempts: number
+  /** Plain `500`s in a row: three, and the entry stops for a human (see `flush`). */
+  server_errors?: number
   last_error: string | null
   status: 'queued' | 'failed'
   /** For the failed card: "Sto 7 · Tura 2". Display only, never sent. */
@@ -65,6 +80,7 @@ export interface EnqueueInput {
   client_id: string
   payload: unknown
   tab_client_id?: string
+  table_id?: string | null
   client_created_at?: string
   label?: string
   amount_fen?: number
@@ -86,6 +102,23 @@ const BACKOFF_MAX_MS = 60_000
 
 /** An entry older than this puts the banner under the header (§2.3). */
 export const STALE_MS = 5 * 60_000
+
+/**
+ * How long a `429` makes the queue wait. `POST /api/orders` allows sixty rounds
+ * a minute per phone (`tenant.ts`), and an evening queued behind a dead router
+ * can hold more than that — so the limiter is not a refusal of the body, it is
+ * the server asking for a minute, and the queue gives it one.
+ */
+const RATE_LIMIT_WAIT_MS = 60_000
+
+/**
+ * How many plain `500`s one entry gets before it stops for a human. A `500`
+ * means the server read the body and crashed on it, and some bodies crash it
+ * every time; retried for ever, one such entry held every table behind it.
+ * Three is enough to ride out a restart mid-request and no more. (`502`–`504`
+ * are nginx saying Node is not there, which is a network error, as ever.)
+ */
+const SERVER_ERROR_LIMIT = 3
 
 /**
  * The 401s that must **not** burn a round.
@@ -126,6 +159,22 @@ function canPersist(): boolean {
  */
 function plain<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
+}
+
+/**
+ * What a failed entry holds back behind it: its tab, and its table. A storno
+ * or a waste line names no table and holds back only its tab. Entries queued
+ * before `table_id` existed carry the table inside a round's body.
+ */
+function blockKeys(entry: OutboxEntry): string[] {
+  const keys: string[] = []
+  if (entry.tab_client_id) keys.push(`tab:${entry.tab_client_id}`)
+  const payloadTable = entry.kind === 'order'
+    ? (entry.payload as { table_id?: string | null } | null)?.table_id
+    : undefined
+  const table = entry.table_id !== undefined ? entry.table_id : payloadTable
+  if (table) keys.push(`table:${table}`)
+  return keys
 }
 
 export const useOutboxStore = defineStore('outbox', () => {
@@ -225,6 +274,7 @@ export const useOutboxStore = defineStore('outbox', () => {
       last_error: null,
       status: 'queued',
       ...(input.tab_client_id ? { tab_client_id: input.tab_client_id } : {}),
+      ...(input.table_id !== undefined ? { table_id: input.table_id } : {}),
       ...(input.label ? { label: input.label } : {}),
       ...(input.amount_fen !== undefined ? { amount_fen: input.amount_fen } : {}),
     }
@@ -281,16 +331,22 @@ export const useOutboxStore = defineStore('outbox', () => {
 
     flushing = true
     let sent = 0
-    /** Tabs held up by a 4xx in front of them. Other tabs keep flushing. */
+    /**
+     * What a refused entry holds back: its tab, and its table. Other tables
+     * keep flushing. The table matters since a party can turn over on a phone
+     * with no signal: the next guests' round has a tab id of its own, and
+     * without the table key it would reach the server ahead of the last
+     * party's refused payment and join their tab.
+     */
     const blocked = new Set<string>()
 
     try {
       for (const entry of [...entries.value]) {
         if (entry.status === 'failed') {
-          if (entry.tab_client_id) blocked.add(entry.tab_client_id)
+          for (const key of blockKeys(entry)) blocked.add(key)
           continue
         }
-        if (entry.tab_client_id && blocked.has(entry.tab_client_id)) continue
+        if (blockKeys(entry).some(key => blocked.has(key))) continue
 
         try {
           const result = await transport.send(entry.kind, entry.payload)
@@ -321,18 +377,44 @@ export const useOutboxStore = defineStore('outbox', () => {
             continue
           }
 
+          // The limiter, not a refusal: the body is fine and the server wants
+          // a minute. Wait it out and carry on from this same entry.
+          if (status === 429 || e?.code === 'RATE_LIMITED') {
+            entry.last_error = transport.errorText(err)
+            online.value = true
+            retryAt = Date.now() + RATE_LIMIT_WAIT_MS
+            break
+          }
+
           if (status >= 400 && status < 500) {
             // The server read the body and refused it. Retrying changes
             // nothing, so it waits for a human: *Popravi ili odbaci*.
             entry.status = 'failed'
             entry.last_error = transport.errorText(err)
             entry.attempts += 1
-            if (entry.tab_client_id) blocked.add(entry.tab_client_id)
+            for (const key of blockKeys(entry)) blocked.add(key)
             online.value = true
             continue
           }
 
-          // A 5xx, a timeout or no network at all: still ours to send. A
+          if (status === 500) {
+            // The server crashed on this body. A few times is a restart; more is
+            // this body, and it must not hold every other table hostage.
+            entry.server_errors = (entry.server_errors ?? 0) + 1
+            entry.attempts += 1
+            online.value = true
+            if (entry.server_errors >= SERVER_ERROR_LIMIT) {
+              entry.status = 'failed'
+              entry.last_error = 'Server ne prima ovu stavku — javi vlasniku.'
+              for (const key of blockKeys(entry)) blocked.add(key)
+              continue
+            }
+            entry.last_error = transport.errorText(err)
+            scheduleBackoff()
+            break
+          }
+
+          // A 502–504, a timeout or no network at all: still ours to send. A
           // timeout is a network error, not a failure — the request may even
           // have landed, and the replay key is what makes that harmless.
           entry.attempts += 1

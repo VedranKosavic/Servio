@@ -82,8 +82,8 @@ export const createOrderBody = z.object({
    * `null` is *Bez stola*: guests at the bar, on nobody's table (PHASE3 §1.11).
    *
    * The column is nullable and the partial index
-   * `tabs_one_open_per_table_uq (venue_id, table_id) WHERE status='open'` keeps
-   * working unchanged — SQLite treats two NULLs in a unique index as *different*
+   * `tabs_one_live_per_table_uq (venue_id, table_id)` keeps working unchanged —
+   * SQLite treats two NULLs in a unique index as *different*
    * values, so many table-less tabs may be open at once while a real table still
    * holds exactly one.
    */
@@ -197,6 +197,24 @@ export const markUnpaidBody = z.object({
   client_created_at: clientAt.optional(),
 }).strict()
 
+/**
+ * `POST /api/tabs/clear` — *Očisti sto*, from the outbox (docs/OFFLINE.md §4.4).
+ *
+ * The same act as `POST /api/tabs/:id/clear`, shaped so that a phone with no
+ * signal can queue it: the tab is named by the phone's own `tab_client_id`
+ * (a tab whose first round is still in the same queue has no server id yet) or
+ * by `tab_id` when the phone has one, and `client_id` is the idempotency key —
+ * the clear is stored on the tab as `cleared_client_id`, so sending it twice
+ * gives the table back once. `client_created_at` becomes `cleared_at`: when the
+ * table was given back, not when the phone found a signal.
+ */
+export const clearTabBody = z.object({
+  client_id: uuid,
+  tab_id: uuid.optional(),
+  tab_client_id: uuid.optional(),
+  client_created_at: clientAt.optional(),
+}).strict()
+
 /** `POST /api/tabs/:id/unpaid/decide` — the owner writes it off, or chases it. */
 export const decideUnpaidBody = z.object({
   outcome: z.enum(['otpis', 'naplatiti']),
@@ -295,6 +313,7 @@ export type CreateOrderBody = z.infer<typeof createOrderBody>
 export type DiscardDraftBody = z.infer<typeof discardDraftBody>
 export type CreatePaymentBody = z.infer<typeof createPaymentBody>
 export type MarkUnpaidBody = z.infer<typeof markUnpaidBody>
+export type ClearTabBody = z.infer<typeof clearTabBody>
 export type DecideUnpaidBody = z.infer<typeof decideUnpaidBody>
 export type MoveTabBody = z.infer<typeof moveTabBody>
 export type AssignTabBody = z.infer<typeof assignTabBody>

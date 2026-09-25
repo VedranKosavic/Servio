@@ -87,6 +87,9 @@ export function useTabPay(ctx: TabPayContext) {
         kind: 'pay',
         client_id: clientId,
         tab_client_id: clientTabId,
+        // Which table, so the floor takes it off this tile the moment it is
+        // queued and a refusal holds the table's next party back behind it.
+        table_id: ctx.tableId(),
         label: ctx.tableName(),
         amount_fen: payment.amount_fen,
         payload: {
@@ -155,6 +158,7 @@ export function useTabPay(ctx: TabPayContext) {
         // walk out while the phone is offline, on a tab the server has never
         // seen.
         tab_client_id: clientTabId,
+        table_id: ctx.tableId(),
         label: ctx.tableName(),
         payload: {
           client_id: clientId,

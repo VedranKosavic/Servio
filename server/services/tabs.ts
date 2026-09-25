@@ -12,7 +12,6 @@ import { and, asc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { badRequest, conflict, forbidden, notFound } from '../utils/errors'
 import { newId, nowIso } from '../utils/ids'
-import { clampEventAt } from '#shared/dates'
 import { mixLabels } from '#shared/flavours'
 import { isAuthorisedUnpaid } from '#shared/schemas/money'
 import type {
@@ -20,7 +19,7 @@ import type {
   Tab, TabDetail, TabLine, TabMoney, TableState, TablesStateResponse, UnpaidResult,
 } from '#shared/types'
 import type { Actor, Db, Queryable, Tx } from './types'
-import { bump, getSettings, log, writeSummaryVersion } from './contracts'
+import { bump, eventTime, getSettings, log, writeSummaryVersion } from './contracts'
 import { changeTag, maxSeq } from './changes'
 import { emitChange } from '../utils/bus'
 import { shiftBrief, userNames } from './shifts'
@@ -541,7 +540,9 @@ export function markUnpaid(
 
     const settings = getSettings(tx, venueId)
     const at = nowIso()
-    const clientAt = clampEventAt(body.client_created_at, at, settings.max_sync_lag_h)
+    // World time with the device's skew, the same clock every other stamp on
+    // a tab's life now uses (`eventTime`, docs/OFFLINE.md §4.1).
+    const clientAt = eventTime(tx, actor.deviceId, body.client_created_at, at, settings.max_sync_lag_h)
 
     /**
      * **`pending_review` is the whole of the difference.**
@@ -688,11 +689,16 @@ export function moveTab(
 
     if (table.id === tab.tableId) return tabView(tx, venueId, tabId)
 
+    // A table is taken while it holds a *live* tab — open or paid, not yet
+    // cleared — which is the rule `tabs_one_live_per_table_uq` enforces. Asking
+    // only for `open` let a move onto a paid, uncleared table through to that
+    // index, and the answer was a 500 instead of this sentence.
     const occupied = tx.select({ id: schema.tabs.id }).from(schema.tabs)
       .where(and(
         eq(schema.tabs.venueId, venueId),
         eq(schema.tabs.tableId, table.id),
-        eq(schema.tabs.status, 'open'),
+        inArray(schema.tabs.status, ['open', 'paid']),
+        isNull(schema.tabs.clearedAt),
       ))
       .get()
     if (occupied) throw conflict('TABLE_OCCUPIED', `table ${table.id} already has an open tab`)

@@ -183,6 +183,13 @@
       "when": 1790343805471,
       "tag": "0025_no_zar",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1790344865801,
+      "tag": "0026_offline_tabs",
+      "breakpoints": true
     }
   ]
 }

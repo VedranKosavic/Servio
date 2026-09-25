@@ -23,19 +23,22 @@
  *     whether he took the money for it.
  */
 import { formatAmount, formatKm } from '#shared/money'
+import { localTime } from '#shared/dates'
 import type {
-  PaymentMethod, ShiftBrief, TabDetail, TabLine, TabOrder, TableState, User, VenueTable, Zone,
+  PaymentMethod, ShiftBrief, TabDetail, TabLine, TabOrder, TableState, TablesStateResponse,
+  User, VenueTable, Zone,
 } from '#shared/types'
 import type { AdjustmentOutcome } from '~/composables/useAdjustments'
 import { unpaidWordBs } from '#shared/logTemplates'
 import type { UnpaidReason } from '#shared/types'
-import { ApiSideError } from '~/composables/useApi'
 // Explicit, not auto-imported: Nuxt names a component after its path from the
 // components root, so `adjust/AdjVoidSheet.vue` would be `<AdjustAdjVoidSheet>`
 // — and an unresolved tag renders nothing at all in a production build,
 // silently.
 import AdjVoidSheet from '~/components/adjust/AdjVoidSheet.vue'
 import { stavke } from '~/components/order/OrderText'
+import { useRoomStore, tabSignature } from '~/stores/room'
+import { projectRoom, projectRounds, type ProjectedTab, type ProjectionMe } from '~/utils/projection'
 
 useHead({ title: 'Stolovi' })
 
@@ -48,12 +51,24 @@ const { outbox, enqueue } = useOutbox()
 // the server there and then, so the sheet says so rather than failing on tap.
 const { state: syncState } = useSync()
 const cart = useCartStore()
+/** The room and every tab's rounds, kept on the phone for a start with no signal. */
+const room = useRoomStore()
 
 const states = ref<TableState[]>([])
 const looseTabs = ref<TableState[]>([])
 /** Open tabs whose table was given back before the money was settled. */
 const strandedTabs = ref<TableState[]>([])
 const shift = ref<ShiftBrief | null>(null)
+/** Has the poll answered on this load? Until it has, the room on the disk stands. */
+const polled = ref(false)
+
+/** One answer from the server — or the last one, off the disk — onto the screen. */
+function applyTables(state: TablesStateResponse) {
+  states.value = state.tables
+  looseTabs.value = state.loose_tabs
+  strandedTabs.value = state.stranded_tabs
+  shift.value = state.shift
+}
 
 const { data: boot, pending: bootPending, refresh: refreshBoot } = useBootstrapData()
 
@@ -64,12 +79,26 @@ onMounted(() => {
   void me.requireSession()
 })
 
-const { refresh: refreshState } = useChanges({
+/**
+ * **The room from the disk, before the first answer** (docs/OFFLINE.md §5.1).
+ *
+ * With a signal the poll answers in a second and this is only a first paint a
+ * second early. Without one — the café's line is down and iOS restarted the app
+ * in an apron — it is the difference between the tables the waiter is serving
+ * and an empty plan. `polled` keeps it from ever painting over a real answer,
+ * including a real answer that says the room is empty.
+ */
+onMounted(async () => {
+  await room.hydrate()
+  if (!polled.value && room.room) applyTables(room.room.state)
+})
+
+const { refresh: refreshState, lastOkAt } = useChanges({
   tables: (state) => {
-    states.value = state.tables
-    looseTabs.value = state.loose_tabs
-    strandedTabs.value = state.stranded_tabs
-    shift.value = state.shift
+    polled.value = true
+    applyTables(state)
+    void room.saveRoom(state)
+    void refreshMyTabs()
     // The catalogue's own recovery. `useAsyncData` runs once and never retries,
     // so a first client fetch that failed with no cached copy behind it would
     // leave the floor plan empty for the rest of the shift. The poll has just
@@ -125,90 +154,43 @@ async function acceptOffer(tabId: string, tableName: string) {
 }
 
 /**
- * The room as **this phone** knows it: what the server says, plus the tables
- * whose rounds are still on the queue.
+ * The room as **this phone** knows it: what the server last said, with this
+ * phone's unsent rounds, payments and *Očisti sto* laid on top — one walk over
+ * the queue, `projectRoom()` (docs/OFFLINE.md §5.2).
  *
- * Without this, a waiter who locks a round with no signal watches Sto 12 stay
+ * Without it, a waiter who locks a round with no signal watches Sto 12 stay
  * drawn as free — and a table drawn free is a table a colleague will sit
- * somebody at. The overlay tells the truth the phone actually has: the table is
- * his, and this is what is on it. The amount is priced from the catalogue,
- * which is allowed here because it is a number to read, never a number to send;
- * the server prices the round for real when the entry lands.
+ * somebody at. The amounts are priced from the catalogue, which is allowed here
+ * because they are numbers to read, never numbers to send; the server prices
+ * every round for real when the entry lands.
+ *
+ * The tile, the bar's card and the sheet all read this one answer. They used to
+ * fold the queue in three places, and the sheet counted a queued round twice.
  */
 const priceById = computed(() =>
   new Map((boot.value?.products ?? []).map(p => [p.id, p.price_fen])))
 
-const queuedByTable = computed(() => {
-  const totals = new Map<string, number>()
-  for (const entry of outbox.entries) {
-    if (entry.kind !== 'order') continue
-    const payload = entry.payload as {
-      table_id?: string | null
-      lines?: { product_id: string, qty: number }[]
-    }
-    if (!payload.table_id) continue
-    const sum = (payload.lines ?? []).reduce(
-      (n, line) => n + (priceById.value.get(line.product_id) ?? 0) * line.qty, 0,
-    )
-    totals.set(payload.table_id, (totals.get(payload.table_id) ?? 0) + sum)
-  }
-  return totals
+function priceOf(productId: string): number {
+  return priceById.value.get(productId) ?? 0
+}
+
+const meBrief = computed<ProjectionMe | null>(() => {
+  const user = me.user.value
+  return user ? { id: user.id, name: user.name, initials: user.initials } : null
 })
 
-/**
- * The same sum for *Bez stola*, which has no table id to key on: the guests at
- * the bar are a tab like any other, and a round queued for them has to show on
- * their card the way a queued round shows on a tile.
- */
-const queuedLooseFen = computed(() => {
-  let sum = 0
-  for (const entry of outbox.entries) {
-    if (entry.kind !== 'order') continue
-    const payload = entry.payload as {
-      table_id?: string | null
-      lines?: { product_id: string, qty: number }[]
-    }
-    if (payload.table_id) continue
-    sum += (payload.lines ?? []).reduce(
-      (n, line) => n + (priceById.value.get(line.product_id) ?? 0) * line.qty, 0)
-  }
-  return sum
-})
+const projected = computed(() => projectRoom({
+  tables: states.value,
+  loose: looseTabs.value,
+  stranded: strandedTabs.value,
+  entries: outbox.entries,
+  priceOf,
+  me: meBrief.value,
+}))
 
-const shownStates = computed<TableState[]>(() => {
-  const myId = me.user.value?.id ?? null
-  const merged = [...states.value]
-  for (const [tableId, fen] of queuedByTable.value) {
-    const existing = merged.findIndex(s => s.table_id === tableId)
-    if (existing >= 0) {
-      // The server already has a tab here; add what it has not seen yet.
-      const row = merged[existing]!
-      merged[existing] = {
-        ...row,
-        total_fen: row.total_fen + fen,
-        remaining_fen: row.remaining_fen + fen,
-      }
-      continue
-    }
-    merged.push({
-      table_id: tableId,
-      // No server id yet, and the tile only asks whether there is *a* tab.
-      tab_id: `local:${tableId}`,
-      tab_client_id: null,
-      total_fen: fen,
-      remaining_fen: fen,
-      assigned_to: myId,
-      assigned_to_initials: me.user.value?.initials ?? null,
-      opened_by_name: me.user.value?.name ?? null,
-      opened_at: null,
-      last_order_at: null,
-      pending_review: false,
-      late_sync: false,
-      offered_to: null,
-    })
-  }
-  return merged
-})
+const shownStates = computed<TableState[]>(() => projected.value.tables)
+const shownLooseTabs = computed<TableState[]>(() => projected.value.loose)
+const shownStranded = computed<TableState[]>(() => projected.value.stranded)
 
 /** `bez-stola` in `?sto=`: a tab on no table at all (PHASE3 §1.11). */
 const LOOSE = 'bez-stola'
@@ -216,75 +198,87 @@ const LOOSE = 'bez-stola'
 /**
  * *Bez stola* as one row of the same shape a table has.
  *
- * Which of the loose tabs is **this phone's**: the one whose `tab_client_id`
- * this phone minted, else one assigned to the person signed in — the same rule
- * `/konobar/sto/bez-stola` has always used, so the card and the sheet cannot
- * disagree about which party at the bar is meant. One *Bez stola* tab per phone
- * is the deliberate limit (PHASE3 §1.11).
- *
- * The outbox is folded in exactly as it is for a tile, and a round that exists
- * only on this phone produces the same `local:` row, so the sheet has something
- * to open over with no signal.
+ * Which of the parties at the bar is **this phone's**: the one whose
+ * `tab_client_id` this phone minted, else one assigned to the person signed in
+ * — the same rule `/konobar/sto/bez-stola` has always used, so the card and the
+ * sheet cannot disagree about which party is meant. A party whose first round
+ * is still in the queue is a `local:<its client id>` row, so the sheet has
+ * something to open over with no signal, and it is still found after the queue
+ * has given it a real id.
  */
 function looseRow(tabId: string | null): TableState | null {
-  const mine = cart.tabClientIdFor(null)
+  const rows = shownLooseTabs.value
 
   // **A named tab is that tab, or nothing.** The fallbacks below are for a
   // sheet that has not been told which party it is about yet; once it has, a
   // fallback is how *Naplati i očisti* on one bar tab cleared the other — the
   // payment forgets this phone's tab id, the row it named disappears from the
   // list, and the next-best row is a different party's money.
-  if (tabId !== null) return withQueue(looseTabs.value.find(r => r.tab_id === tabId) ?? null, mine)
+  if (tabId !== null) {
+    return rows.find(r => r.tab_id === tabId)
+      ?? (tabId.startsWith('local:') ? rows.find(r => r.tab_client_id === tabId.slice(6)) : undefined)
+      ?? null
+  }
 
   // With none named: this phone's own tab, then any of this person's.
-  const row = looseTabs.value.find(r => mine !== null && r.tab_client_id === mine)
-    ?? looseTabs.value.find(r => r.assigned_to === me.user.value?.id)
+  const mine = cart.tabClientIdFor(null)
+  return rows.find(r => mine !== null && r.tab_client_id === mine)
+    ?? rows.find(r => r.assigned_to === me.user.value?.id)
     ?? null
-
-  return withQueue(row, mine, true)
-}
-
-/**
- * The row plus whatever this phone has not managed to send.
- *
- * The queue belongs to the tab the cart is adding to and to no other, so a
- * second bar tab never shows a colleague's queued round on top of its own.
- * `mint` is for the un-named sheet only: with nothing on the server yet, the
- * queued round is still a party at the bar and needs a row to be drawn as.
- */
-function withQueue(
-  row: TableState | null, mine: string | null, mint = false,
-): TableState | null {
-  const fen = row === null || (mine !== null && row.tab_client_id === mine)
-    ? queuedLooseFen.value
-    : 0
-
-  if (row) {
-    return fen === 0
-      ? row
-      : { ...row, total_fen: row.total_fen + fen, remaining_fen: row.remaining_fen + fen }
-  }
-  if (!mint || fen === 0) return null
-
-  return {
-    table_id: null,
-    tab_id: 'local:bez-stola',
-    tab_client_id: mine,
-    total_fen: fen,
-    remaining_fen: fen,
-    assigned_to: me.user.value?.id ?? null,
-    assigned_to_initials: me.user.value?.initials ?? null,
-    opened_by_name: me.user.value?.name ?? null,
-    opened_at: null,
-    last_order_at: null,
-    pending_review: false,
-    late_sync: false,
-    offered_to: null,
-  }
 }
 
 /** The bar as the plan draws it when nobody has named a particular tab. */
 const shownLoose = computed<TableState | null>(() => looseRow(null))
+
+// -- The rounds, kept on the phone -------------------------------------------
+
+/**
+ * **Every tab of mine, copied before the line goes down.**
+ *
+ * The sheet lists a table's rounds from `GET /api/tabs/:id`, which is a network
+ * read. Kept only when a sheet opened it, the copy would be missing for exactly
+ * the table the waiter needs with no signal — the one nobody has opened since
+ * its last round. So whenever the poll says one of my tabs moved (its
+ * fingerprint, `tabSignature`, changed), its rounds are fetched in the
+ * background and stored. One request at a time, and the first failure stops
+ * the run: there is no point asking a router that is not answering.
+ */
+let refreshingTabs = false
+async function refreshMyTabs(): Promise<void> {
+  if (refreshingTabs) return
+  refreshingTabs = true
+  try {
+    await room.hydrate()
+    const myId = me.user.value?.id
+    const rows = [...states.value, ...looseTabs.value, ...strandedTabs.value]
+    for (const row of rows) {
+      if (!myId || row.assigned_to !== myId || !row.tab_id) continue
+      const sig = tabSignature(row)
+      if (room.tabFor(row.tab_id)?.sig === sig) continue
+      try {
+        await room.saveTab(await api.getTab(row.tab_id), sig)
+      } catch {
+        break
+      }
+    }
+    // Tabs that have left the room are forgotten, so the disk holds tonight only.
+    await room.keepOnly(new Set(rows.map(r => r.tab_id).filter((id): id is string => !!id)))
+  } finally {
+    refreshingTabs = false
+  }
+}
+
+/**
+ * *Stanje od 21:40* — how old the room on screen is, said only when it matters:
+ * while the chip is red. The last answer this load received, or the one the
+ * disk held when the app started with no signal.
+ */
+const staleLine = computed<string | null>(() => {
+  if (syncState.value !== 'offline') return null
+  const at = lastOkAt.value !== null ? new Date(lastOkAt.value).toISOString() : room.room?.saved_at
+  if (!at) return 'Bez veze · sve se čuva na telefonu'
+  return `Bez veze · stanje od ${localTime(at)} · sve se čuva na telefonu`
+})
 
 // -- Nacrti -----------------------------------------------------------------
 
@@ -440,24 +434,35 @@ const sheetError = ref<string | null>(null)
  * call, 16.09.2026: the guests standing at the bar get the same sheet, the same
  * buttons and the same evening as a table).
  */
-const sheetState = computed(() => {
-  if (!sheetFor.value) return null
-  const stranded = sheetFor.value.strandedTabId
-  if (stranded) return strandedTabs.value.find(r => r.tab_id === stranded) ?? null
-  const id = sheetFor.value.tableId
-  if (id === null) return looseRow(sheetFor.value.looseTabId ?? null)
-  return shownStates.value.find(s => s.table_id === id) ?? null
+const sheetTab = computed<ProjectedTab | null>(() => {
+  const open = sheetFor.value
+  if (!open) return null
+  if (open.strandedTabId) return projected.value.tabOfLoose(open.strandedTabId)
+  if (open.tableId === null) {
+    const row = looseRow(open.looseTabId ?? null)
+    return row?.tab_id ? projected.value.tabOfLoose(row.tab_id) : null
+  }
+  return projected.value.tabOfTable(open.tableId)
 })
 
+const sheetState = computed<TableState | null>(() => sheetTab.value?.row ?? null)
+
 /**
- * What the guests owe **on this phone** — the server's figure plus anything the
- * outbox is still holding. Shared with the table's own page through
- * `useTabMoney`, so the two screens can never quote a guest different numbers.
+ * What the guests owe **on this phone** — the server's figure with the queue
+ * laid over it, straight off the projection. The row already holds every
+ * queued round and payment; nothing here adds them a second time, which is
+ * the mistake that once asked a guest for 6,00 KM on a 3,00 KM table.
  */
-const sheetMoney = useTabMoney({
-  tableId: () => sheetFor.value?.tableId ?? null,
-  state: () => sheetState.value,
-  priceOf: id => priceById.value.get(id) ?? 0,
+const sheetMoney = computed(() => {
+  const tab = sheetTab.value
+  return {
+    remainingFen: tab?.row.remaining_fen ?? 0,
+    totalFen: tab?.row.total_fen ?? 0,
+    queuedOrdersFen: tab?.queuedOrdersFen ?? 0,
+    payQueued: (tab?.queuedPayFen ?? 0) > 0,
+    hasTab: tab !== null,
+    tabClientId: tab?.row.tab_client_id ?? cart.tabClientIdFor(sheetFor.value?.tableId ?? null),
+  }
 })
 
 const sheetDraftFen = computed(() => {
@@ -557,22 +562,64 @@ watch(() => (sheetFor.value ? sheetState.value?.tab_id ?? null : null), (tabId) 
 
 async function loadSheetDetail() {
   if (!sheetFor.value) return
-  const tabId = sheetState.value?.tab_id
+  const row = sheetState.value
+  const tabId = row?.tab_id
   // A tab that lives only in the outbox has no server id to read, and that is
-  // not an error: the sheet shows the draft and the queued chip instead.
-  if (!tabId || tabId.startsWith('local:')) return
-  if (sheetLoading.value) return
+  // not an error: its rounds are the queued ones, which the projection draws.
+  if (!row || !tabId || tabId.startsWith('local:')) return
 
+  // The copy on the phone first, so the sheet lists the rounds at once — and
+  // with no signal, it is all there is (docs/OFFLINE.md §5.1).
+  const stored = room.tabFor(tabId)
+  if (stored && sheetDetail.value?.tab.id !== tabId) sheetDetail.value = stored.detail
+
+  if (sheetLoading.value) return
   sheetLoading.value = true
   try {
-    sheetDetail.value = await api.getTab(tabId)
+    const fresh = await api.getTab(tabId)
+    sheetDetail.value = fresh
     sheetError.value = null
+    void room.saveTab(fresh, tabSignature(row))
   } catch (err) {
-    sheetError.value = apiErrorText(err, 'Nema veze — ture se ne mogu učitati')
+    // With a stored copy on screen there is nothing to apologise for; the
+    // sheet says how old it is instead. Only an empty sheet gets the sentence.
+    if (!stored) sheetError.value = apiErrorText(err, 'Nema veze — ture se ne mogu učitati')
   } finally {
     sheetLoading.value = false
   }
 }
+
+/**
+ * What the sheet lists: the rounds the server has, then the ones still in the
+ * queue, drawn exactly as the server will draw them (`projectRounds`).
+ */
+const productNames = computed(() =>
+  new Map((boot.value?.products ?? []).map(p => [p.id, p.name])))
+const flavourNames = computed(() =>
+  new Map((boot.value?.flavours ?? []).map(f => [f.id, f.name])))
+
+const sheetRounds = computed(() => projectRounds(
+  sheetDetail.value,
+  sheetTab.value,
+  {
+    productName: id => productNames.value.get(id) ?? '',
+    flavourName: id => flavourNames.value.get(id) ?? '',
+  },
+  priceOf,
+  meBrief.value,
+))
+
+/**
+ * *Ture od 21:40* — said when the rounds on the sheet are the phone's copy and
+ * the network is gone, so nobody mistakes an old list for a live one.
+ */
+const sheetStoredNote = computed<string | null>(() => {
+  if (syncState.value !== 'offline') return null
+  const tabId = sheetState.value?.tab_id
+  if (!tabId || tabId.startsWith('local:')) return null
+  const stored = room.tabFor(tabId)
+  return stored ? `Bez veze · ture kakve su bile u ${localTime(stored.saved_at)}` : null
+})
 
 function closeSheet() {
   sheetFor.value = null
@@ -649,7 +696,7 @@ const lockedLine = ref<{ line: TabLine, order: TabOrder, label: string } | null>
 const stornoFor = ref<{ line: TabLine, order: TabOrder } | null>(null)
 
 function openLine(line: TabLine, round: TabOrder) {
-  const index = (sheetDetail.value?.orders ?? []).findIndex(o => o.id === round.id)
+  const index = sheetRounds.value.orders.findIndex(o => o.id === round.id)
   lockedLine.value = { line, order: round, label: `${index + 1}. tura` }
 }
 
@@ -692,13 +739,18 @@ const { paying, payError, pay: payTab, markUnpaid: unpaidTab } = useTabPay({
   },
   // The row's own id, so a bar card settles the party it is drawn for.
   tabClientId: () => sheetState.value?.tab_client_id ?? null,
-  remainingFen: () => sheetMoney.remainingFen.value,
+  remainingFen: () => sheetMoney.value.remainingFen,
   refresh: () => refreshState(),
 })
 
 async function onPay(payment: { method: PaymentMethod, amount_fen: number, received_fen?: number }) {
-  // Read before the payment: taking the money moves the floor under the sheet.
-  const paidTabId = sheetState.value?.tab_id ?? null
+  // Read before the payment: taking the money moves the floor under the sheet,
+  // and a settled tab's client id is forgotten the moment it is paid.
+  const paid = sheetState.value
+  const paidTab = {
+    tabId: paid?.tab_id && !paid.tab_id.startsWith('local:') ? paid.tab_id : null,
+    tabClientId: paid?.tab_client_id ?? cart.tabClientIdFor(sheetFor.value?.tableId ?? null),
+  }
   const done = await payTab(payment)
   if (!done) return
   payOpen.value = false
@@ -709,39 +761,57 @@ async function onPay(payment: { method: PaymentMethod, amount_fen: number, recei
   // Settled. *Naplati i očisti* gives the table back in the same breath;
   // *Naplati* leaves the guests sitting there behind a checkmark, so the sheet
   // stays open on the table they are still at.
-  if (payAndClear.value) await clearCurrentTable(paidTabId)
+  if (payAndClear.value) await clearCurrentTable(paidTab)
   else await loadSheetDetail()
 }
 
 /**
  * *Očisti sto* — the table given back.
  *
- * Unlike a payment this is **not** queued through the outbox: it needs the
- * server's id for the tab, and a phone with no signal has nothing useful to
- * queue against a tab the server has never seen. It fails loudly instead, and
- * the table stays as it was until it is tapped again.
+ * **Queued, like the money** (docs/OFFLINE.md §4.4). It used to need the
+ * server's tab id there and then, so with no signal the table stayed taken and
+ * the next guests could not be seated on the plan. Now it goes into the outbox
+ * behind the round and the payment it follows, naming the tab the way the phone
+ * can — its own client id, and the server's id when there is one — and the
+ * projection frees the tile the moment it is queued. The server answers a
+ * replay, and a table somebody else already gave back, with a plain 200.
+ *
+ * The tab's client id is forgotten here too, the way a payment forgets it:
+ * the next guests at this table are a tab of their own.
  */
-async function clearCurrentTable(only?: string | null) {
-  const tabId = only ?? sheetState.value?.tab_id
-  if (!tabId || tabId.startsWith('local:')) {
+async function clearCurrentTable(ref?: { tabId: string | null, tabClientId: string | null }) {
+  const open = sheetFor.value
+  const row = sheetState.value
+  const tabId = ref ? ref.tabId : (row?.tab_id && !row.tab_id.startsWith('local:') ? row.tab_id : null)
+  const tabClientId = ref ? ref.tabClientId : (row?.tab_client_id ?? null)
+  if (!open || (!tabId && !tabClientId)) {
     closeSheet()
     return
   }
+  // A stranded tab is already off its table: it is named by its ids alone.
+  const tableId = open.strandedTabId ? undefined : open.tableId
   clearing.value = true
   try {
-    await api.clearTab(tabId)
-    await refreshState()
+    const clientId = crypto.randomUUID()
+    await enqueue({
+      kind: 'clear',
+      client_id: clientId,
+      ...(tabClientId ? { tab_client_id: tabClientId } : {}),
+      ...(tableId !== undefined ? { table_id: tableId } : {}),
+      label: open.name,
+      payload: {
+        client_id: clientId,
+        ...(tabId ? { tab_id: tabId } : {}),
+        ...(tabClientId ? { tab_client_id: tabClientId } : {}),
+        client_created_at: new Date().toISOString(),
+      },
+    })
+    if (tabClientId && cart.tabClientIdFor(open.tableId) === tabClientId) cart.closeTab(open.tableId)
     closeSheet()
+    await refreshState()
   } catch (err) {
-    // Already given back — which is the state *Naplati i očisti* was asking
-    // for. A stranded tab reaches this every time, and it is not a failure.
-    if (err instanceof ApiSideError && err.code === 'TAB_ALREADY_CLEARED') {
-      await refreshState()
-      closeSheet()
-      return
-    }
+    // Only storage can refuse a queue; the table stays as it was.
     sheetError.value = apiErrorText(err, 'Sto se nije očistio — pokušaj ponovo')
-    void me.handleAuthError(err)
   } finally {
     clearing.value = false
   }
@@ -784,7 +854,19 @@ const currentShiftSeq = computed<number | null>(() => {
   return seqs.length ? Math.max(...seqs) : null
 })
 
-const myOpenTabs = computed(() => shift.value?.my_open_tabs ?? 0)
+/**
+ * My tabs still owing, counted off the same projection the tiles are drawn
+ * from — tables, the bar and the stranded cards — so a table opened with no
+ * signal counts the moment it is drawn. Online and synced it is the server's
+ * `my_open_tabs` exactly: every open tab assigned to me.
+ */
+const myOpenTabs = computed(() => {
+  const myId = me.user.value?.id
+  if (!myId) return shift.value?.my_open_tabs ?? 0
+  return [...shownStates.value, ...shownLooseTabs.value, ...shownStranded.value]
+    .filter(row => row.tab_id && row.assigned_to === myId && !row.paid)
+    .length
+})
 
 /**
  * The header's second line. It carries the one fact the screen used to bury in
@@ -952,6 +1034,11 @@ function addToSheet() {
 
       <WaiterOutboxBanner />
 
+      <!-- No signal: how old the room on screen is, and that nothing is lost. -->
+      <p v-if="staleLine" class="note mx-4 mt-3 text-center" role="status">
+        {{ staleLine }}
+      </p>
+
       <div class="flex flex-1 flex-col gap-4 pb-4 pt-4">
         <!-- A queued body the server refused. It blocks its own table only. -->
         <WaiterFailedCard />
@@ -1055,7 +1142,7 @@ function addToSheet() {
           invisible everywhere and still refused *Zaključi smjenu*.
         -->
         <button
-          v-for="row in strandedTabs"
+          v-for="row in shownStranded"
           :key="row.tab_id!"
           type="button"
           class="card flex items-center gap-3 border-warn p-4 text-left"
@@ -1077,9 +1164,9 @@ function addToSheet() {
 
         <!-- Bez stola: the guests at the bar, on nobody's table.
              The card opens the same sheet a tile does. -->
-        <div v-if="looseTabs.length > 0 || draftCount(null) > 0" class="flex flex-col gap-2">
+        <div v-if="shownLooseTabs.length > 0 || draftCount(null) > 0" class="flex flex-col gap-2">
           <button
-            v-for="row in looseTabs"
+            v-for="row in shownLooseTabs"
             :key="row.tab_id!"
             type="button"
             class="card flex items-center gap-3 p-4 text-left"
@@ -1099,7 +1186,7 @@ function addToSheet() {
           </button>
 
           <button
-            v-if="draftCount(null) > 0 && looseTabs.length === 0"
+            v-if="draftCount(null) > 0 && shownLooseTabs.length === 0"
             type="button"
             class="card flex items-center gap-3 border-dashed border-accent-line p-4 text-left"
             @click="openSheet(null)"
@@ -1196,20 +1283,22 @@ function addToSheet() {
     <WaiterTableSheet
       v-if="sheetFor && !payOpen"
       :table-name="sheetFor.name"
-      :remaining-fen="sheetMoney.remainingFen.value"
-      :total-fen="sheetMoney.totalFen.value"
-      :detail="sheetDetail"
+      :remaining-fen="sheetMoney.remainingFen"
+      :total-fen="sheetMoney.totalFen"
+      :rounds="sheetRounds.orders"
+      :queued-round-ids="[...sheetRounds.queuedIds]"
+      :stored-note="sheetStoredNote"
       :loading="sheetLoading"
       :error="sheetError"
       :pending-review="sheetState?.pending_review ?? false"
       :late-sync="sheetState?.late_sync ?? false"
-      :queued-fen="sheetMoney.queuedOrdersFen.value"
-      :pay-queued="sheetMoney.payQueued.value"
+      :queued-fen="sheetMoney.queuedOrdersFen"
+      :pay-queued="sheetMoney.payQueued"
       :draft-count="draftCount(sheetFor.tableId)"
       :draft-fen="sheetDraftFen"
       :paid="sheetState?.paid ?? false"
       :clearing="clearing"
-      :has-tab="sheetMoney.hasTab.value"
+      :has-tab="sheetMoney.hasTab"
       :loose="sheetFor.tableId === null"
       @close="closeSheet"
       @add="addToSheet()"
@@ -1240,8 +1329,8 @@ function addToSheet() {
       :table-name="sheetFor.name"
       :locked-at="stornoFor.order.at"
       :mine="stornoFor.order.locked_by === me.user.value?.id"
-      :tab-paid="sheetDetail?.tab.status === 'paid'"
-      :tab-client-id="sheetMoney.tabClientId.value"
+      :tab-paid="sheetState?.paid ?? false"
+      :tab-client-id="sheetMoney.tabClientId"
       @close="stornoFor = null"
       @done="stornoDone"
     />
@@ -1267,8 +1356,8 @@ function addToSheet() {
     <WaiterPaySheet
       v-if="payOpen && sheetFor"
       :table-name="sheetFor.name"
-      :remaining-fen="sheetMoney.remainingFen.value"
-      :total-fen="sheetMoney.totalFen.value"
+      :remaining-fen="sheetMoney.remainingFen"
+      :total-fen="sheetMoney.totalFen"
       :busy="paying"
       :error="payError"
       @close="payOpen = false"

@@ -195,6 +195,15 @@ onMounted(async () => {
     await navigateTo(me.home.value)
     return
   }
+  // No signal, but this phone was signed in the last time it had one: the
+  // session is most likely still alive, and the floor works without the network
+  // (docs/OFFLINE.md §5.1). The first request that gets through decides — a
+  // session that really ended brings the phone back here with *Prijava je
+  // istekla*.
+  if (state === 'offline' && me.me.value && !relocked.value) {
+    await navigateTo(me.home.value)
+    return
+  }
   /**
    * **An unknown phone is just a phone.**
    *

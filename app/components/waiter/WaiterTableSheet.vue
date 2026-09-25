@@ -25,7 +25,8 @@
  * of every drink the guests have had.
  */
 import { formatKm } from '#shared/money'
-import type { TabDetail, TabLine, TabOrder } from '#shared/types'
+import { localTime } from '#shared/dates'
+import type { TabLine, TabOrder } from '#shared/types'
 
 const props = withDefaults(defineProps<{
   tableName: string
@@ -33,7 +34,16 @@ const props = withDefaults(defineProps<{
   remainingFen: number
   /** What the guests were charged in total, for the line under it. */
   totalFen: number
-  detail: TabDetail | null
+  /**
+   * The rounds to list: the server's, then the ones still in this phone's
+   * queue (`projectRounds`, docs/OFFLINE.md §5.2) — so a round locked with no
+   * signal is on the list the moment it is locked, not after the line returns.
+   */
+  rounds: TabOrder[]
+  /** Which of `rounds` are still in the queue: they wear *čeka slanje*. */
+  queuedRoundIds?: string[]
+  /** The rounds are the phone's own copy and the network is gone — say how old. */
+  storedNote?: string | null
   loading?: boolean
   error?: string | null
   /** *naplata čeka*, *kasno*, *čeka slanje* — the table's own marks. */
@@ -60,6 +70,8 @@ const props = withDefaults(defineProps<{
    */
   loose?: boolean
 }>(), {
+  queuedRoundIds: () => [],
+  storedNote: null,
   loading: false,
   error: null,
   pendingReview: false,
@@ -117,16 +129,17 @@ function toggleRound(id: string) {
   openRounds.value = next
 }
 
+/** "21:05" on the café's wall clock (`shared/dates.ts`), whatever the phone's zone. */
 function clock(iso: string): string {
-  const at = new Date(iso)
-  return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
+  return localTime(iso)
 }
 
 function roundFen(lines: TabLine[]): number {
   return lines.reduce((sum, line) => sum + line.charged_fen, 0)
 }
 
-const rounds = computed(() => props.detail?.orders ?? [])
+const rounds = computed(() => props.rounds)
+const queued = computed(() => new Set(props.queuedRoundIds))
 </script>
 
 <template>
@@ -193,6 +206,7 @@ const rounds = computed(() => props.detail?.orders ?? [])
       </div>
 
       <p v-if="error" class="note note-warn" role="alert">{{ error }}</p>
+      <p v-else-if="storedNote" class="note" role="status">{{ storedNote }}</p>
 
       <!-- The draft this phone is still holding, if any: it is money nobody has
            been charged yet, so it never joins the locked rounds below. -->
@@ -218,6 +232,7 @@ const rounds = computed(() => props.detail?.orders ?? [])
             <span class="grow truncate text-label font-semibold text-text-2">
               {{ index + 1 }}. tura · {{ clock(round.at) }} · {{ round.locked_by_name }}
             </span>
+            <span v-if="queued.has(round.id)" class="chip chip-warn shrink-0">čeka slanje</span>
             <span class="num shrink-0 text-body font-semibold">
               {{ formatKm(roundFen(round.lines)) }}
             </span>

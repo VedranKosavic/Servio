@@ -194,6 +194,45 @@ async function lockRound(page: Page) {
   await expect(page.getByText(/Sačuvano · čeka slanje/)).toBeVisible()
 }
 
+/**
+ * *Naplati i očisti* from the table's sheet: the pay sheet must ask for
+ * `amount`, and its one button takes it in cash.
+ */
+async function payAndClear(page: Page, name: string, amount: string) {
+  await openTab(page, name)
+  await page.getByRole('button', { name: /^Naplati i očisti/ }).click()
+  const sheet = page.getByRole('dialog', { name: 'Naplata' })
+  await expect(sheet.getByText(amount, { exact: true })).toBeVisible()
+  await sheet.getByRole('button', { name: 'Naplati', exact: true }).click()
+  await expect(page.getByText(/Naplaćeno/)).toBeVisible()
+}
+
+/** A table's tile with nothing on it: the number alone. */
+function freeTile(page: Page, name: string) {
+  return page.getByRole('button', { name: name.replace(/^Sto /, ''), exact: true })
+}
+
+/** How many tabs' rounds the phone keeps for a start with no signal (`stores/room.ts`). */
+async function storedTabs(page: Page): Promise<number> {
+  return page.evaluate(() => new Promise<number>((done) => {
+    const request = indexedDB.open('keyval-store')
+    request.onerror = () => done(0)
+    request.onsuccess = () => {
+      const db = request.result
+      if (!db.objectStoreNames.contains('keyval')) { db.close(); done(0); return }
+      const get = db.transaction('keyval').objectStore('keyval').get('sank:tabs')
+      get.onsuccess = () => { db.close(); done(Object.keys(get.result ?? {}).length) }
+      get.onerror = () => { db.close(); done(0) }
+    }
+  }))
+}
+
+interface StateRow { table_id: string, tab_id: string | null, total_fen: number, late_sync: boolean }
+
+async function readState(): Promise<{ tables: StateRow[], stranded_tabs: StateRow[] }> {
+  return (await context.request.get('/api/tables/state')).json()
+}
+
 let context: BrowserContext
 let tables: Map<string, string>
 
@@ -235,21 +274,20 @@ test.describe('WP0 — the offline outbox', () => {
 
     await expect(chip(page, /čeka slanje \(2\)/i)).toBeVisible()
 
-    // Cash for Sto 7, on a tab whose only name is a uuid this phone minted.
-    // The *Naplati* card is drawn from the phone's own view of the table for
-    // exactly this moment — offline there is no server tab to draw it from.
-    await openTab(page, tableB)
-    await page.getByRole('button', { name: /^Naplati/ }).click()
-    await page.getByRole('button', { name: /^Tačno/ }).click()
-    await expect(page.getByText(/Naplaćeno/)).toBeVisible()
-    await expect(page.getByText('Stolovi')).toBeVisible({ timeout: 15_000 })
+    // Cash for Sto 7, on a tab whose only name is a uuid this phone minted, and
+    // the table given back in the same tap. The pay sheet asks for what the
+    // Cola costs, once — it used to count a queued round twice and ask for
+    // 6,00 KM, which the server then refused as an overpayment.
+    await payAndClear(page, tableB, '3,00 KM')
+    await expect(freeTile(page, tableB)).toBeVisible()
 
-    await expect(chip(page, /čeka slanje \(3\)/i)).toBeVisible()
+    // Two rounds, the payment and the clear.
+    await expect(chip(page, /čeka slanje \(4\)/i)).toBeVisible()
 
-    // A reload with the network still off keeps all three: the queue is in
+    // A reload with the network still off keeps all four: the queue is in
     // IndexedDB, and the page itself comes back from the worker's cache.
     await page.reload()
-    await expect(chip(page, /čeka slanje \(3\)/i)).toBeVisible({ timeout: 20_000 })
+    await expect(chip(page, /čeka slanje \(4\)/i)).toBeVisible({ timeout: 20_000 })
 
     // ---- back on the network --------------------------------------------
     await context.setOffline(false)
@@ -269,6 +307,81 @@ test.describe('WP0 — the offline outbox', () => {
     // tab closed. One of each — the table is free again, not doubly billed.
     const b = state.tables.find(r => r.table_id === tables.get(tableB))!
     expect(b.tab_id).toBeNull()
+  })
+
+  /**
+   * The whole of what the owner asked for (25.09.2026): with no internet the
+   * waiter keeps entering what each table had, takes the money, gives the
+   * table back and seats the next guests — and when the line returns it all
+   * lands where it belongs. Before `eventTime` the next guests' round was filed
+   * as "late", on no floor plan, and its payment failed.
+   */
+  test('a table turns over offline, survives a restart, and syncs as two paid tabs', async () => {
+    const page = await freshPage()
+    const table = 'Sto 13'
+    await context.setOffline(true)
+
+    // The first guests: two coffees, paid, and the table given back.
+    await openTable(page, table)
+    await tapProduct(page, 'Kafa')
+    await tapProduct(page, 'Kafa')
+    await lockRound(page)
+    await backToFloor(page)
+    await payAndClear(page, table, '3,00 KM')
+    await expect(freeTile(page, table)).toBeVisible()
+
+    // The next guests: a Cola, on the same table, still with no signal.
+    await openTable(page, table)
+    await tapProduct(page, 'Cola')
+    await lockRound(page)
+    await backToFloor(page)
+    await expect(chip(page, /čeka slanje \(4\)/i)).toBeVisible()
+
+    // iOS kills the app in an apron: a cold start with no network. The room
+    // comes back off the phone, with the new guests on their table.
+    await page.reload()
+    await expect(page.getByText('Stolovi')).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByRole('button', { name: /^13\s+3,00$/ })).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText(/Bez veze · stanje od/)).toBeVisible()
+
+    // The line comes back.
+    await context.setOffline(false)
+    await page.evaluate(() => window.dispatchEvent(new Event('online')))
+    await expect(chip(page, 'Sinhronizovano')).toBeVisible({ timeout: 30_000 })
+
+    // One live tab on Sto 13 — the Cola, nothing late — and nothing stranded.
+    const state = await readState()
+    const row = state.tables.find(r => r.table_id === tables.get(table))!
+    expect(row.total_fen).toBe(300)
+    expect(row.late_sync).toBe(false)
+    expect(state.stranded_tabs).toHaveLength(0)
+  })
+
+  test('a table opened with no signal still lists its rounds', async () => {
+    const page = await freshPage()
+    const table = 'Sto 14'
+
+    // Online: the round goes straight out…
+    await openTable(page, table)
+    await tapProduct(page, 'Kafa')
+    await page.getByRole('button', { name: /^Zaključi/ }).click()
+    await page.getByRole('button', { name: 'Potvrdi' }).click()
+    await backToFloor(page)
+    await expect(chip(page, 'Sinhronizovano')).toBeVisible({ timeout: 30_000 })
+    // …and the phone copies that table's rounds in the background.
+    await expect.poll(() => storedTabs(page), { timeout: 30_000 }).toBeGreaterThan(0)
+
+    // The line goes, and the app restarts.
+    await context.setOffline(true)
+    await page.reload()
+    await expect(page.getByText('Stolovi')).toBeVisible({ timeout: 20_000 })
+
+    await page.getByRole('button', { name: /^14\s/ }).first().click()
+    await expect(page.getByText(/ture kakve su bile u/)).toBeVisible({ timeout: 15_000 })
+    await page.getByText(/1\. tura/).click()
+    await expect(page.getByRole('dialog', { name: 'Sto 14' }).getByText('Kafa')).toBeVisible()
+
+    await context.setOffline(false)
   })
 
   test('the heartbeat reports the queue, and stops once it is empty', async () => {

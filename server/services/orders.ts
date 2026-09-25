@@ -30,7 +30,7 @@ import { newId, nowIso } from '../utils/ids'
 import { clampEventAt, isPastAvailableUntil, syncLagS } from '#shared/dates'
 import type { Settings } from '#shared/settings'
 import {
-  bump, ensureOpenShift, getSettings, hasLiveSettlement, insertMovement, log,
+  bump, deviceSkew, ensureOpenShift, getSettings, hasLiveSettlement, insertMovement, log,
   nextShiftSeq, unitCost, writeSummaryVersion,
 } from './contracts'
 import { maxSeq } from './changes'
@@ -392,7 +392,10 @@ function resolveTab(
       // Whose money it is until somebody decides. Without this the amount sits
       // on nobody's line and the surplus in his envelope has no explanation.
       unpaidBy: actor.userId,
-      closedAt: at,
+      // The round's own time, not the arrival: a late tab stamped "now" would
+      // become the table's newest close and drag every round queued behind it
+      // on the same phone into the late branch too (docs/OFFLINE.md §2, 1).
+      closedAt: clientAt,
       closedBy: actor.userId,
     }).run()
     return {
@@ -403,6 +406,11 @@ function resolveTab(
 
   // "The open tab on this table" is a question only a table can answer. A loose
   // round joins a tab **only** through the id its own phone minted.
+  //
+  // `cleared_at IS NULL`, because a tab given back while it still owed money
+  // (*Očisti sto* on an open tab — a *stranded* tab) is no longer on the table.
+  // Joining it put the next guests' round on the last party's bill while their
+  // table looked free (docs/OFFLINE.md §2, finding 2).
   const existing = byClient ?? (tableId === null
     ? undefined
     : tx.select().from(schema.tabs)
@@ -410,6 +418,7 @@ function resolveTab(
         eq(schema.tabs.venueId, venueId),
         eq(schema.tabs.tableId, tableId),
         eq(schema.tabs.status, 'open'),
+        isNull(schema.tabs.clearedAt),
       ))
       .get())
 
@@ -444,7 +453,7 @@ function resolveTab(
    */
   if (tableId !== null) {
     tx.update(schema.tabs)
-      .set({ clearedAt: at, clearedBy: actor.userId })
+      .set({ clearedAt: clientAt, clearedBy: actor.userId })
       .where(and(
         eq(schema.tabs.venueId, venueId),
         eq(schema.tabs.tableId, tableId),
@@ -464,7 +473,9 @@ function resolveTab(
     status: 'open',
     shiftId,
     openedBy: actor.userId,
-    openedAt: at,
+    // When the guests' first round happened, which is the moment the table was
+    // taken — the late rule above compares it with other tabs' closes.
+    openedAt: clientAt,
     // Whose tab it is. Nullable in the DDL only because a REFERENCES column
     // cannot be added NOT NULL; `tabs_assigned_required` refuses an insert
     // without it, which is why no reader anywhere needs a fallback.
@@ -813,15 +824,6 @@ function coalStockItem(tx: Tx, venueId: string) {
       eq(schema.stockItems.active, 1),
     ))
     .get()
-}
-
-/** How far this phone's clock is from the server's, as the heartbeat measured it. */
-function deviceSkew(tx: Tx, deviceId: string | null): number {
-  if (!deviceId) return 0
-  const row = tx.select({ skew: schema.devices.clockSkewS }).from(schema.devices)
-    .where(eq(schema.devices.id, deviceId))
-    .get()
-  return row?.skew ?? 0
 }
 
 /** Did the clamp have to pull the claim forward? Then the round is `late_sync`. */

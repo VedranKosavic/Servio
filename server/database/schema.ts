@@ -713,7 +713,7 @@ export const tabs = sqliteTable('tabs', {
   venueId: text('venue_id').notNull().references(() => venues.id),
   /**
    * NULL is *Bez stola* (PHASE3 §1.11): a tab with no table, for the guests at
-   * the bar. `tabs_one_open_per_table_uq` keeps working unchanged, because
+   * the bar. `tabs_one_live_per_table_uq` keeps working unchanged, because
    * SQLite treats two NULLs in a unique index as *different* values — so many
    * table-less tabs may be open at once while one table still holds one tab.
    */
@@ -746,6 +746,12 @@ export const tabs = sqliteTable('tabs', {
    */
   clearedAt: text('cleared_at'),
   clearedBy: text('cleared_by').references(() => users.id),
+  /**
+   * The phone's id for the *Očisti sto* that set `cleared_at`, when it came
+   * through the outbox (`POST /api/tabs/clear`, docs/OFFLINE.md §4.4). Unique
+   * per venue, so a replay finds its own clear instead of clearing twice.
+   */
+  clearedClientId: text('cleared_client_id'),
   /** Reserved: there is no fiscal device (CLAUDE.md). Never written in Korak 2. */
   fiscalStatus: text('fiscal_status').notNull().default('none'),
   fiscalRef: text('fiscal_ref'),
@@ -753,15 +759,20 @@ export const tabs = sqliteTable('tabs', {
   closedBy: text('closed_by').references(() => users.id),
 }, t => [
   uniqueIndex('tabs_client_uq').on(t.venueId, t.clientId),
-  uniqueIndex('tabs_one_open_per_table_uq')
-    .on(t.venueId, t.tableId)
-    .where(sql`status = 'open'`),
-  // One *live* tab per table — the rule the floor plan actually depends on now
-  // that a paid tab keeps its tile until it is cleared. The `open` index above
-  // is the stricter, older half of the same rule and is kept.
+  // One *live* tab per table — the rule the floor plan depends on, now that a
+  // paid tab keeps its tile until it is cleared.
+  //
+  // It used to have an older, stricter twin, one `open` tab per table, and
+  // `0026_offline_tabs.sql` dropped it: a tab cleared while it still owes money
+  // is still `open` but no longer on the table, and the twin made the next
+  // guests' round join that tab instead of opening their own (docs/OFFLINE.md
+  // §2, finding 2). A stranded tab is settled from its own card.
   uniqueIndex('tabs_one_live_per_table_uq')
     .on(t.venueId, t.tableId)
     .where(sql`cleared_at IS NULL AND status IN ('open', 'paid')`),
+  uniqueIndex('tabs_cleared_client_uq')
+    .on(t.venueId, t.clearedClientId)
+    .where(sql`cleared_client_id IS NOT NULL`),
   uniqueIndex('tabs_unpaid_client_uq')
     .on(t.venueId, t.unpaidClientId)
     .where(sql`unpaid_client_id IS NOT NULL`),

@@ -401,6 +401,7 @@ async function confirm() {
       // answers with the round it already wrote instead of charging twice.
       client_id: draft.client_id,
       tab_client_id: tabClientId,
+      table_id: tableId.value,
       label: tableName.value,
       payload: {
         client_id: draft.client_id,
@@ -431,6 +432,7 @@ async function confirm() {
         kind: 'unpaid',
         client_id: markId,
         tab_client_id: tabClientId,
+        table_id: tableId.value,
         label: tableName.value,
         payload: {
           client_id: markId,

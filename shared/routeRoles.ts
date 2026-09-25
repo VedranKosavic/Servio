@@ -85,6 +85,8 @@ export const ROUTE_ROLES: Record<string, RouteRole> = {
   'GET /api/tabs/:id': AR,
   'POST /api/payments': AR,
   'POST /api/tabs/unpaid': AR,
+  // *Očisti sto* from the outbox, by the phone's ids (docs/OFFLINE.md §4.4).
+  'POST /api/tabs/clear': AR,
   'POST /api/tabs/:id/unpaid/decide': A,
   'POST /api/tabs/:id/move': AR,
   'POST /api/tabs/:id/assign': AR,

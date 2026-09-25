@@ -120,6 +120,7 @@ export type * from './types/sync'
 export type {
   ApproveWasteBody,
   AssignTabBody,
+  ClearTabBody,
   ConfirmCountBody,
   CorrectStockBody,
   CreateAdjustmentBody,

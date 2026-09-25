@@ -243,6 +243,7 @@ async function lockDraft() {
       kind: 'order',
       client_id: draft.client_id,
       tab_client_id: tabClientId,
+      table_id: tableId.value,
       label: tableName.value,
       payload: {
         client_id: draft.client_id,
@@ -584,6 +585,7 @@ async function lateWasPaid(row: TableState) {
       kind: 'pay',
       client_id: clientId,
       ...(row.tab_client_id ? { tab_client_id: row.tab_client_id } : {}),
+      table_id: row.table_id,
       label: tableName.value,
       amount_fen: row.remaining_fen,
       payload: {

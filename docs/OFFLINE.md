@@ -1,6 +1,6 @@
 # Šank — working without internet
 
-*Build spec, drafted 24.09.2026. Status: **proposal**. §10 lists what Vedran and the owner decide before WP-C and WP-F start; Fable reviews WP-C before it merges.*
+*Build spec, drafted 24.09.2026. Status: **v1 built 25.09.2026** on the owner's narrower scope — §11 says what it covers and what is left; everything else here is still a proposal. §10 lists what Vedran and the owner decide before the rest of WP-C and WP-F start.*
 
 The waiter's screen must keep working when the café loses its internet. That means taking rounds, taking money, marking *Rashod* or *Policija*, moving guests and giving tables back. Rounds reach the bar and the ledger once the line returns.
 
@@ -26,7 +26,9 @@ Three facts shape everything below.
 2. **iOS kills a home-screen app it is not showing.** During a long outage the app will often be *cold-started with no network*. The waiter pockets the phone, takes it out ten minutes later, and the app starts from nothing. Anything the floor needs must be on the phone's own disk (IndexedDB), not only in memory.
 3. **A phone knows only its own actions until it syncs.** During an outage two phones cannot see each other's rounds. The design does not try to fix that; it makes the merge safe instead. Phones only append. The server decides where each entry lands, judging by **when it happened**, not **when it arrived**.
 
-## 2. Where we are today
+## 2. Where we were on 24.09.2026
+
+*§11 says which of these v1 fixed.*
 
 ### Already works offline
 
@@ -459,3 +461,49 @@ Sizes are relative: S < M < L.
 - **Phones talking to each other without the server.** Browsers cannot open a local server, and WebRTC needs a server to introduce the phones.
 - **A local copy of the server in the café.** Two databases would be two sources of truth to reconcile, and a second origin breaks the service worker and the cookies.
 - **Background sync on iOS.** It does not exist there. A phone sends its queue when somebody opens the app, which is why the close waits for the phones.
+
+## 11. v1 — built on 25.09.2026
+
+**The owner's scope.** *"Jedino što bi nam bilo potrebno jeste da napravimo sistem da konobar može unijeti šta je ko imao na stolu, da može raditi dok internet ne bude dostupan opet. Ovo se kasnije može oduzeti, update kada internet bude opet dostupan."* So v1 is the waiter's own evening, end to end, with no signal:
+
+- enter rounds per table;
+- see what each table had;
+- take the money;
+- give the table back and seat the next guests;
+- keep all of it through a restart.
+
+The stock is subtracted, and every entry dated and filed, when the line returns.
+
+**Built:**
+
+| What | Where | Plan |
+|---|---|---|
+| The room, the session envelope and the rounds of each of my tabs on the phone's disk, a 4 s limit on the reads, *Stanje od 21:40* | `app/stores/room.ts`, `useMe`, `useApi`, `pages/konobar/index.vue` | §5.1 |
+| One projection for the tile, the bar's card and the sheet — which ended the sheet counting a queued round twice (a 3,00 KM table asked for 6,00, and the payment failed on sync with `OVERPAY`) | `app/utils/projection.ts` | §5.2 |
+| *Očisti sto* queued, by the phone's ids, idempotent | `POST /api/tabs/clear`, `tabs.cleared_client_id` (`0026`) | §4.4 |
+| Every stamp on a tab's life in world time — the turnover bug (§2, finding 1) | `eventTime()` in `server/services/contracts.ts`, `orders.ts`, `payments.ts`, `tabs.ts`, `clearTable.ts` | §4.1 |
+| The next guests never join a stranded tab; `tabs_one_open_per_table_uq` dropped (§2, finding 2) | `orders.ts`, `0026_offline_tabs.sql` | §4.2 |
+| *Premjesti* onto a paid, uncleared table answers `409`, not `500` | `tabs.ts` | §4.4 |
+| A queued entry carries its `table_id`; a refused entry holds back its whole table; `429` waits a minute; a `500` three times stops one entry | `app/stores/outbox.ts` | §5.3 |
+
+**Tests:**
+
+- `tests/unit/offline-timelines.test.ts` (timelines 1, 2, 5, 6 and 7 of §9);
+- `tests/unit/projection.test.ts`;
+- new cases in `tests/unit/outbox.test.ts`;
+- two new scenarios in `tests/e2e/wp0-offline.spec.ts`: a table that turns over offline and survives a restart, and a sheet that lists its rounds with no signal.
+
+**Left, deliberately — outside what the owner asked for:**
+
+- the bar hand-off (WP-E);
+- the close waiting for the phones (WP-F);
+- *Premjesti* offline, the tab aliases and §4.2 rule 4 (the rest of WP-C and WP-D);
+- author-bound entries (§5.3);
+- the runbook (WP-G).
+
+**What that leaves true in v1:**
+
+- **Two phones serving one table during an outage.** A phone's round can join a colleague's tab that was opened while it had no signal. The payment it queued then names a tab id the server never stored and fails with `404 TAB_NOT_FOUND` — a failed card, and the money is decided by hand (§2, finding 4).
+- ***Zaključi smjenu* does not wait for phones.** If a phone still holds rounds when the šanker closes, they wait on that phone and are sent under whoever signs in on it next (§2, finding 3). Until WP-F: after an outage, everybody opens the app and waits for *Sinhronizovano* before the close.
+- **The bar sees nothing until the line returns.** Rounds made from a shown phone arrive at the bar as new tickets (§2, finding 6).
+

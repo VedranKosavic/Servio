@@ -19,10 +19,22 @@
  *   `anon`     — the device is enrolled, nobody is logged in → the PIN pad
  *   `nodevice` — no device cookie, or the owner revoked it → the enrol screen
  *   `offline`  — the server could not be reached; `me` is whatever we last knew
+ *
+ * **What "whatever we last knew" means after a restart** (docs/OFFLINE.md
+ * §5.1). The answer used to live in memory only, so a phone that iOS killed in
+ * an apron and reopened with no signal knew nobody: the floor drew the waiter's
+ * own tables as a colleague's and the re-lock pad could not unlock. The last
+ * envelope is now also kept on the phone (`sank:me`, IndexedDB) and read back
+ * when the server cannot be asked. It carries no secret — the session itself is
+ * an httpOnly cookie the page never sees — and it decides nothing for the
+ * server, which still checks the cookie on every request that gets through. It
+ * is forgotten the moment the server says nobody is signed in.
  */
+import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval'
 import type { MeContext, Role, ScreenMode } from '#shared/types'
 import { landingFor } from '#shared/landing'
 import { ApiSideError } from '~/composables/useApi'
+import { useRoomStore } from '~/stores/room'
 
 export type MeStatus = 'unknown' | 'ready' | 'anon' | 'nodevice' | 'offline'
 
@@ -46,6 +58,40 @@ export function homeFor(
   return landingFor(role, mode ?? null, shiftId ?? null) ?? CHOOSER
 }
 
+/** Where the last session envelope is kept for a start with no signal. */
+const ENVELOPE_KEY = 'sank:me'
+
+function canPersist(): boolean {
+  return import.meta.client && typeof indexedDB !== 'undefined'
+}
+
+async function rememberEnvelope(envelope: MeContext): Promise<void> {
+  if (!canPersist()) return
+  try {
+    await idbSet(ENVELOPE_KEY, JSON.parse(JSON.stringify(envelope)) as MeContext)
+  } catch {
+    // Storage refused: the next start with no signal simply knows nobody.
+  }
+}
+
+async function recallEnvelope(): Promise<MeContext | null> {
+  if (!canPersist()) return null
+  try {
+    return (await idbGet<MeContext>(ENVELOPE_KEY)) ?? null
+  } catch {
+    return null
+  }
+}
+
+async function forgetEnvelope(): Promise<void> {
+  if (!canPersist()) return
+  try {
+    await idbDel(ENVELOPE_KEY)
+  } catch {
+    // Nothing to forget is not an error.
+  }
+}
+
 /** Everything this phone remembers on its own. Wiped when the device is revoked. */
 function wipeLocalState() {
   if (!import.meta.client) return
@@ -56,6 +102,9 @@ function wipeLocalState() {
   } catch {
     // Private mode, or storage disabled. Nothing to wipe is not an error.
   }
+  // And what lives in IndexedDB for a start with no signal: who, and the room.
+  void forgetEnvelope()
+  void useRoomStore().forget()
 }
 
 export function useMe() {
@@ -124,10 +173,18 @@ export function useMe() {
       me.value = await api.getMe()
       status.value = 'ready'
       authCode.value = null
+      void rememberEnvelope(me.value)
     } catch (err) {
       status.value = classify(err)
       authCode.value = (err as ApiSideError)?.code ?? null
-      if (status.value !== 'offline') me.value = null
+      if (status.value === 'offline') {
+        // No signal is not an answer about who this is. The person we last
+        // knew stands — and after a cold start, that is the one on the disk.
+        if (!me.value) me.value = await recallEnvelope()
+      } else {
+        me.value = null
+        void forgetEnvelope()
+      }
       if (status.value === 'nodevice') wipeLocalState()
     }
     return status.value
@@ -185,6 +242,10 @@ export function useMe() {
     const lock = useLock()
     await lock.wipe()
     lock.unlock()
+    // The envelope and the room go too: the next person to hold this phone
+    // must not be shown the last one's floor on a start with no signal.
+    await forgetEnvelope()
+    await useRoomStore().forget()
     me.value = null
     status.value = 'anon'
     // A deliberate sign-out is not an expired session. Clearing the code is
@@ -204,7 +265,12 @@ export function useMe() {
    */
   async function requireSession(roles?: Role[]): Promise<boolean> {
     const state = me.value ? status.value : await load()
-    if (state !== 'ready' || !me.value) {
+    // `offline` with an envelope is a phone that lost its signal, not its
+    // session: the screen keeps working on what it last knew, and the first
+    // request that gets through decides (a dead session comes back through
+    // `handleAuthError` to the pad).
+    const usable = !!me.value && (state === 'ready' || state === 'offline')
+    if (!usable || !me.value) {
       if (state !== 'offline') await navigateTo('/')
       return false
     }
@@ -245,6 +311,7 @@ export function useMe() {
         // A revoked device may be in somebody else's hands by now.
         await useLock().wipe()
       }
+      void forgetEnvelope()
       me.value = null
       status.value = state
       await navigateTo('/')

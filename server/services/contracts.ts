@@ -29,7 +29,7 @@
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { schema } from '../database/client'
 import { newId, nowIso } from '../utils/ids'
-import { businessDate } from '#shared/dates'
+import { businessDate, clampEventAt } from '#shared/dates'
 import { mergeSettings, type Settings } from '#shared/settings'
 import { log } from './log'
 import type { Actor, Role } from '#shared/types'
@@ -40,6 +40,38 @@ type ShiftRow = typeof schema.shifts.$inferSelect
 // ===========================================================================
 // Real — WP0 implements these because its own tests need them
 // ===========================================================================
+
+/** How far this phone's clock is from the server's, as the heartbeat measured it. */
+export function deviceSkew(q: Queryable, deviceId: string | null): number {
+  if (!deviceId) return 0
+  const row = q.select({ skew: schema.devices.clockSkewS }).from(schema.devices)
+    .where(eq(schema.devices.id, deviceId))
+    .get()
+  return row?.skew ?? 0
+}
+
+/**
+ * When something happened **in the world**, as the server will believe it.
+ *
+ * A phone with no signal sends its rounds, payments and *Očisti sto* late — an
+ * hour late after a long outage — and each carries `client_created_at`, the
+ * phone's own clock at the tap. This is that claim with the device's measured
+ * clock skew taken off and clamped to `[now − max_sync_lag_h, now]`: never in
+ * the future, never older than the venue tolerates (`clampEventAt`).
+ *
+ * **Why the whole life of a tab is stamped with it** (docs/OFFLINE.md §4.1).
+ * `opened_at`, `closed_at` and `cleared_at` are compared with a round's time to
+ * decide where a late round belongs. Stamp a payment made at 21:20 with the
+ * moment it *arrived*, 22:00, and the next guests' round from 21:25 looks older
+ * than the close and is filed as late — the bug this helper exists to end.
+ * `created_at` keeps the arrival, for the record.
+ */
+export function eventTime(
+  q: Queryable, deviceId: string | null, claimed: string | undefined | null,
+  now: string, maxLagH: number,
+): string {
+  return clampEventAt(claimed, now, maxLagH, deviceSkew(q, deviceId))
+}
 
 /**
  * The venue's settings: `DEFAULT_SETTINGS` with the owner's overrides on top.

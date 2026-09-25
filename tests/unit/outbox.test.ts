@@ -261,6 +261,91 @@ describe('the outbox', () => {
     expect(outbox.pending).toBe(0)
   })
 
+  /**
+   * A table turns over on a phone with no signal: the next guests' round has a
+   * tab of its own, so the tab rule alone would let it overtake the last
+   * party's refused payment — and land on their bill. The table holds it back.
+   */
+  it('holds a table\'s next party back behind a refused entry on the same table', async () => {
+    const outbox = store()
+    fake.answer('p1', new FakeApiError(422, 'OVERPAY'))
+    await outbox.enqueue({ kind: 'pay', client_id: 'p1', payload: body('p1'), tab_client_id: 't1', table_id: 'sto5' })
+    await outbox.enqueue({ kind: 'clear', client_id: 'c1', payload: body('c1'), tab_client_id: 't1', table_id: 'sto5' })
+    await outbox.enqueue({ kind: 'order', client_id: 'r2', payload: body('r2', { table_id: 'sto5' }), tab_client_id: 't2', table_id: 'sto5' })
+    // Another table is nobody's business but its own.
+    await outbox.enqueue({ kind: 'order', client_id: 'r9', payload: body('r9', { table_id: 'sto9' }), tab_client_id: 't9', table_id: 'sto9' })
+
+    await outbox.flush()
+
+    expect(fake.sent.map(a => (a.payload as { client_id: string }).client_id)).toEqual(['p1', 'r9'])
+    expect(outbox.entries.map(e => e.client_id)).toEqual(['p1', 'c1', 'r2'])
+  })
+
+  it('reads the table off an old round\'s body when the entry has none', async () => {
+    const outbox = store()
+    fake.answer('r1', new FakeApiError(404, 'PRODUCT_NOT_FOUND'))
+    // Queued before `table_id` rode on the entry: only the body names the table.
+    await outbox.enqueue({ kind: 'order', client_id: 'r1', payload: body('r1', { table_id: 'sto5' }), tab_client_id: 't1' })
+    await outbox.enqueue({ kind: 'order', client_id: 'r2', payload: body('r2', { table_id: 'sto5' }), tab_client_id: 't2' })
+
+    await outbox.flush()
+
+    expect(fake.sent).toHaveLength(1)
+  })
+
+  it('waits out the rate limit instead of failing the round', async () => {
+    const outbox = store()
+    fake.answer('r1', new FakeApiError(429, 'RATE_LIMITED'))
+    await outbox.enqueue({ kind: 'order', client_id: 'r1', payload: body('r1'), tab_client_id: 't1' })
+    await outbox.enqueue({ kind: 'order', client_id: 'r2', payload: body('r2'), tab_client_id: 't2' })
+
+    await outbox.flush()
+
+    // Still ours, not a red card, and nothing behind it was sent into the limiter.
+    expect(outbox.entries.map(e => e.status)).toEqual(['queued', 'queued'])
+    expect(fake.sent).toHaveLength(1)
+    // The server answered: this is not the network.
+    expect(outbox.online).toBe(true)
+
+    // A plain flush inside the minute does nothing…
+    await outbox.flush()
+    expect(fake.sent).toHaveLength(1)
+    // …and the minute passing (or the network coming back) lets both through.
+    await outbox.flushNow()
+    expect(outbox.pending).toBe(0)
+  })
+
+  it('stops one entry after three server errors, and lets every other table go', async () => {
+    const outbox = store()
+    const crash = () => new FakeApiError(500, 'INTERNAL')
+    fake.answer('m1', crash(), crash(), crash())
+    await outbox.enqueue({ kind: 'clear', client_id: 'm1', payload: body('m1'), tab_client_id: 't1', table_id: 'sto5' })
+    await outbox.enqueue({ kind: 'order', client_id: 'r9', payload: body('r9'), tab_client_id: 't9', table_id: 'sto9' })
+
+    // Twice it is a server having a bad moment: the run stops and waits.
+    await outbox.flushNow()
+    await outbox.flushNow()
+    expect(outbox.entries.find(e => e.client_id === 'm1')?.status).toBe('queued')
+    expect(fake.sent.map(a => (a.payload as { client_id: string }).client_id)).toEqual(['m1', 'm1'])
+
+    // The third time it is this body. It stops for a human; the rest goes.
+    await outbox.flushNow()
+    const stuck = outbox.entries.find(e => e.client_id === 'm1')
+    expect(stuck?.status).toBe('failed')
+    expect(stuck?.last_error).toBe('Server ne prima ovu stavku — javi vlasniku.')
+    expect(outbox.entries.map(e => e.client_id)).toEqual(['m1'])
+  })
+
+  it('treats a gateway error as the network, never as a failure', async () => {
+    const outbox = store()
+    fake.answer('r1', new FakeApiError(502, 'UNKNOWN'), new FakeApiError(502, 'UNKNOWN'),
+      new FakeApiError(502, 'UNKNOWN'), new FakeApiError(502, 'UNKNOWN'))
+    await outbox.enqueue({ kind: 'order', client_id: 'r1', payload: body('r1'), tab_client_id: 't1' })
+    for (let i = 0; i < 4; i += 1) await outbox.flushNow()
+    expect(outbox.entries[0]?.status).toBe('queued')
+    expect(outbox.online).toBe(false)
+  })
+
   it('reports the oldest entry, and goes stale after five minutes', async () => {
     const outbox = store()
     const old = new Date(Date.now() - 6 * 60_000).toISOString()

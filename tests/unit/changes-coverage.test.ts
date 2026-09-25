@@ -39,7 +39,7 @@ import {
 } from '../../server/services/cash'
 import { acceptSettlement, settle } from '../../server/services/settlements'
 import { closeByBar } from '../../server/services/closings'
-import { clearTab } from '../../server/services/clearTable'
+import { clearTab, clearTabQueued } from '../../server/services/clearTable'
 import {
   addMonthExtraCost, deleteMonthExtraCost, setMonthCost,
 } from '../../server/services/analytics'
@@ -291,6 +291,15 @@ const CALLS: Record<string, () => void | Promise<void>> = {
   [join('tabs', '[id]', 'clear.post.ts')]: () => {
     const order = lockOn('Sto 16')
     clearTab(f.db, f.venueId, f.actor('Amar'), order.tab_id)
+  },
+
+  // The outbox's *Očisti sto*: the same bump, reached by the phone's own id.
+  [join('tabs', 'clear.post.ts')]: () => {
+    const order = lockOn('Sto 18')
+    clearTabQueued(f.db, f.venueId, f.actor('Amar'), {
+      client_id: randomUUID(),
+      tab_client_id: order.tab_client_id,
+    })
   },
 
   [join('adjustments', 'index.post.ts')]: () => {

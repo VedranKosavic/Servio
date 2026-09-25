@@ -523,8 +523,8 @@ describe('createOrder — a gratis on the round', () => {
  * *Bez stola* — a round for the guests standing at the bar (PHASE3 §1.11).
  *
  * `tabs.table_id` became nullable in `0003_phase3.sql`, and the partial index
- * `tabs_one_open_per_table_uq (venue_id, table_id) WHERE status='open'` keeps
- * working unchanged: SQLite treats two NULLs in a unique index as *different*
+ * `tabs_one_live_per_table_uq (venue_id, table_id)` keeps working unchanged:
+ * SQLite treats two NULLs in a unique index as *different*
  * values, so many table-less tabs may be open at once while a real table still
  * holds exactly one. That is the whole property this block is about.
  */
