@@ -8,11 +8,11 @@
  *   2× kafa                       5 taps
  *   nargila + 2× Coca-Cola        8 taps
  *   mix nargila + čaj s čipom    10 taps
- *   Žar on a live bowl            2 taps
  *   gotovina tačno                3 taps
  *
- * What else is proved: *Zaključi* never locks without *Potvrdi*; *Žar* is the
- * one thing that does; the diacritic-insensitive search finds Čaj from "caj"
+ * What else is proved: *Zaključi* never locks without *Potvrdi* (the one thing
+ * that ever did, *Dodatni žar*, was removed on 25.09.2026); a long press on a
+ * table opens nothing extra; the diacritic-insensitive search finds Čaj from "caj"
  * and Coca-Cola from "kola"; *Bez stola* opens a tab on no table and the floor
  * plan stays 27 circles; *Pokaži narudžbu* carries the watermark and nothing
  * tappable; *Premjesti sto* moves the guests; and no screen scrolls sideways at
@@ -249,49 +249,32 @@ test.describe('WP3 — the order screens', () => {
     await expect(page.locator('.chip').filter({ hasText: 'Al Fakher · Jabuka' })).toBeVisible()
   })
 
-  test('Žar on a live bowl is two taps and locks with no sheet', async () => {
+  test('a long press on a table opens the table, and nothing else', async () => {
     const page = await freshPage()
     const thumb = new Thumb(page)
 
-    // A bowl on Sto 8 first.
+    // A bowl on Sto 8 — the table the long press used to offer *Žar* on.
     await thumb.tapTable('Sto 8')
     await thumb.tapProduct('Nargila')
     await page.getByRole('button', { name: 'Al Fakher · Jabuka' }).click()
     await page.getByRole('button', { name: /^Dodaj nargilu/ }).click()
     await thumb.lock()
-    await expect(page.getByRole('button', { name: /^Naplati/ })).toBeVisible({ timeout: 15_000 })
-    await backToFloor(page)
-
-    // Now the two taps that matter: a long press on the table, then *Žar*.
-    const counted = new Thumb(page)
+    // A lock lands back on the plan with nothing open (the owner, 17.09.2026).
+    await expect(page.getByText('Stolovi')).toBeVisible({ timeout: 15_000 })
     const number = page.getByRole('button', { name: /^8(\s|$)/ }).first()
+    await expect(number).toBeVisible({ timeout: 15_000 })
+
+    // Held for longer than the old 450 ms press: it is a tap like any other now,
+    // so the table's own sheet opens, and there is no *Žar* anywhere.
     const box = (await number.boundingBox())!
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
     await page.mouse.down()
     await page.waitForTimeout(600)
     await page.mouse.up()
-    counted.taps += 1
 
-    await expect(page.getByText('Dodatni žar')).toBeVisible({ timeout: 15_000 })
-    await counted.tap(page.getByRole('button', { name: 'Žar', exact: true }))
-    expect(counted.taps).toBe(2)
-
-    // No *Potvrdi* anywhere — the carve-out of invariant 2, and it is safe
-    // because the product is 0 KM.
-    await expect(page.getByRole('button', { name: 'Potvrdi' })).toHaveCount(0)
-    await expect(page.getByText(/Žar · Sto 8/)).toBeVisible({ timeout: 15_000 })
-
-    // The coal is on the ledger: a 0 KM line pointing at the bowl.
-    await expect.poll(async () => {
-      // By this table, not "the first tab there is": the whole file shares one
-      // database and the tests before this one left tabs of their own.
-      const state = await readState(context)
-      const tab = state.tables.find(t => t.table_id === tables.get('Sto 8'))
-      if (!tab?.tab_id) return 0
-      const detail = await (await context.request.get(`/api/tabs/${tab.tab_id}`)).json() as
-        { orders: { lines: { name_snapshot: string }[] }[] }
-      return detail.orders.flatMap(o => o.lines).filter(l => l.name_snapshot === 'Dodatni žar').length
-    }, { timeout: 20_000 }).toBe(1)
+    await expect(page.getByRole('button', { name: /^Naplati/ })).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText('Dodatni žar')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Žar', exact: true })).toHaveCount(0)
   })
 
   test('the search folds diacritics and matches on aliases', async () => {

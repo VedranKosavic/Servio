@@ -208,7 +208,7 @@ function roundLabel(index: number, at: string, who: string): string {
   return `Tura ${index + 1} · ${clock(at)} · ${who}`
 }
 
-/** Is this line a bowl that can still take coal? */
+/** Is this line a live bowl — the one *Nova lula* follows? */
 function isBowl(line: TabLine): boolean {
   return line.flavour_names.length > 0 && line.status !== 'storno'
 }
@@ -436,56 +436,6 @@ async function handToColleague(userId: string) {
     moveError.value = apiErrorText(err)
   } finally {
     moving.value = false
-  }
-}
-
-// -- Žar --------------------------------------------------------------------
-
-const zarBusy = ref(false)
-const zarError = ref<string | null>(null)
-
-const zarProduct = computed(() => products.value.find(p => p.system_key === 'zar') ?? null)
-
-/**
- * *Žar* is its own round, and it is the **one** lock in the app with no
- * *Potvrdi* sheet (PLAN §10, invariant 2). The carve-out is safe because the
- * product is 0 KM: there is no price to confirm. Two pieces of coal still leave
- * the box and the ledger still says so.
- */
-async function addZar(parentLineId: string) {
-  const product = zarProduct.value
-  if (!product || zarBusy.value) return
-  zarBusy.value = true
-  zarError.value = null
-  try {
-    const clientId = crypto.randomUUID()
-    const tabClientId = cart.ensureTabClientId(tableId.value)
-    await enqueue({
-      kind: 'order',
-      client_id: clientId,
-      tab_client_id: tabClientId,
-      label: tableName.value,
-      payload: {
-        client_id: clientId,
-        table_id: tableId.value,
-        tab_client_id: tabClientId,
-        client_created_at: new Date().toISOString(),
-        lines: [{
-          id: crypto.randomUUID(),
-          product_id: product.id,
-          qty: 1,
-          // Which bowl this coal is for. The server checks the line is on this
-          // same tab, so a stale phone cannot point it at somebody else's.
-          parent_line_id: parentLineId,
-        }],
-      },
-    })
-    say(lockToast(tableName.value, 'Žar'))
-    await refreshState()
-  } catch (err) {
-    zarError.value = apiErrorText(err)
-  } finally {
-    zarBusy.value = false
   }
 }
 
@@ -797,23 +747,13 @@ function lateWasNotPaid(row: TableState) {
                 <span v-for="flavour in row.flavour_names" :key="flavour" class="chip">{{ flavour }}</span>
                 <span v-if="row.note && !adjState(row)" class="chip chip-warn">{{ row.note }}</span>
 
-                <!-- The button twin of the long press on the floor plan (F4). -->
-                <template v-if="isBowl(row)">
-                  <button
-                    type="button"
-                    class="btn btn-secondary btn-sm"
-                    :disabled="zarBusy"
-                    @click="addZar(row.id)"
-                  >
-                    Žar
-                  </button>
-                  <NuxtLink
-                    :to="`/konobar/dodaj/${routeId}?kat=${products.find(p => p.name === row.name_snapshot)?.category_id ?? ''}`"
-                    class="btn btn-secondary btn-sm"
-                  >
-                    Nova lula
-                  </NuxtLink>
-                </template>
+                <NuxtLink
+                  v-if="isBowl(row)"
+                  :to="`/konobar/dodaj/${routeId}?kat=${products.find(p => p.name === row.name_snapshot)?.category_id ?? ''}`"
+                  class="btn btn-secondary btn-sm"
+                >
+                  Nova lula
+                </NuxtLink>
               </div>
             </li>
           </ul>
@@ -898,8 +838,8 @@ function lateWasNotPaid(row: TableState) {
 
       <!-- The bar: + Dodaj beside either Zaključi or Naplati, never both -->
       <div class="action-bar -mx-4 flex-col gap-2.5 border-t border-line px-4">
-        <p v-if="sendError || zarError" class="note note-danger" role="alert">
-          {{ sendError ?? zarError }}
+        <p v-if="sendError" class="note note-danger" role="alert">
+          {{ sendError }}
         </p>
 
         <!--

@@ -59,8 +59,6 @@ export const orderLineInput = z.object({
   /** A draft *gratis*. Only `staff_drink` under the cap and an admin's
    *  `owner_guest` lock at zero; anything else locks at full price and waits. */
   comp_reason: z.enum(COMP_REASONS).optional(),
-  /** *Dodatni žar* points at the bowl it tops up. */
-  parent_line_id: uuid.optional(),
 }).strict()
 
 /**

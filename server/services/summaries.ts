@@ -108,7 +108,6 @@ interface LedgerLine {
   unitPriceFen: number
   chargedFen: number
   compReason: string | null
-  parentLineId: string | null
   categoryId: string
   productKind: 'simple' | 'shisha'
   /** The one live (`pending`/`applied`) adjustment, if any — the index says one. */
@@ -157,7 +156,6 @@ function loadLines(q: Queryable, venueId: string, shiftId: string): LedgerLine[]
     unitPriceFen: schema.orderLines.unitPriceFen,
     chargedFen: schema.orderLines.chargedFen,
     compReason: schema.orderLines.compReason,
-    parentLineId: schema.orderLines.parentLineId,
     categoryId: schema.products.categoryId,
     productKind: schema.products.kind,
     adjId: schema.lineAdjustments.id,
@@ -197,7 +195,6 @@ function loadLines(q: Queryable, venueId: string, shiftId: string): LedgerLine[]
     unitPriceFen: r.unitPriceFen,
     chargedFen: r.chargedFen,
     compReason: r.compReason,
-    parentLineId: r.parentLineId,
     categoryId: r.categoryId,
     productKind: r.productKind,
     adjId: r.adjId,
@@ -380,9 +377,7 @@ export function summarizeUser(
     float_out_fen: cash?.float_out_fen ?? 0,
     tabs: tabs.size,
     rounds: rounds.size,
-    bowls: countBowls(lines.map(l => ({
-      kind: l.productKind, qty: l.qty, parent_line_id: l.parentLineId,
-    }))),
+    bowls: countBowls(lines.map(l => ({ kind: l.productKind, qty: l.qty }))),
     by_category: categoryTotals(lines),
     storno,
     self_voids: selfVoids,
@@ -463,8 +458,9 @@ export function summarizeShift(
     .get()
 
   // Tobacco and coal come from the stock ledger rather than from the menu: a
-  // bowl's grams depend on the aromas chosen at the table, and a *Dodatni žar*
-  // burns coal without being a bowl.
+  // bowl's grams depend on the aromas chosen at the table, and the ledger also
+  // holds the coal of the old *Dodatni žar* rows, which burned coal without
+  // being a bowl.
   const consumed = q.select({
     kind: schema.stockItems.kind,
     qty: sql<number>`coalesce(sum(${schema.stockMovements.qtyDelta}), 0)`,
@@ -505,9 +501,7 @@ export function summarizeShift(
     diff_fen: counted === null ? null : counted - expectedCashFen,
     stock_variance_fen: variance?.fen ?? 0,
     waste_fen: waste?.fen ?? 0,
-    bowls: countBowls(lines.map(l => ({
-      kind: l.productKind, qty: l.qty, parent_line_id: l.parentLineId,
-    }))),
+    bowls: countBowls(lines.map(l => ({ kind: l.productKind, qty: l.qty }))),
     tobacco_g: -(consumed.find(c => c.kind === 'duhan')?.qty ?? 0),
     coals: Math.round(-(consumed.find(c => c.kind === 'zar')?.qty ?? 0)),
     by_category: byCategory,
@@ -804,9 +798,7 @@ function myShiftCounts(
   return {
     rounds: rounds.size,
     tabs: tabs.size,
-    bowls: countBowls(lines.map(l => ({
-      kind: l.productKind, qty: l.qty, parent_line_id: l.parentLineId,
-    }))),
+    bowls: countBowls(lines.map(l => ({ kind: l.productKind, qty: l.qty }))),
     by_category: [...perCategory.entries()]
       .map(([categoryId, qty]) => ({
         category_id: categoryId,

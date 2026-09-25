@@ -14,8 +14,7 @@
  * ordinary evening, and all of it now happens over the plan.
  *
  * **What it deliberately is not.** Moving a tab to another table, handing it to
- * a colleague, cancelling a locked line, topping a bowl up with coal, showing
- * the guest his own bill: each of those is a decision with a PIN, a reason or a
+ * a colleague, cancelling a locked line, showing the guest his own bill: each of those is a decision with a PIN, a reason or a
  * countdown attached, and each already has a screen that gives it room. They
  * stay one tap further in, behind *Detalji stola*, rather than being folded
  * into a sheet somebody is reading over a tray. The sheet is the evening; the

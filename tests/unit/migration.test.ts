@@ -153,10 +153,15 @@ BEGIN SELECT RAISE(ABORT, 'tabs: only open -> paid with closed_at/closed_by'); E
  * 0005 does to one that has not.
  */
 function bootedAt0004(file: string): void {
+  bootedAt(file, 4)
+}
+
+/** The same, stopped after migration `upTo` — for replaying a later file on a booted database. */
+function bootedAt(file: string, upTo: number): void {
   const dir = scratch()
   mkdirSync(join(dir, 'meta'), { recursive: true })
   const journal = JSON.parse(readFileSync(join(MIGRATIONS, 'meta', '_journal.json'), 'utf8'))
-  journal.entries = journal.entries.filter((e: { idx: number }) => e.idx <= 4)
+  journal.entries = journal.entries.filter((e: { idx: number }) => e.idx <= upTo)
   writeFileSync(join(dir, 'meta', '_journal.json'), JSON.stringify(journal, null, 2))
   for (const entry of journal.entries as { tag: string }[]) {
     writeFileSync(
@@ -448,6 +453,52 @@ describe('a database that already holds Korak 1 data', () => {
         .get() as { n: number }
       expect(count.n).toBe(TRIGGER_NAMES.length)
       expect(sqlite.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+    } finally {
+      sqlite.close()
+    }
+  })
+})
+
+describe('0025_no_zar.sql — *Dodatni žar* is gone', () => {
+  /**
+   * The owner's call (25.09.2026): nothing adds *Žar* any more. The product row
+   * cannot be deleted — the lines locked before today still name it — so the
+   * migration switches it off, clears its `system_key`, and bumps `menu` so
+   * every phone refetches the catalogue on its next poll.
+   */
+  it('switches the product off, clears its key, and moves menu_version', () => {
+    const dir = scratch()
+    const file = join(dir, 'sank.db')
+    bootedAt(file, 24)
+
+    const seed = new Database(file)
+    applyPragmas(seed)
+    const venueId = randomUUID()
+    const categoryId = randomUUID()
+    const zarId = randomUUID()
+    const ostaloId = randomUUID()
+    const now = '2026-09-24T18:00:00.000Z'
+    seed.prepare('INSERT INTO venues (id, name, slug, created_at) VALUES (?,?,?,?)')
+      .run(venueId, 'Lounge', 'lounge', now)
+    seed.prepare('INSERT INTO categories (id, venue_id, name, sort) VALUES (?,?,?,1)')
+      .run(categoryId, venueId, 'Nargila')
+    const product = seed.prepare(
+      'INSERT INTO products (id, venue_id, category_id, name, price_fen, system_key, created_at)'
+      + ' VALUES (?,?,?,?,?,?,?)',
+    )
+    product.run(zarId, venueId, categoryId, 'Dodatni žar', 0, 'zar', now)
+    product.run(ostaloId, venueId, categoryId, 'Ostalo', 500, 'ostalo', now)
+    seed.close()
+
+    // `git pull`, restart: `openDatabase` migrates 0025 and re-applies triggers.
+    const { sqlite } = openDatabase(file)
+    try {
+      const row = sqlite.prepare('SELECT active, system_key FROM products WHERE id = ?')
+      expect(row.get(zarId)).toEqual({ active: 0, system_key: null })
+      // The catch-all keeps its key: the phone still finds it by `'ostalo'`.
+      expect(row.get(ostaloId)).toEqual({ active: 1, system_key: 'ostalo' })
+      expect(sqlite.prepare('SELECT entity, entity_id FROM changes WHERE venue_id = ?').all(venueId))
+        .toEqual([{ entity: 'menu', entity_id: zarId }])
     } finally {
       sqlite.close()
     }

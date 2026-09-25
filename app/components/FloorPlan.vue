@@ -80,7 +80,6 @@ const props = withDefaults(defineProps<{
 
 defineEmits<{
   select: [tableId: string]
-  long: [tableId: string]
   bar: []
   /** Where the waiter wants the table he is adding (`+ Sto`). */
   spot: [x: number, y: number]
@@ -206,7 +205,6 @@ const cells = computed(() => new Map(props.tables
           :draft="cells.get(table.id)!.draft"
           :shape="table.shape"
           @select="$emit('select', table.id)"
-          @long="$emit('long', table.id)"
         />
         <!-- A plain button riding on the tile. The tile itself ignores taps
              while placing, so this one opts back in; `.stop` keeps the tap from

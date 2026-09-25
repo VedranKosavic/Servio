@@ -60,7 +60,7 @@ describe('GET /api/bootstrap', () => {
     expect(boot.categories.map(c => c.name)).toEqual(
       ['Kafa', 'Bezalkoholna', 'Energetska', 'Čaj', 'Nargila', 'Ostalo'],
     )
-    expect(boot.products).toHaveLength(15)
+    expect(boot.products).toHaveLength(14)
     expect(boot.products.filter(p => p.is_favourite).map(p => p.name).sort())
       .toEqual(['Coca-Cola', 'Kafa', 'Limunada', 'Nargila', 'Red Bull', 'Čaj'].sort())
 
@@ -159,11 +159,11 @@ describe('GET /api/bootstrap', () => {
     expect(cola.staff_drink_allowed).toBe(false)
     expect(boot.products.find(p => p.name === 'Kafa')!.staff_drink_allowed).toBe(true)
 
-    // Exactly one of each, and found by key rather than by name.
-    expect(boot.products.filter(p => p.system_key === 'zar').map(p => p.name))
-      .toEqual(['Dodatni žar'])
-    expect(boot.products.filter(p => p.system_key === 'ostalo').map(p => p.name))
+    // Exactly one, and found by key rather than by name. *Dodatni žar* is gone
+    // (the owner, 25.09.2026): no key for it, and no product in the catalogue.
+    expect(boot.products.filter(p => p.system_key !== null).map(p => p.name))
       .toEqual(['Ostalo'])
+    expect(boot.products.some(p => p.name === 'Dodatni žar')).toBe(false)
     expect(boot.products.find(p => p.name === 'Nargila')!.system_key).toBeNull()
   })
 
@@ -185,7 +185,7 @@ describe('GET /api/bootstrap', () => {
 
 describe('GET /api/health', () => {
   it('counts what the deploy gate needs', () => {
-    expect(getHealth(f.db, f.venueId)).toEqual({ ok: true, tables: 27, products: 15 })
+    expect(getHealth(f.db, f.venueId)).toEqual({ ok: true, tables: 27, products: 14 })
   })
 })
 

@@ -22,7 +22,6 @@ export const MONEY_ERRORS = {
   FLAVOUR_NOT_FOUND: 'Ta aroma ne postoji.',
   FLAVOURS_REQUIRED: 'Nargila treba 1–3 arome.',
   FLAVOURS_NOT_ALLOWED: 'Taj artikal nema arome.',
-  PARENT_LINE_NOT_FOUND: 'Ta stavka ne postoji na ovoj turi.',
   ORDER_NOT_FOUND: 'Ta narudžba ne postoji.',
   ORDER_ALREADY_PREPARED: 'Narudžba je već pripremljena.',
 

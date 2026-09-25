@@ -476,8 +476,8 @@ export function seed(db: Db, opts: SeedOptions = {}): void {
       shortName?: string
       /** Extra words the *Dodaj* search matches, space separated. */
       aliases?: string
-      /** The two products the phone recognises by key rather than by name. */
-      systemKey?: 'zar' | 'ostalo'
+      /** The product the phone recognises by key rather than by name. */
+      systemKey?: 'ostalo'
     }
     const menu: SeedProduct[] = [
       { name: 'Kafa', category: 'Kafa', priceFen: 150, recipe: [['Kafa (mljevena)', 7], ['Šećer', 5]], favourite: true, staffDrink: true, aliases: 'espreso kahva' },
@@ -494,10 +494,6 @@ export function seed(db: Db, opts: SeedOptions = {}): void {
       { name: 'Nargila', category: 'Nargila', priceFen: 1500, kind: 'shisha', shishaGrams: 20, coalPcs: 3, favourite: true, aliases: 'sisa shisha lula' },
       // A fresh bowl on a running shisha: charged, its own tobacco, no new coal.
       { name: 'Nova lula', category: 'Nargila', priceFen: 1000, kind: 'shisha', shishaGrams: 20, coalPcs: 0, aliases: 'glava' },
-      // Free for the guest, never free for the café: two pieces of coal leave
-      // the box and the ledger says so. `systemKey` is how S1's long-press and
-      // S2's inline chip find it without matching on the name (PHASE3 §1.10).
-      { name: 'Dodatni žar', category: 'Nargila', priceFen: 0, recipe: [['Ugalj (kocke)', 2]], systemKey: 'zar', shortName: 'Žar' },
       // The catch-all: one fixed price, and the free text of its long-press
       // becomes the line's note ("2 kifle", "flaša vode za osoblje"). It sells
       // nothing off the shelf on purpose — what it was is written on the line.

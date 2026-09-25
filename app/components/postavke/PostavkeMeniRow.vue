@@ -73,8 +73,8 @@ const commit = useDebounceFn(() => {
 }, 500)
 
 function step(delta: number) {
-  // A price is never negative, and the floor is the interesting case: *Dodatni
-  // žar* is a real 0,00 KM product, so 0 is a value and not an error.
+  // A price is never negative, and 0 is a value rather than an error: a free
+  // article is a real 0,00 KM product.
   local.value = Math.max(0, shown.value + delta)
   void commit()
 }

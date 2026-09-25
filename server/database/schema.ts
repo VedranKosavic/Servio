@@ -223,14 +223,15 @@ export const products = sqliteTable('products', {
   /**
    * What a *phone* is allowed to recognise a product by (PHASE3 §1.10).
    *
-   * `'zar'` is *Dodatni žar* and `'ostalo'` is the fixed-price catch-all; both
-   * get UI behaviour of their own, and matching that behaviour on a name is how
-   * a rename becomes a Saturday-night bug. NULL for everything else, which is
-   * why the unique index below is **partial**: a partial index only indexes the
-   * rows its WHERE matches, so a hundred products with no system key are not a
-   * hundred collisions on NULL.
+   * `'ostalo'` is the fixed-price catch-all; it gets UI behaviour of its own,
+   * and matching that behaviour on a name is how a rename becomes a
+   * Saturday-night bug. NULL for everything else, which is why the unique index
+   * below is **partial**: a partial index only indexes the rows its WHERE
+   * matches, so a hundred products with no system key are not a hundred
+   * collisions on NULL. (`'zar'`, *Dodatni žar*, was removed on the owner's call
+   * on 25.09.2026 — `0025_no_zar.sql`.)
    */
-  systemKey: text('system_key', { enum: ['zar', 'ostalo'] }),
+  systemKey: text('system_key', { enum: ['ostalo'] }),
   sort: integer('sort').notNull().default(0),
   active: integer('active').notNull().default(1),
   createdAt: text('created_at').notNull().default(''),
@@ -815,7 +816,9 @@ export const orders = sqliteTable('orders', {
  *
  * `flavours_json` holds stock item **ids** (`["uuid","uuid"]`), never names —
  * names are joined at read time, so renaming an aroma does not rewrite history.
- * `parent_line_id` is how a *Dodatni žar* row points at the bowl it tops up.
+ * `parent_line_id` is how a *Dodatni žar* row pointed at the bowl it topped up.
+ * Nothing writes it since the product was removed (25.09.2026); the column stays
+ * for the rows locked before that.
  */
 export const orderLines = sqliteTable('order_lines', {
   id: text('id').primaryKey(),

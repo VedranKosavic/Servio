@@ -126,12 +126,11 @@ export function createOrder(
       createdAt: at,
     }).run()
 
-    const inserted = new Set<string>()
     let orderTotalFen = 0
     for (const line of body.lines) {
       orderTotalFen += insertLine(
         tx, venueId, actor, settings, orderId, resolved.tabId, line,
-        shift.id, at, clientAt, inserted,
+        shift.id, at, clientAt,
       )
     }
 
@@ -522,7 +521,6 @@ function insertLine(
   shiftId: string,
   at: string,
   clientAt: string,
-  inserted: Set<string>,
 ): number {
   const product = tx.select().from(schema.products)
     .where(and(
@@ -539,23 +537,6 @@ function insertLine(
   }
 
   const flavours = requireFlavours(tx, venueId, product, line.flavour_ids ?? [])
-
-  /**
-   * *Dodatni žar* points at the bowl it tops up, and the bowl has to be on
-   * **this tab** — either on this same round (the phone minted both ids in one
-   * cart) or on an earlier one at the same table.
-   *
-   * The earlier-round case is F4 itself: a nargila lit at 21:05 burns down at
-   * 21:40 and the guest raises a hand. That top-up is its own `orders` row, so
-   * its parent is by definition on a round the phone locked half an hour ago.
-   * Scoping the check to the tab rather than to the order is what makes the
-   * two-tap path possible while keeping the rule that matters — a phone cannot
-   * hang coal off a line at somebody else's table.
-   */
-  if (line.parent_line_id && !inserted.has(line.parent_line_id)
-    && !lineIsOnTab(tx, venueId, tabId, line.parent_line_id)) {
-    throw notFound('PARENT_LINE_NOT_FOUND', `line ${line.parent_line_id} is not on this tab`)
-  }
 
   const lineId = line.id
   const fullFen = product.priceFen * line.qty
@@ -580,10 +561,8 @@ function insertLine(
     flavoursJson: flavours.length > 0 ? JSON.stringify(flavours.map(f => f.id)) : null,
     compReason: freeNow ? line.comp_reason! : null,
     authorisedBy: freeNow ? actor.userId : null,
-    parentLineId: line.parent_line_id ?? null,
     note: line.note ?? null,
   }).run()
-  inserted.add(lineId)
 
   if (line.comp_reason !== undefined && !freeNow) {
     /**
@@ -597,8 +576,7 @@ function insertLine(
       id: newId(),
       venueId,
       orderLineId: lineId,
-      tabId: tx.select({ tabId: schema.orders.tabId }).from(schema.orders)
-        .where(eq(schema.orders.id, orderId)).get()!.tabId,
+      tabId,
       clientId: `${lineId}:comp`,
       kind: 'comp',
       reason: line.comp_reason,
@@ -637,19 +615,6 @@ function insertLine(
   }
 
   return chargedFen
-}
-
-/** Is this line one of the ones already locked on this tab? */
-function lineIsOnTab(tx: Tx, venueId: string, tabId: string, lineId: string): boolean {
-  return tx.select({ id: schema.orderLines.id })
-    .from(schema.orderLines)
-    .innerJoin(schema.orders, eq(schema.orders.id, schema.orderLines.orderId))
-    .where(and(
-      eq(schema.orderLines.venueId, venueId),
-      eq(schema.orderLines.id, lineId),
-      eq(schema.orders.tabId, tabId),
-    ))
-    .get() !== undefined
 }
 
 /**

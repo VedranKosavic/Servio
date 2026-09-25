@@ -10,14 +10,12 @@
  * layout itself comes from `bootstrap` (which table sits at which col/row) and
  * is refetched only when `menu_version` moves.
  *
- * Four things Phase 3 added, and each of them is a thing a waiter can only find
+ * Three things Phase 3 added, and each of them is a thing a waiter can only find
  * out here:
  *
  *   - **+ Bez stola** — guests at the bar are a tab on no table (§1.11). They
  *     are cards above the plan, because the plan draws tables and there is no
  *     circle for the bar.
- *   - **A long press on a table with a live nargila is *Žar*** (F4). Two taps,
- *     and the button twin is the inline chip on the shisha line inside S2.
  *   - **Drafts pulse.** A round tapped fifteen minutes ago and never locked is
  *     money nobody has recorded, so it says so and offers the two ways out.
  *   - **The red *kasno* card** — a round that reached the server after its
@@ -408,97 +406,6 @@ function lateWasNotPaid(row: TableState) {
   if (row.tab_id) dismissedLate.value = [...dismissedLate.value, row.tab_id]
 }
 
-// -- Žar --------------------------------------------------------------------
-
-const zarFor = ref<{ tableId: string, name: string, tabId: string } | null>(null)
-const zarDetail = ref<TabDetail | null>(null)
-const zarLoading = ref(false)
-const zarBusy = ref(false)
-const zarError = ref<string | null>(null)
-
-const zarProduct = computed(() =>
-  (boot.value?.products ?? []).find(p => p.system_key === 'zar') ?? null)
-
-/** "21:05" — the café's wall clock, never the browser's zone. */
-function clock(iso: string): string {
-  return new Date(iso).toLocaleTimeString('bs-BA', {
-    hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Sarajevo',
-  })
-}
-
-const zarBowls = computed(() => (zarDetail.value?.orders ?? []).flatMap((round, index) =>
-  round.lines
-    .filter(line => line.flavour_names.length > 0 && line.status !== 'storno')
-    .map(line => ({
-      ...line,
-      round: `Tura ${index + 1} · ${clock(round.at)}`,
-    }))))
-
-async function openZar(tableId: string) {
-  const state = shownStates.value.find(s => s.table_id === tableId)
-  const tabId = state?.tab_id
-  // A table with no tab has no bowl on it; the long press simply opens it,
-  // which is now the sheet or the menu exactly as an ordinary tap would be.
-  if (!tabId || tabId.startsWith('local:')) {
-    openTable(tableId)
-    return
-  }
-  zarFor.value = { tableId, name: draftName(tableId), tabId }
-  zarError.value = null
-  zarLoading.value = true
-  try {
-    zarDetail.value = await api.getTab(tabId)
-  } catch (err) {
-    zarDetail.value = null
-    zarError.value = apiErrorText(err, 'Nema veze — otvori sto da dodaš žar')
-  } finally {
-    zarLoading.value = false
-  }
-}
-
-/**
- * *Žar* locks on the spot with no *Potvrdi* sheet — the single carve-out from
- * PLAN §10's invariant 2, and it is safe because the product is 0 KM: there is
- * no price to confirm. Two pieces of coal still leave the box and the ledger
- * still says so.
- */
-async function addZar(parentLineId: string) {
-  const product = zarProduct.value
-  const target = zarFor.value
-  if (!product || !target || zarBusy.value) return
-  zarBusy.value = true
-  zarError.value = null
-  try {
-    const clientId = crypto.randomUUID()
-    const tabClientId = cart.ensureTabClientId(target.tableId)
-    await enqueue({
-      kind: 'order',
-      client_id: clientId,
-      tab_client_id: tabClientId,
-      label: target.name,
-      payload: {
-        client_id: clientId,
-        table_id: target.tableId,
-        tab_client_id: tabClientId,
-        client_created_at: new Date().toISOString(),
-        lines: [{
-          id: crypto.randomUUID(),
-          product_id: product.id,
-          qty: 1,
-          parent_line_id: parentLineId,
-        }],
-      },
-    })
-    zarFor.value = null
-    say(`Žar · ${target.name}`)
-    await refreshState()
-  } catch (err) {
-    zarError.value = apiErrorText(err)
-  } finally {
-    zarBusy.value = false
-  }
-}
-
 // -- One table, over the plan ------------------------------------------------
 
 /**
@@ -512,7 +419,7 @@ async function addZar(parentLineId: string) {
  *
  * The sheet carries the evening: what is owed, what was ordered, another round,
  * the money. Everything that is *not* an ordinary evening — moving a tab,
- * handing it over, a storno, žar, showing the guest his bill — still lives on
+ * handing it over, a storno, showing the guest his bill — still lives on
  * `/konobar/sto/<id>`, one tap further in, because each of those is a decision
  * with a PIN, a reason or a countdown on it.
  */
@@ -1246,7 +1153,6 @@ function addToSheet() {
           :current-shift-seq="currentShiftSeq"
           :placing="placing"
           @select="openTable"
-          @long="openZar"
           @bar="barOpen = true"
           @spot="placeTable"
           @remove="removeTable"
@@ -1266,7 +1172,7 @@ function addToSheet() {
         <!-- A sentence, not two arrows. This is the only place in the app that
              used "→" as vocabulary, and the app speaks Bosnian everywhere else. -->
         <p class="text-center text-caption tracking-normal text-muted">
-          Dodirni sto za narudžbu, zadrži za žar.
+          Dodirni sto za narudžbu.
         </p>
       </div>
 
@@ -1284,18 +1190,6 @@ function addToSheet() {
     />
 
     <WaiterStanjeSheet v-if="stanjeOpen" @close="stanjeOpen = false" />
-
-    <OrderZarSheet
-      v-if="zarFor"
-      :table-name="zarFor.name"
-      :bowls="zarBowls"
-      :zar-name="zarProduct?.name ?? null"
-      :loading="zarLoading"
-      :busy="zarBusy"
-      :error="zarError"
-      @close="zarFor = null"
-      @zar="addZar"
-    />
 
     <!-- One table, over the plan. The sheet the owner asked for in place of a
          page of its own. -->

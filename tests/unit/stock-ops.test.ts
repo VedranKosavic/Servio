@@ -1459,17 +1459,16 @@ describe('retiring coal, sugar, ground coffee and lemon', () => {
 
   it('deactivates the four and takes their normativ lines with them', () => {
     expect(recipeCount('Kafa')).toBe(2)
-    expect(recipeCount('Dodatni žar')).toBe(1)
 
     const result = retireUncountedItems(f.db)
 
     expect(result.deactivated.map(item => item.name).sort()).toEqual([...RETIRED].sort())
-    // Kafa's two, Kafa s mlijekom's two, Nes's one, Čaj's one, Limunada's two
-    // (sugar and lemon) and Dodatni žar's one — every line that pointed at one
-    // of the four.
-    expect(result.recipeLinesRemoved).toBe(9)
+    // Kafa's two, Kafa s mlijekom's two, Nes's one, Čaj's one and Limunada's
+    // two (sugar and lemon) — every line that pointed at one of the four. (The
+    // seed's *Dodatni žar* had a ninth, coal, until the product was removed on
+    // 25.09.2026.)
+    expect(result.recipeLinesRemoved).toBe(8)
     expect(recipeCount('Kafa')).toBe(0)
-    expect(recipeCount('Dodatni žar')).toBe(0)
     // The lines pointing at articles the café still counts are untouched.
     expect(recipeCount('Nes')).toBe(1)
     expect(recipeCount('Čaj')).toBe(1)
@@ -1546,18 +1545,6 @@ describe('retiring coal, sugar, ground coffee and lemon', () => {
     // but `coalStockItem()` finds no active `zar` article, so nothing moves.
     expect(f.onHand('Ugalj (kocke)')).toBe(coalBefore)
     expect(soldItems()).toEqual(['Al Fakher · Jabuka'])
-  })
-
-  it('still lets Dodatni žar be given away, and it costs the ledger nothing', () => {
-    retireUncountedItems(f.db)
-    f.openShift({ members: ['Amar'] })
-
-    const coalBefore = f.onHand('Ugalj (kocke)')
-    const order = lock('Amar', 'Sto 7', [line('Dodatni žar', 1)])
-
-    expect(order.order_total_fen).toBe(0)
-    expect(f.onHand('Ugalj (kocke)')).toBe(coalBefore)
-    expect(movements('sale')).toHaveLength(0)
   })
 
   it('keeps settled + pending === on_hand over the whole shelf', () => {

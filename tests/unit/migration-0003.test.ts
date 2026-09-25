@@ -261,7 +261,7 @@ describe('0003 on a database that already holds a night', () => {
     }
   })
 
-  it('gives a venue one *Dodatni žar* product and refuses a second', () => {
+  it('gives a venue one product per system key and refuses a second', () => {
     const { sqlite } = openDatabase(':memory:')
     try {
       const venue = randomUUID()
@@ -275,8 +275,8 @@ describe('0003 on a database that already holds a night', () => {
         'INSERT INTO products (id, venue_id, category_id, name, price_fen, system_key, created_at)'
         + ' VALUES (?,?,?,?,?,?,?)',
       )
-      product.run(randomUUID(), venue, category, 'Dodatni žar', 0, 'zar', now)
-      expect(() => product.run(randomUUID(), venue, category, 'Žar 2', 0, 'zar', now)).toThrow()
+      product.run(randomUUID(), venue, category, 'Ostalo', 500, 'ostalo', now)
+      expect(() => product.run(randomUUID(), venue, category, 'Ostalo 2', 500, 'ostalo', now)).toThrow()
       // The partial index indexes only the rows that have a key, so any number
       // of ordinary products may sit at NULL.
       product.run(randomUUID(), venue, category, 'Kafa', 200, null, now)

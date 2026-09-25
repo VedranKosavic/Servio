@@ -10,15 +10,16 @@ export type ProductKind = 'simple' | 'shisha'
 export type CategoryKind = 'pice' | 'hrana' | 'nargila' | 'ostalo'
 
 /**
- * The two products a *phone* is allowed to recognise (PHASE3 §1.10).
+ * The product a *phone* is allowed to recognise by key (PHASE3 §1.10).
  *
- * `'zar'` is *Dodatni žar* — 0 KM, two pieces of coal, and the one product the
- * lock sheet is skipped for (PLAN §10, invariant 2). `'ostalo'` is the
- * fixed-price catch-all whose long-press takes the free text that becomes the
- * line's note. Both get behaviour of their own on S2 and S3, and matching that
- * behaviour on a *name* is how a rename in *Meni* becomes a Saturday-night bug.
+ * `'ostalo'` is the fixed-price catch-all whose long-press takes the free text
+ * that becomes the line's note. It gets behaviour of its own on S2 and S3, and
+ * matching that behaviour on a *name* is how a rename in *Meni* becomes a
+ * Saturday-night bug. There used to be a second, `'zar'` — *Dodatni žar* — and
+ * it went on the owner's call (25.09.2026); `0025_no_zar.sql` switched the
+ * product off and cleared its key.
  */
-export type ProductSystemKey = 'zar' | 'ostalo'
+export type ProductSystemKey = 'ostalo'
 
 export interface Venue {
   id: string
@@ -75,7 +76,7 @@ export interface Product {
   search_aliases: string
   price_fen: number
   kind: ProductKind
-  /** Set only on the two system products; see `ProductSystemKey`. */
+  /** Set only on the system product; see `ProductSystemKey`. */
   system_key: ProductSystemKey | null
   /** Grams of tobacco a bowl uses, split across the chosen flavours. */
   shisha_grams: number | null

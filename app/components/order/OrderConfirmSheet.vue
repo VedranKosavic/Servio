@@ -5,8 +5,8 @@
  * A lock is the moment a tapped cart becomes money, stock and somebody's
  * promet, and it is irreversible — the only way back is a logged self-void — so
  * it gets one deliberate confirmation that lists **every line and the total**,
- * with the table pill as its header. The single exception in the whole app is a
- * 0 KM system product (*Žar*), which locks on one explicit tap.
+ * with the table pill as its header. There is no exception any more: the one
+ * there was, *Dodatni žar*, went with the product (the owner, 25.09.2026).
  *
  * It doubles as *Pregled*: the same sheet, opened from the strip on S3, is
  * where a line's quantity is corrected. That is deliberate — it is the **button

@@ -7,10 +7,9 @@
  *
  *   - *Nova lula* — a fresh bowl on a running shisha — **is** a bowl. It is
  *     charged, it burns its own 20 g of tobacco, and it takes no new coal.
- *   - *Dodatni žar* — two more coals on a bowl already going — is **not** a
- *     bowl. It is a `simple` product with a coal recipe and a `parent_line_id`
- *     pointing at the bowl it tops up. Counting it would inflate *prodano lula*
- *     and make grams-per-bowl look far too low.
+ *   - Anything `simple` is **not** a bowl, whatever it burns. That is what kept
+ *     the old *Dodatni žar* rows (two more coals on a running bowl, removed on
+ *     the owner's call 25.09.2026) out of *prodano lula*.
  *
  * `qty` counts: one line of 2 × Nargila is two bowls.
  */
@@ -19,8 +18,6 @@ import type { ProductKind } from './types'
 export interface BowlLine {
   kind: ProductKind
   qty: number
-  /** Set on a *Dodatni žar* row: the bowl it tops up. */
-  parent_line_id?: string | null
 }
 
 /** Is this line a bowl? */

@@ -538,9 +538,10 @@ function countedAt(
  * *Prodano lula* over the period — `shared/bowls.ts`'s rule, in SQL.
  *
  * A bowl is a line whose product is `kind='shisha'`; `qty` counts, so one line of
- * 2 × Nargila is two bowls. *Dodatni žar* is a `simple` product and is
- * deliberately **not** a bowl (counting it would inflate the count and make
- * grams-per-bowl look far too low). An applied void takes its bowls back out.
+ * 2 × Nargila is two bowls. A `simple` product is never a bowl, which is what
+ * kept the old *Dodatni žar* rows out of the count (counting them would inflate
+ * it and make grams-per-bowl look far too low). An applied void takes its bowls
+ * back out.
  */
 function bowlsSold(q: Queryable, venueId: string, fromIso: string, toIso: string): number {
   const rows = q.select({

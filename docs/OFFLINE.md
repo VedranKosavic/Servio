@@ -51,7 +51,6 @@ Three facts shape everything below.
 | taps *Očisti sto* / *Naplati i očisti* | The payment is queued, but the clear fails: *"Sto se nije očistio"*. A table paid offline never shows *Očisti sto* either, because the button waits for the server's `paid` flag. | `konobar/index.vue:809`, `WaiterTableSheet.vue:276` |
 | looks at a table just paid offline | The tile still shows the full amount. Queued rounds are folded into the floor, queued payments are not. | `konobar/index.vue:143` |
 | taps *Premjesti* | Disabled. | `OrderMoveSheet.vue` |
-| adds *Žar* (long press, or on a bowl in the sheet) | Needs the bowl's line from the tab's rounds, which come from the server. | `konobar/index.vue:437` |
 | has to tell the bar | Nothing on the phone is made for the bartender to read. | — |
 
 ### Found while planning: what goes wrong when the phones come back

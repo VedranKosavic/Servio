@@ -17,8 +17,8 @@
  * picture at every width, and nothing here measures anything to draw it.
  *
  * **What it does not draw is the table top.** Each table is a slot, filled by
- * the screen using the room: the waiter's tile (dark, the shift colours, the
- * long press for žar), *Puls*'s (light), or the editor's plain number.
+ * the screen using the room: the waiter's tile (dark, the shift colours),
+ * *Puls*'s (light), or the editor's plain number.
  *
  * **The bar is a thing you tap** on a finished plan: everything that happens at
  * the counter rather than at a table — the shelf, a nargila or a drink to take

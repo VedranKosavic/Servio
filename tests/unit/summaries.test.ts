@@ -60,10 +60,8 @@ describe('the three-way reconciliation', () => {
   it('agrees per person, per category and in total', () => {
     const shiftId = f.openShift({ members: ['Amar', 'Lejla'] })
 
-    // A bowl and a top-up of coal on it. The top-up is charged nothing and is
-    // *not* a bowl — counting it would inflate prodano lula and make
-    // grams-per-bowl look far too low.
-    const a1 = f.lock('Amar', 'Sto 1', [{ product: 'Nargila' }, { product: 'Dodatni žar' }])
+    // A bowl — the one thing on this shift that counts as prodano lula.
+    const a1 = f.lock('Amar', 'Sto 1', [{ product: 'Nargila' }])
     const a2 = f.lock('Amar', 'Sto 2', [{ product: 'Kafa', qty: 2 }])
     const l1 = f.lock('Lejla', 'Sto 3', [{ product: 'Red Bull' }, { product: 'Coca-Cola' }])
 
@@ -76,7 +74,7 @@ describe('the three-way reconciliation', () => {
 
     const summary = summarise(shiftId)
 
-    expect(summary.promet_fen).toBe(2_300) // 1500 + 0 + (300 − 300) + 500 + 300
+    expect(summary.promet_fen).toBe(2_300) // 1500 + (300 − 300) + 500 + 300
     expect(summary.by_user.reduce((n, u) => n + u.promet_fen, 0)).toBe(2_300)
     expect(summary.by_category.reduce((n, c) => n + c.fen, 0)).toBe(2_300)
 
@@ -311,9 +309,7 @@ describe('a whole night', () => {
     f.pay('Amar', a2.tabId, 450)
     closeTab(f, a2.tabId, 'Amar')
 
-    const l1 = f.lock('Lejla', 'Sto 3', [
-      { product: 'Nargila', qty: 2 }, { product: 'Dodatni žar' },
-    ])
+    const l1 = f.lock('Lejla', 'Sto 3', [{ product: 'Nargila', qty: 2 }])
     f.pay('Lejla', l1.tabId, 3_000, { method: 'card' })
     closeTab(f, l1.tabId, 'Lejla')
 
@@ -397,7 +393,7 @@ describe('a whole night', () => {
     expect(summary.void_count).toBe(1)
     expect(summary.void_fen).toBe(200)
     expect(summary.unpaid_fen).toBe(500)
-    expect(summary.bowls).toBe(3) // one of Amar's, two of Lejla's; no žar
+    expect(summary.bowls).toBe(3) // one of Amar's, two of Lejla's
 
     // The second split of the same total: what is countable tonight, and what is
     // still in somebody's pocket.

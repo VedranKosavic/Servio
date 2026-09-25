@@ -20,6 +20,7 @@ import { createPayment } from '../../server/services/payments'
 import { expectedCash } from '../../server/services/cash'
 import { tabMoney } from '../../server/services/tabs'
 import { makeFixture, schema, type Fixture } from '../helpers/db'
+import { createOrderBody } from '../../shared/schemas/money'
 import { rawClose, refuses } from '../helpers/shifts'
 
 let f: Fixture
@@ -139,84 +140,20 @@ describe('createOrder — stock resolution', () => {
     expect(f.onHand('Limun')).toBe(-10)
   })
 
-  it('charges nothing for Dodatni žar but still takes the coal', () => {
-    const before = f.onHand('Ugalj (kocke)')
-    const result = createOrder(f.db, f.venueId, f.actor('Amar'), {
-      client_id: randomUUID(),
-      table_id: f.tableId('Sto 1'),
-      lines: [line('Dodatni žar', 1)],
-    })
-    expect(result.order_total_fen).toBe(0)
-    expect(f.onHand('Ugalj (kocke)')).toBe(before - 2)
-  })
-
-  it('hangs a Dodatni žar off the bowl it tops up', () => {
-    const bowl = line('Nargila', 1, {
-      flavour_ids: [f.stockItemId('Al Fakher · Jabuka')],
-    })
-    const result = createOrder(f.db, f.venueId, f.actor('Dino'), {
-      client_id: randomUUID(),
-      table_id: f.tableId('Sto 16'),
-      lines: [bowl, line('Dodatni žar', 1, { parent_line_id: bowl.id })],
-    })
-
-    const rows = f.db.select().from(schema.orderLines)
-      .where(eq(schema.orderLines.orderId, result.order_id)).all()
-    const topUp = rows.find(r => r.nameSnapshot === 'Dodatni žar')!
-    expect(topUp.parentLineId).toBe(bowl.id)
-  })
-
   /**
-   * The invariant moved, deliberately: a parent line must be on **this tab**
-   * rather than on this same round.
-   *
-   * F4's *Žar* is a round of its own, locked half an hour after the bowl it
-   * tops up, so "on this round" made the two-tap path impossible to build. What
-   * the rule is actually for — a phone cannot hang coal off a line at somebody
-   * else's table — is unchanged and is what the two tests below assert.
+   * *Dodatni žar* is gone (the owner, 25.09.2026). The lock no longer takes a
+   * `parent_line_id` at all, and the line schema is strict, so a body that still
+   * carries one is refused at the door rather than half-understood.
    */
-  it('hangs a Dodatni žar off a bowl locked on an earlier round of the same tab', () => {
-    const bowl = line('Nargila', 1, { flavour_ids: [f.stockItemId('Al Fakher · Jabuka')] })
-    const first = createOrder(f.db, f.venueId, f.actor('Dino'), {
+  it('no longer takes a parent line on a round', () => {
+    const body = {
       client_id: randomUUID(),
       table_id: f.tableId('Sto 16'),
-      lines: [bowl],
-    })
-
-    const topUp = createOrder(f.db, f.venueId, f.actor('Dino'), {
-      client_id: randomUUID(),
-      table_id: f.tableId('Sto 16'),
-      lines: [line('Dodatni žar', 1, { parent_line_id: bowl.id })],
-    })
-
-    expect(topUp.tab_id).toBe(first.tab_id)
-    const row = f.db.select().from(schema.orderLines)
-      .where(eq(schema.orderLines.orderId, topUp.order_id)).get()!
-    expect(row.parentLineId).toBe(bowl.id)
-    expect(row.chargedFen).toBe(0)
-  })
-
-  it('refuses a parent line that is on no tab of this venue', () => {
-    refuses(() => createOrder(f.db, f.venueId, f.actor('Dino'), {
-      client_id: randomUUID(),
-      table_id: f.tableId('Sto 16'),
-      lines: [line('Dodatni žar', 1, { parent_line_id: randomUUID() })],
-    }), 'PARENT_LINE_NOT_FOUND', 404)
-  })
-
-  it("refuses a parent line that belongs to another table's tab", () => {
-    const bowl = line('Nargila', 1, { flavour_ids: [f.stockItemId('Al Fakher · Jabuka')] })
-    createOrder(f.db, f.venueId, f.actor('Dino'), {
-      client_id: randomUUID(),
-      table_id: f.tableId('Sto 16'),
-      lines: [bowl],
-    })
-
-    refuses(() => createOrder(f.db, f.venueId, f.actor('Dino'), {
-      client_id: randomUUID(),
-      table_id: f.tableId('Sto 17'),
-      lines: [line('Dodatni žar', 1, { parent_line_id: bowl.id })],
-    }), 'PARENT_LINE_NOT_FOUND', 404)
+      lines: [{ ...line('Nargila', 1), parent_line_id: randomUUID() }],
+    }
+    expect(createOrderBody.safeParse(body).success).toBe(false)
+    // The same round without it is a perfectly good body.
+    expect(createOrderBody.safeParse({ ...body, lines: [line('Nargila', 1)] }).success).toBe(true)
   })
 })
 

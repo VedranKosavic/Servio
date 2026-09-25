@@ -12,9 +12,10 @@ describe('what counts as a bowl', () => {
     expect(isBowl({ kind: 'shisha' })).toBe(true)
   })
 
-  it('does not count *Dodatni žar*', () => {
-    // Two more coals on a bowl already going. Counting it would inflate
-    // *prodano lula* and make grams-per-bowl look far too low.
+  it('does not count anything simple', () => {
+    // A drink, or the old *Dodatni žar* rows — two more coals on a bowl already
+    // going. Counting them would inflate *prodano lula* and make grams-per-bowl
+    // look far too low.
     expect(isBowl({ kind: 'simple' })).toBe(false)
   })
 
@@ -22,7 +23,7 @@ describe('what counts as a bowl', () => {
     expect(countBowls([
       { kind: 'shisha', qty: 2 },
       { kind: 'shisha', qty: 1 },
-      { kind: 'simple', qty: 3, parent_line_id: 'a-bowl' },
+      { kind: 'simple', qty: 3 },
       { kind: 'simple', qty: 5 },
     ])).toBe(3)
   })

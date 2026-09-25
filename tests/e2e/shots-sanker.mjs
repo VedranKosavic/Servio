@@ -99,7 +99,7 @@ if (openCount === 0) {
     { name: 'Kafa', qty: 2 },
   ], 'Bez leda, gost žuri')
   await lockRound(dinoCtx.request, 'Sto 7', [{ name: 'Coca-Cola', qty: 2 }, { name: 'Kafa', qty: 1 }, { name: 'Voda 0,5 l', qty: 2 }])
-  await lockRound(amarCtx.request, 'Sto 21', [{ name: 'Nargila', qty: 2, flavours: ['Grožđe'] }, { name: 'Dodatni žar', qty: 1 }])
+  await lockRound(amarCtx.request, 'Sto 21', [{ name: 'Nargila', qty: 2, flavours: ['Grožđe'] }])
 
   // Two things waiting on the bartender: a storno and a gratis.
   const r1 = await lockRound(amarCtx.request, 'Sto 18', [{ name: 'Kafa', qty: 1 }])
