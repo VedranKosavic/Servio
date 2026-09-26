@@ -26,28 +26,28 @@
   /* ---------------------------------------------------------------------- *
    * COLOUR — the dark theme (waiter, bartender, lock screen).
    *
-   * The ground is a cool near-black with a real hue (around 220°) so the
-   * surface ladder reads as *layers of one material* rather than four
-   * arbitrary greys. The ink on top of it is warm off-white, which is what
-   * keeps the copper from looking like an accident.
+   * The ground is a neutral graphite: no blue in it and no brown (Vedran,
+   * 24.09.2026, docs/UI-REFRESH.md). Each step of the ladder is a visible
+   * level of elevation, and copper is the only colour on it that is not a
+   * meaning, so the eye goes straight to the one button a screen is about.
    * ---------------------------------------------------------------------- */
 
   /* The four-step surface ladder. Each step is a visible level of elevation. */
-  --color-bg: #0b0d11;          /* the page itself */
-  --color-bg-2: #0f1116;        /* an inset well: a scroller, a pad recess */
-  --color-surface: #14171d;     /* a card, a sheet, a header */
-  --color-surface-2: #1b1f26;   /* a row, an input, a key inside a card */
-  --color-surface-3: #232830;   /* the top step: pressed, hovered, selected */
+  --color-bg: #0f0f0f;          /* the page itself */
+  --color-bg-2: #131313;        /* an inset well: a scroller, a pad recess */
+  --color-surface: #191919;     /* a card, a sheet, a header */
+  --color-surface-2: #222222;   /* a row, an input, a key inside a card */
+  --color-surface-3: #2c2c2c;   /* the top step: pressed, hovered, selected */
 
   /* Two borders. `line` draws an edge you are meant to see; `line-soft`
      separates two rows of the same thing and should barely register. */
-  --color-line: #2c323c;
-  --color-line-soft: #21262e;
+  --color-line: #2e2e2e;
+  --color-line-soft: #252525;
 
   /* Ink, warm, in three weights. Nothing on a dark screen is pure white. */
-  --color-text: #f3f0ea;        /* headings, values, anything read first */
-  --color-text-2: #a9a8a3;      /* labels, secondary lines */
-  --color-muted: #7a7d84;       /* captions, disabled, the eyebrow */
+  --color-text: #f4f3f1;        /* headings, values, anything read first */
+  --color-text-2: #b3b1ae;      /* labels, secondary lines */
+  --color-muted: #8b8986;       /* captions, disabled, the eyebrow — 4.9:1 on surface */
 
   /* Copper — the interactive colour and the *own state* colour, and nothing
      else. `accent` is a fill (dark ink goes on it); `accent-text` is the same
@@ -60,14 +60,16 @@
 
   /* Meaning, kept away from the accent so "this is mine" and "this is fine"
      are never the same colour. Each has a `-soft` background companion. */
-  --color-good: #63b89f;
-  --color-good-soft: #12312a;
-  --color-warn: #e6b44f;
-  --color-warn-soft: #35290f;
+  --color-good: #7cc493;
+  --color-good-soft: #16271c;
+  /* A touch yellower than it was, so a late ticket or a waiting table never
+     reads as copper — "act here" and "something is late" stay apart. */
+  --color-warn: #ecc653;
+  --color-warn-soft: #2f2911;
   --color-danger: #e5736e;
   --color-danger-soft: #3a1e1f;
 
-  --color-scrim: rgb(6 8 11 / 0.72);
+  --color-scrim: rgb(0 0 0 / 0.7);
 
   /**
    * **The second shift.**
@@ -103,15 +105,19 @@
   /* ---------------------------------------------------------------------- *
    * TYPE
    *
-   * Bricolage Grotesque for the wordmark, page titles and big numbers: a
-   * contemporary grotesque with an optical-size axis, so it tightens as it
-   * grows instead of looking like a blown-up UI font. IBM Plex Sans for
-   * everything read rather than glanced at, and for **every digit in the app** —
-   * it has true tabular figures, which is the one thing this product cannot do
-   * without.
+   * One face for the whole UI: Geist — titles, rows, buttons and **every digit
+   * in the app**. It has true tabular figures (with `tabular-nums`, "1111" and
+   * "0000" are the same width), which is the one thing this product cannot do
+   * without, and it ships Latin Extended for č ć š ž đ.
+   *
+   * `--font-display` keeps its name because a dozen components read it (page
+   * titles, key numbers, avatar initials); it now points at the same face.
+   * Bricolage Grotesque survives only as `--font-wordmark`: the product name
+   * on the PIN screen, on the rail and on the admin login, and nowhere else.
    * ---------------------------------------------------------------------- */
-  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-display: "Bricolage Grotesque", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-wordmark: "Bricolage Grotesque", "Geist", ui-sans-serif, system-ui, sans-serif;
 
   /**
    * The scale. Six steps, roughly a 1.22 ratio at the top and 1.14 at the
@@ -127,16 +133,18 @@
   --text-display--line-height: 1.02;
   --text-display--letter-spacing: -0.035em;
 
-  --text-title: 1.5rem;             /* 24px — a page title, a person's name */
-  --text-title--line-height: 1.16;
-  --text-title--letter-spacing: -0.02em;
+  --text-title: 1.25rem;            /* 20px — a screen title in the header */
+  --text-title--line-height: 1.2;
+  --text-title--letter-spacing: -0.01em;
 
-  --text-section: 1.1875rem;        /* 19px — a card heading, a group label */
+  --text-section: 1.0625rem;        /* 17px — a sheet title, a ticket's lines */
   --text-section--line-height: 1.3;
   --text-section--letter-spacing: -0.01em;
 
-  --text-body: 1.0625rem;           /* 17px — sentences, list rows, buttons */
-  --text-body--line-height: 1.5;
+  /* 16px — sentences, list rows, buttons and inputs (16 is also the floor
+     below which iOS zooms the page when a field is focused). */
+  --text-body: 1rem;
+  --text-body--line-height: 1.45;
   --text-body--letter-spacing: 0em;
 
   --text-label: 0.875rem;           /* 14px — a field label, a secondary line */
@@ -160,8 +168,8 @@
 
   /* Not a seventh step of prose: the numeric readout. Money and quantities
      are a different kind of object and get their own size. */
-  --text-metric: 1.875rem;          /* 30px */
-  --text-metric--line-height: 1.05;
+  --text-metric: 1.75rem;           /* 28px */
+  --text-metric--line-height: 1.1;
   --text-metric--letter-spacing: -0.02em;
 
   /* ---------------------------------------------------------------------- *
@@ -302,7 +310,7 @@ html {
 body {
   font-family: var(--font-sans);
   font-size: var(--text-body);
-  line-height: 1.5;
+  line-height: 1.45;
   background: var(--bg);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
@@ -374,7 +382,7 @@ button,
 
   /** The product name. The one place the display face is set at full size. */
   .wordmark {
-    font-family: var(--font-display);
+    font-family: var(--font-wordmark);
     font-size: var(--text-display);
     line-height: 1.02;
     letter-spacing: -0.035em;
@@ -385,9 +393,9 @@ button,
   .page-title {
     font-family: var(--font-display);
     font-size: var(--text-title);
-    line-height: 1.16;
-    letter-spacing: -0.02em;
-    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    font-weight: 600;
   }
 
   /** A card heading or a group label. Body face — it sits close to prose. */
@@ -412,7 +420,7 @@ button,
   .metric {
     font-family: var(--font-display);
     font-size: var(--text-metric);
-    line-height: 1.05;
+    line-height: 1.1;
     letter-spacing: -0.02em;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
@@ -650,7 +658,7 @@ button,
     font-feature-settings: "tnum" 1;
     text-align: center;
     min-height: 60px;
-    font-size: var(--text-title);
+    font-size: var(--text-metric);
     font-weight: 600;
   }
 

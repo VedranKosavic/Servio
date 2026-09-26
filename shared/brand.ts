@@ -42,7 +42,7 @@ export const APP_DESCRIPTION = 'Narudžbe, smjene i stanje šanka'
  */
 
 /** `--color-bg` in `main.css`: the dark ground of /konobar, /sanker and the lock screen. */
-export const THEME_COLOR_DARK = '#0b0d11'
+export const THEME_COLOR_DARK = '#0f0f0f'
 
 /** `--nav` in `admin.css`: the dark rail the dashboard hangs its chrome off. */
-export const THEME_COLOR_LIGHT = '#1b2427'
+export const THEME_COLOR_LIGHT = '#171717'

@@ -21,19 +21,23 @@ both, never a re-theme of one into the other.
 
 ## 1. Typography
 
-**Bricolage Grotesque + IBM Plex Sans.** Bricolage carries the voice — a
-contemporary grotesque with a real optical-size axis, so a 40 px wordmark is
-*drawn* for 40 px instead of being a blown-up UI face — while IBM Plex Sans
-carries every sentence and, crucially, every digit: it has true tabular figures,
-which is the one thing a product made almost entirely of money and quantities
-cannot do without.
+**Geist, and Bricolage Grotesque for the wordmark.** Since the UI refresh
+(`docs/UI-REFRESH.md`, S1, 26.09.2026) one face carries the whole UI — titles,
+sentences and, crucially, every digit: Geist has true tabular figures, which is
+the one thing a product made almost entirely of money and quantities cannot do
+without, and Latin Extended for č ć š ž đ. Bricolage Grotesque — a grotesque
+with a real optical-size axis, so a 40 px wordmark is *drawn* for 40 px — is
+kept for the product name alone.
 
 Both are loaded once, app-wide, in `nuxt.config.ts`. `--font-sans` and
 `--font-display` name real system fallbacks, so a phone that cannot reach Google
 Fonts renders the same layout at the same sizes rather than a broken one.
 
-- `--font-display` — the wordmark, page titles, big numbers, avatar initials.
-- `--font-sans` — everything else, and **every digit without exception**.
+- `--font-sans` — everything, and **every digit without exception**.
+- `--font-display` — the same face, under the name page titles, big numbers and
+  avatar initials read (a dozen components), so they moved without an edit.
+- `--font-wordmark` — Bricolage Grotesque: `.wordmark`, the rail's brand name
+  and the admin login's, and nowhere else.
 
 ### The scale
 
@@ -45,12 +49,12 @@ values, so a page never writes `text-[15px]` again.
 | Token | Size | Line height | Tracking | Used for |
 | --- | --- | --- | --- | --- |
 | `--text-display` | 40 px | 1.02 | −0.035em | the wordmark, a hero number |
-| `--text-title` | 24 px | 1.16 | −0.02em | a page title, a person's name |
-| `--text-section` | 19 px | 1.30 | −0.01em | a card heading, a group label |
-| `--text-body` | 17 px | 1.50 | 0 | sentences, list rows, buttons |
+| `--text-title` | 20 px | 1.20 | −0.01em | a screen title in the header |
+| `--text-section` | 17 px | 1.30 | −0.01em | a sheet title, a ticket's lines |
+| `--text-body` | 16 px | 1.45 | 0 | sentences, list rows, buttons, inputs |
 | `--text-label` | 14 px | 1.35 | 0.005em | a field label, a secondary line |
 | `--text-caption` | 12 px | 1.30 | 0.08em | the eyebrow, a role, a timestamp |
-| `--text-metric` | 30 px | 1.05 | −0.02em | **a money or quantity readout** |
+| `--text-metric` | 28 px | 1.10 | −0.02em | **a money or quantity readout** — also the PIN pad's digits and `.input-num` |
 
 The ratio is roughly 1.22 at the top and 1.14 at the bottom, because the small
 end of a UI scale needs more steps than a geometric ratio gives it.
@@ -59,8 +63,9 @@ Weight is deliberately **not** in the token — pick it with `font-semibold` /
 `font-bold`, or use one of the semantic classes that bundle family, step and
 weight: `.wordmark`, `.page-title`, `.section-title`, `.eyebrow`, `.metric`.
 
-The dark theme's body is 17 px (read at arm's length, in a dark room, in a
-hurry); `/admin`'s is 15 px (read at a desk, in daylight, in quantity). That is
+The dark theme's body is 16 px (it was 17 until the refresh calmed the scale;
+if 16 fails at arm's length in the dim café, rows go back to 17 and nothing else
+moves); `/admin`'s is 15 px (read at a desk, in daylight, in quantity). That is
 the only density difference between the two themes.
 
 ### Numbers
@@ -78,24 +83,24 @@ real minus sign U+2212 so a tabular column keeps its alignment.
 
 ### Dark — waiter, bartender, the lock screen
 
-The old palette was a flat near-black with a mixed hue and one copper on top of
-it; the result read as mud. The new ground is a **cool near-black with a real
-hue around 220°**, laid out as a four-step ladder where each step is a visible
-level of elevation, and the ink on it is **warm** off-white. That opposition is
-what keeps the copper from looking like an accident.
+The ground is a **neutral graphite** — no blue in it and no brown (Vedran,
+24.09.2026): a four-step ladder where each step is a visible level of elevation,
+with warm off-white ink on it. Copper is the only colour on it that is not a
+meaning, which is what sends the eye to the one button a screen is about. Until
+26.09.2026 it was a cool blue-black at 220°, and it read like every other POS.
 
 | Token | Value | It is |
 | --- | --- | --- |
-| `--bg` | `#0b0d11` | the page |
-| `--bg-2` | `#0f1116` | an inset well: a scroller, a pad recess |
-| `--surface` | `#14171d` | a card, a sheet, a header |
-| `--surface-2` | `#1b1f26` | a row, an input, a key inside a card |
-| `--surface-3` | `#232830` | the top step: pressed, hovered, selected |
-| `--line` | `#2c323c` | a border you are meant to see |
-| `--line-soft` | `#21262e` | a rule between two rows of the same thing |
-| `--ink` / `--text` | `#f3f0ea` | headings, values, anything read first |
-| `--ink-2` / `--text-2` | `#a9a8a3` | labels, secondary lines |
-| `--muted` | `#7a7d84` | captions, the eyebrow, disabled |
+| `--bg` | `#0f0f0f` | the page |
+| `--bg-2` | `#131313` | an inset well: a scroller, a pad recess |
+| `--surface` | `#191919` | a card, a sheet, a header |
+| `--surface-2` | `#222222` | a row, an input, a key inside a card |
+| `--surface-3` | `#2c2c2c` | the top step: pressed, hovered, selected |
+| `--line` | `#2e2e2e` | a border you are meant to see |
+| `--line-soft` | `#252525` | a rule between two rows of the same thing |
+| `--ink` / `--text` | `#f4f3f1` | headings, values, anything read first |
+| `--ink-2` / `--text-2` | `#b3b1ae` | labels, secondary lines |
+| `--muted` | `#8b8986` | captions, the eyebrow, disabled (4.9:1 on `--surface`) |
 
 **Two borders, not one.** `--line` draws an edge; `--line-soft` separates two
 rows and should barely register. Boxing every row in `--line` is exactly what
@@ -115,7 +120,8 @@ state* — his avatar, his row, his table — and nothing else.
 Never set copper as text with `--accent`; that is what `--accent-text` is for.
 
 **Meaning is separate from the accent**, so "this is mine" and "this is fine"
-are never the same colour: `--good #63b89f`, `--warn #e6b44f`,
+are never the same colour: `--good #7cc493`, `--warn #ecc653` (a touch yellower than it
+was, so "late" never reads as "act here"),
 `--danger #e5736e`, each with a `-soft` background companion. Colour never
 carries the meaning alone — a pill always contains the word too, because a
 colour-blind owner and a printed screenshot have to read the same thing.
@@ -129,10 +135,11 @@ list. The five are re-valued for paper in `admin.css` like every other token.
 
 ### Light — `/admin`
 
-Warm paper kept, contrast tightened for dense tables: `--bg #f2f0eb`,
-`--surface #fffdf9`, `--ink #1a2327` (≈14:1 on the card, which is what a column
-of four-digit amounts at 13 px needs), `--line #d7d1c6` with `--line-soft
-#e6e1d8` for table rows. The copper is deepened to `#ad5730` so white on it
+Near-neutral paper, contrast tightened for dense tables: `--bg #f4f4f2`,
+`--surface #ffffff`, `--ink #1b1b1a` (≈17:1 on the card, which is what a column
+of four-digit amounts at 13 px needs), `--line #deded9` with `--line-soft
+#ebebe8` for table rows. The rail is graphite (`--nav #171717`), the same
+material as the staff screens. The copper is deepened to `#ad5730` so white on it
 clears 4.5:1, and `--accent-text #8a4525` is the copper that works as ink on
 paper. The dark nav rail keeps its own small ladder (`--nav`, `--nav-well`,
 `--nav-ink`, `--nav-muted`) because it is the one piece of dark material in the
@@ -319,10 +326,10 @@ than a phone held at arm's length does:
 | `--text-caption` | 12 | 12 | a column header, an eyebrow, a timestamp |
 | `--text-micro` | 13 | — | a second line under a row, an inline meta |
 | `--text-label` | 14 | 14 | a table cell, a field label, a small button |
-| `--text-body` | 15 | 17 | a row, a sentence, a button, an input |
-| `--text-section` | 16 | 19 | a card heading |
-| `--text-title` | 24 | 24 | the page title |
-| `--text-metric` | 28 | 30 | the number a tile is about |
+| `--text-body` | 15 | 16 | a row, a sentence, a button, an input |
+| `--text-section` | 16 | 17 | a card heading |
+| `--text-title` | 24 | 20 | the page title (dark: the header's screen title) |
+| `--text-metric` | 28 | 28 | the number a tile is about |
 
 `--text-micro` exists only under `[data-theme='light']`, so **it must not be
 used outside `/admin`** — a dark screen reading it would get no size at all.

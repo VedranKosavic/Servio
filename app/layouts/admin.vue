@@ -284,7 +284,7 @@ async function signOut() {
 .a-brand-text { display: flex; flex-direction: column; min-width: 0; }
 
 .a-brand-name {
-  font-family: var(--font-display);
+  font-family: var(--font-wordmark);
   font-weight: 700;
   font-size: var(--text-title);
   line-height: 1.1;

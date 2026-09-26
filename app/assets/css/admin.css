@@ -23,24 +23,24 @@
  * primary action and the current row.
  */
 [data-theme='light'] {
-  /* Warm paper, and a card that is brighter than the page it sits on. */
-  --bg: #f2f0eb;
-  --bg-2: #e7e4dd;
-  --surface: #fffdf9;
-  --surface-2: #eae7e0;
-  --surface-3: #f6f4ef;
+  /* Near-neutral paper, and a white card that sits on it (docs/UI-REFRESH.md). */
+  --bg: #f4f4f2;
+  --bg-2: #eaeae7;
+  --surface: #ffffff;
+  --surface-2: #efefec;
+  --surface-3: #f7f7f5;
 
   /* Two rules: one you read as an edge, one that only separates table rows. */
-  --line: #d7d1c6;
-  --line-soft: #e6e1d8;
+  --line: #deded9;
+  --line-soft: #ebebe8;
 
   /* Nearly-black ink on paper. `--ink` is 14:1 on `--surface`, which is what a
      column of four-digit amounts at 13 px needs. */
-  --ink: #1a2327;
-  --ink-2: #46545a;
-  --text: #1a2327;
-  --text-2: #46545a;
-  --muted: #6c797e;
+  --ink: #1b1b1a;
+  --ink-2: #52524f;
+  --text: #1b1b1a;
+  --text-2: #52524f;
+  --muted: #737370;
 
   /* Copper, deepened until white on it clears 4.5:1. `--accent-text` is the
      same copper as *ink on paper*, which the fill colour is too light for. */
@@ -51,14 +51,14 @@
   --accent-line: #e0c3af;
   --on-accent: #ffffff;
 
-  --good: #2f8a72;
-  --good-soft: #dceee7;
-  --warn: #a5720f;
-  --warn-soft: #f7ead0;
+  --good: #2f7f55;
+  --good-soft: #e0efe5;
+  --warn: #8a6e09;
+  --warn-soft: #f5edcf;
   --danger: #c03b37;
   --danger-soft: #f6dcda;
 
-  --scrim: rgb(26 35 39 / 0.42);
+  --scrim: rgb(27 27 26 / 0.42);
 
   /* The categorical ramp, deepened for paper: a slice has to read as a solid
      block against `--surface` in daylight, where the dark theme's mid-tones go
@@ -71,11 +71,11 @@
 
   /* The dark nav rail beside the light page. Its own small ladder, because it
      is the one piece of dark material in this theme. */
-  --nav: #1b2427;
-  --nav-ink: #ece8e0;
-  --nav-muted: #949c9f;
-  --nav-item: #bfb9ae;
-  --nav-well: #283134;
+  --nav: #171717;
+  --nav-ink: #f1f0ee;
+  --nav-muted: #9a9895;
+  --nav-item: #c4c2be;
+  --nav-well: #232323;
 
   --field-bg: #ffffff;
   --offline-ink: #e3a29f;
@@ -95,10 +95,10 @@
    * dashboard look like a spreadsheet; a heavy shadow is what makes it look like
    * 2014. This is the amount between the two.
    */
-  --shadow-card: 0 1px 2px rgb(26 35 39 / 0.05), 0 1px 1px rgb(26 35 39 / 0.03);
-  --shadow-raise: 0 4px 14px -6px rgb(26 35 39 / 0.16), 0 1px 2px rgb(26 35 39 / 0.05);
-  --shadow-pop: 0 18px 44px -20px rgb(26 35 39 / 0.30), 0 2px 6px rgb(26 35 39 / 0.06);
-  --shadow-sheet: 0 -18px 48px -24px rgb(26 35 39 / 0.28);
+  --shadow-card: 0 1px 2px rgb(27 27 26 / 0.05), 0 1px 1px rgb(27 27 26 / 0.03);
+  --shadow-raise: 0 4px 14px -6px rgb(27 27 26 / 0.16), 0 1px 2px rgb(27 27 26 / 0.05);
+  --shadow-pop: 0 18px 44px -20px rgb(27 27 26 / 0.30), 0 2px 6px rgb(27 27 26 / 0.06);
+  --shadow-sheet: 0 -18px 48px -24px rgb(27 27 26 / 0.28);
 
   /**
    * The dark rail's own small ladder, extended.
@@ -109,8 +109,8 @@
    * a raised well with a copper spine and copper ink, and the fill is kept for
    * the one button a screen is about.
    */
-  --nav-line: #313b3e;
-  --nav-on: #32393b;
+  --nav-line: #2e2e2e;
+  --nav-on: #2a2a2a;
   --nav-on-ink: #f0b58e;
 
   /**
@@ -166,9 +166,9 @@
   --text-metric--line-height: 1.05;
   --text-metric--letter-spacing: -0.02em;
 
-  /* Bricolage Grotesque is the wordmark and the page titles, and nothing else.
-     It is loaded app-wide in `nuxt.config.ts`; `--font-display` in `main.css`
-     is the same stack under the name the rest of the app uses. */
+  /* Page titles read the display name, which is Geist since the UI refresh;
+     the wordmark has its own `--font-wordmark` (Bricolage Grotesque). Both are
+     loaded app-wide in `nuxt.config.ts`. */
   --font-title: var(--font-display);
 
   /* The dashboard is read sitting down, often with a mouse: 44, not the floor's

@@ -1,6 +1,7 @@
 # UI refresh — *Grafit i bakar*
 
-**Status: decided 24.09.2026 (Vedran), not built yet.** The mockups are on the
+**Status: decided 24.09.2026 (Vedran). S1 (tokens and font) landed 26.09.2026;
+S2–S6 are not built yet.** The mockups are on the
 design canvas <https://claude.ai/artifact/9fMgWT4J1aAmnkSBncnGMd> (private — ask
 Vedran for access). `docs/DESIGN.md` still describes what is shipped; every slice
 below updates it for the part it lands, so the two never disagree about the

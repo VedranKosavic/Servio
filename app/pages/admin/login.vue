@@ -134,7 +134,7 @@ async function submit() {
 
 .a-login-name {
   margin: 12px 0 0;
-  font-family: var(--font-display);
+  font-family: var(--font-wordmark);
   font-size: var(--text-title);
   font-weight: 700;
   letter-spacing: -0.025em;
