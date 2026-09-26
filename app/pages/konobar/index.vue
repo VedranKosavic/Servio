@@ -1202,31 +1202,13 @@ function addToSheet() {
           </button>
         </div>
 
-        <div class="flex items-center gap-2">
-          <UiSeg
-            block
-            class="grow"
-            label="Zona"
-            :options="ZONES"
-            :model-value="zone"
-            @update:model-value="zone = $event as Zone"
-          />
-          <button
-            type="button"
-            class="btn btn-secondary shrink-0 px-3"
-            :class="placing ? 'border-accent-line text-accent-text' : ''"
-            :aria-pressed="placing"
-            @click="placing = !placing"
-          >
-            {{ placing ? 'Otkaži' : '+ Sto' }}
-          </button>
-        </div>
-
-        <!-- Placing: the plan is one big target until he taps, or taps Otkaži. -->
-        <p v-if="placing" class="note" role="status">
-          Dodirni mjesto na planu gdje stoji novi sto.
-          <template v-if="zoneHasAdded">Crveni krstić na dodanom stolu ga uklanja.</template>
-        </p>
+        <UiSeg
+          block
+          label="Zona"
+          :options="ZONES"
+          :model-value="zone"
+          @update:model-value="zone = $event as Zone"
+        />
 
         <FloorPlan
           v-if="boot"
@@ -1256,11 +1238,32 @@ function addToSheet() {
           </button>
         </div>
 
+        <!-- The line under the plan says what a tap on it does, so while a table
+             is being placed it says that instead.
+             Placing: the plan is one big target until he taps, or taps Otkaži. -->
+        <p v-if="placing" class="note" role="status">
+          Dodirni mjesto na planu gdje stoji novi sto.
+          <template v-if="zoneHasAdded">Crveni krstić na dodanom stolu ga uklanja.</template>
+        </p>
         <!-- A sentence, not two arrows. This is the only place in the app that
              used "→" as vocabulary, and the app speaks Bosnian everywhere else. -->
-        <p class="text-center text-caption tracking-normal text-muted">
+        <p v-else class="text-center text-caption tracking-normal text-muted">
           Dodirni sto za narudžbu.
         </p>
+
+        <!-- + Sto sits under the plan, not beside the zone switch (Vedran,
+             26.09.2026): the switch gets the whole row, and the button is where
+             the thumb already is after reading the room. -->
+        <button
+          v-if="boot"
+          type="button"
+          class="btn btn-secondary w-full"
+          :class="placing ? 'border-accent-line text-accent-text' : ''"
+          :aria-pressed="placing"
+          @click="placing = !placing"
+        >
+          {{ placing ? 'Otkaži' : '+ Sto' }}
+        </button>
       </div>
 
     </div>

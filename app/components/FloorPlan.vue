@@ -185,7 +185,9 @@ const cells = computed(() => new Map(props.tables
 </script>
 
 <template>
-  <div class="flex flex-1 flex-col gap-3">
+  <!-- No flex-1: the plan takes the height its room needs, so what the page puts
+       under it (the hint, + Sto) sits right below the tables, not at the foot. -->
+  <div class="flex flex-col gap-3">
     <FloorRoom
       class="mx-auto max-w-[560px]"
       :plan="plan"
